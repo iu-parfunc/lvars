@@ -6,22 +6,22 @@
 
 ;; Export things we want to test.
 (provide
- lub
- leq
- valid
  exists-d
+ leq
+ lub
  lubstore
  lubstore-helper
- store-locs
- union
- store-lookup
- store-update
+ rename-locs
+ small-step-base-rr
+ small-step-fast-rr
  store-dom
  store-dom-diff
- rename-locs
+ store-locs
+ store-lookup
+ store-update
  subst
- small-step-fast-rr
- small-step-base-rr)
+ union
+ valid)
 
 ;; We're assuming a domain where elements are of type "number" for
 ;; simplicity.
