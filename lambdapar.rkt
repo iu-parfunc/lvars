@@ -18,8 +18,10 @@
  store-dom-diff
  store-locs
  store-lookup
+ store-top?
  store-update
  subst
+ top?
  union
  valid)
 
@@ -373,15 +375,19 @@
      (term (S_1 e_11))
      (term (store-dom-diff S_1 S)))])
 
+;; The greatest element of the store lattice is any store in which
+;; some location is bound to Top.
 (define-metafunction lambdapar
   store-top? : S -> Bool
-  [(store-top? S) ,(equal? (term S)
-                           (term Top))])
+  [(store-top? ()) ,#f]
+  [(store-top? ((l_1 d_1) (l_2 d_2) ...))
+   ,(or (term (top? d_1))
+        (term (store-top? ((l_2 d_2) ...))))])
 
 (define-metafunction lambdapar
   top? : d -> Bool
-  [(top? d) ,(equal? (term d)
-                     (term Top))])
+  [(top? Top) ,#t]
+  [(top? d) ,#f])
 
 (define-metafunction lambdapar
   lub : d d -> d

@@ -204,6 +204,34 @@
      (put l1 (3)))))
 
   (test-equal
+   (term (store-top? ()))
+   (term #f))
+
+  (test-equal
+   (term (store-top? ((l 3) (l1 Top))))
+   (term #t))
+
+  (test-equal
+   (term (store-top? ((l Top))))
+   (term #t))
+
+  (test-equal
+   (term (store-top? ((l 3) (l 4))))
+   (term #f))
+
+  (test-equal
+   (term (top? Top))
+   (term #t))
+
+  (test-equal
+   (term (top? Bot))
+   (term #f))
+
+  (test-equal
+   (term (top? 3))
+   (term #f))
+
+  (test-equal
    (equal-modulo-store-perms?
     '(((l 4) (l1 3)) ())
     '(((l1 3) (l 4)) ()))
