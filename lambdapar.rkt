@@ -154,11 +154,11 @@
                     ((lubstore S_11 S_2) (e_111 e_22)))
    (small-step-base (S e_1) (S_1 e_11))
    (small-step-base (S e_2) (S_2 e_22))
-   (where #f (store-top? (lubstore S_1 S_2)))
    ;; Handles renaming: any new locations created between S and S_1
    ;; must have names unique from those created between S and S_2.
    ;; See `rename-locs` for more details.
-   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))]
+   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
+   (where #f (store-top? (lubstore S_11 S_2)))]
 
   ;; E-Beta
   [(small-step-base (S ((lambda (x) e) v))
@@ -215,7 +215,8 @@
                     Error)
    (small-step-base (S e_1) (S_1 e_11))
    (small-step-base (S e_2) (S_2 e_22))
-   (where #t (store-top? (lubstore S_1 S_2)))]
+   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
+   (where #t (store-top? (lubstore S_11 S_2)))]
 
   ;; E-PutValErr
   [(small-step-base (S (put l (d_2)))
@@ -265,11 +266,11 @@
                     ((lubstore S_11 S_2) (e_111 e_22)))
    (small-step-fast (S e_1) (S_1 e_11))
    (small-step-fast (S e_2) (S_2 e_22))
-   (where #f (store-top? (lubstore S_1 S_2)))
    ;; Handles renaming: any new locations created between S and S_1
    ;; must have names unique from those created between S and S_2.
    ;; See `rename-locs` for more details.
-   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))]
+   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
+   (where #f (store-top? (lubstore S_11 S_2)))]
 
   ;; E-Beta
   [(small-step-fast (S ((lambda (x) e) v))
@@ -325,7 +326,8 @@
                     Error)
    (small-step-fast (S e_1) (S_1 e_11))
    (small-step-fast (S e_2) (S_2 e_22))
-   (where #t (store-top? (lubstore S_1 S_2)))]
+   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
+   (where #t (store-top? (lubstore S_11 S_2)))]
 
   ;; E-PutValErr
   [(small-step-fast (S (put l (d_2)))
