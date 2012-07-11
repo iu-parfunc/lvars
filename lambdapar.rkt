@@ -38,8 +38,8 @@
   (e x
      v
      (e e)
-     (get tl tq)
-     (put tl tq)
+     (get e e)
+     (put e e)
      new
      (convert e)
 
@@ -52,20 +52,6 @@
   (v l
      Q
      (lambda (x) e))
-
-  ;; Trivial expressions.  These are expressions that are either
-  ;; already a location or a query set, or about to be one after a
-  ;; variable lookup.  The programmer never writes locations directly
-  ;; in lambdapar programs; she writes variables that are bound to
-  ;; locations.  By the time evaluation reaches the arguments of a
-  ;; `get` or `put`, though, variables pointing to locations have been
-  ;; replaced by actual locations, and similarly for variables
-  ;; pointing to query sets (although query set literals are allowed
-  ;; in programs).
-  (tl l
-      x)
-  (tq Q
-      x)
 
   ;; Query set literals.  A query set is the set we pass to a `get`
   ;; expression that specifies a non-empty, pairwise incompatible
@@ -169,11 +155,31 @@
                     ((store-update S l Bot) l))
    (where l (variable-not-in-store S))]
 
+  ;; E-Put-1
+  [(small-step-base (S (put e_1 e_2))
+                    (S_1 (put e_11 e_2)))
+   (small-step-base (S e_1) (S_1 e_11))]
+
+  ;; E-Put-2
+  [(small-step-base (S (put e_1 e_2))
+                    (S_2 (put e_1 e_22)))
+   (small-step-base (S e_2) (S_2 e_22))]
+
   ;; E-PutVal
   [(small-step-base (S (put l (d_2)))
                     ((store-update S l d_2) ()))
    (where d_1 (store-lookup S l))
    (where #f (top? (lub d_1 d_2)))]
+
+  ;; E-Get-1
+  [(small-step-base (S (get e_1 e_2))
+                    (S_1 (get e_11 e_2)))
+   (small-step-base (S e_1) (S_1 e_11))]
+
+  ;; E-Get-2
+  [(small-step-base (S (get e_1 e_2))
+                    (S_2 (get e_1 e_22)))
+   (small-step-base (S e_2) (S_2 e_22))]
 
   ;; E-GetVal
   [(small-step-base (S (get l Q))
@@ -282,11 +288,31 @@
                     ((store-update S l Bot) l))
    (where l (variable-not-in-store S))]
 
+  ;; E-Put-1
+  [(small-step-fast (S (put e_1 e_2))
+                    (S_1 (put e_11 e_2)))
+   (small-step-fast (S e_1) (S_1 e_11))]
+
+  ;; E-Put-2
+  [(small-step-fast (S (put e_1 e_2))
+                    (S_2 (put e_1 e_22)))
+   (small-step-fast (S e_2) (S_2 e_22))]
+
   ;; E-PutVal
   [(small-step-fast (S (put l (d_2)))
                     ((store-update S l d_2) ()))
    (where d_1 (store-lookup S l))
    (where #f (top? (lub d_1 d_2)))]
+
+  ;; E-Get-1
+  [(small-step-fast (S (get e_1 e_2))
+                    (S_1 (get e_11 e_2)))
+   (small-step-fast (S e_1) (S_1 e_11))]
+
+  ;; E-Get-2
+  [(small-step-fast (S (get e_1 e_2))
+                    (S_2 (get e_1 e_22)))
+   (small-step-fast (S e_2) (S_2 e_22))]
 
   ;; E-GetVal
   [(small-step-fast (S (get l Q))
