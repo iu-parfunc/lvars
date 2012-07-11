@@ -37,7 +37,7 @@
   ;; Expressions.
   (e x
      v
-     (e_1 e_2)
+     (e e)
      (get tl tq)
      (put tl tq)
      new
@@ -45,8 +45,8 @@
 
      ;; These don't appear in the grammar in the paper, because they
      ;; immediately desugar to application and lambda.
-     (let ((x e_1)) e_2)
-     (let par ((x_1 e_1) (x_2 e_2)) e_3))
+     (let ((x e)) e)
+     (let par ((x e) (x e)) e))
 
   ;; Values.
   (v l
@@ -70,7 +70,7 @@
   ;; Query set literals.  A query set is the set we pass to a `get`
   ;; expression that specifies a non-empty, pairwise incompatible
   ;; subset of the state space of the location being queried.
-  (Q (d_1 ...))
+  (Q (d ...))
   ;; TODO: support for { d | pred(d) }-style query sets (issue #5).
   
   ;; TODO: this grammar allows query sets to be Top and Bot.  We
@@ -81,7 +81,7 @@
   ;; return value of "put".
 
   ;; Stores: mappings from locations to domain values.
-  (S ((l_1 d_1) ...))
+  (S ((l d) ...))
 
   ;; Domains contain elements to which locations can be bound.  Let's
   ;; assume a domain of numbers (plus Top and Bot) for now.  TODO:
