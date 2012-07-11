@@ -10,7 +10,7 @@ based on the untyped lambda calculus, and extended with `put` and
 `get` operations that write to and read from shared variables.  In
 this setting of shared mutable state, the trick that lambdapar employs
 to maintain determinism is that writes must be _monotonically
-increasing_ according to the partial order on a user-specified
+increasing_ with respect to the partial order on a user-specified
 partially ordered set, and reads must make only limited observations
 of the states of variables -- for instance, in a lambdapar program it
 might be possible to observe that a store location containes "at least
