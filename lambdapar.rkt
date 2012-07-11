@@ -27,11 +27,11 @@
 
 ;; We're assuming a domain where elements are of type "number" for
 ;; simplicity.
-(define leq-op <=) ;; TODO: define in terms of lub-op
+(define leq-op <=)
 (define lub-op max)
 
 (define-language lambdapar
-  ;; Configurations: what --> is defined on.
+  ;; Configurations, on which the reduction relation is defined.
   (Config (S e) Error)
   
   ;; Expressions.
@@ -69,23 +69,22 @@
 
   ;; Query set literals.  A query set is the set we pass to a `get`
   ;; expression that specifies a non-empty, pairwise incompatible
-  ;; subset of the state space of the location being queried.
+  ;; subset of the state space of the location being queried.  The
+  ;; grammar allows empty query sets, as well, because those are the
+  ;; return value of `put`.
+
+  ;; Incidentally, under this grammar, (Top) and (Bot) are query
+  ;; sets. (Bot) makes sense, but (Top) is nonsensical -- a program
+  ;; that queried a variable for (Top) would block forever.
+  ;; Nevertheless, the grammar admits it.
   (Q (d ...))
   ;; TODO: support for { d | pred(d) }-style query sets (issue #5).
   
-  ;; TODO: this grammar allows query sets to be Top and Bot.  We
-  ;; definitely want to allow Bot in query sets, but Top is kinda
-  ;; nonsensical.  Is this OK? (issue #6)
-
-  ;; NB: The grammar allows empty query sets because those are the
-  ;; return value of "put".
-
   ;; Stores: mappings from locations to domain values.
   (S ((l d) ...))
 
-  ;; Domains contain elements to which locations can be bound.  Let's
-  ;; assume a domain of numbers (plus Top and Bot) for now.  TODO:
-  ;; figure out a way to make domains abstract (issue #3).
+  ;; Domains contain elements to which locations can be bound.  We
+  ;; assume a domain of numbers (plus Top and Bot) for now.
   (d Top Bot number)
 
   ;; Ranges of a couple of metafunctions.
@@ -132,7 +131,8 @@
 ;; metafunction ...))`.  This should be fixed in the most recent
 ;; release, which I'm having trouble installing!
 
-;; Reduction rules shown in Figure 4 of the paper, 
+;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
+;; E-ReflErr, and with the addition of the rules shown in Figure 5.
 (define-judgment-form lambdapar
   #:mode (small-step-base I O)
   #:contract (small-step-base Config Config)
@@ -229,8 +229,9 @@
                     Error)
    (small-step-base (S e) Error)])
 
-;; The reduction relation shown in Figure 7 of the paper.  Much faster
-;; in Redex than `small-step-base`.
+;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
+;; E-ReflErr, and with the addition of the rules shown in Figure 6.
+;; Much faster in Redex than `small-step-base`.
 (define-judgment-form lambdapar
   #:mode (small-step-fast I O)
   #:contract (small-step-fast Config Config)
