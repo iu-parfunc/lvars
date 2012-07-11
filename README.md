@@ -7,18 +7,18 @@ A PLT Redex model of a variant of the lambdapar language.
 
 lambdapar is a deterministic parallel calculus with shared state,
 based on the untyped lambda calculus, and extended with `put` and
-`get` operations that write to and read from shared variables in the
-store.  In this setting of shared mutable state, the trick that
-lambdapar employs to maintain determinism is that writes must be
-_monotonically increasing_ according to the partial order on a
-user-specified partially ordered set, and reads must make only limited
-observations of the states of variables -- for instance, in a
-lambdapar program it might be possible to observe that a store
-location contained "at least 4", but not possible to observe the
-precise value.  The code in this repository is a PLT Redex model of a
-variant of the lambdapar language where the reduction relation has
-been tweaked from its "canonical" on-paper version and the partially
-ordered set is the set of natural numbers ordered by `<=`.
+`get` operations that write to and read from shared variables.  In
+this setting of shared mutable state, the trick that lambdapar employs
+to maintain determinism is that writes must be _monotonically
+increasing_ according to the partial order on a user-specified
+partially ordered set, and reads must make only limited observations
+of the states of variables -- for instance, in a lambdapar program it
+might be possible to observe that a store location containes "at least
+4", but not possible to observe the precise value.  The code in this
+repository is a PLT Redex model of a variant of the lambdapar language
+where the reduction relation has been tweaked from its "canonical"
+on-paper version, and the user-specified partially ordered set is the
+set of natural numbers ordered by Racket's `<=`.
 
 ### Why we don't use evaluation contexts
 
@@ -38,22 +38,22 @@ Unfortunately, such _single-hole_ evaluation contexts force evaluation
 to happen sequentially, and we want to model the explicit simultaneous
 evaluation steps of the E-ParApp rule of our semantics.  To be sure, a
 semantics specified with single-hole evaluation contexts can express
-_arbitrary_ evaluation order and therefore remain open to the
+_arbitrary_ evaluation order and therefore remains open to the
 possibility of parallel _implementation_. Still, since parallelism is
-lambdapar's _raison d'etre_, we want to bake parallelism into the
+lambdapar's _raison d'être_, we want to bake parallelism into the
 model.
 
 Since Redex does not (at the time of this writing) have support for
 multiple-hole evaluation contexts [2], we opted instead for an
 inference-rule-based semantics implemented using Redex's
 `define-judgment-form` feature [3].  Unfortunately, in so doing, we
-miss out on some of Redex's most useful features.  As a tiny example,
-`define-judgment-form` offers no way to name individual reduction
-rules, so although using Redex's `traces` feature [4] with our
-semantics will show us a beautiful reduction graph of a configuration,
-it won't label the edges in the graphs with the names of the reduction
-rules as it would normally, because Redex has no way of knowing their
-names.
+miss out on some of Redex's most useful features.  As a tiny example
+of what we're missing, `define-judgment-form` offers no way to name
+individual reduction rules, so although using Redex's `traces` feature
+[4] with our semantics will show us a beautiful reduction graph of a
+configuration, it won't label the edges in the graphs with the names
+of the reduction rules as it would normally, because Redex has no way
+of knowing their names.
 
 ### Dealing with reflexive relations
 
@@ -86,15 +86,20 @@ Under the semantics just described, if both subexpressions in an
 application can step, then any of three rules can apply next --
 E-App-1, E-App-2, and E-ParApp -- leading to an exponential increase
 in the number of evaluation paths that an configuration might take. It
-is easy to construct lambdapar programs that are very slow to test in
-Redex under this semantics, because the system must take all
-evaluation paths in order to confirm that a term is reducing
-deterministically.  To ameliorate the slowness, we can define more
-restricted versions of E-App-1 and E-App-2, in which the subexpression
-that is not taking a step must be a _value_.  Finally, we add an
-E-GetValBlock rule, which allows a _blocked_ `get` expression to step
-to itself. This is necessary because a blocked `get` is not a value.
-We call the resulting reduction relation `small-step-fast-rr`.
+is easy to construct lambdapar programs that are very slow to test
+with `test-->>` under this semantics, because the system must take all
+evaluation paths.  Of course, taking all evaluation paths is exactly
+the behavior we want.  Although we can't prove determinism with Redex,
+we _can_ prove the _absence_ of determinism -- a reduction graph that
+does not converge means that there's a nondeterminism-introducing bug
+somewhere.  Nevertheless, sometimes we just want to check that a
+program runs at all.  In that case, to ameliorate the slowness, we can
+define more restricted versions of E-App-1 and E-App-2, in which the
+subexpression that is not taking a step must be a _value_.  Finally,
+we add an E-GetValBlock rule, which allows a _blocked_ `get`
+expression to step to itself. This is necessary because a blocked
+`get` is not a value.  We call the resulting reduction relation
+`small-step-fast-rr`.
 
 Under the `small-step-fast-rr` rules, an application expression in
 which one subexpression is a blocked `get` will always be able to take
@@ -150,8 +155,12 @@ that has better support for simultaneous reductions -- the K system
 ### References
 
 [1] http://www.ccs.neu.edu/racket/pubs/tcs92-fh.pdf
+
 [2] http://lists.racket-lang.org/users/archive/2012-July/053000.html
+
 [3] http://docs.racket-lang.org/redex/Other_Relations.html#%28form._%28%28lib._redex/reduction-semantics..rkt%29._define-judgment-form%29%29
+
 [4] http://docs.racket-lang.org/redex/GUI.html?q=traces#%28def._%28%28lib._redex/gui..rkt%29._traces%29%29
+
 [5] http://k-framework.org
 
