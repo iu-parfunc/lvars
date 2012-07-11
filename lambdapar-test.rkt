@@ -208,16 +208,12 @@
    (term #f))
 
   (test-equal
-   (term (store-top? ((l 3) (l1 Top))))
-   (term #t))
-
-  (test-equal
-   (term (store-top? ((l Top))))
-   (term #t))
-
-  (test-equal
-   (term (store-top? ((l 3) (l 4))))
+   (term (store-top? ((l 3) (l1 4))))
    (term #f))
+
+  (test-equal
+   (term (store-top? TopS))
+   (term #t))
 
   (test-equal
    (term (top? Top))

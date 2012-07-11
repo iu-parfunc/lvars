@@ -66,12 +66,15 @@
   (Q (d ...))
   ;; TODO: support for { d | pred(d) }-style query sets (issue #5).
   
-  ;; Stores: mappings from locations to domain values.
-  (S ((l d) ...))
+  ;; Stores.  A store is either a finite partial mapping from
+  ;; locations to domain values (excluding Top), or it is the
+  ;; distinguished element TopS.
+  (S ((l StoreVal) ...) TopS)
 
   ;; Domains contain elements to which locations can be bound.  We
   ;; assume a domain of naturals (plus Top and Bot) for now.
-  (d Top Bot natural)
+  (d Top StoreVal)
+  (StoreVal natural Bot)
 
   ;; Ranges of a couple of metafunctions.
   (d/lookupfailed d lookupfailed)
@@ -408,10 +411,8 @@
 ;; some location is bound to Top.
 (define-metafunction lambdapar
   store-top? : S -> Bool
-  [(store-top? ()) ,#f]
-  [(store-top? ((l_1 d_1) (l_2 d_2) ...))
-   ,(or (term (top? d_1))
-        (term (store-top? ((l_2 d_2) ...))))])
+  [(store-top? TopS) ,#t]
+  [(store-top? S) ,#f])
 
 (define-metafunction lambdapar
   top? : d -> Bool
