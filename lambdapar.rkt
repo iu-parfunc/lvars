@@ -41,7 +41,7 @@
      (get tl tq)
      (put tl tq)
      new
-     (reify e)
+     (convert e)
 
      ;; These don't appear in the grammar in the paper, because they
      ;; immediately desugar to application and lambda.
@@ -183,13 +183,13 @@
    (where #t (valid Q))
    (where d_2 (exists-d d_1 Q))]
 
-  ;; E-Reify
-  [(small-step-base (S_1 (reify e_1))
-                    (S_2 (reify e_2)))
+  ;; E-Convert
+  [(small-step-base (S_1 (convert e_1))
+                    (S_2 (convert e_2)))
    (small-step-base (S_1 e_1) (S_2 e_2))]
 
-  ;; E-ReifyVal
-  [(small-step-base (S (reify Q))
+  ;; E-ConvertVal
+  [(small-step-base (S (convert Q))
                     (S (delta Q)))]
 
   ;; Desugaring of lets.
@@ -224,8 +224,8 @@
    (where d_1 (store-lookup S l))
    (where #t (top? (lub d_1 d_2)))]
 
-  ;; E-ReifyErr
-  [(small-step-base (S (reify e))
+  ;; E-ConvertErr
+  [(small-step-base (S (convert e))
                     Error)
    (small-step-base (S e) Error)])
 
@@ -295,13 +295,13 @@
    (where #t (valid Q))
    (where d_2 (exists-d d_1 Q))]
 
-  ;; E-Reify
-  [(small-step-fast (S_1 (reify e_1))
-                    (S_2 (reify e_2)))
+  ;; E-Convert
+  [(small-step-fast (S_1 (convert e_1))
+                    (S_2 (convert e_2)))
    (small-step-fast (S_1 e_1) (S_2 e_2))]
 
-  ;; E-ReifyVal
-  [(small-step-fast (S (reify Q))
+  ;; E-ConvertVal
+  [(small-step-fast (S (convert Q))
                     (S (delta Q)))]
 
   ;; Desugaring of lets.
@@ -335,8 +335,8 @@
    (where d_1 (store-lookup S l))
    (where #t (top? (lub d_1 d_2)))]
 
-  ;; E-ReifyErr
-  [(small-step-fast (S (reify e))
+  ;; E-ConvertErr
+  [(small-step-fast (S (convert e))
                     Error)
    (small-step-fast (S e) Error)])
 

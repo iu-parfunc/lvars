@@ -377,26 +377,26 @@
              (((l Bot))
               l)))
 
-  ;; let + E-New + E-PutVal + E-GetVal + E-Reify
+  ;; let + E-New + E-PutVal + E-GetVal + E-Convert
   (test-->> rr
             (term
              (() ;; empty store
               (let ((x_1 new))
                 (let ((x_2 (put x_1 (3))))
                   (let ((x_3 (get x_1 (2))))
-                    (reify x_3))))))
+                    (convert x_3))))))
             (term
              (((l 3))
               (2))))
   
-  ;; let par + E-New + E-PutVal + E-GetVal + E-Reify
+  ;; let par + E-New + E-PutVal + E-GetVal + E-Convert
   (test-->> rr
             (term
              (() ;; empty store
               (let ((x_1 new))
                 (let par ((x_2 (put x_1 (2)))
                           (x_3 (put x_1 (3))))
-                  (reify (get x_1 (2)))))))
+                  (convert (get x_1 (2)))))))
             (term
              (((l 3))
               (2))))
@@ -410,7 +410,7 @@
                   ;; This should just take the lub of the old and new
                   ;; values, i.e., 5.
                   (let ((x_3 (put x_1 (4))))
-                    (reify (get x_1 (5))))))))
+                    (convert (get x_1 (5))))))))
             (term
              (((l 5))
               (5))))
@@ -421,7 +421,7 @@
              (() ;; empty store
               (let ((x_1 new))
                 (let ((x_2 (put x_1 (Top))))
-                  (reify x_2)))))
+                  (convert x_2)))))
             (term
              Error))
 
@@ -433,7 +433,7 @@
                         [x_2 new])
                 (let par ([x_3 (put x_1 (3))]
                           [x_4 (put x_2 (4))])
-                  (reify (get x_2 (4)))))))
+                  (convert (get x_2 (4)))))))
 
             ;; When we're using small-step-base-rr, we can end up with
             ;; a store of ((l 3) (l1 4)) or a permutation thereof --
@@ -465,7 +465,7 @@
 ;; `small-step-fast-rr`.
 (define (slow-program-test-suite rr)
 
-  ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock + E-Reify
+  ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock + E-Convert
   (test-->> rr
             (term
              (() ;; empty store
@@ -484,7 +484,7 @@
                                   ((lambda (x_2)
                                      ((lambda (x_2)
                                         (put x_1 (4))) ())) ())) ())) ())) ())))
-                  (reify x_4)))))
+                  (convert x_4)))))
             (term
              (((l 4))
               (4))))
