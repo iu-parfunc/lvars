@@ -47,7 +47,7 @@ lambdapar's _raison d'être_, we want to bake parallelism into the
 model.)
 
 Since Redex [does not have support for multiple-hole evaluation
-contexts][[racket-list-message]], we opted instead for an
+contexts][racket-list-message], we opted instead for an
 inference-rule-based semantics implemented using Redex's
 [`define-judgment-form`][define-judgment-form] feature.
 Unfortunately, in so doing, we miss out on some of Redex's most useful
