@@ -137,10 +137,10 @@ cpu time: 1010991 real time: 1022071 gc time: 13267
 ```
 
 The slow test takes _three orders of magnitude_ longer when run with
-`small-step-base-rr` than with `small-step-fast-rr` does.  (Those
-numbers are in milliseconds -- so the slow test is taking about 17
-minutes!)  Stepping through the test manually using `traces` finds 64
-terms for the slow version, and 15 for the fast version.
+`small-step-base-rr` than with `small-step-fast-rr`.  (Those numbers
+are in milliseconds -- so the slow test is taking about 17 minutes!)
+Stepping through the test manually using `traces` finds 64 terms for
+the slow version, and 15 for the fast version.
 
 [2012-lambdapar-draft]: http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
 
