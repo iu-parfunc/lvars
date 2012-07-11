@@ -25,7 +25,7 @@
  union
  valid)
 
-;; We're assuming a domain where elements are of type "number" for
+;; We're assuming a domain where elements are of type `natural` for
 ;; simplicity.
 (define leq-op <=)
 (define lub-op max)
@@ -84,8 +84,8 @@
   (S ((l d) ...))
 
   ;; Domains contain elements to which locations can be bound.  We
-  ;; assume a domain of numbers (plus Top and Bot) for now.
-  (d Top Bot number)
+  ;; assume a domain of naturals (plus Top and Bot) for now.
+  (d Top Bot natural)
 
   ;; Ranges of a couple of metafunctions.
   (d/lookupfailed d lookupfailed)
