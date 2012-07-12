@@ -30,9 +30,9 @@ p0 = App (App (Lam x (Lam y (Varref x)))
           (Put New (Q$QS (S.singleton$ Full 200)))
 
 t0 :: (Exp (IVar Integer), SymbolMap (IVar Integer))
-t0  = eval    p0 exampleInterp
--- t0b = evalCPS p0 exampleInterp
-t0c = E2.evalThreaded p0 exampleInterp
+t0  = eval    p0 exampleReify
+-- t0b = evalCPS p0 exampleReify
+t0c = E2.evalThreaded p0 exampleReify
 
 ----------------------------------------
 p1 :: Exp (IVar Integer)
@@ -40,8 +40,8 @@ p1 = letpar [(x, (Q$QS (S.singleton$ Full 100))),
 	     (y, (Q$QS (S.singleton$ Full 200)))]
       (singQ Empty)
 
-t1 = eval p1 exampleInterp
-t1c = E2.evalThreaded p1 exampleInterp
+t1 = eval p1 exampleReify
+t1c = E2.evalThreaded p1 exampleReify
 
 ----------------------------------------
 p2 :: Exp (IVar Integer)
@@ -50,8 +50,8 @@ p2 = lett   [(x, New)] $
 	     (z, Put (Varref x) (fullIvarQ [3]))]
       (Varref y)
 
-t2 = eval p2 exampleInterp
-t2c = E2.evalThreaded p2 exampleInterp
+t2 = eval p2 exampleReify
+t2c = E2.evalThreaded p2 exampleReify
 
 ----------------------------------------
 -- Multiple put error:
@@ -61,14 +61,14 @@ p3 = lett   [(x, New)] $
 	     (z, Put (Varref x) (fullIvarQ [3]))]
       (Varref y)
 
-t3 = eval p3 exampleInterp
+t3 = eval p3 exampleReify
 
 ----------------------------------------
 p4 :: Exp (IVar Integer)
 p4 = App (Lam x (Varref x)) void
 
-t4 = eval p4 exampleInterp
-t4c = E2.evalThreaded p4 exampleInterp
+t4 = eval p4 exampleReify
+t4c = E2.evalThreaded p4 exampleReify
 
 
 ----------------------------------------
@@ -112,7 +112,7 @@ testOne prog = unsafePerformIO$ do
         False -> hPutStrLn stderr "FAILED."            
     return$ all id doesUnify
   where 
-    evaled1:evaledRest = map (\ eval -> eval prog exampleInterp) allEvals
+    evaled1:evaledRest = map (\ eval -> eval prog exampleReify) allEvals
 
 -- Check if two configurations (exp,store) are equivalent up to
 -- renaming:

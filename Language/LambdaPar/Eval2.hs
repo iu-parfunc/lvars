@@ -117,7 +117,7 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
       Varref v | isLocation v -> kont state e -- Allowing as a value only for LOCATIONS.
       Varref v -> error$"unbound variable: " ++ show v
 
-      Interp e1 -> 
+      Reify e1 -> 
         evalloop e1 (\ runstate (Q (QS ls)) -> kont runstate (interp ls)) state
         
       Consume e1 -> 

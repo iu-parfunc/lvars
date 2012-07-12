@@ -51,8 +51,8 @@ eval eOrig interp = outerloop AM.empty eOrig
           Lam v bod -> loop store (subst e2 v bod)
 	  _ -> error$"Type error, non lambda in operator position: "++ show e1
 
-      Interp (Q (QS s)) -> (interp s, store)
-      Interp (Q (QF _)) -> error "Should not call Interp on a predicate-based QuerySet"
+      Reify (Q (QS s)) -> (interp s, store)
+      Reify (Q (QF _)) -> error "Should not call Reify on a predicate-based QuerySet"
 
       -- Global shared memory with global uniqueness.
       -- For now using Varrefs to represent labels:
@@ -105,7 +105,7 @@ eval eOrig interp = outerloop AM.empty eOrig
       Get e1 e2 -> recur2 Get e1 e2 
       Put e1 e2 -> recur2 Put e1 e2 
       Consume e -> recur1 Consume e
-      Interp e  -> recur1 Interp  e
+      Reify e   -> recur1 Reify   e
       PrimApp pr e1 e2 -> recur2 (PrimApp pr) e1 e2 
       
       Unique    -> (e,store) -- This can't be reduced, and is NOT handled by this interpreter.

@@ -60,14 +60,14 @@ desugar e =
                       (App (desugar e2) (consR$ Varref p)))
     Get e1 e2 -> Lam p $ 
                  (Get (App (desugar e1) (consL$ Varref p))
-                      (App (desugar e2) (consR$ Varref p)))                 
+                      (App (desugar e2) (consR$ Varref p)))
     
     PrimApp prm e1 e2 -> Lam p $
                  (PrimApp prm (App (desugar e1) (consL$ Varref p))
                               (App (desugar e2) (consR$ Varref p)))
 
     Consume e -> Lam p $ Consume $ App (desugar e) (Varref p)
-    Interp  e -> Lam p $ Interp  $ App (desugar e) (Varref p)
+    Reify  e -> Lam p $ Reify  $ App (desugar e) (Varref p)
 
  where  
    -- Fake operations on pedigree trees:
@@ -87,7 +87,7 @@ runDesugNopPed prog =
             , (toAtom "consR", Lam p_ $ Lam x $ Lam p (Varref x))
             , (toAtom "consJ", Lam p_ $ Lam x $ Lam p (Varref x))] 
        (App prog initP))
-      exampleInterp
+      exampleReify
  where initP = void
 
 -- OPTION 2: Use stateful locations to model pedigree.  Requires a specific domain.
@@ -103,7 +103,7 @@ runDesugLocPed prog =
             , (toAtom "consR", cons 2)
             , (toAtom "consJ", cons 3)]
        (App prog initP))
-      exampleInterp
+      exampleReify
  where 
    initP = New   
    -- Note: The representation of pedigres is as RAW values (without \p's)
@@ -127,7 +127,7 @@ runDesugNumPed prog =
             , (toAtom "consR", cons 2)
             , (toAtom "consJ", cons 3)]
        (App prog initP))
-      exampleInterp
+      exampleReify
  where 
    initP = Num 0
    cons n = Lam p $ PrimApp Add  (Num n)  $ 
@@ -151,21 +151,13 @@ p1b = App ident Unique
 p1c :: Exp (IVar ())
 p1c = App (Lam x Unique) (Num 9)
 
--- (((lambda (x) (lambda (y) x)) (unique)) (unique))
-
 -- Go a little deeper: Left then Right:
 p1d :: Exp (IVar ())
 p1d = App (App f Unique) Unique
  where f = Lam x$ Lam y$ Varref x
-
-#if 0
-  Lam p
-    (App (App (App (Lam p (Lam x (Lam p_ (Varref x))))
-                   (App (Varref consL) (Varref p)))
-              (App (Lam p (Varref p)) (App (Varref consR) (Varref p))))
-         (App (Varref consJ) (Varref p)))
-#endif
     
+------------------------------
+
 p2 :: Exp LRJ
 p2 = App ident void
 
@@ -203,7 +195,7 @@ p4 = PrimApp Add (Num 4) (Num 3)
 p5 :: Exp (IVar Integer)
 p5 = App ident void
 
-t5 = eval p5 exampleInterp
+t5 = eval p5 exampleReify
 
 d5 = desugar p5
 
@@ -216,7 +208,7 @@ omega :: Exp (IVar ())
 omega = App f f 
  where f = Lam x (App (Varref x) (Varref x))
 
-t6 = eval omega exampleInterp
+t6 = eval omega exampleReify
 
 d6 = desugar omega
 
@@ -228,7 +220,7 @@ p7 :: Exp (IVar String)
 p7 = lett [(y, New)] $ 
      App ident (Put (Varref y) (Q$ QS$ S.singleton$ Full "hi"))
 
-t7 = eval p7 exampleInterp
+t7 = eval p7 exampleReify
 d7 = desugar p7
 -- td7 = runDesugLocPed d7
 
@@ -248,7 +240,7 @@ testOne prog evalFn = unsafePerformIO$ do
     let desug = desugar prog
     hPutStrLn port$ "Desugared: \n  " ++ show (doc desug)
     hPutStrLn port "--------------------------------------------------------------------------------"    
-    let (e1,s1) = eval prog exampleInterp
+    let (e1,s1) = eval prog exampleReify
 --    hPutStrLn port$ "Now running original (pre-desugured) version:"            
 --    hPutStrLn port$ show $ doc e1
         

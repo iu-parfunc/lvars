@@ -176,7 +176,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
            threadDispatch (store, completed, t1 : t2 : t3 : runnable)
     
       -- ASSUMPTION: You'd better not call Interp on an Oracle function.
-      Interp e1 -> 
+      Reify e1 -> 
         evalloop e1 env  state $ 
         \ runstate (VQ (QS ls)) -> kont runstate (toVal$ interp ls)
         

@@ -142,15 +142,12 @@ data Exp d =
     Varref Var
   | App (Exp d) (Exp d)
   | Lam Var (Exp d)      -- I don't like reading De Bruijn  
---  | Q (S.Set d)          -- Query set literals, for now finite.
-  | Q (QuerySet d) -- Query sets defined as predicate functions.  The onus is on the
-                   -- user to ensure incompatibility between all the states that
-                   -- satisfy the predicate.
+  | Q (QuerySet d) 
   | New
   | Put (Exp d) (Exp d)  -- label and singleton query set
   | Get (Exp d) (Exp d)  -- label and query set
   | Consume (Exp d)      -- label only
-  | Interp  (Exp d)      -- query set
+  | Reify  (Exp d)      -- query set
     
   | Unique  -- This can be desugared!
     
@@ -171,8 +168,12 @@ data Prim = Add | Mult
 --   if one exists, and otherwise return Nothing.
 type Oracle d = d -> Maybe d
 
-data QuerySet d = QS (S.Set d)
-                | QF (Oracle d)
+data QuerySet d = QS (S.Set d)  -- Explicit, literal query *sets*.  This could be translated 
+                                -- to a function, but then it wouldn't be printable.
+                | QF (Oracle d) -- Query sets defined as predicate functions.  The onus is on the
+                                -- user to ensure incompatibility between all the states that
+                                -- satisfy the predicate.
+
 instance Show d => Show (QuerySet d) where 
   show (QS s) = "QS "++ show s
   show fn = "<QPredicateFn>"
@@ -223,16 +224,16 @@ subst new var e =
   Put e1 e2 -> Put (loop e1) (loop e2)
   Get e1 e2 -> Get (loop e1) (loop e2)
   Consume x -> Consume (loop x)
-  Interp  x -> Interp  (loop x)
+  Reify  x -> Reify  (loop x)
   PrimApp p e1 e2 -> PrimApp p (loop e1) (loop e2)
 
 --------------------------------------------------------------------------------
 -- * Interpretation Functions
 --------------------------------------------------------------------------------
 
--- A silly Interp function that produces strange unbound variables:
-exampleInterp :: Show d => S.Set d -> Exp d
-exampleInterp ls = Varref (var$ show ls)
+-- A silly Reify function that produces strange unbound variables:
+exampleReify :: Show d => S.Set d -> Exp d
+exampleReify ls = Varref (var$ show ls)
 
 --------------------------------------------------------------------------------
 -- Pretty Printing
