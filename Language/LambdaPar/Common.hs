@@ -41,6 +41,7 @@ var = toAtom
 type Var = Atom
 type SymbolMap a = AtomMap a 
 symMapToList = AM.toList
+symMapFromList = AM.fromList
 symMapInsert = AM.insert
 symMapLookup = AM.lookup
 symMapMap    = AM.map 
@@ -67,6 +68,7 @@ type SymbolMap a = M.Map Symbol a
 -- NOTE - this package would seem to be unsafe because the Symbol type
 -- constructor is exported.
 symMapToList = M.toList
+symMapFromList = M.fromList
 symMapInsert k v m = M.insert k v m
 symMapLookup k m   = M.lookup k m 
 symMapMap    f m   = M.map    f m

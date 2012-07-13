@@ -18,9 +18,7 @@ test:
 
 q: quick
 quick:
-	ghc -package ghc --make UniqueDesugar -o UniqueDesugar.exe
 	ghc -package ghc --make RunTests      -o RunTests.exe
-#	ghc -package ghc --make Language/LambdaPar/RaceDet1 -o UniqueDesugar.exe
 
 test-junit:
 	${CABAL} clean

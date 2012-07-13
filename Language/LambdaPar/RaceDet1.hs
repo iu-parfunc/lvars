@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes, CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
 
 --------------------------------------------------------------------------------
@@ -8,7 +9,7 @@
 
 module Language.LambdaPar.RaceDet1 where 
 
-import qualified UniqueDesugar as U
+import qualified Language.LambdaPar.UniqueDesugar as U
 
 -- import Language.LambdaPar.Common hiding (Exp(..), isValue, subst, get, put, void, singQ)
 import Language.LambdaPar.Common (QuerySet(..), Prim(..), Var, SymbolMap, isLocation, maytrace, var)
@@ -18,6 +19,9 @@ import Control.Monad.State.Strict (State, modify, runState, get, put)
 import Control.Applicative ((<$>),(<*>))
 import Algebra.Lattice
 import Prelude as P hiding (fromInteger)
+import Test.Framework.TH (testGroupGenerator)
+import Test.HUnit ((@=?)) 
+import Test.Framework.Providers.HUnit (testCase)
 
 --------------------------------------------------------------------------------
 
@@ -114,10 +118,10 @@ data DataRace =
              otherPed   :: Pedigree, -- When did the other happen
              otherType  :: GetOrPut
            }
-  deriving (Show)
+  deriving (Show, Eq)
            
 data GetOrPut = GetOp | PutOp
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- Logs PER-location.
 type Logs d = SymbolMap [LogEntry d]
@@ -348,19 +352,19 @@ eval eOrig interp = (final,logs)
 
 -- For quickcheck:
 
-prop_1 a b = (isEarlier a b) == Just LT 
-    -- => (isEarlier b a) == Just GT
+-- prop_1 a b = (isEarlier a b) == Just LT 
+--     -- => (isEarlier b a) == Just GT
 
-prop_2 a b = (isEarlier a b) == Just EQ 
-    -- => (isEarlier b a) == Just EQ
+-- prop_2 a b = (isEarlier a b) == Just EQ 
+--     -- => (isEarlier b a) == Just EQ
            
-prop_3 a b = (isEarlier a b) == Nothing
-    -- => (isEarlier b a) == Nothing
+-- prop_3 a b = (isEarlier a b) == Nothing
+--     -- => (isEarlier b a) == Nothing
 
-prop_4 a =  (isEarlier [] a) == Just LT
-        || (isEarlier [] a) == Just EQ
+-- prop_4 a =  (isEarlier [] a) == Just LT
+--         || (isEarlier [] a) == Just EQ
         
-    -- (isEarlier b a) == Nothing           
+--     -- (isEarlier b a) == Nothing           
            
 -- Unit test cases:
 fs = fromString
@@ -433,14 +437,39 @@ p = var "p"
 --  </ End copy paste>
 --------------------------------------------------------------------------------
 
+-- Unit Tests:
 
-test = do 
-  
+l0 = var "l0"
+case_race1 = (singQ (C.Full 33),
+              C.symMapFromList [(l0,[LogGet [J,J] (C.Full 33),
+                                     LogPut [R,J] (C.Full 33)])],
+              [])
+             @=? detectConsumeRaces U.p3a  
+case_race2 = (singQ (C.Full 33),
+              C.symMapFromList [(l0,[LogGet [R,J]   (C.Full 33),
+                                     LogPut [R,L,J] (C.Full 33)])],
+              [])
+             @=? detectConsumeRaces U.p3b
+
+-- Here's one with a race!
+case_race3 = (singQ C.Empty,
+              C.symMapFromList [(l0,[LogPut     [R,L,J] (C.Full 33),
+                                     LogConsume [R,J]])],
+              [(l0,DataRace {consumePed = [R,J], otherPed = [R,L,J], otherType = PutOp})])
+  @=? detectConsumeRaces U.p5a
+--(Q QS fromList [Full 33],[(l0,)],[])             
+case_race4 = (singQ (C.Full 33),              
+              C.symMapFromList [(l0,[LogConsume [J,J],
+                                     LogPut [R,J] (C.Full 33)])],
+              []) -- And then the race is fixed:
+  @=? detectConsumeRaces U.p5b
+
+
+-- Aggregate the unit tests above in a generated data structure:
+raceTests = $(testGroupGenerator)
+
+quicktest = do 
   print $ detectConsumeRaces U.p3a  
   print $ detectConsumeRaces U.p3b
   print $ detectConsumeRaces U.p5a
   print $ detectConsumeRaces U.p5b
-
--- Hand verified correct answers for p3a and p3b:
--- (Q QS fromList [Full 33],[LogGet l0 [J,J],LogPut l0 [R,J]])
--- (Q QS fromList [Full 33],[LogGet l0 [R,J],LogPut l0 [R,L,J]])

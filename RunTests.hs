@@ -2,16 +2,20 @@
 
 module Main where
 
-import Test.Framework.TH
+import Test.Framework    (defaultMain)
+import Test.Framework.TH (testGroupGenerator)
 import Test.HUnit
 import Test.Framework.Providers.HUnit
 import Algebra.Lattice (joinLeq)
 import Language.LambdaPar.Common
-
+import Language.LambdaPar.UniqueDesugar (uniqueTests)
+import Language.LambdaPar.RaceDet1      (raceTests)
 import Tests
 
-main = $(defaultMainGenerator)
+basicTests = $(testGroupGenerator)
 
+-- main = $(defaultMainGenerator)
+main = defaultMain [basicTests, uniqueTests, raceTests]
 
 --------------------------------------------------------------------------------
 -- QuickCheck properties:

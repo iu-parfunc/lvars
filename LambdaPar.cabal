@@ -20,37 +20,23 @@ library
   exposed-modules:  Language.LambdaPar.Common
                  ,  Language.LambdaPar.Eval1
                  ,  Language.LambdaPar.Eval2
-  
-  -- Modules included in this library but not exported.
-  -- other-modules:       
-  
-  -- Other library packages from which modules are imported.
---  build-depends:       base ==4.5.*, lattices ==1.2.*, stringtable-atom ==0.0.*, containers ==0.4.*
-  build-depends: base, ghc, ghc-prim, lattices, containers,
-                 GenericPretty,
-                 symbol,
-                 stringtable-atom
-
+                 ,  Language.LambdaPar.Eval4
+                 ,  Language.LambdaPar.UniqueDesugar
+                 ,  Language.LambdaPar.RaceDet1
+  build-depends:  base, ghc, ghc-prim, lattices, containers, mtl,
+                  GenericPretty,
+                  template-haskell, HUnit, test-framework, 
+                  test-framework-th, test-framework-quickcheck2, test-framework-hunit,
+                  symbol,
+                  stringtable-atom
 
 -- Test-Suite test-lambdapar
 --  type:       exitcode-stdio-1.0
 executable test-lambdapar
   main-is: RunTests.hs
-  build-depends:  base, ghc, ghc-prim, lattices, containers,
+  build-depends:  base, ghc, ghc-prim, lattices, containers, mtl,
                   GenericPretty,
-                  template-haskell, 
+                  template-haskell, HUnit, test-framework, 
                   test-framework-th, test-framework-quickcheck2, test-framework-hunit,
-                  HUnit, test-framework,
-                  symbol,
-                  stringtable-atom
-
-
-executable test-uniqueDesugar
-  main-is: UniqueDesugar.hs
-  build-depends:  base, ghc, ghc-prim, lattices, containers,
-                  GenericPretty,
-                  template-haskell, 
-                  test-framework-th, test-framework-quickcheck2, test-framework-hunit,
-                  HUnit, test-framework,
-                  symbol,
+                  symbol, 
                   stringtable-atom

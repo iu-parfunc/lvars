@@ -7,7 +7,7 @@
 -- figure 10 of this paper:
 --   http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
 
-module UniqueDesugar where
+module Language.LambdaPar.UniqueDesugar where
 
 import Algebra.Lattice (BoundedJoinSemiLattice)
 import Language.LambdaPar.Common
@@ -18,7 +18,7 @@ import Data.Set as S
 
 import System.IO (stderr, stdout, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
-import Test.Framework.TH
+import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 import Test.HUnit
 import Test.Framework.Providers.HUnit
 
@@ -257,55 +257,19 @@ testOne prog evalFn = unsafePerformIO$ do
     return (e2,s2)
 
 
-case_old_p1  = (Varref (var "l1"))        @=? fst (testOne p1  runDesugLocPed)
-case_old_p1b = (Varref (var "l3"))        @=? fst (testOne p1b runDesugLocPed)
-case_p1      = (Num 0)                    @=? fst (testOne p1  runDesugNumPed) -- [], root Pedigree
-case_p1b     = (Num 2)                    @=? fst (testOne p1b runDesugNumPed) -- [Right]
-case_p1c     = (Num 3)                    @=? fst (testOne p1c runDesugNumPed) -- [Join]
-case_p1d     = (Num 12)                   @=? fst (testOne p1d runDesugNumPed) -- [Right, Left]
+case_old_up1  = (Varref (var "l1"))        @=? fst (testOne p1  runDesugLocPed)
+case_old_up1b = (Varref (var "l3"))        @=? fst (testOne p1b runDesugLocPed)
+case_up1      = (Num 0)                    @=? fst (testOne p1  runDesugNumPed) -- [], root Pedigree
+case_up1b     = (Num 2)                    @=? fst (testOne p1b runDesugNumPed) -- [Right]
+case_up1c     = (Num 3)                    @=? fst (testOne p1c runDesugNumPed) -- [Join]
+case_up1d     = (Num 12)                   @=? fst (testOne p1d runDesugNumPed) -- [Right, Left]
 
-case_p2  =  Q (QS (S.fromList []))        @=? fst (testOne p2  runDesugNopPed)
-case_p3a =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3a runDesugNopPed)
-case_p3b =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3b runDesugNopPed)
-case_p4  =  Num 7                         @=? fst (testOne p4  runDesugNopPed)
+case_up2  =  Q (QS (S.fromList []))        @=? fst (testOne p2  runDesugNopPed)
+case_up3a =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3a runDesugNopPed)
+case_up3b =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3b runDesugNopPed)
+case_up4  =  Num 7                         @=? fst (testOne p4  runDesugNopPed)
 
 ------------------------------------------------------------
 runTests = $(defaultMainGenerator)
 
-main = do 
-  runTests
---  print $ testOne p1d runDesugNumPed
-
-
-  
-  
-  -- (Lam loc (Lam p (Put (Varref loc) (Q QS fromList [LRJ 2]))))
-
-#if 1
-main2 = do 
---   putStrLn "\np1\n============================================================"
---   print $ doc $ desugar p1
---   print $ runDesugLocPed p1
-
-  putStrLn "\np2\n============================================================"
-  print $ doc $ desugar p2
-  print $ runDesugLocPed (desugar p2)
-
-
---   putStrLn "\np5\n============================================================"
---   print p5
---   print d5
---   print t5  
---   putStrLn "\ntest desugared p5\n----------------------------------------"
---   print td5
-  
---   putStrLn "\np7\n============================================================"
---   print p7
---   print$ doc d7
---   print t7  
---   putStrLn "\ntest desugared p7\n----------------------------------------"
---   putStrLn "Running with runDesugLocPed:"
---   print td7
--- --  print $ runDesugNopPed d7 
-
-#endif
+uniqueTests = $(testGroupGenerator)
