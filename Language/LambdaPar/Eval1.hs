@@ -14,16 +14,13 @@ import qualified Data.Set as S
 import Text.PrettyPrint.GenericPretty (Out, doc)
 import Pretty (text, (<>))
 
--- -- Interned strings:
-import StringTable.Atom
-import qualified StringTable.AtomMap as AM
 
 --------------------------------------------------------------------------------
 
 -- | Takes an expression and an interp function.
 eval :: (Eq d, Show d, BoundedJoinSemiLattice d, Out d)
      => Exp d -> (S.Set d -> Exp d) -> (Exp d, SymbolMap d)
-eval eOrig interp = outerloop AM.empty eOrig 
+eval eOrig interp = outerloop symMapEmpty eOrig 
  where
   outerloop store expr = 
     maytrace (show$ text"EVAL1: "<> doc store <> text"    " <> doc expr) $
@@ -56,12 +53,12 @@ eval eOrig interp = outerloop AM.empty eOrig
 
       -- Global shared memory with global uniqueness.
       -- For now using Varrefs to represent labels:
-      New -> let fresh = toAtom$ "l"++show (AM.size store) in
+      New -> let fresh = var$ "l"++show (symMapSize store) in
 	     (Varref fresh, 
-	      AM.insert fresh bottom store)
+	      symMapInsert fresh bottom store)
 
       Get (Varref l) (Q q) -> 
-        case AM.lookup l store of 
+        case symMapLookup l store of 
 	  Nothing -> error$"get: Unbound store location!: "++show l
 
           -- Here we find all the elements of our query set less than the current state:
@@ -78,18 +75,18 @@ eval eOrig interp = outerloop AM.empty eOrig
 
       Consume (Varref l) -> 
           -- Overwrite the existing entry:
-          let store' = AM.insert l (probation l) store in
-          case AM.lookup l store of       
+          let store' = symMapInsert l (probation l) store in
+          case symMapLookup l store of       
 	    Nothing -> (singQ bottom, store')
 	    Just x  -> (singQ   x   , store')
 
       Put (Varref l) (Q q) ->   
         let QS set = q in
           case S.toList set of 
-	    [d] -> let new = case AM.lookup l store of       
+	    [d] -> let new = case symMapLookup l store of       
 			      Nothing -> d
 			      Just x  -> join d x
-                   in (void, AM.insert l new store)
+                   in (void, symMapInsert l new store)
 	    _ -> error$"put can only take a singleton query set, not: "++show set
 		    
 

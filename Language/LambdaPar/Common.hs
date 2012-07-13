@@ -14,7 +14,7 @@ module Language.LambdaPar.Common
        where
 
 -- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
-import Algebra.Lattice
+import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 import qualified Data.Set as S
 import Debug.Trace (trace)
 import Pretty (text, (<>), cat, sep, braces, comma, hsep) -- ghc api
@@ -40,7 +40,13 @@ import StringTable.AtomMap as AM
 var = toAtom
 type Var = Atom
 type SymbolMap a = AtomMap a 
-symbolMapToList = AM.toList
+symMapToList = AM.toList
+symMapInsert = AM.insert
+symMapLookup = AM.lookup
+symMapMap    = AM.map 
+symMapEmpty  = AM.empty
+symMapSize   = AM.size
+symMapElems  = AM.elems
 ----------------------------
 #elif defined(USE_SIMPLEATOM)
 -- 'simple-atom' package:
@@ -51,13 +57,22 @@ type Var = Symbol
 #elif defined(USE_SYMBOL)
 -- 'symbol' package
 import Data.Symbol
+import Data.Map as M
 var = intern
 type Var = Symbol 
 instance Show Symbol where 
  show = unintern
-instance Read Symbol where 
+-- instance Read Symbol where 
+type SymbolMap a = M.Map Symbol a
 -- NOTE - this package would seem to be unsafe because the Symbol type
 -- constructor is exported.
+symMapToList = M.toList
+symMapInsert k v m = M.insert k v m
+symMapLookup k m   = M.lookup k m 
+symMapMap    f m   = M.map    f m
+symMapEmpty  = M.empty
+symMapSize   = M.size 
+symMapElems  = M.elems
 #endif
   
 var :: String -> Var
@@ -269,7 +284,7 @@ instance Out t => Out (SymbolMap t) where
           -- intersperse (text ", ") $ 
           P.map  (<> text ", ") $ 
           P.map (\ (x,y) -> doc x <> text ": " <> docPrec 0 y) $ 
-          symbolMapToList m
+          symMapToList m
   doc m = docPrec 0 m
 
 --------------------------------------------------------------------------------

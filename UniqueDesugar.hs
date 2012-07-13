@@ -7,12 +7,12 @@
 -- figure 10 of this paper:
 --   http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
 
+module UniqueDesugar where
 
 import Algebra.Lattice (BoundedJoinSemiLattice)
 import Language.LambdaPar.Common
 import Language.LambdaPar.Eval4 (evalThreaded)
 import Language.LambdaPar.Eval1 
-import StringTable.Atom (toAtom)
 import Text.PrettyPrint.GenericPretty (Out(..), doc)
 import Data.Set as S
 
@@ -22,16 +22,16 @@ import Test.Framework.TH
 import Test.HUnit
 import Test.Framework.Providers.HUnit
 
-x = toAtom "x"
-y = toAtom "y"
-z = toAtom "z"
-p = toAtom "p"
-p_ = toAtom "ignored"
-loc = toAtom "loc"
-loc2 = toAtom "loc2"
+x = var "x"
+y = var "y"
+z = var "z"
+p = var "p"
+p_ = var "ignored"
+loc = var "loc"
+loc2 = var "loc2"
 
-ig1 = toAtom "ignr1"
-ig2 = toAtom "ignr2"
+ig1 = var "ignr1"
+ig2 = var "ignr2"
 
 ----------------------------------------------------------------------------------------------------
 
@@ -71,9 +71,9 @@ desugar e =
 
  where  
    -- Fake operations on pedigree trees:
-   consL = App (Varref (toAtom "consL")) -- These are NOT normal desugared varrefs
-   consR = App (Varref (toAtom "consR"))
-   consJ = App (Varref (toAtom "consJ"))
+   consL = App (Varref (var "consL")) -- These are NOT normal desugared varrefs
+   consR = App (Varref (var "consR"))
+   consJ = App (Varref (var "consJ"))
 
 
 --------------------------------------------------------------
@@ -83,9 +83,9 @@ desugar e =
 -- Takes an ALREADY DESUGARED input:
 runDesugNopPed prog = 
       eval 
-      (lett [ (toAtom "consL", Lam p_ $ Lam x $ Lam p (Varref x))
-            , (toAtom "consR", Lam p_ $ Lam x $ Lam p (Varref x))
-            , (toAtom "consJ", Lam p_ $ Lam x $ Lam p (Varref x))] 
+      (lett [ (var "consL", Lam p_ $ Lam x $ Lam p (Varref x))
+            , (var "consR", Lam p_ $ Lam x $ Lam p (Varref x))
+            , (var "consJ", Lam p_ $ Lam x $ Lam p (Varref x))] 
        (App prog initP))
       exampleReify
  where initP = void
@@ -99,9 +99,9 @@ runDesugLocPed prog =
       (lett [ (loc, New) ] $ 
        -- The idea here is to represent paths as locations, and use a
        -- CHEATING non-commutative LUB to add info to those locations.
-       lett [ (toAtom "consL", cons 1)
-            , (toAtom "consR", cons 2)
-            , (toAtom "consJ", cons 3)]
+       lett [ (var "consL", cons 1)
+            , (var "consR", cons 2)
+            , (var "consJ", cons 3)]
        (App prog initP))
       exampleReify
  where 
@@ -123,9 +123,9 @@ runDesugNumPed :: (Eq d, Out d, Show d, BoundedJoinSemiLattice d)
 runDesugNumPed prog = 
       eval 
 --      evalThreaded  
-      (lett [ (toAtom "consL", cons 1)
-            , (toAtom "consR", cons 2)
-            , (toAtom "consJ", cons 3)]
+      (lett [ (var "consL", cons 1)
+            , (var "consR", cons 2)
+            , (var "consJ", cons 3)]
        (App prog initP))
       exampleReify
  where 
@@ -162,8 +162,8 @@ p2 :: Exp LRJ
 p2 = App ident void
 
 -- Do a get with a query function (oracle):
-p3 :: Exp (IVar Integer)
-p3 = lett [ (x, New)
+p3a :: Exp (IVar Integer)
+p3a = lett [ (x, New)
           , (y, put x (singQ (Full 33)))] $ 
      get x (Q(QF fn))
  where fn Empty = Nothing
@@ -192,15 +192,21 @@ p3Err = lett   [ (x, New) ]$
 p4 :: Exp LRJ
 p4 = PrimApp Add (Num 4) (Num 3)
 
-p5 :: Exp (IVar Integer)
-p5 = App ident void
+--------------------
+-- Next test a DATA RACE:
 
-t5 = eval p5 exampleReify
+-- This one has a race:
+p5a :: Exp (IVar Int)
+p5a = lett   [ (x, New) ]$ 
+      letpar [ (y, put x (singQ (Full 33)))
+             , (z, Consume (Varref x)) ]
+      (Varref z)
 
-d5 = desugar p5
-
--- Use a void pedigree to start:
-td5 = runDesugNopPed d5
+-- This one doesn't:
+p5b :: Exp (IVar Int)
+p5b = lett  [ (x, New)
+            , (y, put x (singQ (Full 33))) ]
+      (Consume (Varref x))
 
 --------------------
 
@@ -259,7 +265,7 @@ case_p1c     = (Num 3)                    @=? fst (testOne p1c runDesugNumPed) -
 case_p1d     = (Num 12)                   @=? fst (testOne p1d runDesugNumPed) -- [Right, Left]
 
 case_p2  =  Q (QS (S.fromList []))        @=? fst (testOne p2  runDesugNopPed)
-case_p3  =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3  runDesugNopPed)
+case_p3a =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3a runDesugNopPed)
 case_p3b =  Q (QS (S.fromList [Full 33])) @=? fst (testOne p3b runDesugNopPed)
 case_p4  =  Num 7                         @=? fst (testOne p4  runDesugNopPed)
 
@@ -270,7 +276,10 @@ main = do
   runTests
 --  print $ testOne p1d runDesugNumPed
 
--- (Lam loc (Lam p (Put (Varref loc) (Q QS fromList [LRJ 2]))))
+
+  
+  
+  -- (Lam loc (Lam p (Put (Varref loc) (Q QS fromList [LRJ 2]))))
 
 #if 1
 main2 = do 

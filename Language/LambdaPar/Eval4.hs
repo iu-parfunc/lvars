@@ -24,10 +24,6 @@ import Pretty (text, (<>), (<+>))
 import Text.PrettyPrint.GenericPretty (Out(..), doc)
 import GHC.Generics (Generic)
 
--- -- Interned strings:
-import StringTable.Atom
-import qualified StringTable.AtomMap as AM
-
 --------------------------------------------------------------------------------
 -- This interpreter needs a number of extra types not defined in Common:
 
@@ -57,7 +53,7 @@ fromVal val =
     VQ q           -> Q q
     VNum n         -> Num  n
     VLocation l    -> Varref l
-    VClosure v b env | AM.size env == 0 -> Lam v b      
+    VClosure v b env | symMapSize env == 0 -> Lam v b      
                      | otherwise -> error "fromVal: not supporting closures with free vars"
 
 -- | Likewise certain expressions are directly convertable to values:
@@ -65,7 +61,7 @@ toVal :: Show d => Exp d -> Val d
 toVal e = 
   case e of 
     Q q -> VQ q
-    Lam v b -> VClosure v b AM.empty -- TODO - check for free vars.
+    Lam v b -> VClosure v b symMapEmpty -- TODO - check for free vars.
     Varref l | isLocation l -> VLocation l
     _ -> error$"toVal: expression is not a value: "++show e
     
@@ -92,17 +88,17 @@ instance Show d => Show (Store d) where
 instance Out d => Out (Store d) where 
   doc (Store amap) = text "Store" <+> doc (stripMap amap)
   docPrec _ x = doc x
-stripMap mp = AM.map (\ (x,ls) -> (x, length ls)) mp 
+stripMap mp = symMapMap (\ (x,ls) -> (x, length ls)) mp 
 ----------------------------------------
 
 -- Note - the RunState should be used LINEARLY:
 
 evalThreaded :: forall d . (Eq d, Show d, BoundedJoinSemiLattice d, Ord d, Out d) 
              => Exp d -> Interp d -> (Exp d, SymbolMap d)
-evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
+evalThreaded eOrig interp = (fromVal finalVal, symMapMap fst finalStore)
  where
-  (finalVal, (Store finalStore,_,[])) = evalloop eOrig AM.empty initState idCont 
-  initState = (Store AM.empty, M.empty, [])
+  (finalVal, (Store finalStore,_,[])) = evalloop eOrig symMapEmpty initState idCont 
+  initState = (Store symMapEmpty, M.empty, [])
   
   idCont st@(_,_,[]) exp = (exp,st)
   idCont _ _ =  error "Runnables should be empty at the end of execution"
@@ -149,7 +145,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
       Num n    -> kont state (VNum n) 
       Lam v b  -> kont state (VClosure v b env)
       Varref v ->
-        case AM.lookup v env of
+        case symMapLookup v env of
           Nothing -> error$"unbound variable: " ++ show v
           Just val -> kont state val
 
@@ -168,7 +164,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
              
              -- Note that this captures the env / kont arguments:
              doApp (VClosure v bod env) v2 st = 
-               let env' = AM.insert v v2 env in
+               let env' = symMapInsert v v2 env in
                evalloop bod env' st kont 
              doApp e1 e2 _ = error$"Bad operator/rand in application: "++show e1++" "++show e2
          in 
@@ -184,10 +180,10 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
          evalloop e1 env state
          (\ (Store amap,c,r) (VLocation l) -> 
            -- Overwrite the existing entry:
-           let amap' = AM.insert l (probation l,[]) amap 
+           let amap' = symMapInsert l (probation l,[]) amap 
                runstate' = (Store amap',c,r) 
                probation l = error$ "Probationary value for location "++show l++" touched!" in
-           case AM.lookup l amap of       
+           case symMapLookup l amap of       
 	     Nothing     -> kont runstate' (VQ$ QS$ S.singleton bottom)
 	     Just (x,[]) -> kont runstate' (VQ$ QS$ S.singleton x)
              Just (_,ls) -> error$"consumed value on which "++show(length ls)++" gets were still blocked"
@@ -195,8 +191,8 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
 
       -- Global shared memory => globally unique labels.
       -- For now using Varrefs to represent labels:
-      New -> let fresh = toAtom$ "l"++show (AM.size amap) in
-	     kont (Store$ AM.insert fresh (bottom,[]) amap,
+      New -> let fresh = var$ "l"++show (symMapSize amap) in
+	     kont (Store$ symMapInsert fresh (bottom,[]) amap,
                   completed, runnable)
                   (VLocation fresh) 
              
@@ -208,7 +204,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
           (VLocation l, VQ (QS set)) ->             
             case S.toList set of 
               [d] -> let (new, waitlist) =
-                           case AM.lookup l amap of
+                           case symMapLookup l amap of
                              Nothing -> (d,[])
                              Just (x,waitlist) -> (join d x, waitlist)
                          -- When we call each entry in the waitlist, it
@@ -220,7 +216,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
                                                    Just thr -> Right thr) 
                                            waitlist 
                          -- Add the information from this put into the store:
-                         store' = Store$ AM.insert l (new,stillWaiting) amap
+                         store' = Store$ symMapInsert l (new,stillWaiting) amap
                          -- Wake anything ready in the waitlist:
                          runnable' = thrds ++ runnable
                      in 
@@ -234,7 +230,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
          let (Store amap, completed, runnable) = state2 in
          case (v1,v2) of
            (VLocation l, VQ quer) ->
-             case AM.lookup l amap of 
+             case symMapLookup l amap of 
                Nothing -> error$"get: Unbound store location!: "++show l
                Just (d,waiting) -> 
                   case checkReady d of
@@ -242,7 +238,7 @@ evalThreaded eOrig interp = (fromVal finalVal, AM.map fst finalStore)
                     Nothing ->      
                        -- It's not above us yet, capture continuation and place it in the store:
                        -- Continue processing another thread:
-                       threadDispatch (Store$ AM.insert l (d, putcont : waiting) amap,
+                       threadDispatch (Store$ symMapInsert l (d, putcont : waiting) amap,
                                        completed, runnable)
               -- Here we may need to add a new continuation to the waitlist.
               -- That continuation is invoked whenever there is the

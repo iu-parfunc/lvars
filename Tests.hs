@@ -2,8 +2,6 @@
 module Tests where
 
 import qualified Data.Set as S
-import StringTable.Atom (toAtom)
-import qualified StringTable.AtomMap as AM
 
 import Language.LambdaPar.Common
 import Language.LambdaPar.Eval1 (eval)
@@ -19,9 +17,9 @@ import Control.Monad (forM_)
 -- Examples and Test programs:
 --------------------------------------------------------------------------------
 
-x = toAtom "x"
-y = toAtom "y"
-z = toAtom "z"
+x = var "x"
+y = var "y"
+z = var "z"
 
 ----------------------------------------
 p0 :: Exp (IVar Integer)
@@ -122,8 +120,8 @@ unify (e1,s1) (e2,s2) =
   expsMatch &&
   -- TEMP -- for now just check if the same SET of values is in the
   -- store, ignoring all labels entirely:
-  S.fromList (AM.elems s1) == 
-  S.fromList (AM.elems s2)
+  S.fromList (symMapElems s1) == 
+  S.fromList (symMapElems s2)
  where 
   expsMatch =
    case (e1,e2) of

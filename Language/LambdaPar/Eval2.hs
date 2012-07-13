@@ -19,10 +19,6 @@ import Prelude hiding (exp)
 import Pretty (text, (<>), (<+>))
 import Text.PrettyPrint.GenericPretty (Out(..), doc)
 
--- -- Interned strings:
-import StringTable.Atom
-import qualified StringTable.AtomMap as AM
-
 --------------------------------------------------------------------------------
 -- This interpreter needs a number of extra types not defined in Common:
 
@@ -58,17 +54,17 @@ instance Out d => Out (Store d) where
   doc (Store amap) = text "Store" <+> doc (stripMap amap)
   docPrec _ x = doc x
   
-stripMap mp = AM.map (\ (x,ls) -> (x, length ls)) mp
+stripMap mp = symMapMap (\ (x,ls) -> (x, length ls)) mp
 ----------------------------------------
 
 -- Note - the RunState should be used LINEARLY:
 
 evalThreaded :: forall d . (Eq d, Show d, BoundedJoinSemiLattice d, Ord d, Out d) 
              => Exp d -> Interp d -> (Exp d, SymbolMap d)
-evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
+evalThreaded eOrig interp = (finalVal, symMapMap fst finalStore)
   where
   (finalVal, (Store finalStore,_,[])) = evalloop eOrig idCont initState
-  initState = (Store AM.empty, M.empty, [])
+  initState = (Store symMapEmpty, M.empty, [])
   
   idCont st@(_,_,[]) exp = (exp,st)
   idCont _ _ =  error "Runnables should be empty at the end of execution"
@@ -124,9 +120,9 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
          evalloop e1
          (\ (Store amap,c,r) (Varref l) -> 
            -- Overwrite the existing entry:
-           let amap' = AM.insert l (probation l,[]) amap 
+           let amap' = symMapInsert l (probation l,[]) amap 
                runstate' = (Store amap',c,r) in
-           case AM.lookup l amap of       
+           case symMapLookup l amap of       
 	     Nothing     -> kont runstate' (singQ bottom)
 	     Just (x,[]) -> kont runstate' (singQ x)
              Just (_,ls) -> error$"consumed value on which "++show(length ls)++" gets were still blocked"
@@ -134,8 +130,8 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
 
       -- Global shared memory => globally unique labels.
       -- For now using Varrefs to represent labels:
-      New -> let fresh = toAtom$ "l"++show (AM.size amap) in
-	     kont (Store$ AM.insert fresh (bottom,[]) amap,
+      New -> let fresh = var$ "l"++show (symMapSize amap) in
+	     kont (Store$ symMapInsert fresh (bottom,[]) amap,
                   completed, runnable)
                   (Varref fresh) 
              
@@ -160,7 +156,7 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
      doPut (Varref l) (Q (QS set)) (Store amap, completed, runnable) =
        case S.toList set of 
          [d] -> let (new, waitlist) =
-                      case AM.lookup l amap of
+                      case symMapLookup l amap of
                         Nothing -> (d,[])
                         Just (x,waitlist) -> (join d x, waitlist)
                     -- When we call each entry in the waitlist, it
@@ -172,7 +168,7 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
                                               Just thr -> Right thr) 
                                       waitlist 
                     -- Add the information from this put into the store:
-                    store' = Store$ AM.insert l (new,stillWaiting) amap
+                    store' = Store$ symMapInsert l (new,stillWaiting) amap
                     -- Wake anything ready in the waitlist:
                     runnable' = thrds ++ runnable
                 in 
@@ -182,7 +178,7 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
 
      doGet :: Val d -> Val d -> RunState d -> Result d      
      doGet (Varref l) (Q (QS set)) (Store amap,completed,runnable) =
-           case AM.lookup l amap of 
+           case symMapLookup l amap of 
              Nothing -> error$"get: Unbound store location!: "++show l
              Just (d,waiting) -> 
                 case checkReady d of
@@ -190,7 +186,7 @@ evalThreaded eOrig interp = (finalVal, AM.map fst finalStore)
                   Nothing ->      
                      -- It's not above us yet, capture continuation and place it in the store:
                      -- Continue processing another thread:
-                     threadDispatch (Store$ AM.insert l (d, putcont : waiting) amap,
+                     threadDispatch (Store$ symMapInsert l (d, putcont : waiting) amap,
                                      completed, runnable)
        -- Here we may need to add a new continuation to the waitlist,
        -- but that continuation is invoked whenever there is the
