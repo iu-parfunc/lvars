@@ -36,4 +36,3 @@ clean:
 	rm -f *.o Language/LambdaPar/*.o
 	rm -f RunTests UniqueDesugar Language/LambdaPar/RaceDet1
 
-
