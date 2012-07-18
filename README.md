@@ -17,7 +17,7 @@ might be possible to observe that a store location containes "at least
 4", but not possible to observe the precise value.
 
 Section 3 of our [draft paper][2012-lambdapar-draft] presents the
-syntax and semantics of lambdapar.  The code in this reposito ry is a
+syntax and semantics of lambdapar.  The code in this repository is a
 PLT Redex model of a variant of the semantics given in the paper,
 where the reduction relation has been tweaked a bit and the
 user-specified partially ordered set is the set of natural numbers
