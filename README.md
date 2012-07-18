@@ -5,8 +5,8 @@ A PLT Redex model of a variant of the lambdapar language.
 
 ### lambdapar in a nutshell
 
-lambdapar is a deterministic parallel calculus with shared state,
-based on the untyped lambda calculus, and extended with `put` and
+lambdapar is a deterministic parallel calculus with shared state.  It
+is an untyped lambda calculus extended with a store and with `put` and
 `get` operations that write to and read from shared variables.  In
 this setting of shared mutable state, the trick that lambdapar employs
 to maintain determinism is that writes must be _monotonically
@@ -17,7 +17,7 @@ might be possible to observe that a store location containes "at least
 4", but not possible to observe the precise value.
 
 Section 3 of our [draft paper][2012-lambdapar-draft] presents the
-syntax and semantics of lambdapar.  The code in this repository is a
+syntax and semantics of lambdapar.  The code in this reposito ry is a
 PLT Redex model of a variant of the semantics given in the paper,
 where the reduction relation has been tweaked a bit and the
 user-specified partially ordered set is the set of natural numbers
@@ -136,7 +136,7 @@ Running slow test suite with small-step-base-rr...One test passed.
 cpu time: 1010991 real time: 1022071 gc time: 13267
 ```
 
-The slow test takes _three orders of magnitude_ longer when run with
+The slow test takes several orders of magnitude longer when run with
 `small-step-base-rr` than with `small-step-fast-rr`.  (Those numbers
 are in milliseconds -- so the slow test is taking about 17 minutes!)
 Stepping through the test manually using `traces` finds 64 terms for
