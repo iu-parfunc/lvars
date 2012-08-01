@@ -17,8 +17,8 @@ module Language.LambdaPar.Common
 import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 import qualified Data.Set as S
 import Debug.Trace (trace)
-import Pretty (text, (<>), cat, sep, braces, comma, hsep) -- ghc api
-import Text.PrettyPrint.GenericPretty (Out(..))
+import Text.PrettyPrint (text, (<>), cat, sep, braces, comma, hsep)
+import Text.PrettyPrint.GenericPretty
 import GHC.Generics
 import Data.List as L (intersperse, lookup) 
 import Prelude as P
@@ -274,13 +274,6 @@ instance Out t => Out (S.Set t) where
   doc s = docPrec 0 s
 
 instance Out t => Out (IVar t)
-
--- This instance was added to Text.PrettyPrint.GenericPretty in version 1.2.0:
-#if !MIN_VERSION_GenericPretty(1,2,0)
-instance Out Integer where
-  docPrec _ i = doc i
-  doc i = text (show i)
-#endif
 
 instance Out t => Out (SymbolMap t) where
   docPrec _ m = 

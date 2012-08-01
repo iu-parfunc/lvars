@@ -16,7 +16,7 @@ import Data.Either (partitionEithers)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Prelude hiding (exp)
-import Pretty (text, (<>), (<+>))
+import Text.PrettyPrint (text, (<>), (<+>))
 import Text.PrettyPrint.GenericPretty (Out(..), doc)
 
 --------------------------------------------------------------------------------

@@ -24,7 +24,7 @@ library
                  ,  Language.LambdaPar.UniqueDesugar
                  ,  Language.LambdaPar.RaceDet1
   build-depends:  base, ghc, ghc-prim, lattices, containers, mtl,
-                  GenericPretty,
+                  GenericPretty >= 1.2.0, pretty,
                   template-haskell, HUnit, test-framework, 
                   test-framework-th, test-framework-quickcheck2, test-framework-hunit,
                   symbol,
@@ -35,7 +35,7 @@ library
 executable test-lambdapar
   main-is: RunTests.hs
   build-depends:  base, ghc, ghc-prim, lattices, containers, mtl,
-                  GenericPretty,
+                  GenericPretty >= 1.2.0, pretty,
                   template-haskell, HUnit, test-framework, 
                   test-framework-th, test-framework-quickcheck2, test-framework-hunit,
                   symbol, 

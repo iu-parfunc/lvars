@@ -12,7 +12,7 @@ import Language.LambdaPar.Common
 import Algebra.Lattice
 import qualified Data.Set as S
 import Text.PrettyPrint.GenericPretty (Out, doc)
-import Pretty (text, (<>))
+import Text.PrettyPrint (text, (<>))
 
 
 --------------------------------------------------------------------------------
