@@ -275,9 +275,12 @@ instance Out t => Out (S.Set t) where
 
 instance Out t => Out (IVar t)
 
+-- This instance was added to Text.PrettyPrint.GenericPretty in version 1.2.0:
+#if !MIN_VERSION_GenericPretty(1,2,0)
 instance Out Integer where
   docPrec _ i = doc i
   doc i = text (show i)
+#endif
 
 instance Out t => Out (SymbolMap t) where
   docPrec _ m = 
