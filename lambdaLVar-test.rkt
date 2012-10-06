@@ -1,6 +1,6 @@
 #lang racket
 (require redex/reduction-semantics
-         "lambdapar.rkt")
+         "lambdaLVar.rkt")
 (require srfi/1)
 
 (provide test-all test-fast)

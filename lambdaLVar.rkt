@@ -1,4 +1,4 @@
-;; A Redex model of the lambdapar language.
+;; A Redex model of the lambdaLVar language.
 
 #lang racket
 (require redex)
@@ -30,7 +30,7 @@
 (define leq-op <=)
 (define lub-op max)
 
-(define-language lambdapar
+(define-language lambdaLVar
   ;; Configurations, on which the reduction relation is defined.
   (Config (S e) Error)
   
@@ -95,13 +95,13 @@
 
 (define small-step-base-rr
   (reduction-relation
-   lambdapar
+   lambdaLVar
    (--> Config_1 Config_2
         (judgment-holds (small-step-base Config_1 Config_2)))))
 
 (define small-step-fast-rr
   (reduction-relation
-   lambdapar
+   lambdaLVar
    (--> Config_1 Config_2
         (judgment-holds (small-step-fast Config_1 Config_2)))))
 
@@ -122,7 +122,7 @@
 
 ;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
 ;; E-ReflErr, and with the addition of the rules shown in Figure 5.
-(define-judgment-form lambdapar
+(define-judgment-form lambdaLVar
   #:mode (small-step-base I O)
   #:contract (small-step-base Config Config)
 
@@ -241,7 +241,7 @@
 ;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
 ;; E-ReflErr, and with the addition of the rules shown in Figure 6.
 ;; Much faster in Redex than `small-step-base`.
-(define-judgment-form lambdapar
+(define-judgment-form lambdaLVar
   #:mode (small-step-fast I O)
   #:contract (small-step-fast Config Config)
 
@@ -370,14 +370,14 @@
                     Error)
    (small-step-fast (S e) Error)])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-dom : S -> (l ...)
   [(store-dom ()) ()]
   [(store-dom ((l_1 d_1) (l_2 d_2) ...))
    ,(cons (term l_1) (term (store-dom ((l_2 d_2) ...))))])
 
 ;; Return a list of locations in dom(S_1) that are not in dom(S_2).
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-dom-diff : S S -> (l ...)
   [(store-dom-diff S_1 S_2)
    ,(lset-difference equal?
@@ -385,7 +385,7 @@
                      (term (store-dom S_2)))])
 
 ;; Rename locations so threads don't conflict.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   rename-locs : (S e) S S -> (S e)
   [(rename-locs (S_1 e_11) S_2 S)
    ;; Any new locations created between S and S_1 need to be given
@@ -409,17 +409,17 @@
 
 ;; The greatest element of the store lattice is any store in which
 ;; some location is bound to Top.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-top? : S -> Bool
   [(store-top? TopS) ,#t]
   [(store-top? S) ,#f])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   top? : d -> Bool
   [(top? Top) ,#t]
   [(top? d) ,#f])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   lub : d d -> d
   [(lub d_1 d_2) d_2
    (where #t (leq d_1 d_2))]
@@ -427,7 +427,7 @@
    (where #t (leq d_2 d_1))]
   [(lub d_1 d_2) ,(lub-op (term d_1) (term d_2))])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   leq : d d -> Bool
   [(leq Bot d_2) ,#t]
   [(leq d_1 Bot) ,#f]
@@ -435,7 +435,7 @@
   [(leq d_1 Top) ,#t]
   [(leq d_1 d_2) ,(leq-op (term d_1) (term d_2))])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   lubstore : S S -> S
   [(lubstore S_1 ()) S_1]
   [(lubstore () S_2) S_2]
@@ -455,7 +455,7 @@
 ;; gets is going to be in the domain of either S_1 or S_2 or both.
 
 ;; TODO: could use style improvement with `where` clauses (issue #8).
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   lubstore-helper : S S l -> d
   [(lubstore-helper S_1 S_2 l)
    ,(let ([d_1 (term (store-lookup S_1 l))]
@@ -466,7 +466,7 @@
         [else (term (lub ,d_1 ,d_2))]))])
 
 ;; Helper function to get all the locations in a store
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-locs : S -> (l ...)
   [(store-locs ()) ()]
   [(store-locs ((l d) (l_1 d_1) ...))
@@ -474,7 +474,7 @@
           (term (store-locs ((l_1 d_1) ...))))])
 
 ;; Helper function to take the union of lists of locations
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   union : (l ...) (l ...) -> (l ...)
   [(union () (l ...)) (l ...)]
   [(union (l ...) ()) (l ...)]
@@ -484,12 +484,12 @@
         (cons (term l_1)
               (term (union (l_2 ...) (l ...)))))])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   variable-not-in-store : S -> l
   [(variable-not-in-store S)
    ,(variable-not-in (term S) (term l))])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-lookup : S l -> d/lookupfailed
   ;; TODO: more Redex-y way to express this? (issue #9)
   [(store-lookup S l) ,(let ([v (assq (term l) (term S))])
@@ -498,7 +498,7 @@
                              (term lookupfailed)))])
 
 ;; Actually handles both updates and extensions.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   store-update : S l d -> S/updatefailed
   [(store-update () l d) ((l d))
    ;; TODO: deal with case where d = Top, or tighten up to not accept
@@ -514,7 +514,7 @@
 
 ;; The second condition on the E-GetVal rule.  For any two distinct
 ;; elements in Q, the lub of them is Top.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   incomp : Q -> Bool
   [(incomp ()) ,#t]
   [(incomp (d)) ,#t]
@@ -527,12 +527,12 @@
          (term (incomp (d_2 d_3 ...))))])
 
 ;; The third condition on the E-GetVal rule.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   valid : Q -> Bool
   [(valid Q) ,(not (null? (term Q)))])
 
 ;; The fourth condition on the E-GetVal rule.
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   exists-d : d Q -> d/Bool
   [(exists-d d_1 ()) #f]
   ;; 
@@ -543,7 +543,7 @@
   [(exists-d d_1 (d_2 d_3 ...))
    (exists-d d_1 (d_3 ...))])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   delta : Q -> Q
   ;; Let's just have it be identity for now...
   [(delta Q) Q])
@@ -551,7 +551,7 @@
 ;; subst and subst-vars: capture-avoiding substitution, due to
 ;; redex.racket-lang.org/lam-v.html.
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   subst : x any any -> any
   ;; 1. x_1 bound, so don't continue in lambda body
   [(subst x_1 any_1 (lambda (x_2 ... x_1 x_3 ...) any_2))
@@ -576,7 +576,7 @@
    ((subst x_1 any_1 any_2) ...)]
   [(subst x_1 any_1 any_2) any_2])
 
-(define-metafunction lambdapar
+(define-metafunction lambdaLVar
   subst-vars : (x any) ... any -> any
   [(subst-vars (x_1 any_1) x_1) any_1]
   [(subst-vars (x_1 any_1) (any_2 ...))

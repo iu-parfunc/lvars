@@ -1,24 +1,24 @@
-lambdapar-redex
-===============
+lambdaLVar-redex
+================
 
-A PLT Redex model of a variant of the lambdapar language.
+A PLT Redex model of a variant of the lambdaLVar language.
 
-### lambdapar in a nutshell
+### lambdaLVar in a nutshell
 
-lambdapar is a deterministic parallel calculus with shared state.  It
+lambdaLVar is a deterministic parallel calculus with shared state.  It
 is an untyped lambda calculus extended with a store and with `put` and
 `get` operations that write to and read from shared variables.  In
-this setting of shared mutable state, the trick that lambdapar employs
+this setting of shared mutable state, the trick that lambdaLVar employs
 to maintain determinism is that writes must be _monotonically
 increasing_ with respect to the partial order on a user-specified
 partially ordered set, and reads must make only limited observations
-of the states of variables -- for instance, in a lambdapar program it
+of the states of variables -- for instance, in a lambdaLVar program it
 might be possible to observe that a store location containes "at least
 4", but not possible to observe the precise value.
 
 Section 3 of the draft paper ["A Lattice-Theoretical Approach to
-Deterministic Parallelism with Shared State"][2012-lambdapar-draft]
-presents the syntax and semantics of lambdapar.  The code in this
+Deterministic Parallelism with Shared State"][2012-lambdaLVar-draft]
+presents the syntax and semantics of lambdaLVar.  The code in this
 repository is a PLT Redex model of a variant of the semantics given in
 the paper, where the reduction relation has been tweaked a bit and the
 user-specified partially ordered set is the set of natural numbers
@@ -44,7 +44,7 @@ evaluation steps of the E-ParApp rule of our semantics.  (To be sure, a
 semantics specified with single-hole evaluation contexts can express
 _arbitrary_ evaluation order and therefore remains open to the
 possibility of parallel _implementation_. Still, since parallelism is
-lambdapar's _raison d'être_, we want to bake parallelism into the
+lambdaLVar's _raison d'être_, we want to bake parallelism into the
 model.)
 
 Since Redex [does not have support for multiple-hole evaluation
@@ -61,7 +61,7 @@ rules as it would normally, because Redex has no way of knowing their
 names.
 
 The Redex model is useful despite these limitations.  However, it
-would be interesting to try modeling lambdapar in a framework that has
+would be interesting to try modeling lambdaLVar in a framework that has
 better support for truly simultaneous reductions -- the [K
 system][k-framework] comes to mind.
 
@@ -71,7 +71,7 @@ The reflexive reduction rules E-Refl and E-ReflErr of our paper
 semantics pose a dilemma for the Redex testing infrastructure. Redex's
 built-in `test-->>` mechanism for testing a reduction relation finds
 all irreducible terms reachable from a given term, but with E-Refl and
-E-ReflErr present in the reduction relation, no lambdapar terms would
+E-ReflErr present in the reduction relation, no lambdaLVar terms would
 be irreducible under it, so it wouldn't be possible to write tests
 with `test-->>`.  An alternative testing mechanism, `test-->>E`,
 checks if there _exists_ a reduction path from one given term to
@@ -93,7 +93,7 @@ Under the semantics just described, if both subexpressions in an
 application can step, then any of three rules can apply next --
 E-App-1, E-App-2, and E-ParApp -- leading to an exponential increase
 in the number of evaluation paths that an configuration might take. It
-is easy to construct [lambdapar programs that are very slow to test
+is easy to construct [lambdaLVar programs that are very slow to test
 with `test-->>`][slow-test] under this semantics, because the system
 must take all evaluation paths.  Of course, taking all evaluation
 paths is exactly the behavior we want.  Although we can't prove
@@ -117,7 +117,7 @@ implementations in which parallel evaluation is ``lockstep''.
 
 ### Building and running
 
-Running `make all` from the lambdapar-redex directory will build and
+Running `make all` from the lambdaLVar-redex directory will build and
 all the tests will run, using both reduction relations.  There's [one
 particular test][slow-test] that runs so slowly under
 `small-step-base-rr` that we put it in a "slow test suite" by itself.
@@ -143,7 +143,7 @@ are in milliseconds -- so the slow test is taking about 17 minutes!)
 Stepping through the test manually using `traces` finds 64 terms for
 the slow version, and 15 for the fast version.
 
-[2012-lambdapar-draft]: http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
+[2012-lambdaLVar-draft]: http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
 
 [eval-contexts]: http://www.ccs.neu.edu/racket/pubs/tcs92-fh.pdf
 
@@ -155,4 +155,4 @@ the slow version, and 15 for the fast version.
 
 [k-framework]: http://k-framework.org
 
-[slow-test]: https://github.com/lkuper/lambdapar-redex/blob/master/lambdapar-test.rkt#L463
+[slow-test]: https://github.com/lkuper/lambdaLVar-redex/blob/master/lambdaLVar-test.rkt#L463

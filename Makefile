@@ -1,4 +1,4 @@
 default:
-	racket lambdapar-test-main.rkt
+	racket lambdaLVar-test-main.rkt
 all:
-	racket lambdapar-test-all-main.rkt
+	racket lambdaLVar-test-all-main.rkt
