@@ -1,7 +1,7 @@
 ;; A Redex model of the lambdaLVar language.
 
 #lang racket
-(require redex)
+(require redex/reduction-semantics)
 (require srfi/1)
 
 ;; Export things we want to test.
@@ -104,14 +104,6 @@
    lambdaLVar
    (--> Config_1 Config_2
         (judgment-holds (small-step-fast Config_1 Config_2)))))
-
-(define trace-base
-  (lambda (config)
-    (traces small-step-base-rr config)))
-
-(define trace-fast
-  (lambda (config)
-    (traces small-step-fast-rr config)))
 
 ;; NB: in Racket v5.2, `define-judgment-form` doesn't let you use
 ;; `side-condition`; you have to use `where`, which does pattern
