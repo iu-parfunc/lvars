@@ -143,6 +143,11 @@ are in milliseconds -- so the slow test is taking about 17 minutes!)
 Stepping through the test manually using `traces` finds 64 terms for
 the slow version, and 15 for the fast version.
 
+### Automated testing
+
+Some lambdaLVar tests are running (and, hopefully, passing) on [a
+Jenkins continuous integration server][jenkins].
+
 [2012-lambdaLVar-draft]: http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
 
 [eval-contexts]: http://www.ccs.neu.edu/racket/pubs/tcs92-fh.pdf
@@ -156,3 +161,5 @@ the slow version, and 15 for the fast version.
 [k-framework]: http://k-framework.org
 
 [slow-test]: https://github.com/lkuper/lambdaLVar-redex/blob/master/lambdaLVar-test.rkt#L463
+
+[jenkins]: http://tester-lin.soic.indiana.edu:8080/job/lambdaLVar-redex/
