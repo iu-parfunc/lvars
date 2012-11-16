@@ -148,7 +148,7 @@ the slow version, and 15 for the fast version.
 Some lambdaLVar tests are running (and, hopefully, passing) on [a
 Jenkins continuous integration server][jenkins].
 
-[2012-lambdaLVar-draft]: http://www.cs.indiana.edu/~rrnewton/papers/2012-lambdapar-draft.pdf
+[2012-lambdaLVar-draft]: https://www.cs.indiana.edu/~lkuper/papers/2012-lambdaLVar-draft.pdf
 
 [eval-contexts]: http://www.ccs.neu.edu/racket/pubs/tcs92-fh.pdf
 
