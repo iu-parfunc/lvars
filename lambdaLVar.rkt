@@ -4,8 +4,9 @@
 (require redex/reduction-semantics)
 (require srfi/1)
 
-;; Export things we want to test.
+;; Export things we want to use or test elsewhere.
 (provide
+ lambdaLVar
  exists-d
  leq
  lub
