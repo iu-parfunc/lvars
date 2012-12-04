@@ -1,6 +1,5 @@
 #lang racket
-(require redex/reduction-semantics
-         "lambdaLVar.rkt")
+(require "lambdaLVar-stdlib.rkt")
 
 ;; Sketch of a 0CFA provided by Matt Might.  TODO: make this actually
 ;; work.
@@ -39,13 +38,28 @@
 ;;  while (changed())
 ;;    propagate(calls)
 
+;; analyze-call: Evaluate f, evaluate args, apply eval'd f to eval'd
+;; args.
 (define-metafunction lambdaLVar
-  map-par : v (e ...) -> (e ...)
-  [(map-par f (e_1 e_2 ...))
-   (let par ((x_1 (f e_1))
-             (x_2 (map-par f (e_2 ...))))
-     ,(cons (term x_1)
-            (term x_2)))])
+  analyze-call : f (e ...) -> ()
+  [(analyze-call f (e  ...))
+   ;; Two or more args to be eval'd.
+   (let par ((x_1 (eval f))
+             (x_2 (map-par eval (e ...))))
+     (apply x_1 x_2))])
+
+(define-metafunction lambdaLVar
+  ;; TODO.
+  apply : v (v ...) -> ()
+  )
+
+(define-metafunction lambdaLVar
+  eval : e -> v
+  ;; TODO.
+  [(eval x)
+   ;; TODO: not sure if "get (V(v))" is supposed to be lambdaLVar
+   ;; "get", or what V is supposed to be yet, exactly.
+   ()])
 
 (term
  (()
@@ -55,19 +69,18 @@
            ((lambda (x) (f (lambda (v) ((x x) v))))
             (lambda (x) (f (lambda (v) ((x x) v))))))))
     ;; analyze :: Call -> ()
-    (let ((analyze
-           (Y (lambda (analyze)
-                (lambda (call)))))))
-    
-    ;; propagate :: Call* -> ()
-    (let ((propagate
-           (Y (lambda (propagate)
-                (lambda (calls)
-                  ;; Escape to Scheme for 'cond'.
-                  ,(cond
-                     [(null? calls) (term '())]
-                     [else
-                      (term (let par ((x_1 (analyze (car calls)))
-                                      (x_2 (propagate (cdr calls))))
-                              ;; return value not important
-                              '()))]))))))))))
+    (let ((analyze (lambda (call)
+                     (analyze-call (car call) (cdr call)))))
+
+      ;; propagate :: Call* -> ()
+      (let ((propagate
+             (Y (lambda (propagate)
+                  (lambda (calls)
+                    ;; Escape to Scheme for 'cond'.
+                    ,(cond
+                       [(null? calls) (term '())]
+                       [else
+                        (term (let par ((x_1 (analyze (car calls)))
+                                        (x_2 (propagate (cdr calls))))
+                                ;; return value not important
+                              '()))])))))))))))
