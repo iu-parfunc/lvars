@@ -59,7 +59,57 @@
   [(eval x)
    ;; TODO: not sure if "get (V(v))" is supposed to be lambdaLVar
    ;; "get", or what V is supposed to be yet, exactly.
+
+   ;; Hm.  V is "a mapping from variables in the program to store
+   ;; locations."  "the program" is THE PROGRAM BEING ANALYZED.
    ()])
+
+;; Representations of CPS'd lambda terms and binding environments
+;; borrowed from example code at
+;; http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/.
+
+;; The analysis works on CPS'd lambda terms.
+
+;; value = clo
+;; For pure CPS, closures are the only kind of value.
+
+;; clo ::= (make-closure <lambda> <benv>)
+;; Closures pair a lambda term with a binding environment that
+;; determinse the value of its free variables.
+(define-struct closure (lam benv) #:prefab)
+
+;; addr = bind
+;; Addresses can point to values in the store.
+;; In pure CPS, the only kind of addresses are bindings.
+
+;; bind ::= (make-binding <var> <time>)
+;; A binding is minted each time a variable gets bound to a value.
+(define-struct binding (var time) #:prefab)
+
+
+;; Before the analysis begins, we need a mapping from variables in the
+;; term being analyzed to store locations, also known as a "binding
+;; environment".
+
+;; benv = hash[var,addr]
+;; A binding environment maps variables to addresses.
+(define empty-benv (make-immutable-hasheq empty))
+
+; benv-lookup : benv var -> addr
+(define benv-lookup hash-ref)
+
+; benv-extend : benv var addr -> benv
+(define benv-extend hash-set)
+
+; benv-extend* : benv list[var] list[addr] -> benv
+(define (benv-extend* benv vars addrs)
+  (for/fold ([benv benv])
+    ([v (in-list vars)]
+     [a (in-list addrs)])
+    (benv-extend benv v a)))  
+
+
+
 
 (term
  (()
