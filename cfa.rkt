@@ -1,8 +1,73 @@
 #lang racket
-(require "lambdaLVar-stdlib.rkt")
+(require "lambdaLVar.rkt"
+         "lambdaLVar-stdlib.rkt"
+         redex/reduction-semantics
+         scheme/set)
 
 ;; Sketch of a 0CFA provided by Matt Might.  TODO: make this actually
 ;; work.
+
+;; Code constructing the programs being analyzed is borrowed from
+;; http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.ss
+
+;; We're analyzing programs written in the CPS lambda calculus, which
+;; has the following grammar:
+
+;; exp  ::= (make-ref    <label> <var>)
+;;       |  (make-lam    <label> (<var1> ... <varN>) <call>)
+;; call ::= (make-call   <label> <exp0> <exp1> ... <expN>)
+
+;; label = uninterned symbol
+
+;; We use structs to represent the syntax of the programs being
+;; analyzed:
+
+(define-struct stx (label) #:prefab)
+(define-struct (exp stx) () #:prefab)
+(define-struct (ref exp) (var) #:prefab)
+(define-struct (lam exp) (formals call) #:prefab)
+(define-struct (call stx) (fun args) #:prefab)
+
+;; And here are some helper functions for constructing syntax trees:
+
+(define new-label gensym)
+
+(define (make-ref* var) 
+  (make-ref (new-label) var))
+
+(define (make-lambda* formals call)
+  (make-lam (new-label) formals call))
+
+(define (make-call* fun . args)
+  (make-call (new-label) fun args))
+
+(define (make-let* var exp call)
+  (make-call* (make-lambda* (list var) call) exp))
+
+;; And here's a standard example program to be analyzed:
+
+;; The Standard Example
+;;
+;; In direct style:
+;;
+;; (let* ((id (lambda (x) x))
+;;        (a  (id (lambda (z) (halt z))))
+;;        (b  (id (lambda (y) (halt y)))))
+;;   (halt b))
+(define standard-example
+  (make-let* 'id (make-lambda* '(x k) (make-call* (make-ref* 'k) (make-ref* 'x)))
+             (make-call* (make-ref* 'id)
+                         (make-lambda* '(z) (make-ref* 'z))
+                         (make-lambda* '(a) 
+                                       (make-call* (make-ref* 'id)
+                                                   (make-lambda* '(y) (make-ref* 'y))
+                                                   (make-lambda* '(b) 
+                                                                 (make-ref* 'b)))))))
+
+;; The tricky part here is going to be writing the analysis using only
+;; the lambdaLVar language.
+
+
 
 ;; propagate :: Call* -> ()
 ;; propagate (call : rest) =
@@ -64,18 +129,16 @@
    ;; locations."  "the program" is THE PROGRAM BEING ANALYZED.
    ()])
 
-;; Representations of CPS'd lambda terms and binding environments
-;; borrowed from example code at
-;; http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/.
 
-;; The analysis works on CPS'd lambda terms.
+
+
 
 ;; value = clo
 ;; For pure CPS, closures are the only kind of value.
 
 ;; clo ::= (make-closure <lambda> <benv>)
 ;; Closures pair a lambda term with a binding environment that
-;; determinse the value of its free variables.
+;; determines the value of its free variables.
 (define-struct closure (lam benv) #:prefab)
 
 ;; addr = bind
@@ -88,8 +151,8 @@
 
 
 ;; Before the analysis begins, we need a mapping from variables in the
-;; term being analyzed to store locations, also known as a "binding
-;; environment".
+;; term being analyzed to store locations in the lambdaLVar store,
+;; also known as a "binding environment".
 
 ;; benv = hash[var,addr]
 ;; A binding environment maps variables to addresses.
