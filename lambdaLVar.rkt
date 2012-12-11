@@ -463,7 +463,6 @@
       ;; Put labels back together with their lubs.
       (zip locs lubs))])
 
-
 (define-metafunction lambdaLVar
   lubstore-TopS? : S S -> Bool
   [(lubstore-TopS? S_1 S_2)
