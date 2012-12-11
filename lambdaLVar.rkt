@@ -54,18 +54,19 @@
      Q
      (lambda (x) e))
 
-  ;; Query set literals.  A query set is the set we pass to a `get`
-  ;; expression that specifies a non-empty, pairwise incompatible
-  ;; subset of the state space of the location being queried.  The
-  ;; grammar allows empty query sets, as well, because those are the
-  ;; return value of `put`.
+  ;; Threshold set literals.  A threshold set is the set we pass to a
+  ;; `get` expression that specifies a non-empty, pairwise
+  ;; incompatible subset of the state space of the location being
+  ;; queried.  The grammar allows empty threshold sets, as well,
+  ;; because those are the return value of `put`.
 
-  ;; Incidentally, under this grammar, (Top) and (Bot) are query
+  ;; Incidentally, under this grammar, (Top) and (Bot) are threshold
   ;; sets. (Bot) makes sense, but (Top) is nonsensical -- a program
-  ;; that queried a variable for (Top) would block forever.
+  ;; that passed (Top) as a threshold would block forever.
   ;; Nevertheless, the grammar admits it.
   (Q (d ...))
-  ;; TODO: support for { d | pred(d) }-style query sets (issue #5).
+  ;; TODO: support for { d | pred(d) }-style threshold sets (issue
+  ;; #5).
 
   ;; Stores.  A store is either a finite partial mapping from
   ;; locations to domain values (excluding Top), or it is the
