@@ -59,7 +59,7 @@
    (term #f))
 
   (test-equal
-   (term (store-locs ((l1 4) (l2 5) (l3 Bot))))
+   (term (store-dom ((l1 4) (l2 5) (l3 Bot))))
    (term (l1 l2 l3)))
 
   (test-equal

@@ -17,7 +17,6 @@
  small-step-fast-rr
  store-dom
  store-dom-diff
- store-locs
  store-lookup
  store-top?
  store-update
@@ -434,8 +433,8 @@
   [(lubstore () S_2) S_2]
   [(lubstore S_1 S_2)
    ;; Get the union of labels from S_1 and S_2
-   ,(let* ([union-locs (term (union (store-locs S_1)
-                                    (store-locs S_2)))]
+   ,(let* ([union-locs (term (union (store-dom S_1)
+                                    (store-dom S_2)))]
            ;; For each label in the list, take the lub of S_1(l) and S_2(l)
            [union-lubs (term ,(map (lambda (loc)
                                      (term (lubstore-helper S_1 S_2 ,loc)))
@@ -457,14 +456,6 @@
         [(equal? d_1 (term lookupfailed)) d_2]
         [(equal? d_2 (term lookupfailed)) d_1]
         [else (term (lub ,d_1 ,d_2))]))])
-
-;; Helper function to get all the locations in a store
-(define-metafunction lambdaLVar
-  store-locs : S -> (l ...)
-  [(store-locs ()) ()]
-  [(store-locs ((l d) (l_1 d_1) ...))
-   ,(cons (term l)
-          (term (store-locs ((l_1 d_1) ...))))])
 
 ;; Helper function to take the union of lists of locations
 (define-metafunction lambdaLVar
