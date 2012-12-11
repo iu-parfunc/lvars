@@ -63,39 +63,45 @@
    (term (l1 l2 l3)))
 
   (test-equal
-   (term (lubstore ((l1 5)
-                    (l2 6)
-                    (l3 7))
-                   ((l2 2)
-                    (l4 9))))
-   (term ((l1 5)
-          (l3 7)
-          (l2 6)
-          (l4 9))))
+   (stores-equal-modulo-perms?
+    (term (lubstore ((l1 5)
+                     (l2 6)
+                     (l3 7))
+                    ((l2 2)
+                     (l4 9))))
+    (term ((l1 5)
+           (l3 7)
+           (l2 6)
+           (l4 9))))
+   #t)
 
   (test-equal
-   (term (lubstore ((l1 5)
-                    (l2 6)
-                    (l3 7))
-                   ((l1 5)
-                    (l4 9)
-                    (l2 4))))
-   (term ((l3 7)
-          (l1 5)
-          (l4 9)
-          (l2 6))))
+   (stores-equal-modulo-perms?
+    (term (lubstore ((l1 5)
+                     (l2 6)
+                     (l3 7))
+                    ((l1 5)
+                     (l4 9)
+                     (l2 4))))
+    (term ((l3 7)
+           (l1 5)
+           (l4 9)
+           (l2 6))))
+   #t)
 
   (test-equal
-   (term (lubstore ((l1 Bot)
-                    (l2 6)
-                    (l3 Bot))
-                   ((l1 5)
-                    (l4 9)
-                    (l2 4))))
-   (term ((l3 Bot)
-          (l1 5)
-          (l4 9)
-          (l2 6))))
+   (stores-equal-modulo-perms?
+    (term (lubstore ((l1 Bot)
+                     (l2 6)
+                     (l3 Bot))
+                    ((l1 5)
+                     (l4 9)
+                     (l2 4))))
+    (term ((l3 Bot)
+           (l1 5)
+           (l4 9)
+           (l2 6))))
+   #t)
 
   (test-equal
    (term (lubstore-helper ((l1 5))
@@ -119,24 +125,34 @@
    (term 6))
   
   (test-equal
-   (term (union () ()))
-   (term ()))
+   (lset= equal?
+          (lset-union equal? (term ()) (term ()))
+          (term ()))
+   #t)
 
   (test-equal
-   (term (union () (l1)))
-   (term (l1)))
+   (lset= equal?
+          (lset-union equal? (term ()) (term (l1)))
+          (term (l1)))
+   #t)
 
   (test-equal
-   (term (union (l1 l2) (l1 l2 l3)))
-   (term (l1 l2 l3)))
+   (lset= equal?
+          (lset-union equal? (term (l1 l2)) (term (l1 l2 l3)))
+          (term (l1 l2 l3)))
+   #t)
 
   (test-equal
-   (term (union (l2 l3) (l1 l4)))
-   (term (l2 l3 l1 l4)))
+   (lset= equal?
+          (lset-union equal? (term (l2 l3)) (term (l1 l4)))
+          (term (l2 l3 l1 l4)))
+   #t)
 
   (test-equal
-   (term (union (l2 l3) (l1 l2 l4)))
-   (term (l3 l1 l2 l4)))
+   (lset= equal?
+          (lset-union equal? (term (l2 l3)) (term (l1 l2 l4)))
+          (term (l3 l1 l2 l4)))
+   #t)
 
   (test-equal
    (term (store-lookup ((l 2)) l))
@@ -228,25 +244,25 @@
    (term #f))
 
   (test-equal
-   (equal-modulo-store-perms?
+   (cfgs-equal-modulo-perms?
     '(((l 4) (l1 3)) ())
     '(((l1 3) (l 4)) ()))
    #t)
 
   (test-equal
-   (equal-modulo-store-perms?
+   (cfgs-equal-modulo-perms?
     '(((l1 3) (l 4)) ())
     '(((l1 3) (l 4)) (3)))
    #f)
 
   (test-equal
-   (equal-modulo-store-perms?
+   (cfgs-equal-modulo-perms?
     '(((l 4) (l1 3)) ())
     '(((l1 3) (l 4)) (3)))
    #f)
 
   (test-equal
-   (equal-modulo-store-perms?
+   (cfgs-equal-modulo-perms?
     '(((l 3) (l1 4)) ())
     '(((l1 3) (l 4)) ()))
    #f)
@@ -422,7 +438,7 @@
              Error))
 
   (test-->> rr
-            #:equiv equal-modulo-store-perms?
+            #:equiv cfgs-equal-modulo-perms?
             (term
              (()
               (let par ([x_1 new]
@@ -488,10 +504,16 @@
 
 ;; Takes two (S e) configurations and returns #t if they're equal
 ;; modulo permutations of store bindings.
-(define equal-modulo-store-perms?
+(define cfgs-equal-modulo-perms?
   (lambda (cfg1 cfg2)
-    (and (lset= equal? (car cfg1) (car cfg2))
+    (and (stores-equal-modulo-perms? (car cfg1) (car cfg2))
          (equal? (cdr cfg1) (cdr cfg2)))))
+
+;; Takes two stores and returns #t if they're equal modulo
+;; permutations.
+(define stores-equal-modulo-perms?
+  (lambda (s1 s2)
+    (lset= equal? s1 s2)))
 
 (define (test-fast)
   (display "Running metafunction tests...")

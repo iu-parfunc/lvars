@@ -1,4 +1,6 @@
-;; A Redex model of the lambdaLVar language.
+;; A Redex model of the lambdaLVar language.  Mentions of "the TR" in
+;; this document refer to
+;; http://www.cs.indiana.edu/cgi-bin/techreports/TRNNN.cgi?trnum=TR702
 
 #lang racket
 (require redex/reduction-semantics)
@@ -22,7 +24,6 @@
  store-update
  subst
  top?
- union
  valid)
 
 ;; We're assuming a domain where elements are of type `natural` for
@@ -65,14 +66,16 @@
   ;; Nevertheless, the grammar admits it.
   (Q (d ...))
   ;; TODO: support for { d | pred(d) }-style query sets (issue #5).
-  
+
   ;; Stores.  A store is either a finite partial mapping from
   ;; locations to domain values (excluding Top), or it is the
   ;; distinguished element TopS.
   (S ((l StoreVal) ...) TopS)
 
-  ;; Domains contain elements to which locations can be bound.  We
-  ;; assume a domain of naturals (plus Top and Bot) for now.
+  ;; Domains contain elements d to which locations can be bound.  We
+  ;; assume a domain of naturals (plus Top and Bot) for now.  A
+  ;; StoreVal can be any element of the domain except Top (see
+  ;; Definition 1 in the TR).
   (d Top StoreVal)
   (StoreVal natural Bot)
 
@@ -427,20 +430,59 @@
   [(leq d_1 Top) ,#t]
   [(leq d_1 d_2) ,(leq-op (term d_1) (term d_2))])
 
+;; Definition 3 in the TR.
 (define-metafunction lambdaLVar
   lubstore : S S -> S
   [(lubstore S_1 ()) S_1]
   [(lubstore () S_2) S_2]
+
+  ;; The TopS case.
+  [(lubstore S_1 S_2)
+   TopS
+   (where #t (lubstore-TopS? S_1 S_2))]
+
+  ;; Otherwise, (lubstore S_1 S_2) is the store S such that (store-dom
+  ;; S) = (union (store-dom S_1) (store-dom S_2)), and, for all l in
+  ;; (store-dom S),
+
+  ;; S(l) = (lub S_1(l) S_2(l))
+  ;;        if (member? l (intersection (store-dom S_1) (store_dom S_2)))
+  ;; S(l) = S_1(l) if (not (member? l (store-dom S_2)))
+  ;; S(l) = S_2(l) if (not (member? l (store-dom S_1)))
+
   [(lubstore S_1 S_2)
    ;; Get the union of labels from S_1 and S_2
-   ,(let* ([union-locs (term (union (store-dom S_1)
-                                    (store-dom S_2)))]
-           ;; For each label in the list, take the lub of S_1(l) and S_2(l)
-           [union-lubs (term ,(map (lambda (loc)
-                                     (term (lubstore-helper S_1 S_2 ,loc)))
-                                   (term ,union-locs)))])
+   ,(let* ([locs (lset-union equal?
+                             (term (store-dom S_1))
+                             (term (store-dom S_2)))]
+           ;; For each label in the list, take the lub of S_1(l) and S_2(l),
+           [lubs (term ,(map (lambda (loc)
+                               (term (lubstore-helper S_1 S_2 ,loc)))
+                             locs))])
       ;; Put labels back together with their lubs.
-      (zip union-locs union-lubs))])
+      (zip locs lubs))])
+
+
+(define-metafunction lambdaLVar
+  lubstore-TopS? : S S -> Bool
+  [(lubstore-TopS? S_1 S_2)
+   ;; (lubstore-TopS? S_1 S_2) == #t iff there exists some l in
+   ;; (intersection (store-dom S_1) (store-dom S_2)) such that (lub
+   ;; (store-lookup S_1 l) (store-lookup S_2 l)) == Top.
+   
+   ;; First, get the intersection of the domains of S_1 and S_2.
+   ,(let* ([locs (lset-intersection equal?
+                                    (term (store-dom S_1))
+                                    (term (store-dom S_2)))]
+           ;; For each such label l, take the lub of S_1(l) and S_2(l).
+           [lubs (term ,(map (lambda (loc)
+                          (term (lubstore-helper S_1 S_2 ,loc)))
+                        locs))])
+      ;; If any lub in the resulting list is Top, return #t;
+      ;; otherwise, return #f.
+      (if (member (term Top) lubs)
+          #t
+          #f))])
 
 ;; Given a store location `l` and two stores `S_1` and `S_2`, return
 ;; the lub of S_1(l) and S_2(l).  We know that every l this function
@@ -456,17 +498,6 @@
         [(equal? d_1 (term lookupfailed)) d_2]
         [(equal? d_2 (term lookupfailed)) d_1]
         [else (term (lub ,d_1 ,d_2))]))])
-
-;; Helper function to take the union of lists of locations
-(define-metafunction lambdaLVar
-  union : (l ...) (l ...) -> (l ...)
-  [(union () (l ...)) (l ...)]
-  [(union (l ...) ()) (l ...)]
-  [(union (l_1 l_2 ...) (l ...))
-   ,(if (memq (term l_1) (term (l ...)))
-        (term (union (l_2 ...) (l ...)))
-        (cons (term l_1)
-              (term (union (l_2 ...) (l ...)))))])
 
 (define-metafunction lambdaLVar
   variable-not-in-store : S -> l
