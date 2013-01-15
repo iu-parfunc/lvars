@@ -71,8 +71,8 @@ get iv@(LVar ref waitls) = getLV iv poll
 
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
 -- are not allowed, and result in a runtime error.
-put :: IVar a -> a -> Par ()
-put iv elt = putLV iv putter
+put_ :: IVar a -> a -> Par ()
+put_ iv elt = putLV iv putter
  where
    putter ref =
      atomicModifyIORef ref $ \ x ->
@@ -89,6 +89,7 @@ data Trace =
            | forall a . New (IO a) (LVar a -> Trace)
            | Fork Trace Trace
            | Done
+           | DoIO (IO ()) Trace
            | Yield Trace
 
 
@@ -110,13 +111,18 @@ sched _doSync queue t = loop t
            let retry = fmap cont <$> poll in
            atomicModifyIORef waitls $ \ls -> (retry:ls, ())
 
-{-      
-    Put (IVar v) a t  -> do
-      cs <- atomicModifyIORef v $ \e -> case e of
-               Empty    -> (Full a, [])
-               Full _   -> error "multiple put"
-               Blocked cs -> (Full a, cs)
-      mapM_ (pushWork queue. ($a)) cs
+    Put (LVar v waitls) mutator tr -> do
+      mutator v
+      -- Here we have a problem... we can't atomically run polling functions in the
+      -- waitlist..  They're in IO.
+
+      -- FIXME
+
+      -- cs <- atomicModifyIORef waitls $ \ls -> case e of
+      --          Empty    -> (Full a, [])
+      --          Full _   -> error "multiple put"
+      --          Blocked cs -> (Full a, cs)
+      -- mapM_ (pushWork queue. ($a)) cs
       loop t
 
     Fork child parent -> do
@@ -125,13 +131,15 @@ sched _doSync queue t = loop t
     Done ->
          if _doSync
 	 then reschedule queue
--- We could fork an extra thread here to keep numCapabilities workers
--- even when the main thread returns to the runPar caller...
+         -- We could fork an extra thread here to keep numCapabilities workers
+         -- even when the main thread returns to the runPar caller...
          else do putStrLn " [par] Forking replacement thread..\n"
                  forkIO (reschedule queue); return ()
--- But even if we don't we are not orphaning any work in this
--- threads work-queue because it can be stolen by other threads.
---	 else return ()
+         -- But even if we don't we are not orphaning any work in this
+         -- threads work-queue because it can be stolen by other threads.
+         --	 else return ()
+
+    DoIO io t -> io >> loop t
 
     Yield parent -> do 
         -- Go to the end of the worklist:
@@ -141,13 +149,10 @@ sched _doSync queue t = loop t
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
 
--}
-
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
 reschedule :: Sched -> IO ()
 reschedule _ = return ()
-{-
 reschedule queue@Sched{ workpool } = do
   e <- atomicModifyIORef workpool $ \ts ->
          case ts of
@@ -156,7 +161,6 @@ reschedule queue@Sched{ workpool } = do
   case e of
     Nothing -> steal queue
     Just t  -> sched True queue t
--}
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
 -- Cilk time/space bounds if one is running strictly nested (series
@@ -165,7 +169,6 @@ reschedule queue@Sched{ workpool } = do
 -- | Attempt to steal work or, failing that, give up and go idle.
 steal :: Sched -> IO ()
 steal _ = return ()
-{-
 steal q@Sched{ idle, scheds, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no
   go scheds
@@ -198,8 +201,6 @@ steal q@Sched{ idle, scheds, no=my_no } = do
               sched True q t
            Nothing -> go xs
 
--}
-
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: Sched -> Trace -> IO ()
 pushWork Sched { workpool, idle } t = do
@@ -221,17 +222,6 @@ data Sched = Sched
 -- Forcing evaluation of a LVar is fruitless.
 instance NFData (LVar a) where
   rnf _ = ()
-
-{-
-
-
--- From outside the Par computation we can peek.  But this is nondeterministic.
-pollIVar :: IVar a -> IO (Maybe a)
-pollIVar (IVar ref) = 
-  do contents <- readIORef ref
-     case contents of 
-       Full x -> return (Just x)
-       _      -> return (Nothing)
 
 
 {-# INLINE runPar_internal #-}
@@ -267,15 +257,8 @@ runPar_internal _doSync x = do
         forkOnIO cpu $
           if (cpu /= main_cpu)
              then reschedule state
-             else do
-                  rref <- newIORef Empty
-                  sched _doSync state $ runCont (x >>= put_ (IVar rref)) (const Done)
-                  readIORef rref >>= putMVar m
-
-   r <- takeMVar m
-   case r of
-     Full a -> return a
-     _ -> error "no result"
+             else sched _doSync state $ runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
+   takeMVar m
 
 
 runPar :: Par a -> a
@@ -293,7 +276,6 @@ runParAsync :: Par a -> a
 runParAsync = unsafePerformIO . runPar_internal False
 
 -- -----------------------------------------------------------------------------
--}
 
 -- | Internal operation.  Creates a new @LVar@ with an initial value
 newLV :: IO lv -> Par (LVar lv)
@@ -306,4 +288,7 @@ getLV lv poll = Par $ Get lv poll
 -- | Internal operation.  Modify the LVar.  Had better be monotonic.
 putLV :: LVar a -> (a -> IO ()) -> Par ()
 putLV lv fn = Par $ \c -> Put lv fn (c ())
+
+liftIO :: IO () -> Par ()
+liftIO io = Par $ \c -> DoIO io (c ())
 
