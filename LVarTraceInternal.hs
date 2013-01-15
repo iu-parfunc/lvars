@@ -47,7 +47,7 @@ instance Applicative Par where
 
 
 -- Actually, we will need to do something like this:
-data LVar a = LVar a (IORef [a -> Trace])
+data LVar a = LVar a (IORef [IO (Maybe Trace)])
 
 ------------------------------------------------------------------------------
 
@@ -92,26 +92,25 @@ data Trace =
            | Yield Trace
 
 
-{-  
-
 -- | The main scheduler loop.
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
  where 
   loop t = case t of
-    New a f -> do
-      r <- newIORef a
-      loop (f (IVar r))
-    Get (IVar v) c -> do
-      e <- readIORef v
-      case e of
-         Full a -> loop (c a)
-         _other -> do
-           r <- atomicModifyIORef v $ \e -> case e of
-                        Empty    -> (Blocked [c], reschedule queue)
-                        Full a   -> (Full a,      loop (c a))
-                        Blocked cs -> (Blocked (c:cs), reschedule queue)
-           r
+    New io fn -> do
+      x  <- io
+      ls <- newIORef []      
+      loop (fn (LVar x ls))
+
+    Get (LVar v waitls) poll cont -> do
+      e <- poll
+      case e of         
+         Just a  -> loop (cont a) -- Return straight away.
+         Nothing ->
+           let retry = fmap cont <$> poll in
+           atomicModifyIORef waitls $ \ls -> (retry:ls, ())
+
+{-      
     Put (IVar v) a t  -> do
       cs <- atomicModifyIORef v $ \e -> case e of
                Empty    -> (Full a, [])
@@ -119,6 +118,7 @@ sched _doSync queue t = loop t
                Blocked cs -> (Full a, cs)
       mapM_ (pushWork queue. ($a)) cs
       loop t
+
     Fork child parent -> do
          pushWork queue child
          loop parent
@@ -141,9 +141,13 @@ sched _doSync queue t = loop t
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
 
+-}
+
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
 reschedule :: Sched -> IO ()
+reschedule _ = return ()
+{-
 reschedule queue@Sched{ workpool } = do
   e <- atomicModifyIORef workpool $ \ts ->
          case ts of
@@ -152,7 +156,7 @@ reschedule queue@Sched{ workpool } = do
   case e of
     Nothing -> steal queue
     Just t  -> sched True queue t
-
+-}
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
 -- Cilk time/space bounds if one is running strictly nested (series
@@ -160,6 +164,8 @@ reschedule queue@Sched{ workpool } = do
 
 -- | Attempt to steal work or, failing that, give up and go idle.
 steal :: Sched -> IO ()
+steal _ = return ()
+{-
 steal q@Sched{ idle, scheds, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no
   go scheds
@@ -192,6 +198,8 @@ steal q@Sched{ idle, scheds, no=my_no } = do
               sched True q t
            Nothing -> go xs
 
+-}
+
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: Sched -> Trace -> IO ()
 pushWork Sched { workpool, idle } t = do
@@ -209,12 +217,12 @@ data Sched = Sched
       idle     :: IORef [MVar Bool],
       scheds   :: [Sched] -- Global list of all per-thread workers.
     }
---  deriving Show
 
-
--- Forcing evaluation of a IVar is fruitless.
-instance NFData (IVar a) where
+-- Forcing evaluation of a LVar is fruitless.
+instance NFData (LVar a) where
   rnf _ = ()
+
+{-
 
 
 -- From outside the Par computation we can peek.  But this is nondeterministic.
