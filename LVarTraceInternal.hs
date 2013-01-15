@@ -29,22 +29,6 @@ import Control.Concurrent hiding (yield)
 import GHC.Conc hiding (yield)
 import Control.DeepSeq
 import Control.Applicative
--- import Text.Printf
-
-
-class IsLVar lvrep where
-  -- data Guts :: *
-  -- putLVar :: lvrep -> (Guts -> Guts) -> IO ()  
-  -- getLVar :: lvrep -> (Guts -> Bool) -> IO lvrep
-
-  putLVar :: (lvrep -> IO ())   -> IO ()  
-  getLVar :: (lvrep -> IO Bool) -> IO lvrep
-
-
-instance IsLVar (IVar Int) where
-  
---  putLVar (IVar ref) fn =
---    atomicModifyIORef ref fn
 
 newtype Par a = Par {
     runCont :: (a -> Trace) -> Trace
@@ -67,37 +51,42 @@ data LVar a = LVar a (IORef [a -> Trace])
 
 ------------------------------------------------------------------------------
 
--- type IVar a = LVar IVarContents
-newtype IVar a = IVar (IORef (IVarContents a))
+type IVar a = LVar (IORef (IVarContents a))
+-- newtype IVar a = IVar (IORef (IVarContents a))
 data IVarContents a = Full a | Empty -- | Blocked [a -> Trace]
 
 new :: Par (IVar a)
-new = newLV (IVar <$> newIORef Empty)
+new = newLV (newIORef Empty)
 
 -- | read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get iv@(IVar ref) =
-  getLV iv $ do
-    contents <- readIORef ref
-    case contents of
-      Full x -> return$ Just x
-      Empty  -> return Nothing
+get iv@(LVar ref waitls) = getLV iv poll
+ where
+   poll = do contents <- readIORef ref
+             case contents of
+               Full x -> return$ Just x
+               Empty  -> return Nothing
 
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
 -- are not allowed, and result in a runtime error.
--- put :: IVar a -> a -> Par ()
-
-
+put :: IVar a -> a -> Par ()
+put iv elt = putLV iv putter
+ where
+   putter ref =
+     atomicModifyIORef ref $ \ x ->
+        case x of
+          Empty  -> (Full elt, ())
+          Full _ -> error "multiple puts to an IVar"
 
 -- ---------------------------------------------------------------------------
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
-             forall a b . Get a (IO (Maybe b)) (b -> Trace)
-           | forall a . Put a (a -> IO ()) Trace
-           | forall a . New (IO a) (a -> Trace)
+             forall a b . Get (LVar a) (IO (Maybe b)) (b -> Trace)
+           | forall a . Put (LVar a) (a -> IO ()) Trace
+           | forall a . New (IO a) (LVar a -> Trace)
            | Fork Trace Trace
            | Done
            | Yield Trace
@@ -299,14 +288,14 @@ runParAsync = unsafePerformIO . runPar_internal False
 -}
 
 -- | Internal operation.  Creates a new @LVar@ with an initial value
-newLV :: IO lv -> Par lv
+newLV :: IO lv -> Par (LVar lv)
 newLV init = Par $ New init
 
 -- | Internal operation.  Test if the LVar satisfies the given threshold.
-getLV :: lv -> (IO (Maybe b)) -> Par b
+getLV :: LVar a -> (IO (Maybe b)) -> Par b
 getLV lv poll = Par $ Get lv poll
 
 -- | Internal operation.  Modify the LVar.  Had better be monotonic.
-put_ :: lv -> (lv -> IO ()) -> Par ()
-put_ lv fn = Par $ \c -> Put lv fn (c ())
+putLV :: LVar a -> (a -> IO ()) -> Par ()
+putLV lv fn = Par $ \c -> Put lv fn (c ())
 
