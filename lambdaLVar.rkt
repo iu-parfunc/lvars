@@ -66,7 +66,7 @@
   ;; Nevertheless, the grammar admits it.
   (Q (d ...))
   ;; TODO: support for { d | pred(d) }-style threshold sets (issue
-  ;; #5).
+  ;; #3).
 
   ;; Stores.  A store is either a finite partial mapping from
   ;; locations to domain values (excluding Top), or it is the
@@ -198,7 +198,7 @@
                     (S (delta Q)))]
 
   ;; Desugaring of lets.
-  ;; TODO: multiple bindings? (issue #7)
+  ;; TODO: multiple bindings? (issue #4)
   [(small-step-base (S (let ((x_1 e_1)) e_2))
                     (S ((lambda (x_1) e_2) e_1)))]
 
@@ -488,7 +488,7 @@
 ;; the lub of S_1(l) and S_2(l).  We know that every l this function
 ;; gets is going to be in the domain of either S_1 or S_2 or both.
 
-;; TODO: could use style improvement with `where` clauses (issue #8).
+;; TODO: could use style improvement with `where` clauses (issue #6).
 (define-metafunction lambdaLVar
   lubstore-helper : S S l -> d
   [(lubstore-helper S_1 S_2 l)
@@ -506,7 +506,7 @@
 
 (define-metafunction lambdaLVar
   store-lookup : S l -> d/lookupfailed
-  ;; TODO: more Redex-y way to express this? (issue #9)
+  ;; TODO: more Redex-y way to express this? (issue #7)
   [(store-lookup S l) ,(let ([v (assq (term l) (term S))])
                          (if v
                              (term ,(second v))
@@ -517,10 +517,10 @@
   store-update : S l d -> S/updatefailed
   [(store-update () l d) ((l d))
    ;; TODO: deal with case where d = Top, or tighten up to not accept
-   ;; Top (issue #10)
+   ;; Top (issue #8)
    ]
   [(store-update ((l_2 d_2) (l_3 d_3) ...) l d)
-   ;; TODO: deal with case where (lub d_1 d_2) = Top (issue #10)
+   ;; TODO: deal with case where (lub d_1 d_2) = Top (issue #8)
    ,(if (equal? (term l) (term l_2))
         (cons (term (l_2 (lub d d_2)))
               (term ((l_3 d_3) ...)))
@@ -533,7 +533,7 @@
   incomp : Q -> Bool
   [(incomp ()) ,#t]
   [(incomp (d)) ,#t]
-  ;; TODO: deal with case where d = Top or Bot (issue #10)
+  ;; TODO: deal with case where d = Top or Bot (issue #8)
   [(incomp (d_1 d_2)) ,(equal? (term (lub d_1 d_2)) (term Top))]
   ;; Something like this?
   [(incomp (d_1 d_2 d_3 ...))
