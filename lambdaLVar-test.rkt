@@ -358,6 +358,15 @@
              (((l 3))
               ())))
 
+  ;; This should work because put just puts the max of the current value and the new value.
+  (test-->> rr
+            (term
+             (((l 2))
+              (put l (1))))
+            (term
+             (((l 2))
+              ())))
+  
   ;; let
   (test-->> rr
             (term
