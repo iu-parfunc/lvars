@@ -4,7 +4,10 @@
 	     #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
--- | This module exposes the internals of the @Par@ monad so that you
+-- | This (experimental) module generalizes the Par monad to allow arbitrary LVars
+-- (lattice variables) not just IVars.
+-- 
+-- This module exposes the internals of the @Par@ monad so that you
 -- can build your own scheduler or other extensions.  Do not use this
 -- module for purposes other than extending the @Par@ monad with new
 -- functionality.
@@ -46,13 +49,19 @@ instance Applicative Par where
    pure  = return
 
 
--- Actually, we will need to do something like this:
-data LVar a = LVar a (IORef [IO (Maybe Trace)])
+-- | An LVar consists of (1) a piece of mutable state, (2) a list of polling
+-- functions that produce continuations when they are successfull, and (3) a version
+-- number that is atomically updated each time a put *begins*.
+data LVar a = LVar {
+  lvstate :: !a,
+  blocked :: {-# UNPACK #-} !IORef [IO (Maybe Trace)],
+  version :: {-# UNPACK #-} !IORef Int -- TODO, replace with MutVar# 
+}
 
 ------------------------------------------------------------------------------
+-- IVars implemented on top of LVars:
 
 type IVar a = LVar (IORef (IVarContents a))
--- newtype IVar a = IVar (IORef (IVarContents a))
 data IVarContents a = Full a | Empty -- | Blocked [a -> Trace]
 
 new :: Par (IVar a)
