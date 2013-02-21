@@ -49,17 +49,26 @@ instance Applicative Par where
    pure  = return
 
 
--- | An LVar consists of (1) a piece of mutable state, (2) a list of polling
--- functions that produce continuations when they are successfull, and (3) a version
--- number that is atomically updated each time a put *begins*.
+-- | An LVar consists of a piece of mutable state, and a list of polling
+-- functions that produce continuations when they are successfull.
 data LVar a = LVar {
   lvstate :: a,
-  blocked :: {-# UNPACK #-} !(IORef [IO (Maybe Trace)]),
-  version :: {-# UNPACK #-} !(IORef Int) -- TODO, replace with MutVar# 
+  blocked :: {-# UNPACK #-} !Poller
 }
 
--- Return the updated value:
-atomicIncr cntr = atomicModifyIORef cntr (\c -> (c+1,c+1))
+data Poller = Poller {
+   poll  :: {-# UNPACK #-}! (IORef [IO (Maybe Trace)]), 
+   woken :: {-# UNPACK #-}! (IORef Bool)
+}
+
+-- Return the old value.  Could replace with a true atomic op.
+atomicIncr cntr = atomicModifyIORef cntr (\c -> (c+1,c))
+
+uidCntr :: IORef Int
+uidCntr = unsafePerformIO (newIORef 0)
+
+getUID :: IORef Int
+getUID =  atomicModifyIORef uidCntr
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
@@ -114,9 +123,9 @@ sched _doSync queue t = loop t
     New io fn -> do
       x  <- io
       ls <- newIORef []      
-      loop (fn (LVar x ls (error "finishme--need version")))
+      loop (fn (LVar x ls))
 
-    Get (LVar v waitls _) poll cont -> do
+    Get (LVar v waitls) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
@@ -124,12 +133,10 @@ sched _doSync queue t = loop t
            let retry = fmap cont <$> poll in
            atomicModifyIORef waitls $ \ls -> (retry:ls, ())
 
-    Put (LVar v waitls version) mutator tr -> do
+    Put (LVar v waitls) mutator tr -> do
       -- Here we follow an unfortunately expensive protocol.
-      -- First, increment the counter to indicate the start of mutation:
-      _ <- atomicIncr version
       mutator v
-      
+      readIORef 
 
       -- Now we TRY to scan the waitlist, but someone else may mutate in the middle.
       -- Because changes must be monotonic, this never allows false positives in the
