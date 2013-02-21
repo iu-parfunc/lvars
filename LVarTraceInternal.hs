@@ -53,10 +53,13 @@ instance Applicative Par where
 -- functions that produce continuations when they are successfull, and (3) a version
 -- number that is atomically updated each time a put *begins*.
 data LVar a = LVar {
-  lvstate :: !a,
-  blocked :: {-# UNPACK #-} !IORef [IO (Maybe Trace)],
-  version :: {-# UNPACK #-} !IORef Int -- TODO, replace with MutVar# 
+  lvstate :: a,
+  blocked :: {-# UNPACK #-} !(IORef [IO (Maybe Trace)]),
+  version :: {-# UNPACK #-} !(IORef Int) -- TODO, replace with MutVar# 
 }
+
+-- Return the updated value:
+atomicIncr cntr = atomicModifyIORef cntr (\c -> (c+1,c+1))
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
@@ -71,7 +74,7 @@ new = newLV (newIORef Empty)
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get iv@(LVar ref waitls) = getLV iv poll
+get iv@(LVar ref waitls vercnt) = getLV iv poll
  where
    poll = do contents <- readIORef ref
              case contents of
@@ -90,6 +93,7 @@ put_ iv elt = putLV iv putter
           Full _ -> error "multiple puts to an IVar"
 
 -- ---------------------------------------------------------------------------
+-- Generic scheduler with LVars:
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
@@ -110,20 +114,32 @@ sched _doSync queue t = loop t
     New io fn -> do
       x  <- io
       ls <- newIORef []      
-      loop (fn (LVar x ls))
+      loop (fn (LVar x ls (error "finishme--need version")))
 
-    Get (LVar v waitls) poll cont -> do
+    Get (LVar v waitls _) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
-         Nothing ->
+         Nothing -> -- Atomically register on the waitlist:
            let retry = fmap cont <$> poll in
            atomicModifyIORef waitls $ \ls -> (retry:ls, ())
 
-    Put (LVar v waitls) mutator tr -> do
+    Put (LVar v waitls version) mutator tr -> do
+      -- Here we follow an unfortunately expensive protocol.
+      -- First, increment the counter to indicate the start of mutation:
+      _ <- atomicIncr version
       mutator v
+      
+
+      -- Now we TRY to scan the waitlist, but someone else may mutate in the middle.
+      -- Because changes must be monotonic, this never allows false positives in the
+      -- polling functions, but it may allow false negatives, and we may miss
+      -- something which should unblock.
+      
       -- Here we have a problem... we can't atomically run polling functions in the
       -- waitlist..  They're in IO.
+
+
 
       -- FIXME
 
