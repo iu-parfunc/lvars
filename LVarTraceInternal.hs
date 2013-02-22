@@ -54,7 +54,7 @@ new = newLV (newIORef (IVarContents Nothing))
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get iv@(LVar ref _) = getLV iv poll
+get iv@(LVar ref _ _) = getLV iv poll
  where
    poll = fmap fromIVarContents $ readIORef ref
 
@@ -120,7 +120,7 @@ putInSet elem (ISet lv) = putLV lv putter
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
+waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -130,7 +130,7 @@ waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
 
 -- | Wait on the SIZE of the set, not its contents.
 waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv@(LVar ref _)) = getLV lv getter
+waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -158,8 +158,8 @@ consumeSet (ISet lv) = consumeLV lv readIORef
 -- monad.
 data LVar a = LVar {
   lvstate :: a,
-  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller))
---  callback :: Maybe (a -> IO Trace)
+  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller)),
+  callback :: Maybe (a -> IO Trace)
 }
 
 -- A poller can only be removed from the Map when it is woken.
@@ -237,11 +237,14 @@ sched _doSync queue t = loop t
     New io fn -> do
       x  <- io
       ls <- newIORef M.empty
-      loop (fn (LVar x ls))
+      loop (fn (LVar x ls Nothing))
 
-    NewWithCallBack {} -> error "FINISHME - NewWithCallBack case"
+    NewWithCallBack io cont -> do
+      (st0, cb) <- io
+      wait <- newIORef M.empty
+      loop (cont$ LVar st0 wait (Just cb))
 
-    Get (LVar _ waitmp) poll cont -> do
+    Get (LVar _ waitmp _) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
@@ -264,7 +267,7 @@ sched _doSync queue t = loop t
                              True  -> loop tr
                              False -> reschedule queue -- Already woken
 
-    Consume (LVar state waittmp) extractor cont -> do
+    Consume (LVar state waittmp _) extractor cont -> do
       -- HACK!  We know nothing about the type of state.  But we CAN destroy waittmp
       -- to prevent any future access.
       atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
@@ -273,9 +276,9 @@ sched _doSync queue t = loop t
       result <- extractor state
       loop (cont result)
 
-    Put (LVar v waitmp) mutator tr -> do
+    Put (LVar state waitmp callback) mutator tr -> do
       -- Here we follow an unfortunately expensive protocol.
-      mutator v
+      mutator state
       -- Innefficiency: we must leave the pollers in the wait list, where they may
       -- be redundantly evaluated:
       pollers <- readIORef waitmp
@@ -290,11 +293,16 @@ sched _doSync queue t = loop t
                          case b of
                            True  -> pushWork queue trc
                            False -> return ()
-      loop tr
+      case callback of
+        Nothing -> loop tr
+        Just cb -> do tr2 <- cb state
+                      loop (Fork tr tr2)
 
     Fork child parent -> do
-         pushWork queue child -- "Help-first" policy.  Generally bad.
-         loop parent
+         pushWork queue parent -- "Work-first" policy.
+         loop child
+         -- pushWork queue child -- "Help-first" policy.  Generally bad.
+         -- loop parent
     Done ->
          if _doSync
 	 then reschedule queue
