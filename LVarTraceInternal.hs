@@ -12,32 +12,32 @@
 -- module for purposes other than extending the @Par@ monad with new
 -- functionality.
 
-module LVarTraceInternal where
- --       (
- --   Trace(..), Sched(..), Par(..),
- --   IVar(..), IVarContents(..),
- --   sched,
- --   runPar, runParIO, runParAsync,
- --   -- runParAsyncHelper,
- --   new, newFull, newFull_, get, put_, put,
- --   pollIVar, yield,
- -- ) where
+module LVarTraceInternal 
+  (
+    -- * LVar interface (for library writers):
+   runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO, 
 
+   -- * Example use case: Basic IVar ops.
+   runPar, IVar, new, put, put_, get, fork
+   ) where
 
-import Control.Monad hiding (mapM, sequence, join)
-import Prelude hiding (mapM, sequence, head,tail)
-import Data.IORef
+import           Control.Monad hiding (mapM, sequence, join)
+import           Control.Concurrent hiding (yield)
+import           Control.DeepSeq
+import           Control.Applicative
+import           Data.IORef
 import qualified Data.Map as M
-import System.IO.Unsafe
-import Control.Concurrent hiding (yield)
-import GHC.Conc hiding (yield)
-import Control.DeepSeq
-import Control.Applicative
+import           GHC.Conc hiding (yield)
+import           System.IO.Unsafe (unsafePerformIO)
+import           Prelude  hiding (mapM, sequence, head,tail)
+
+import Text.Printf -- Temp
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
 ------------------------------------------------------------------------------
 
+-- TODO: newtype and hide the constructor:
 type IVar a = LVar (IORef (IVarContents a))
 newtype IVarContents a = IVarContents { fromIVarContents :: Maybe a }
 
@@ -63,7 +63,15 @@ put_ iv elt = putLV iv putter
           Nothing -> (IVarContents (Just elt), ())
           Just  _ -> error "multiple puts to an IVar"
 
+-- spawn p  = do r <- new;  fork (p >>= put r);   return r
+-- spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
+put :: NFData a => IVar a -> a -> Par ()
+put v a = deepseq a (put_ v a)
+
+
+------------------------------------------------------------------------------
+-- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
 -- | An LVar consists of a piece of mutable state, and a list of polling
@@ -155,28 +163,41 @@ sched _doSync queue t = loop t
          Nothing -> do -- Register on the waitlist:
            uid <- getUID
            flag <- newIORef False
+
+           printf "Get blocking, UID: %d\n" uid
+           
            -- Data-race here: what if a putter runs to completion right now.
            -- It migh finish before we get our poller in.  Thus we self-poll at the end.
            let fn = fmap cont <$> poll
                retry = Poller fn flag
            atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
+
+           printf "Inserted UID %d, now self polling...\n" uid
+           
            -- We must SELF POLL here to make sure there wasn't a race with a putter.
            -- Now we KNOW that our poller is "published".  So any put's that sneak in
            -- here are fine.
-           trc <- fn
+           trc <- fn           
            case trc of
-             Nothing -> reschedule queue
+             Nothing -> do printf "pollingfailed. rescheduling"
+                           reschedule queue
              Just tr -> do b <- tryWake retry waitmp uid 
                            case b of
                              True  -> loop tr
                              False -> reschedule queue -- Already woken
 
     Put (LVar v waitmp) mutator tr -> do
+
+      printf "Put running, now for mutator...\n" 
+      
       -- Here we follow an unfortunately expensive protocol.
       mutator v
       -- Innefficiency: we must leave the pollers in the wait list, where they may
       -- be redundantly evaluated:
       pollers <- readIORef waitmp
+
+      printf "Ran mutator... got pollers, length: %d\n" (M.size pollers)
+      
       -- (Ugh, there doesn't seem to be a M.traverseWithKey_, just for effect)    
       forM_ (M.toList pollers) $ \ (uid, pl@(Poller poll _)) -> do
         -- Here we try to wake ready threads.
@@ -191,7 +212,8 @@ sched _doSync queue t = loop t
       loop tr
 
     Fork child parent -> do
-         pushWork queue child
+         pushWork queue child -- "Help-first" policy.  Generally bad.
+         printf "Pushed work...\n"
          loop parent
     Done ->
          if _doSync
@@ -217,8 +239,10 @@ sched _doSync queue t = loop t
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
 reschedule :: Sched -> IO ()
-reschedule _ = return ()
 reschedule queue@Sched{ workpool } = do
+
+  printf " !! Reschedule called \n" 
+  
   e <- atomicModifyIORef workpool $ \ts ->
          case ts of
            []      -> ([], Nothing)
@@ -341,6 +365,15 @@ runParAsync :: Par a -> a
 runParAsync = unsafePerformIO . runPar_internal False
 
 -- -----------------------------------------------------------------------------
+-- Basic stuff:
+
+-- Not in 6.12: {- INLINABLE fork -}
+{-# INLINE fork #-}
+fork :: Par () -> Par ()
+fork p = Par $ \c -> Fork (runCont p (\_ -> Done)) (c ())
+
+
+-- -----------------------------------------------------------------------------
 
 -- | Internal operation.  Creates a new @LVar@ with an initial value
 newLV :: IO lv -> Par (LVar lv)
@@ -356,4 +389,5 @@ putLV lv fn = Par $ \c -> Put lv fn (c ())
 
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
+
 
