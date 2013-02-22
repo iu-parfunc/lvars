@@ -24,9 +24,10 @@ module LVarTraceInternal where
  -- ) where
 
 
-import Control.Monad as M hiding (mapM, sequence, join)
+import Control.Monad hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
 import Data.IORef
+import qualified Data.Map as M
 import System.IO.Unsafe
 import Control.Concurrent hiding (yield)
 import GHC.Conc hiding (yield)
@@ -51,24 +52,34 @@ instance Applicative Par where
 
 -- | An LVar consists of a piece of mutable state, and a list of polling
 -- functions that produce continuations when they are successfull.
+--
+-- This implementation cannot provide scalable LVars (e.g. a concurrent hashmap),
+-- rather accesses to a single LVar will contend.  But even if operations on an LVar
+-- are serialized, they cannot all be a single "atomicModifyIORef", because atomic
+-- modifies must be pure functions whereas the LVar polling functions are in the IO
+-- monad.
 data LVar a = LVar {
   lvstate :: a,
-  blocked :: {-# UNPACK #-} !Poller
+  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller))
 }
 
+-- A poller can only be removed from the Map when it is woken.
 data Poller = Poller {
-   poll  :: {-# UNPACK #-}! (IORef [IO (Maybe Trace)]), 
+   poll  :: IO (Maybe Trace),
    woken :: {-# UNPACK #-}! (IORef Bool)
 }
 
 -- Return the old value.  Could replace with a true atomic op.
+atomicIncr :: IORef Int -> IO Int
 atomicIncr cntr = atomicModifyIORef cntr (\c -> (c+1,c))
 
-uidCntr :: IORef Int
+type UID = Int
+
+uidCntr :: IORef UID
 uidCntr = unsafePerformIO (newIORef 0)
 
-getUID :: IORef Int
-getUID =  atomicModifyIORef uidCntr
+getUID :: IO UID
+getUID =  atomicIncr uidCntr
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
@@ -83,7 +94,7 @@ new = newLV (newIORef Empty)
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get iv@(LVar ref waitls vercnt) = getLV iv poll
+get iv@(LVar ref waitls) = getLV iv poll
  where
    poll = do contents <- readIORef ref
              case contents of
@@ -103,6 +114,7 @@ put_ iv elt = putLV iv putter
 
 -- ---------------------------------------------------------------------------
 -- Generic scheduler with LVars:
+-- ---------------------------------------------------------------------------
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
@@ -122,21 +134,34 @@ sched _doSync queue t = loop t
   loop t = case t of
     New io fn -> do
       x  <- io
-      ls <- newIORef []      
+      ls <- newIORef M.empty
       loop (fn (LVar x ls))
 
     Get (LVar v waitls) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
-         Nothing -> -- Atomically register on the waitlist:
-           let retry = fmap cont <$> poll in
-           atomicModifyIORef waitls $ \ls -> (retry:ls, ())
+         Nothing -> do -- Register on the waitlist:
+           uid <- getUID
+           flag <- newIORef False
+
+           -- FIXME: data-race: what if a putter runs to completion right now.
+           -- Reader write lock?
+           
+           let retry = Poller (fmap cont <$> poll) flag
+           atomicModifyIORef waitls $ \mp -> (M.insert uid retry mp, ())
+
+           -- We must SELF POLL here to make sure there wasn't a race with a runner.
+           
 
     Put (LVar v waitls) mutator tr -> do
       -- Here we follow an unfortunately expensive protocol.
       mutator v
-      readIORef 
+
+      pollers <- readIORef waitls
+      -- Innefficiency #1: we must leave the pollers in the list, where they may be
+      -- redundantly evaluated:
+
 
       -- Now we TRY to scan the waitlist, but someone else may mutate in the middle.
       -- Because changes must be monotonic, this never allows false positives in the
@@ -145,6 +170,7 @@ sched _doSync queue t = loop t
       
       -- Here we have a problem... we can't atomically run polling functions in the
       -- waitlist..  They're in IO.
+
 
 
 
