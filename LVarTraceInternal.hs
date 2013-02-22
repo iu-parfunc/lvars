@@ -34,21 +34,37 @@ import GHC.Conc hiding (yield)
 import Control.DeepSeq
 import Control.Applicative
 
-newtype Par a = Par {
-    runCont :: (a -> Trace) -> Trace
-}
+------------------------------------------------------------------------------
+-- IVars implemented on top of LVars:
+------------------------------------------------------------------------------
 
-instance Functor Par where
-    fmap f m = Par $ \c -> runCont m (c . f)
+type IVar a = LVar (IORef (IVarContents a))
+newtype IVarContents a = IVarContents { fromIVarContents :: Maybe a }
 
-instance Monad Par where
-    return a = Par ($ a)
-    m >>= k  = Par $ \c -> runCont m $ \a -> runCont (k a) c
+new :: Par (IVar a)
+new = newLV (newIORef (IVarContents Nothing))
 
-instance Applicative Par where
-   (<*>) = ap
-   pure  = return
+-- | read the value in a @IVar@.  The 'get' can only return when the
+-- value has been written by a prior or parallel @put@ to the same
+-- @IVar@.
+get :: IVar a -> Par a
+get iv@(LVar ref _) = getLV iv poll
+ where
+   poll = fmap fromIVarContents $ readIORef ref
 
+-- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
+-- are not allowed, and result in a runtime error.
+put_ :: IVar a -> a -> Par ()
+put_ iv elt = putLV iv putter
+ where
+   putter ref =
+     atomicModifyIORef ref $ \ x ->
+        case fromIVarContents x of
+          Nothing -> (IVarContents (Just elt), ())
+          Just  _ -> error "multiple puts to an IVar"
+
+
+------------------------------------------------------------------------------
 
 -- | An LVar consists of a piece of mutable state, and a list of polling
 -- functions that produce continuations when they are successfull.
@@ -81,40 +97,25 @@ uidCntr = unsafePerformIO (newIORef 0)
 getUID :: IO UID
 getUID =  atomicIncr uidCntr
 
-------------------------------------------------------------------------------
--- IVars implemented on top of LVars:
-
-type IVar a = LVar (IORef (IVarContents a))
-data IVarContents a = Full a | Empty -- | Blocked [a -> Trace]
-
-new :: Par (IVar a)
-new = newLV (newIORef Empty)
-
--- | read the value in a @IVar@.  The 'get' can only return when the
--- value has been written by a prior or parallel @put@ to the same
--- @IVar@.
-get :: IVar a -> Par a
-get iv@(LVar ref waitls) = getLV iv poll
- where
-   poll = do contents <- readIORef ref
-             case contents of
-               Full x -> return$ Just x
-               Empty  -> return Nothing
-
--- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
--- are not allowed, and result in a runtime error.
-put_ :: IVar a -> a -> Par ()
-put_ iv elt = putLV iv putter
- where
-   putter ref =
-     atomicModifyIORef ref $ \ x ->
-        case x of
-          Empty  -> (Full elt, ())
-          Full _ -> error "multiple puts to an IVar"
 
 -- ---------------------------------------------------------------------------
 -- Generic scheduler with LVars:
 -- ---------------------------------------------------------------------------
+
+newtype Par a = Par {
+    runCont :: (a -> Trace) -> Trace
+}
+
+instance Functor Par where
+    fmap f m = Par $ \c -> runCont m (c . f)
+
+instance Monad Par where
+    return a = Par ($ a)
+    m >>= k  = Par $ \c -> runCont m $ \a -> runCont (k a) c
+
+instance Applicative Par where
+   (<*>) = ap
+   pure  = return
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
@@ -130,58 +131,64 @@ data Trace =
 -- | The main scheduler loop.
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
- where 
-  loop t = case t of
+ where
+
+  -- Try to wake it up and remove from the wait list.  Returns true if this was the
+  -- call that actually removed the entry.
+  tryWake (Poller fn flag) waitmp uid = do
+    b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
+    case b of
+      True -> return False -- Already woken.
+      False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
+                  return True 
+        
+  loop origt = case origt of
     New io fn -> do
       x  <- io
       ls <- newIORef M.empty
       loop (fn (LVar x ls))
 
-    Get (LVar v waitls) poll cont -> do
+    Get (LVar v waitmp) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
          Nothing -> do -- Register on the waitlist:
            uid <- getUID
            flag <- newIORef False
+           -- Data-race here: what if a putter runs to completion right now.
+           -- It migh finish before we get our poller in.  Thus we self-poll at the end.
+           let fn = fmap cont <$> poll
+               retry = Poller fn flag
+           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
+           -- We must SELF POLL here to make sure there wasn't a race with a putter.
+           -- Now we KNOW that our poller is "published".  So any put's that sneak in
+           -- here are fine.
+           trc <- fn
+           case trc of
+             Nothing -> reschedule queue
+             Just tr -> do b <- tryWake retry waitmp uid 
+                           case b of
+                             True  -> loop tr
+                             False -> reschedule queue -- Already woken
 
-           -- FIXME: data-race: what if a putter runs to completion right now.
-           -- Reader write lock?
-           
-           let retry = Poller (fmap cont <$> poll) flag
-           atomicModifyIORef waitls $ \mp -> (M.insert uid retry mp, ())
-
-           -- We must SELF POLL here to make sure there wasn't a race with a runner.
-           
-
-    Put (LVar v waitls) mutator tr -> do
+    Put (LVar v waitmp) mutator tr -> do
       -- Here we follow an unfortunately expensive protocol.
       mutator v
-
-      pollers <- readIORef waitls
-      -- Innefficiency #1: we must leave the pollers in the list, where they may be
-      -- redundantly evaluated:
-
-
-      -- Now we TRY to scan the waitlist, but someone else may mutate in the middle.
-      -- Because changes must be monotonic, this never allows false positives in the
-      -- polling functions, but it may allow false negatives, and we may miss
-      -- something which should unblock.
-      
-      -- Here we have a problem... we can't atomically run polling functions in the
-      -- waitlist..  They're in IO.
-
-
-
-
-      -- FIXME
-
-      -- cs <- atomicModifyIORef waitls $ \ls -> case e of
-      --          Empty    -> (Full a, [])
-      --          Full _   -> error "multiple put"
-      --          Blocked cs -> (Full a, cs)
-      -- mapM_ (pushWork queue. ($a)) cs
-      loop t
+      -- Innefficiency: we must leave the pollers in the wait list, where they may
+      -- be redundantly evaluated:
+      pollers <- readIORef waitmp
+      -- (Ugh, there doesn't seem to be a M.traverseWithKey_, just for effect)    
+      forM_ (M.toList pollers) $ \ (uid, pl@(Poller poll _)) -> do
+        -- Here we try to wake ready threads.
+        -- TRADEOFF: we could wake one at a time (currently), or in a batch:
+        e <- poll
+        case e of
+          Nothing -> return ()
+          Just trc -> do b <- tryWake pl waitmp uid
+                         case b of
+                           True  -> pushWork queue trc
+                           False -> return ()
+      loop tr
 
     Fork child parent -> do
          pushWork queue child
