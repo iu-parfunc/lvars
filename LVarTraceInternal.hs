@@ -2,6 +2,7 @@
 {-# LANGUAGE RankNTypes, NamedFieldPuns, BangPatterns,
              ExistentialQuantification, CPP
 	     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow arbitrary LVars
@@ -17,17 +18,23 @@ module LVarTraceInternal
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
    Par(), 
-
+   
    -- * Example use case: Basic IVar ops.
-   runPar, IVar, new, put, put_, get, spawn, spawn_, spawnP
-   ) where
+   runPar, IVar, new, put, put_, get, spawn, spawn_, spawnP,
 
-import           Control.Monad hiding (mapM, sequence, join)
+   -- * Example 2: Monotonically growing sets.
+   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
+
+  ) where
+
+import           Control.Monad hiding (sequence, join)
+import           Control.Applicative ((<$>))
 import           Control.Concurrent hiding (yield)
 import           Control.DeepSeq
 import           Control.Applicative
 import           Data.IORef
 import qualified Data.Map as M
+import qualified Data.Set as S
 import           GHC.Conc hiding (yield)
 import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head,tail)
@@ -73,6 +80,71 @@ put v a = deepseq a (put_ v a)
 
 
 ------------------------------------------------------------------------------
+-- ISets and setmap implemented on top of LVars:
+------------------------------------------------------------------------------
+
+newtype ISet a = ISet (LVar (IORef (S.Set a)))
+
+newEmptySet :: Par (ISet a)
+newEmptySet = fmap ISet $ newLV$ newIORef S.empty
+
+-- | Extended lambda-LVar (callbacks).  Create an empty set, but establish a callback
+-- that will be invoked (in parallel) on each element added to the set.
+newEmptySetWithCallBack :: forall a . Ord a => (a -> Par ()) -> Par (ISet a)
+newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback io
+ where -- Every time the set is updated we fork callbacks:
+   io = do
+     alreadyCalled <- newIORef S.empty
+     contents <- newIORef S.empty   
+     let fn :: IORef (S.Set a) -> IO Trace
+         fn _ = do
+           curr <- readIORef contents
+           old <- atomicModifyIORef alreadyCalled (\set -> (curr,set))
+           let new = S.difference curr old
+           -- Spawn in parallel all new callbacks:
+           let trcs = map runCallback (S.toList new)
+           -- Would be nice if this were a balanced tree:           
+           return (foldl Fork Done trcs)
+
+         runCallback :: a -> Trace
+         -- Run each callback with an etpmyt continuation:
+         runCallback elem = runCont (callb elem) (\_ -> Done)
+         
+     return (contents, fn)
+
+-- | Put a single element in the set.
+putInSet :: Ord a => a -> ISet a -> Par () 
+putInSet elem (ISet lv) = putLV lv putter
+  where
+    putter ref = atomicModifyIORef ref (\set -> (S.insert elem set, ()))
+
+-- | Wait for the set to contain a specified element.
+waitForSet :: Ord a => a -> ISet a -> Par ()
+waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
+  where
+    getter = do
+      set <- readIORef ref
+      case S.member elem set of
+        True  -> return (Just ())
+        False -> return (Nothing)
+
+-- | Wait on the SIZE of the set, not its contents.
+waitForSetSize :: Int -> ISet a -> Par ()
+waitForSetSize sz (ISet lv@(LVar ref _)) = getLV lv getter
+  where
+    getter = do
+      set <- readIORef ref
+      if S.size set >= sz
+         then return (Just ())
+         else return Nothing     
+
+-- | Get the exact contents of the set.  Using this may cause your program exhibit a
+-- limited form of non-determinism.  It will never return the wrong answer, but it
+-- may include synchronization bugs that can (non-deterministically) cause exceptions.
+consumeSet :: ISet a -> Par (S.Set a)
+consumeSet (ISet lv) = consumeLV lv readIORef
+
+------------------------------------------------------------------------------
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
@@ -87,6 +159,7 @@ put v a = deepseq a (put_ v a)
 data LVar a = LVar {
   lvstate :: a,
   blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller))
+--  callback :: Maybe (a -> IO Trace)
 }
 
 -- A poller can only be removed from the Map when it is woken.
@@ -137,6 +210,14 @@ data Trace =
            | DoIO (IO ()) Trace
            | Yield Trace
 
+           -- Destructively consume the value (limited nondeterminism):
+           | forall a b . Consume (LVar a) (a -> IO b) (b -> Trace)
+
+           -- The callback (unsafely) is scheduled when there is ANY change.  It does
+           -- NOT get a snapshot of the (continuously mutating) state, just the right
+           -- to read whatever it can.
+           | forall a . NewWithCallBack (IO (a, a -> IO Trace)) (LVar a -> Trace)
+
 
 -- | The main scheduler loop.
 sched :: Bool -> Sched -> Trace -> IO ()
@@ -158,7 +239,9 @@ sched _doSync queue t = loop t
       ls <- newIORef M.empty
       loop (fn (LVar x ls))
 
-    Get (LVar v waitmp) poll cont -> do
+    NewWithCallBack {} -> error "FINISHME - NewWithCallBack case"
+
+    Get (LVar _ waitmp) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
@@ -180,6 +263,15 @@ sched _doSync queue t = loop t
                            case b of
                              True  -> loop tr
                              False -> reschedule queue -- Already woken
+
+    Consume (LVar state waittmp) extractor cont -> do
+      -- HACK!  We know nothing about the type of state.  But we CAN destroy waittmp
+      -- to prevent any future access.
+      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
+      -- CAREFUL: Putters only read waittmp AFTER they do the mutation, so this will be a delayed error.
+      -- It is recommended that higher level interfaces do their own corruption of the state in the extractor.
+      result <- extractor state
+      loop (cont result)
 
     Put (LVar v waitmp) mutator tr -> do
       -- Here we follow an unfortunately expensive protocol.
@@ -223,6 +315,7 @@ sched _doSync queue t = loop t
 	-- This would also be a chance to steal and work from opposite ends of the queue.
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
+
 
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
@@ -364,6 +457,10 @@ fork p = Par $ \c -> Fork (runCont p (\_ -> Done)) (c ())
 newLV :: IO lv -> Par (LVar lv)
 newLV init = Par $ New init
 
+newLVWithCallback :: IO (lv, lv -> IO Trace) -> Par (LVar lv)
+newLVWithCallback = Par .  NewWithCallBack
+                    
+
 -- | Internal operation.  Test if the LVar satisfies the given threshold.
 getLV :: LVar a -> (IO (Maybe b)) -> Par b
 getLV lv poll = Par $ Get lv poll
@@ -372,7 +469,10 @@ getLV lv poll = Par $ Get lv poll
 putLV :: LVar a -> (a -> IO ()) -> Par ()
 putLV lv fn = Par $ \c -> Put lv fn (c ())
 
+-- | Internal operation. Destructively consume the LVar, yielding access to its precise state.
+consumeLV :: LVar a -> (a -> IO b) -> Par b
+consumeLV lv extractor = Par $ Consume lv extractor
+
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
-
 
