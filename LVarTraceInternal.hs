@@ -22,7 +22,10 @@ module LVarTraceInternal
    -- * Example use case: Basic IVar ops.
    runPar, IVar, new, put, put_, get, spawn, spawn_, spawnP,
 
-   -- * Example 2: Monotonically growing sets.
+   -- * Example 2: Pairs (of Ivars).
+   newPair, putFst, putSnd, getFst, getSnd, 
+   
+   -- * Example 3: Monotonically growing sets.
    ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
 
   ) where
@@ -45,7 +48,11 @@ import           Prelude  hiding (mapM, sequence, head,tail)
 
 -- TODO: newtype and hide the constructor:
 type IVar a = LVar (IORef (IVarContents a))
-newtype IVarContents a = IVarContents { fromIVarContents :: Maybe a }
+-- newtype IVarContents a = IVarContents { fromIVarContents :: Maybe a }
+
+newtype IVarContents a = IVarContents (Maybe a)
+fromIVarContents :: IVarContents a -> Maybe a
+fromIVarContents (IVarContents x) = x
 
 new :: Par (IVar a)
 new = newLV (newIORef (IVarContents Nothing))
@@ -69,7 +76,9 @@ put_ iv elt = putLV iv putter
           Nothing -> (IVarContents (Just elt), ())
           Just  _ -> error "multiple puts to an IVar"
 
+spawn :: NFData a => Par a -> Par (IVar a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
+spawn_ :: Par a -> Par (IVar a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
 spawnP :: NFData a => a -> Par (IVar a)
@@ -84,6 +93,12 @@ put v a = deepseq a (put_ v a)
 
 type IPair a b = LVar (IORef (IVarContents a),
                        IORef (IVarContents b))
+
+newPair :: Par (IPair a b)
+newPair = newLV $
+          do r1 <- newIORef (IVarContents Nothing)
+             r2 <- newIORef (IVarContents Nothing)
+             return (r1,r2)
 
 -- What is fromIVarContents?  If it's a function, I can't figure out
 -- where it's defined.
@@ -109,6 +124,16 @@ putSnd lv@(LVar (_, refSnd) _ _) elt = putLV lv putter
       case fromIVarContents x of
         Nothing -> (IVarContents (Just elt), ())
         Just _  -> error "multiple puts to second element of IPair"
+
+getFst :: IPair a b -> Par a
+getFst iv@(LVar (ref1,_) _ _) = getLV iv poll
+ where
+   poll = fmap fromIVarContents $ readIORef ref1
+
+getSnd :: IPair a b -> Par b
+getSnd iv@(LVar (_,ref2) _ _) = getLV iv poll
+ where
+   poll = fmap fromIVarContents $ readIORef ref2
 
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:

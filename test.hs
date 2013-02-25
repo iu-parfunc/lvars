@@ -34,3 +34,33 @@ t3 = runParIO $
         mapM_ (\n -> fork$ putInSet n s2) [1..10]
         waitForSetSize 10 s1
         consumeSet s1
+
+
+-- | Simple test of pairs.
+t4 = runParIO $
+     do p <- newPair
+        putFst p 3
+        putSnd p "hi"        
+        x <- getFst p
+        y <- getSnd p
+        return (x,y)
+
+-- This seems pretty naughty:        
+t5 = runParIO $
+     do p <- newPair
+        putFst p 3
+        putSnd p "hi"
+        putSnd p "there"        
+        getFst p
+
+-- More pairs
+t6 = runParIO $
+     do p1 <- newPair
+        p2 <- newPair
+        fork$ do x <- getFst p1
+                 putSnd p2 x 
+        fork$ do x <- getSnd p2
+                 putSnd p1 x
+        putFst p1 33        
+        getSnd p1
+
