@@ -78,6 +78,7 @@ put_ iv elt = putLV iv putter
 
 spawn :: NFData a => Par a -> Par (IVar a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
+              
 spawn_ :: Par a -> Par (IVar a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 

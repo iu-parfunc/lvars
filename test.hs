@@ -23,6 +23,14 @@ t2 = runParIO $
         waitForSetSize 10 s 
         consumeSet s
 
+-- | This version uses a fork-join so it doesn't need the waitForSetSize:
+t2b :: IO (S.Set Int)
+t2b = runParIO $
+     do s <- newEmptySet
+        ivs <- mapM (\n -> spawn_$ putInSet n s) [1..10]
+        mapM_ get ivs -- Join point.
+        consumeSet s
+
 
 -- | Simple callback test.
 t3 :: IO (S.Set Int)
@@ -45,7 +53,7 @@ t4 = runParIO $
         y <- getSnd p
         return (x,y)
 
--- This seems pretty naughty:        
+-- | This seems pretty naughty, but for now it works!
 t5 = runParIO $
      do p <- newPair
         putFst p 3
