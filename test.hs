@@ -2,11 +2,18 @@
 
 import LVarTraceInternal
 import Data.Set as S
+-- import Control.Applicative ((<$>))
 
+-- TODO: Switch over to "test-framework" for a real harness:
 main = do
   putStrLn$ "T0 "++show t0
   putStrLn$ "T1 "++show t1
-
+  (putStrLn . ("T2 "++) . show) =<< t2
+  (putStrLn . ("T2b "++) . show) =<< t2b
+  (putStrLn . ("T3 "++) . show) =<< t3
+  (putStrLn . ("T4 "++) . show) =<< t4
+  (putStrLn . ("T5 "++) . show) =<< t5
+  (putStrLn . ("T6 "++) . show) =<< t6  
 --------------------------------------------------------------------------------
 
 t0 :: Int 

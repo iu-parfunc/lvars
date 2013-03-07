@@ -82,10 +82,12 @@ main =
     result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
     return result
 
+
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.  We're
 -- not actually doing anything with f yet.
-bf_traverse :: (Graph a) -> ISet a ->
+bf_traverse :: (Ord a)
+            => (Graph a) -> ISet a ->
                   Set.Set a -> Set.Set a -> (a -> b) -> Par (Set.Set b)
 bf_traverse g l_acc seen_rank new_rank f =
   if Set.null new_rank
@@ -100,5 +102,8 @@ bf_traverse g l_acc seen_rank new_rank f =
     let new_rank' =
           foldr Set.union Set.empty (parMap (parMap add . (nbrLabels g))
                                      new_rank)
-    bf_traverse g l_acc seen_rank' new_rank' f
+--
+    bf_traverse g l_acc seen_rank' undefined f        
+
+
 
