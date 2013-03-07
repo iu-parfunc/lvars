@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet)
-import Control.Monad.Par.Combinator (parMap)
+import Control.Monad.Par.Combinator (parMapM)
 import Control.Monad.Par.Class (ParFuture)
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
@@ -34,12 +35,12 @@ nbrs (Graph (n:ns)) lbl =
   then adjacent n
   else nbrs (Graph ns) lbl
        
--- Neighbor labels of a node with a given label, as a set
-nbrLabels :: (Eq a, Ord a) => Graph a -> a -> Set.Set a
-nbrLabels (Graph []) _ = Set.empty
+-- Neighbor labels of a node with a given label
+nbrLabels :: (Eq a, Ord a) => Graph a -> a -> [a]
+nbrLabels (Graph []) _ = []
 nbrLabels (Graph (n:ns)) lbl =
   if lbl == label n
-  then Set.fromList (map label (adjacent n))
+  then map label (adjacent n)
   else nbrLabels (Graph ns) lbl
   
 -- Printing a graph
@@ -48,6 +49,7 @@ instance (Show a) => Show (Node a) where
                         " --> " ++ show (map (show . label) adj) ++ "\n"
   
 -- A graph
+graphExample :: Graph Char
 graphExample =
     mkGraph [('a', ['b', 'c']),
              ('b', ['a', 'd', 'e']),
@@ -58,6 +60,7 @@ graphExample =
              ('g', ['c']),
              ('h', ['d', 'e'])]
 
+printGraph :: Show a => a -> IO ()
 printGraph g =
   putStrLn . filter (`notElem` "'\"") . show $ g
   
@@ -73,6 +76,7 @@ breadth-first traversal.)
 
 -}
 
+main :: IO (Set.Set Char)
 main =
   runParIO $ do
     let g = graphExample
@@ -86,24 +90,39 @@ main =
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.  We're
 -- not actually doing anything with f yet.
-bf_traverse :: (Ord a)
-            => (Graph a) -> ISet a ->
-                  Set.Set a -> Set.Set a -> (a -> b) -> Par (Set.Set b)
+bf_traverse :: forall a b . (Ord a, NFData a) =>
+               (Graph a) -> ISet a -> Set.Set a -> Set.Set a -> (a -> b) ->
+               Par (Set.Set b)
 bf_traverse g l_acc seen_rank new_rank f =
   if Set.null new_rank
   then return Set.empty
   else do
     let seen_rank' = Set.union seen_rank new_rank
     -- Add to the next rank, and to the output/accumulator:
-    let add n = if Set.member n seen_rank'
+    let add :: a -> Par (Set.Set a)
+        add n = if Set.member n seen_rank'
                 then return Set.empty
                 else do putInSet n l_acc
                         return (Set.singleton n)
-    let new_rank' =
-          foldr Set.union Set.empty (parMap (parMap add . (nbrLabels g))
-                                     new_rank)
+    
+    new2 <- parMapM (parMapM add . (nbrLabels g)) (Set.toList new_rank)
+    
+    -- Flatten it out, this should be a parallel fold ideally:
+    let new2' = Set.unions $ concat new2
+    bf_traverse g l_acc seen_rank' new2' f 
+
+
+
+--------------------------------------------------------------------------------
+-- Oops, turns out there is a painful reason that we don't have a traversable
+-- instance for Set:
 --
-    bf_traverse g l_acc seen_rank' undefined f        
+-- http://www.haskell.org/pipermail/haskell-cafe/2010-July/080978.html
+--------------------------------------------------------------------------------
+    
+-- instance Functor Set.Set where
+--   fmap f s = Set.map f s
+--   -- fromList $ fmap f $ Set.toList s  
 
-
-
+-- instance Traversable Set.Set where
+  
