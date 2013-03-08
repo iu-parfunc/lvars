@@ -1,13 +1,15 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet)
+import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet,
+                          consumeSet)
 import Control.Monad.Par.Combinator (parMapM)
 import Control.Monad.Par.Class (ParFuture)
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Control.DeepSeq (NFData)
 import Data.Traversable (Traversable)
+import Debug.Trace (trace)
 
 -- Graph representation
 data Node a = Node
@@ -84,20 +86,24 @@ main =
     let f = \x -> x
     l_acc <- newEmptySet
     result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
-    return result
+    consumeSet l_acc
+    -- return result
 
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.  We're
 -- not actually doing anything with f yet.
-bf_traverse :: forall a b . (Ord a, NFData a) =>
+bf_traverse :: forall a b . (Show a, Ord a, NFData a) =>
                (Graph a) -> ISet a -> Set.Set a -> Set.Set a -> (a -> b) ->
                Par (Set.Set b)
 bf_traverse g l_acc seen_rank new_rank f =
+  -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
   then return Set.empty
-  else do
-    let seen_rank' = Set.union seen_rank new_rank
+  else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
+              "new_rank: " ++ show new_rank) $ do
+    -- Add new_rank stuff to the "seen" list
+    let seen_rank' =  Set.union seen_rank new_rank
     -- Add to the next rank, and to the output/accumulator:
     let add :: a -> Par (Set.Set a)
         add n = if Set.member n seen_rank'
@@ -105,11 +111,11 @@ bf_traverse g l_acc seen_rank new_rank f =
                 else do putInSet n l_acc
                         return (Set.singleton n)
     
-    new2 <- parMapM (parMapM add . (nbrLabels g)) (Set.toList new_rank)
+    new_rank' <- parMapM (parMapM add . (nbrLabels g)) (Set.toList new_rank)
     
     -- Flatten it out, this should be a parallel fold ideally:
-    let new2' = Set.unions $ concat new2
-    bf_traverse g l_acc seen_rank' new2' f 
+    let new_rank'' = Set.unions $ concat new_rank'
+    bf_traverse g l_acc seen_rank' new_rank'' f 
 
 
 
