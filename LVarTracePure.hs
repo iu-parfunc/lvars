@@ -234,8 +234,8 @@ data LVar a = LVar {
 }
 
 data LVarContents a = LVarContents {
-    current   :: a,
-    callbacks :: [a -> Maybe Trace]
+    current :: a,
+    blocked :: [a -> Maybe Trace]
  }
 
 -- Return the old value.  Could replace with a true atomic op.
@@ -273,7 +273,7 @@ instance Applicative Par where
 -- | Trying this using only parametric polymorphism:
 data Trace =
              forall a b . Get (LVar a) (a -> (Maybe b)) (b -> Trace)
-           | forall a . Put (LVar a) a Trace
+           | forall a . JoinSemiLattice a => Put (LVar a) a Trace
            | forall a . New a (LVar a -> Trace)
            | Fork Trace Trace
            | Done
@@ -281,7 +281,7 @@ data Trace =
            | Yield Trace
 
            -- Destructively consume the value (limited nondeterminism):
-           | forall a b . Consume (LVar a) (a -> IO b) (b -> Trace)
+           | forall a b . Consume (LVar a) (a -> Trace)
 
            -- The callback (unsafely) is scheduled when there is ANY change.  It does
            -- NOT get a snapshot of the (continuously mutating) state, just the right
@@ -322,44 +322,36 @@ sched _doSync queue t = loop t
           Just b  -> (st, loop (cont b))
           Nothing -> (LVarContents a (thisCB:ls), reschedule queue)
       r
-{-
 
-    Consume (LVar state waittmp _) extractor cont -> do
-      -- HACK!  We know nothing about the type of state.  But we CAN destroy waittmp
-      -- to prevent any future access.
-      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
-      -- CAREFUL: Putters only read waittmp AFTER they do the mutation, so this will be a delayed error.
-      -- It is recommended that higher level interfaces do their own corruption of the state in the extractor.
-      result <- extractor state
-      loop (cont result)
+    Consume (LVar ref cb) cont -> do
+      -- HACK!  We know nothing about the type of state.  But we CAN destroy it
+      -- to prevent any future access:
+      a <- atomicModifyIORef ref (\(LVarContents a _) ->
+                                   (error "attempt to touch LVar after Consume operation!", a))
+      loop (cont a)
 
-    Put (LVar state waitmp callback) mutator tr -> do
-      -- Here we follow an unfortunately expensive protocol.
-      mutator state
-      -- Innefficiency: we must leave the pollers in the wait list, where they may
-      -- be redundantly evaluated:
-      pollers <- readIORef waitmp
-      -- (Ugh, there doesn't seem to be a M.traverseWithKey_, just for effect)    
-      forM_ (M.toList pollers) $ \ (uid, pl@(Poller poll _)) -> do
-        -- Here we try to wake ready threads.
-        -- TRADEOFF: we could wake one at a time (currently), or in a batch:
-        e <- poll
-        case e of
-          Nothing -> return ()
-          Just trc -> do b <- tryWake pl waitmp uid
-                         case b of
-                           True  -> pushWork queue trc
-                           False -> return ()
-      case callback of
-        Nothing -> loop tr
-        Just cb -> do tr2 <- cb state
-                      loop (Fork tr tr2)
+    Put (LVar ref cb) new tr  -> do
+      cs <- atomicModifyIORef ref $ \e -> case e of
+              LVarContents a ls ->
+                let new' = join a new
+                    (ls',woken) = loop ls [] []
+                    loop [] f w = (f,w)
+                    loop (hd:tl) f w =
+                      case hd new of
+                        Just trc -> loop tl f (trc:w)
+                        Nothing  -> loop tl (hd:f) w 
+                in 
+                (LVarContents new' ls', woken)
+      mapM_ (pushWork queue) cs
+      loop tr              
+
 
     Fork child parent -> do
          pushWork queue parent -- "Work-first" policy.
          loop child
          -- pushWork queue child -- "Help-first" policy.  Generally bad.
          -- loop parent
+
     Done ->
          if _doSync
 	 then reschedule queue
@@ -381,7 +373,6 @@ sched _doSync queue t = loop t
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
 
--}
 
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
