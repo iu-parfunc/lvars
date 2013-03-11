@@ -14,14 +14,14 @@
 -- module for purposes other than extending the @Par@ monad with new
 -- functionality.
 
-module LVarTraceInternal 
+module LVarTracePure
   (
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
    Par(), 
    
    -- * Example use case: Basic IVar ops.
---   runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
+   runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
 
    -- * Example 2: Pairs (of Ivars).
 --   newPair, putFst, putSnd, getFst, getSnd, 
@@ -48,41 +48,42 @@ import qualified Control.Monad.Par.Class as PC
 -- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
 import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 
-{-
+
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
 ------------------------------------------------------------------------------
 
 -- TODO: newtype and hide the constructor:
--- type IVar a = LVar (IORef (IVarContents a))
-newtype IVar a = IVar (LVar (IORef (IVarContents a)))
--- newtype IVarContents a = IVarContents { fromIVarContents :: Maybe a }
+newtype IVar a = IVar (LVar (IVarContents a))
 
+-- data IVarContents a = EmptyIVar | FullIVar a 
 newtype IVarContents a = IVarContents (Maybe a)
 fromIVarContents :: IVarContents a -> Maybe a
 fromIVarContents (IVarContents x) = x
 
 new :: Par (IVar a)
-new = IVar <$> newLV (newIORef (IVarContents Nothing))
+new = IVar <$> newLV (IVarContents Nothing)
 
 -- | read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get (IVar lv@(LVar ref _ _)) = getLV lv poll
- where
-   poll = fmap fromIVarContents $ readIORef ref
+get (IVar lv) = getLV lv fromIVarContents
+
+
+-- instance Eq a => JoinSemiLattice (IVarContents a) where
+instance JoinSemiLattice (IVarContents a) where 
+  join a (IVarContents Nothing) = a
+  join (IVarContents Nothing) b = b
+  join (IVarContents (Just _))
+       (IVarContents (Just _)) = error "Multiple puts to an IVar!"
 
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
 -- are not allowed, and result in a runtime error.
+-- put_ :: Eq a => IVar a -> a -> Par ()
 put_ :: IVar a -> a -> Par ()
-put_ (IVar iv) elt = putLV iv putter
- where
-   putter ref =
-     atomicModifyIORef ref $ \ x ->
-        case fromIVarContents x of
-          Nothing -> (IVarContents (Just elt), ())
-          Just  _ -> error "multiple puts to an IVar"
+-- put_ = undefined
+put_ (IVar iv) elt = putLV iv (IVarContents (Just elt))
 
 spawn :: NFData a => Par a -> Par (IVar a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
@@ -104,7 +105,9 @@ instance PC.ParIVar IVar Par where
   fork = fork  
   put_ = put_
   new = new
-  
+
+{-
+
 ------------------------------------------------------------------------------
 -- IPair implemented on top of LVars:
 ------------------------------------------------------------------------------

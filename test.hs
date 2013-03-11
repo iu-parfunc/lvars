@@ -1,6 +1,8 @@
 
 
 import LVarTraceInternal
+-- import LVarTracePure
+
 import Data.Set as S
 -- import Control.Applicative ((<$>))
 
