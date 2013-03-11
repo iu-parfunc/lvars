@@ -24,7 +24,7 @@ module LVarTracePure
    runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
 
    -- * Example 2: Pairs (of Ivars).
---   newPair, putFst, putSnd, getFst, getSnd, 
+   newPair, putFst, putSnd, getFst, getSnd, 
    
    -- * Example 3: Monotonically growing sets.
 --   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
@@ -57,12 +57,12 @@ import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 newtype IVar a = IVar (LVar (IVarContents a))
 
 -- data IVarContents a = EmptyIVar | FullIVar a 
-newtype IVarContents a = IVarContents (Maybe a)
+newtype IVarContents a = IVC (Maybe a)
 fromIVarContents :: IVarContents a -> Maybe a
-fromIVarContents (IVarContents x) = x
+fromIVarContents (IVC x) = x
 
 new :: Par (IVar a)
-new = IVar <$> newLV (IVarContents Nothing)
+new = IVar <$> newLV (IVC Nothing)
 
 -- | read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or parallel @put@ to the same
@@ -73,17 +73,17 @@ get (IVar lv) = getLV lv fromIVarContents
 
 -- instance Eq a => JoinSemiLattice (IVarContents a) where
 instance JoinSemiLattice (IVarContents a) where 
-  join a (IVarContents Nothing) = a
-  join (IVarContents Nothing) b = b
-  join (IVarContents (Just _))
-       (IVarContents (Just _)) = error "Multiple puts to an IVar!"
+  join a (IVC Nothing) = a
+  join (IVC Nothing) b = b
+  join (IVC (Just _))
+       (IVC (Just _)) = error "Multiple puts to an IVar!"
 
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
 -- are not allowed, and result in a runtime error.
 -- put_ :: Eq a => IVar a -> a -> Par ()
 put_ :: IVar a -> a -> Par ()
 -- put_ = undefined
-put_ (IVar iv) elt = putLV iv (IVarContents (Just elt))
+put_ (IVar iv) elt = putLV iv (IVC (Just elt))
 
 spawn :: NFData a => Par a -> Par (IVar a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
@@ -106,56 +106,35 @@ instance PC.ParIVar IVar Par where
   put_ = put_
   new = new
 
-{-
-
 ------------------------------------------------------------------------------
 -- IPair implemented on top of LVars:
 ------------------------------------------------------------------------------
 
-type IPair a b = LVar (IORef (IVarContents a),
-                       IORef (IVarContents b))
+type IPair a b = LVar (IVarContents a, IVarContents b)
 
 newPair :: Par (IPair a b)
-newPair = newLV $
-          do r1 <- newIORef (IVarContents Nothing)
-             r2 <- newIORef (IVarContents Nothing)
-             return (r1,r2)
-
--- What is fromIVarContents?  If it's a function, I can't figure out
--- where it's defined.
+newPair = newLV (IVC Nothing,
+                 IVC Nothing)
 
 putFst :: IPair a b -> a -> Par ()
-putFst lv@(LVar (refFst, _) _ _) elt = putLV lv putter
-  where
-    -- putter takes the whole pair as an argument, but ignore it and
-    -- just deal with refFst
-    putter _ =
-      atomicModifyIORef refFst $ \x -> 
-      case fromIVarContents x of
-        Nothing -> (IVarContents (Just elt), ())
-        Just _  -> error "multiple puts to first element of IPair"
-        
+putFst lv elt = putLV lv (IVC (Just elt), IVC Nothing)
+
 putSnd :: IPair a b -> b -> Par ()
-putSnd lv@(LVar (_, refSnd) _ _) elt = putLV lv putter
-  where
-    -- putter takes the whole pair as an argument, but ignore it and
-    -- just deal with refSnd
-    putter _ =
-      atomicModifyIORef refSnd $ \x -> 
-      case fromIVarContents x of
-        Nothing -> (IVarContents (Just elt), ())
-        Just _  -> error "multiple puts to second element of IPair"
+putSnd lv elt = putLV lv (IVC Nothing, IVC (Just elt))
 
 getFst :: IPair a b -> Par a
-getFst iv@(LVar (ref1,_) _ _) = getLV iv poll
+getFst lv = getLV lv test
  where
-   poll = fmap fromIVarContents $ readIORef ref1
+   test (IVC (Just x),_) = Just x
+   test (IVC Nothing,_)  = Nothing
 
 getSnd :: IPair a b -> Par b
-getSnd iv@(LVar (_,ref2) _ _) = getLV iv poll
+getSnd lv = getLV lv test
  where
-   poll = fmap fromIVarContents $ readIORef ref2
+   test (_,IVC (Just x)) = Just x
+   test (_,IVC Nothing)  = Nothing
 
+{-
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
