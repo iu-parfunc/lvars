@@ -233,8 +233,10 @@ data LVar a = LVar {
   callback :: Maybe (a -> Trace)
 }
 
-data LVarContents a = NoBlocked a 
-                    | Blocked a [a -> Maybe Trace]
+data LVarContents a = LVarContents {
+    current   :: a,
+    callbacks :: [a -> Maybe Trace]
+ }
 
 -- Return the old value.  Could replace with a true atomic op.
 atomicIncr :: IORef Int -> IO Int
@@ -302,11 +304,11 @@ sched _doSync queue t = loop t
         
   loop origt = case origt of
     New init cont -> do
-      ref <- newIORef$ NoBlocked init
+      ref <- newIORef$ LVarContents init []
       loop (cont (LVar ref Nothing))
 
     NewWithCallBack init cb cont -> do
-      ref <- newIORef$ NoBlocked init
+      ref <- newIORef$ LVarContents init []
       loop (cont$ LVar ref (Just cb))
 
     Get (LVar ref cb) thresh cont -> do
@@ -315,17 +317,10 @@ sched _doSync queue t = loop t
       -- (Which is potentially more expensive than in the plain IVar case.)
       -- e <- readIORef ref
       let thisCB x = fmap cont $ thresh x
-      r <- atomicModifyIORef ref $ \ st ->
-        let a = case st of
-                  NoBlocked a -> a
-                  Blocked a _ -> a in
+      r <- atomicModifyIORef ref $ \ st@(LVarContents a ls) ->
         case thresh a of
-          Just b -> (st, loop (cont b))
-          Nothing ->
-            (case st of
-              NoBlocked a  -> Blocked a [thisCB]
-              Blocked a ls -> Blocked a (thisCB:ls),
-             reschedule queue)
+          Just b  -> (st, loop (cont b))
+          Nothing -> (LVarContents a (thisCB:ls), reschedule queue)
       r
 {-
 
