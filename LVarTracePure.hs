@@ -17,7 +17,7 @@
 module LVarTraceInternal 
   (
     -- * LVar interface (for library writers):
---   runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
+   runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
    Par(), 
    
    -- * Example use case: Basic IVar ops.
@@ -272,7 +272,7 @@ instance Applicative Par where
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
-             forall a b . Get (LVar a) (a -> (Maybe b)) (b -> Trace)
+             forall a b . Get (LVar a) (a -> Maybe b) (b -> Trace)
            | forall a . JoinSemiLattice a => Put (LVar a) a Trace
            | forall a . New a (LVar a -> Trace)
            | Fork Trace Trace
@@ -448,7 +448,7 @@ data Sched = Sched
 instance NFData (LVar a) where
   rnf _ = ()
 
-{-
+
 
 {-# INLINE runPar_internal #-}
 runPar_internal :: Bool -> Par a -> IO a
@@ -483,7 +483,8 @@ runPar_internal _doSync x = do
         forkOnIO cpu $
           if (cpu /= main_cpu)
              then reschedule state
-             else sched _doSync state $ runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
+             else sched _doSync state $
+                    runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
    takeMVar m
 
 
@@ -501,6 +502,7 @@ runParIO = runPar_internal True
 runParAsync :: Par a -> a
 runParAsync = unsafePerformIO . runPar_internal False
 
+
 -- -----------------------------------------------------------------------------
 -- Basic stuff:
 
@@ -509,30 +511,27 @@ runParAsync = unsafePerformIO . runPar_internal False
 fork :: Par () -> Par ()
 fork p = Par $ \c -> Fork (runCont p (\_ -> Done)) (c ())
 
-
 -- -----------------------------------------------------------------------------
 
 -- | Internal operation.  Creates a new @LVar@ with an initial value
-newLV :: IO lv -> Par (LVar lv)
+newLV :: lv -> Par (LVar lv)
 newLV init = Par $ New init
 
-newLVWithCallback :: IO (lv, lv -> IO Trace) -> Par (LVar lv)
-newLVWithCallback = Par .  NewWithCallBack
+newLVWithCallback :: lv -> (lv -> Trace) -> Par (LVar lv)
+newLVWithCallback st cb = Par $ NewWithCallBack st cb
                     
-
 -- | Internal operation.  Test if the LVar satisfies the given threshold.
-getLV :: LVar a -> (IO (Maybe b)) -> Par b
-getLV lv poll = Par $ Get lv poll
+getLV :: LVar a -> (a -> Maybe b) -> Par b
+getLV lv test = Par $ Get lv test
 
 -- | Internal operation.  Modify the LVar.  Had better be monotonic.
-putLV :: LVar a -> (a -> IO ()) -> Par ()
-putLV lv fn = Par $ \c -> Put lv fn (c ())
+putLV :: JoinSemiLattice a => LVar a -> a -> Par ()
+putLV lv st = Par $ \c -> Put lv st (c ())
 
 -- | Internal operation. Destructively consume the LVar, yielding access to its precise state.
-consumeLV :: LVar a -> (a -> IO b) -> Par b
-consumeLV lv extractor = Par $ Consume lv extractor
+consumeLV :: LVar a -> Par a
+consumeLV = Par . Consume 
 
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
 
--}
