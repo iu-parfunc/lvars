@@ -17,7 +17,7 @@
 module LVarTraceInternal 
   (
     -- * LVar interface (for library writers):
-   runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
+--   runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
    Par(), 
    
    -- * Example use case: Basic IVar ops.
@@ -44,6 +44,9 @@ import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head,tail)
 
 import qualified Control.Monad.Par.Class as PC
+
+-- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
+import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 
 {-
 ------------------------------------------------------------------------------
@@ -220,25 +223,18 @@ consumeSet (ISet lv) = consumeLV lv readIORef
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
--- | An LVar consists of a piece of mutable state, and a list of polling
--- functions that produce continuations when they are successfull.
---
+-- | An LVar is a box containing a purely functional data structure.
+-- 
 -- This implementation cannot provide scalable LVars (e.g. a concurrent hashmap),
--- rather accesses to a single LVar will contend.  But even if operations on an LVar
--- are serialized, they cannot all be a single "atomicModifyIORef", because atomic
--- modifies must be pure functions whereas the LVar polling functions are in the IO
--- monad.
+-- rather accesses to a single LVar will contend.  
 data LVar a = LVar {
-  lvstate :: a,
-  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller)),
-  callback :: Maybe (a -> IO Trace)
+  -- TODO: consider MutVar# 
+  lvstate :: {-# UNPACK #-} !(IORef (LVarContents a)),
+  callback :: Maybe (a -> Trace)
 }
 
--- A poller can only be removed from the Map when it is woken.
-data Poller = Poller {
-   poll  :: IO (Maybe Trace),
-   woken :: {-# UNPACK #-}! (IORef Bool)
-}
+data LVarContents a = NoBlocked a 
+                    | Blocked a [a -> Maybe Trace]
 
 -- Return the old value.  Could replace with a true atomic op.
 atomicIncr :: IORef Int -> IO Int
@@ -274,9 +270,9 @@ instance Applicative Par where
 
 -- | Trying this using only parametric polymorphism:
 data Trace =
-             forall a b . Get (LVar a) (IO (Maybe b)) (b -> Trace)
-           | forall a . Put (LVar a) (a -> IO ()) Trace
-           | forall a . New (IO a) (LVar a -> Trace)
+             forall a b . Get (LVar a) (a -> (Maybe b)) (b -> Trace)
+           | forall a . Put (LVar a) a Trace
+           | forall a . New a (LVar a -> Trace)
            | Fork Trace Trace
            | Done
            | DoIO (IO ()) Trace
@@ -288,56 +284,50 @@ data Trace =
            -- The callback (unsafely) is scheduled when there is ANY change.  It does
            -- NOT get a snapshot of the (continuously mutating) state, just the right
            -- to read whatever it can.
-           | forall a . NewWithCallBack (IO (a, a -> IO Trace)) (LVar a -> Trace)
-
+           | forall a . NewWithCallBack a (a -> Trace) (LVar a -> Trace)
 
 -- | The main scheduler loop.
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
  where
 
-  -- Try to wake it up and remove from the wait list.  Returns true if this was the
-  -- call that actually removed the entry.
-  tryWake (Poller fn flag) waitmp uid = do
-    b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
-    case b of
-      True -> return False -- Already woken.
-      False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
-                  return True 
+  -- -- Try to wake it up and remove from the wait list.  Returns true if this was the
+  -- -- call that actually removed the entry.
+  -- tryWake (Poller fn flag) waitmp uid = do
+  --   b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
+  --   case b of
+  --     True -> return False -- Already woken.
+  --     False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
+  --                 return True 
         
   loop origt = case origt of
-    New io fn -> do
-      x  <- io
-      ls <- newIORef M.empty
-      loop (fn (LVar x ls Nothing))
+    New init cont -> do
+      ref <- newIORef$ NoBlocked init
+      loop (cont (LVar ref Nothing))
 
-    NewWithCallBack io cont -> do
-      (st0, cb) <- io
-      wait <- newIORef M.empty
-      loop (cont$ LVar st0 wait (Just cb))
+    NewWithCallBack init cb cont -> do
+      ref <- newIORef$ NoBlocked init
+      loop (cont$ LVar ref (Just cb))
 
-    Get (LVar _ waitmp _) poll cont -> do
-      e <- poll
-      case e of         
-         Just a  -> loop (cont a) -- Return straight away.
-         Nothing -> do -- Register on the waitlist:
-           uid <- getUID
-           flag <- newIORef False
-           -- Data-race here: what if a putter runs to completion right now.
-           -- It migh finish before we get our poller in.  Thus we self-poll at the end.
-           let fn = fmap cont <$> poll
-               retry = Poller fn flag
-           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
-           -- We must SELF POLL here to make sure there wasn't a race with a putter.
-           -- Now we KNOW that our poller is "published".  So any put's that sneak in
-           -- here are fine.
-           trc <- fn           
-           case trc of
-             Nothing -> reschedule queue
-             Just tr -> do b <- tryWake retry waitmp uid 
-                           case b of
-                             True  -> loop tr
-                             False -> reschedule queue -- Already woken
+    Get (LVar ref cb) thresh cont -> do
+      -- Tradeoff, we could do a plain read before the atomicModifyIORef.  But that
+      -- would require evaluating the threshold function TWICE if we need to block.
+      -- (Which is potentially more expensive than in the plain IVar case.)
+      -- e <- readIORef ref
+      let thisCB x = fmap cont $ thresh x
+      r <- atomicModifyIORef ref $ \ st ->
+        let a = case st of
+                  NoBlocked a -> a
+                  Blocked a _ -> a in
+        case thresh a of
+          Just b -> (st, loop (cont b))
+          Nothing ->
+            (case st of
+              NoBlocked a  -> Blocked a [thisCB]
+              Blocked a ls -> Blocked a (thisCB:ls),
+             reschedule queue)
+      r
+{-
 
     Consume (LVar state waittmp _) extractor cont -> do
       -- HACK!  We know nothing about the type of state.  But we CAN destroy waittmp
@@ -396,6 +386,7 @@ sched _doSync queue t = loop t
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
 
+-}
 
 -- | Process the next item on the work queue or, failing that, go into
 --   work-stealing mode.
@@ -448,6 +439,7 @@ steal q@Sched{ idle, scheds, no=my_no } = do
               sched True q t
            Nothing -> go xs
 
+
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: Sched -> Trace -> IO ()
 pushWork Sched { workpool, idle } t = do
@@ -470,6 +462,7 @@ data Sched = Sched
 instance NFData (LVar a) where
   rnf _ = ()
 
+{-
 
 {-# INLINE runPar_internal #-}
 runPar_internal :: Bool -> Par a -> IO a
@@ -556,3 +549,4 @@ consumeLV lv extractor = Par $ Consume lv extractor
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
 
+-}
