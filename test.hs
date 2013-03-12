@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
 
-
+#ifdef PURE
+#warning "Using the PURE version"
+import LVarTracePure
+#else
 import LVarTraceInternal
--- import LVarTracePure
+#endif
 
 import Data.Set as S
 -- import Control.Applicative ((<$>))

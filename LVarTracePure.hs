@@ -27,7 +27,7 @@ module LVarTracePure
    newPair, putFst, putSnd, getFst, getSnd, 
    
    -- * Example 3: Monotonically growing sets.
---   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
+   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
 
   ) where
 
@@ -162,40 +162,29 @@ newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
      -- Would be nice if this were a balanced tree:      
      foldl Fork Done trcs
 
-{- 
 -- | Put a single element in the set.
 putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet elem (ISet lv) = putLV lv putter
-  where
-    putter ref = atomicModifyIORef ref (\set -> (S.insert elem set, ()))
+putInSet elem (ISet lv) = putLV lv (S.singleton elem)
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSet elem (ISet lv) = getLV lv fn
   where
-    getter = do
-      set <- readIORef ref
-      case S.member elem set of
-        True  -> return (Just ())
-        False -> return (Nothing)
+    fn set | S.member elem set = Just ()
+           | otherwise         = Nothing
 
 -- | Wait on the SIZE of the set, not its contents.
 waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSetSize sz (ISet lv) = getLV lv fn
   where
-    getter = do
-      set <- readIORef ref
-      if S.size set >= sz
-         then return (Just ())
-         else return Nothing     
+    fn set | S.size set >= sz = Just ()
+           | otherwise        = Nothing 
 
 -- | Get the exact contents of the set.  Using this may cause your program exhibit a
 -- limited form of non-determinism.  It will never return the wrong answer, but it
 -- may include synchronization bugs that can (non-deterministically) cause exceptions.
 consumeSet :: ISet a -> Par (S.Set a)
-consumeSet (ISet lv) = consumeLV lv readIORef
--}
-
+consumeSet (ISet lv) = consumeLV lv 
 
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
