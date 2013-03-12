@@ -52,13 +52,16 @@ contexts][racket-list-message], we opted instead for an
 inference-rule-based semantics implemented using Redex's
 [`define-judgment-form`][define-judgment-form] feature.
 Unfortunately, in so doing, we miss out on some of Redex's most useful
-features.  As a tiny example of what we're missing,
+features.  ~~As a tiny example of what we're missing,
 `define-judgment-form` offers no way to name individual reduction
 rules, so although using Redex's [`traces`][traces] feature with our
 semantics will show us a beautiful reduction graph of a configuration,
 it won't label the edges in the graphs with the names of the reduction
 rules as it would normally, because Redex has no way of knowing their
-names.
+names.~~ Actually, this is no longer true -- the ability to name
+clauses in `define-judgment-form` was added in Racket release 5.3.1.
+But it's still going to take additional effort to get the names of
+rules to appear in the visualization.
 
 The Redex model is useful despite these limitations.  However, it
 would be interesting to try modeling lambdaLVar in a framework that has
