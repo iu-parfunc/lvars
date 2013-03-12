@@ -457,7 +457,7 @@
                           [x_4 (put x_2 (4))])
                   (convert (get x_2 (4)))))))
 
-            ;; When we're using small-step-base-rr, we can end up with
+            ;; When we're using small-step-slow-rr, we can end up with
             ;; a store of ((l 3) (l1 4)) or a permutation thereof --
             ;; that is, x_1 is allocated first, followed by x_2.  When
             ;; we're using small-step-fast-rr, we always seem to get
@@ -466,7 +466,7 @@
             ;; reading x_2 is always the same, but it ends up at a
             ;; different location in the store.  This is hack to
             ;; account for that.
-            (if (equal? rr small-step-base-rr)
+            (if (equal? rr small-step-slow-rr)
                 (term
                  (((l 3)
                    (l1 4))
@@ -482,7 +482,7 @@
 
   (test-results))
 
-;; Warning: Passing `small-step-base-rr` to this procedure will take
+;; Warning: Passing `small-step-slow-rr` to this procedure will take
 ;; several orders of magnitude longer to finish than passing
 ;; `small-step-fast-rr`.
 (define (slow-program-test-suite rr)
@@ -534,9 +534,9 @@
   (flush-output)
   (time (program-test-suite small-step-fast-rr))
 
-  (display "Running test suite with small-step-base-rr...")
+  (display "Running test suite with small-step-slow-rr...")
   (flush-output)
-  (time (program-test-suite small-step-base-rr))
+  (time (program-test-suite small-step-slow-rr))
 
   (display "Running slow test suite with small-step-fast-rr...")
   (flush-output)
@@ -544,7 +544,7 @@
 
 (define (test-all)
   (test-fast)
-  (display "Running slow test suite with small-step-base-rr...")
+  (display "Running slow test suite with small-step-slow-rr...")
   (flush-output)
-  (time (slow-program-test-suite small-step-base-rr)))
+  (time (slow-program-test-suite small-step-slow-rr)))
 

@@ -15,7 +15,7 @@
  lubstore
  lubstore-helper
  rename-locs
- small-step-base-rr
+ small-step-slow-rr
  small-step-fast-rr
  store-dom
  store-dom-diff
@@ -97,11 +97,11 @@
 ;; We can, however, wrap the small-step relation in
 ;; 'reduction-relation'.
 
-(define small-step-base-rr
+(define small-step-slow-rr
   (reduction-relation
    lambdaLVar
    (--> Config_1 Config_2
-        (judgment-holds (small-step-base Config_1 Config_2)))))
+        (judgment-holds (small-step-slow Config_1 Config_2)))))
 
 (define small-step-fast-rr
   (reduction-relation
@@ -123,19 +123,6 @@
   #:mode (small-step-base I O)
   #:contract (small-step-base Config Config)
 
-  ;; E-App-1 (only reduce left term)
-  [(small-step-base (S (e_1 e_2))
-                    (S_1 (e_11 e_2)))
-   (small-step-base (S e_1) (S_1 e_11))
-   (where #f (store-top? (lubstore S S_1)))]
-
-  ;; E-App-2 (only reduce right term)
-  [(small-step-base (S (e_1 e_2))
-                    (S_2 (e_1 e_22)))
-   (small-step-base (S e_2) (S_2 e_22))
-   (where #f (store-top? (lubstore S S_2)))]
-
-  ;; E-ParApp
   [(small-step-base (S (e_1 e_2))
                     ((lubstore S_11 S_2) (e_111 e_22)))
    (small-step-base (S e_1) (S_1 e_11))
@@ -144,228 +131,149 @@
    ;; must have names unique from those created between S and S_2.
    ;; See `rename-locs` for more details.
    (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
-   (where #f (store-top? (lubstore S_11 S_2)))]
+   (where #f (store-top? (lubstore S_11 S_2)))
+   "E-ParApp"]
 
-  ;; E-Beta
   [(small-step-base (S ((lambda (x) e) v))
-                    (S (subst x v e)))]
-
-  ;; E-New
+                    (S (subst x v e)))
+   "E-Beta"]
+  
   [(small-step-base (S new)
                     ((store-update S l Bot) l))
-   (where l (variable-not-in-store S))]
+   (where l (variable-not-in-store S))
+   "E-New"]
 
-  ;; E-Put-1
   [(small-step-base (S (put e_1 e_2))
                     (S_1 (put e_11 e_2)))
-   (small-step-base (S e_1) (S_1 e_11))]
+   (small-step-base (S e_1) (S_1 e_11))
+   "E-Put-1"]
 
-  ;; E-Put-2
   [(small-step-base (S (put e_1 e_2))
                     (S_2 (put e_1 e_22)))
-   (small-step-base (S e_2) (S_2 e_22))]
+   (small-step-base (S e_2) (S_2 e_22))
+   "E-Put-2"]
 
-  ;; E-PutVal
   [(small-step-base (S (put l (d_2)))
                     ((store-update S l d_2) ()))
    (where d_1 (store-lookup S l))
-   (where #f (top? (lub d_1 d_2)))]
+   (where #f (top? (lub d_1 d_2)))
+   "E-PutVal"]
 
-  ;; E-Get-1
   [(small-step-base (S (get e_1 e_2))
                     (S_1 (get e_11 e_2)))
-   (small-step-base (S e_1) (S_1 e_11))]
+   (small-step-base (S e_1) (S_1 e_11))
+   "E-Get-1"]
 
-  ;; E-Get-2
   [(small-step-base (S (get e_1 e_2))
                     (S_2 (get e_1 e_22)))
-   (small-step-base (S e_2) (S_2 e_22))]
+   (small-step-base (S e_2) (S_2 e_22))
+   "E-Get-2"]
 
-  ;; E-GetVal
   [(small-step-base (S (get l Q))
                     (S (d_2)))
    (where d_1 (store-lookup S l))
    (where #t (incomp Q))
    (where #t (valid Q))
-   (where d_2 (exists-d d_1 Q))]
+   (where d_2 (exists-d d_1 Q))
+   "E-GetVal"]
 
-  ;; E-Convert
   [(small-step-base (S_1 (convert e_1))
                     (S_2 (convert e_2)))
-   (small-step-base (S_1 e_1) (S_2 e_2))]
+   (small-step-base (S_1 e_1) (S_2 e_2))
+   "E-Convert"]
 
-  ;; E-ConvertVal
   [(small-step-base (S (convert Q))
-                    (S (delta Q)))]
+                    (S (delta Q)))
+   "E-ConvertVal"]
 
-  ;; Desugaring of lets.
   ;; TODO: multiple bindings? (issue #4)
   [(small-step-base (S (let ((x_1 e_1)) e_2))
                     (S ((lambda (x_1) e_2) e_1)))]
 
   [(small-step-base (S (let par ((x_1 e_1) (x_2 e_2)) e_3))
-                    (S (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))]
+                    (S (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))
+   "Desugaring of lets"]
 
-  ;; E-AppErr-1
   [(small-step-base (S (e_1 e_2))
                     Error)
-   (small-step-base (S e_1) Error)]
+   (small-step-base (S e_1) Error)
+   "E-AppErr-1"]
 
-  ;; E-AppErr-2
   [(small-step-base (S (e_1 e_2))
                     Error)
-   (small-step-base (S e_2) Error)]
+   (small-step-base (S e_2) Error)
+   "E-AppErr-2"]
 
-  ;; E-ParAppErr
   [(small-step-base (S (e_1 e_2))
                     Error)
    (small-step-base (S e_1) (S_1 e_11))
    (small-step-base (S e_2) (S_2 e_22))
    (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
-   (where #t (store-top? (lubstore S_11 S_2)))]
+   (where #t (store-top? (lubstore S_11 S_2)))
+   "E-ParAppErr"]
 
-  ;; E-PutValErr
   [(small-step-base (S (put l (d_2)))
                     Error)
    (where d_1 (store-lookup S l))
-   (where #t (top? (lub d_1 d_2)))]
+   (where #t (top? (lub d_1 d_2)))
+   "E-PutValErr"]
 
-  ;; E-ConvertErr
   [(small-step-base (S (convert e))
                     Error)
-   (small-step-base (S e) Error)])
+   (small-step-base (S e) Error)
+   "E-ConvertErr"])
 
-;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
-;; E-ReflErr, and with the addition of the rules shown in Figure 6.
-;; Much faster in Redex than `small-step-base`.
-(define-judgment-form lambdaLVar
+;; Because we left out the E-Refl and E-ReflErr rules from our
+;; semantics, we have to add two new rules, E-App-1 and E-App-2, by
+;; which parallel application expressions may take a step even if only
+;; one of their subexpressions can take a step.  This is the simplest
+;; way we know of to patch the missing reflexive rules, but
+;; unfortunately, it runs really slowly Hence the name of this
+;; relation.
+(define-extended-judgment-form lambdaLVar small-step-base
+  #:mode (small-step-slow I O)
+  #:contract (small-step-slow Config Config)
+
+  [(small-step-slow (S (e_1 e_2)) (S_1 (e_11 e_2)))
+   (small-step-slow (S e_1) (S_1 e_11))
+   (where #f (store-top? (lubstore S S_1)))
+   "E-App-1"] ;; only reduce left term
+
+  [(small-step-slow (S (e_1 e_2))
+                    (S_2 (e_1 e_22)))
+   (small-step-slow (S e_2) (S_2 e_22))
+   (where #f (store-top? (lubstore S S_2)))
+   "E-App-2"] ;; only reduce right term
+  )
+
+;; In this version, we again patch the missing reflexive rules, but
+;; this time, in E-App-1 and E-App-2, the subexpression that is not
+;; taking a step must be a value.  We also add an E-GetValBlock rule,
+;; which allows a blocked get expression to step to itself. This is
+;; This version is much faster in Redex than `small-step-slow`.
+(define-extended-judgment-form lambdaLVar small-step-base
   #:mode (small-step-fast I O)
   #:contract (small-step-fast Config Config)
 
-  ;; E-App-1 (only reduce left term; right term is a value)
   [(small-step-fast (S (e_1 v))
                     (S_1 (e_11 v)))
    (small-step-fast (S e_1) (S_1 e_11))
-   (where #f (store-top? (lubstore S S_1)))]
+   (where #f (store-top? (lubstore S S_1)))
+   "E-App-1"] ;; only reduce left term; right term is a value
 
-  ;; E-App-2 (only reduce right term; left term is a value)
   [(small-step-fast (S (v e_2))
                     (S_2 (v e_22)))
    (small-step-fast (S e_2) (S_2 e_22))
-   (where #f (store-top? (lubstore S S_2)))]
+   (where #f (store-top? (lubstore S S_2)))
+   "E-App-2"] ;; only reduce right term; left term is a value
 
-  ;; E-GetValBlock
   [(small-step-fast (S (get l Q))
                     (S (get l Q)))
    (where d_1 (store-lookup S l))
    (where #t (incomp Q))
    (where #t (valid Q))
-   (where #f (exists-d d_1 Q))]
-
-  ;; The following rules are identical to the ones of the same names
-  ;; in `small-step-base` (more's the pity).  It would be great if
-  ;; Redex had an `extend-judgment-form` form, analogous to
-  ;; `extend-reduction-relation`, to avoid having to repeat these
-  ;; rules here!
-  
-  ;; E-ParApp
-  [(small-step-fast (S (e_1 e_2))
-                    ((lubstore S_11 S_2) (e_111 e_22)))
-   (small-step-fast (S e_1) (S_1 e_11))
-   (small-step-fast (S e_2) (S_2 e_22))
-   ;; Handles renaming: any new locations created between S and S_1
-   ;; must have names unique from those created between S and S_2.
-   ;; See `rename-locs` for more details.
-   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
-   (where #f (store-top? (lubstore S_11 S_2)))]
-
-  ;; E-Beta
-  [(small-step-fast (S ((lambda (x) e) v))
-                    (S (subst x v e)))]
-
-  ;; E-New
-  [(small-step-fast (S new)
-                    ((store-update S l Bot) l))
-   (where l (variable-not-in-store S))]
-
-  ;; E-Put-1
-  [(small-step-fast (S (put e_1 e_2))
-                    (S_1 (put e_11 e_2)))
-   (small-step-fast (S e_1) (S_1 e_11))]
-
-  ;; E-Put-2
-  [(small-step-fast (S (put e_1 e_2))
-                    (S_2 (put e_1 e_22)))
-   (small-step-fast (S e_2) (S_2 e_22))]
-
-  ;; E-PutVal
-  [(small-step-fast (S (put l (d_2)))
-                    ((store-update S l d_2) ()))
-   (where d_1 (store-lookup S l))
-   (where #f (top? (lub d_1 d_2)))]
-
-  ;; E-Get-1
-  [(small-step-fast (S (get e_1 e_2))
-                    (S_1 (get e_11 e_2)))
-   (small-step-fast (S e_1) (S_1 e_11))]
-
-  ;; E-Get-2
-  [(small-step-fast (S (get e_1 e_2))
-                    (S_2 (get e_1 e_22)))
-   (small-step-fast (S e_2) (S_2 e_22))]
-
-  ;; E-GetVal
-  [(small-step-fast (S (get l Q))
-                    (S (d_2)))
-   (where d_1 (store-lookup S l))
-   (where #t (incomp Q))
-   (where #t (valid Q))
-   (where d_2 (exists-d d_1 Q))]
-
-  ;; E-Convert
-  [(small-step-fast (S_1 (convert e_1))
-                    (S_2 (convert e_2)))
-   (small-step-fast (S_1 e_1) (S_2 e_2))]
-
-  ;; E-ConvertVal
-  [(small-step-fast (S (convert Q))
-                    (S (delta Q)))]
-
-  ;; Desugaring of lets.
-  [(small-step-fast (S (let ((x_1 e_1)) e_2))
-                    (S ((lambda (x_1) e_2) e_1)))]
-
-  [(small-step-fast (S (let par ((x_1 e_1) (x_2 e_2)) e_3))
-                    (S (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))]
-
-  ;; E-AppErr-1
-  [(small-step-fast (S (e_1 e_2))
-                    Error)
-   (small-step-fast (S e_1) Error)]
-
-  ;; E-AppErr-2
-  [(small-step-fast (S (e_1 e_2))
-                    Error)
-   (small-step-fast (S e_2) Error)]
-
-  ;; E-ParAppErr
-  [(small-step-fast (S (e_1 e_2))
-                    Error)
-   (small-step-fast (S e_1) (S_1 e_11))
-   (small-step-fast (S e_2) (S_2 e_22))
-   (where (S_11 e_111) (rename-locs (S_1 e_11) S_2 S))
-   (where #t (store-top? (lubstore S_11 S_2)))]
-
-  ;; E-PutValErr
-  [(small-step-fast (S (put l (d_2)))
-                    Error)
-   (where d_1 (store-lookup S l))
-   (where #t (top? (lub d_1 d_2)))]
-
-  ;; E-ConvertErr
-  [(small-step-fast (S (convert e))
-                    Error)
-   (small-step-fast (S e) Error)])
+   (where #f (exists-d d_1 Q))
+   "E-GetValBlock"])
 
 (define-metafunction lambdaLVar
   store-dom : S -> (l ...)
