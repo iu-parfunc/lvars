@@ -325,9 +325,13 @@ sched _doSync queue t = loop t
                     loop (hd:tl) f w =
                       case hd new of
                         Just trc -> loop tl f (trc:w)
-                        Nothing  -> loop tl (hd:f) w 
+                        Nothing  -> loop tl (hd:f) w
+                    -- Callbacks invoked: 
+                    woken' = case cb of
+                              Nothing -> woken
+                              Just fn -> fn a new' : woken
                 in 
-                (LVarContents new' ls', woken)
+                (LVarContents new' ls', woken')
       mapM_ (pushWork queue) cs
       loop tr              
 
