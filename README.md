@@ -85,7 +85,7 @@ Fortunately, there is a simple workaround: we drop the E-Refl and
  E-App-1 and E-App-2, by which parallel application expressions may
  take a step even if only one of their subexpressions can take a step.
  The result is a semantics that is feasible to test with Redex.
-This reduction relation is called `small-step-base-rr`.
+This reduction relation is called `small-step-slow-rr`.
 
 ### Speed tweaks
 
@@ -120,7 +120,7 @@ implementations in which parallel evaluation is ``lockstep''.
 Running `make all` from the lambdaLVar-redex directory will build and
 all the tests will run, using both reduction relations.  There's [one
 particular test][slow-test] that runs so slowly under
-`small-step-base-rr` that we put it in a "slow test suite" by itself.
+`small-step-slow-rr` that we put it in a "slow test suite" by itself.
 Here are what the performance results of from a recent run of `make
 all` look like:
 
@@ -129,16 +129,16 @@ Running metafunction tests...All 51 tests passed.
 cpu time: 22 real time: 22 gc time: 0
 Running test suite with small-step-fast-rr...All 17 tests passed.
 cpu time: 307 real time: 309 gc time: 0
-Running test suite with small-step-base-rr...All 17 tests passed.
+Running test suite with small-step-slow-rr...All 17 tests passed.
 cpu time: 1004 real time: 1012 gc time: 66
 Running slow test suite with small-step-fast-rr...One test passed.
 cpu time: 320 real time: 324 gc time: 15
-Running slow test suite with small-step-base-rr...One test passed.
+Running slow test suite with small-step-slow-rr...One test passed.
 cpu time: 1010991 real time: 1022071 gc time: 13267
 ```
 
 The slow test takes several orders of magnitude longer when run with
-`small-step-base-rr` than with `small-step-fast-rr`.  (Those numbers
+`small-step-slow-rr` than with `small-step-fast-rr`.  (Those numbers
 are in milliseconds -- so the slow test is taking about 17 minutes!)
 Stepping through the test manually using `traces` finds 64 terms for
 the slow version, and 15 for the fast version.
