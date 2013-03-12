@@ -114,7 +114,7 @@
 ;; matching.  So for now, we have to define metafunctions for all our
 ;; side conditions and then pattern-match with `(where #t (call to
 ;; metafunction ...))`.  This should be fixed in the most recent
-;; release, which I'm having trouble installing!
+;; release.
 
 ;; Reduction rules shown in Figure 4 of the TR, minus E-Refl and
 ;; E-ReflErr.  We'll patch the missing reflexive rules in the extended
