@@ -134,40 +134,43 @@ getSnd lv = getLV lv test
    test (_,IVC (Just x)) = Just x
    test (_,IVC Nothing)  = Nothing
 
-{-
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
 
-newtype ISet a = ISet (LVar (IORef (S.Set a)))
+-- Abstract data type:
+newtype ISet a = ISet (LVar (S.Set a))
 
 newEmptySet :: Par (ISet a)
-newEmptySet = fmap ISet $ newLV$ newIORef S.empty
+newEmptySet = fmap ISet $ newLV S.empty
 
 -- | Extended lambda-LVar (callbacks).  Create an empty set, but establish a callback
 -- that will be invoked (in parallel) on each element added to the set.
 newEmptySetWithCallBack :: forall a . Ord a => (a -> Par ()) -> Par (ISet a)
-newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback io
- where -- Every time the set is updated we fork callbacks:
-   io = do
-     alreadyCalled <- newIORef S.empty
-     contents <- newIORef S.empty   
-     let fn :: IORef (S.Set a) -> IO Trace
-         fn _ = do
-           curr <- readIORef contents
-           old <- atomicModifyIORef alreadyCalled (\set -> (curr,set))
-           let new = S.difference curr old
-           -- Spawn in parallel all new callbacks:
-           let trcs = map runCallback (S.toList new)
-           -- Would be nice if this were a balanced tree:           
-           return (foldl Fork Done trcs)
+newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
+ where -- Every time the set is updated we fork callbacks on new elements:
+   cb :: S.Set a -> S.Set a -> Trace
+   cb old new =
+     -- Unfortunately we need to do a set diff every time.
+     undefined
+     
+     -- let fn :: IORef (S.Set a) -> IO Trace
+     --     fn _ = do
+     --       curr <- readIORef contents
+     --       old <- atomicModifyIORef alreadyCalled (\set -> (curr,set))
+     --       let new = S.difference curr old
+     --       -- Spawn in parallel all new callbacks:
+     --       let trcs = map runCallback (S.toList new)
+     --       -- Would be nice if this were a balanced tree:           
+     --       return (foldl Fork Done trcs)
 
-         runCallback :: a -> Trace
-         -- Run each callback with an etpmyt continuation:
-         runCallback elem = runCont (callb elem) (\_ -> Done)
+     --     runCallback :: a -> Trace
+     --     -- Run each callback with an etpmyt continuation:
+     --     runCallback elem = runCont (callb elem) (\_ -> Done)
          
-     return (contents, fn)
+     -- return (contents, fn)
 
+{- 
 -- | Put a single element in the set.
 putInSet :: Ord a => a -> ISet a -> Par () 
 putInSet elem (ISet lv) = putLV lv putter
@@ -199,8 +202,9 @@ waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
 -- may include synchronization bugs that can (non-deterministically) cause exceptions.
 consumeSet :: ISet a -> Par (S.Set a)
 consumeSet (ISet lv) = consumeLV lv readIORef
-
 -}
+
+
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
@@ -212,7 +216,7 @@ consumeSet (ISet lv) = consumeLV lv readIORef
 data LVar a = LVar {
   -- TODO: consider MutVar# 
   lvstate :: {-# UNPACK #-} !(IORef (LVarContents a)),
-  callback :: Maybe (a -> Trace)
+  callback :: Maybe (a -> a -> Trace)
 }
 
 data LVarContents a = LVarContents {
@@ -268,7 +272,7 @@ data Trace =
            -- The callback (unsafely) is scheduled when there is ANY change.  It does
            -- NOT get a snapshot of the (continuously mutating) state, just the right
            -- to read whatever it can.
-           | forall a . NewWithCallBack a (a -> Trace) (LVar a -> Trace)
+           | forall a . NewWithCallBack a (a -> a -> Trace) (LVar a -> Trace)
 
 -- | The main scheduler loop.
 sched :: Bool -> Sched -> Trace -> IO ()
@@ -499,7 +503,9 @@ fork p = Par $ \c -> Fork (runCont p (\_ -> Done)) (c ())
 newLV :: lv -> Par (LVar lv)
 newLV init = Par $ New init
 
-newLVWithCallback :: lv -> (lv -> Trace) -> Par (LVar lv)
+-- | In this internal version, the callback gets to see the OLD and the NEW version,
+-- respectively.
+newLVWithCallback :: lv -> (lv -> lv -> Trace) -> Par (LVar lv)
 newLVWithCallback st cb = Par $ NewWithCallBack st cb
                     
 -- | Internal operation.  Test if the LVar satisfies the given threshold.
