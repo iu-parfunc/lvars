@@ -16,11 +16,11 @@ of the states of variables -- for instance, in a lambdaLVar program it
 might be possible to observe that a store location containes "at least
 4", but not possible to observe the precise value.
 
-Section 3 of the draft paper ["A Lattice-Theoretical Approach to
-Deterministic Parallelism with Shared State"][2012-lambdaLVar-draft]
-presents the syntax and semantics of lambdaLVar.  The code in this
-repository is a PLT Redex model of a variant of the semantics given in
-the paper, where the reduction relation has been tweaked a bit and the
+Section 3 of the technical report ["A Lattice-Theoretical Approach to
+Deterministic Parallelism with Shared State"][lambdaLVar-TR] presents
+the syntax and semantics of lambdaLVar.  The code in this repository
+is a PLT Redex model of a variant of the semantics given in the TR,
+where the reduction relation has been tweaked a bit and the
 user-specified partially ordered set is the set of natural numbers
 ordered by Racket's `<=`.
 
@@ -148,7 +148,7 @@ the slow version, and 15 for the fast version.
 Some lambdaLVar tests are running (and, hopefully, passing) on [a
 Jenkins continuous integration server][jenkins].
 
-[2012-lambdaLVar-draft]: https://www.cs.indiana.edu/~lkuper/papers/2012-lambdaLVar-draft.pdf
+[lambdaLVar-TR]: http://www.cs.indiana.edu/cgi-bin/techreports/TRNNN.cgi?trnum=TR702
 
 [eval-contexts]: http://www.ccs.neu.edu/racket/pubs/tcs92-fh.pdf
 

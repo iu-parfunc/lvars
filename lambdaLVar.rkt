@@ -44,7 +44,7 @@
      new
      (convert e)
 
-     ;; These don't appear in the grammar in the paper, because they
+     ;; These don't appear in the grammar in the TR, because they
      ;; immediately desugar to application and lambda.
      (let ((x e)) e)
      (let par ((x e) (x e)) e))
@@ -116,8 +116,9 @@
 ;; metafunction ...))`.  This should be fixed in the most recent
 ;; release, which I'm having trouble installing!
 
-;; Reduction rules shown in Figure 3 of the paper, minus E-Refl and
-;; E-ReflErr, and with the addition of the rules shown in Figure 5.
+;; Reduction rules shown in Figure 4 of the TR, minus E-Refl and
+;; E-ReflErr.  We'll patch the missing reflexive rules in the extended
+;; reduction relations defined below this one.
 (define-judgment-form lambdaLVar
   #:mode (small-step-base I O)
   #:contract (small-step-base Config Config)
