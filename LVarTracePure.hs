@@ -152,23 +152,15 @@ newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
    cb :: S.Set a -> S.Set a -> Trace
    cb old new =
      -- Unfortunately we need to do a set diff every time.
-     undefined
-     
-     -- let fn :: IORef (S.Set a) -> IO Trace
-     --     fn _ = do
-     --       curr <- readIORef contents
-     --       old <- atomicModifyIORef alreadyCalled (\set -> (curr,set))
-     --       let new = S.difference curr old
-     --       -- Spawn in parallel all new callbacks:
-     --       let trcs = map runCallback (S.toList new)
-     --       -- Would be nice if this were a balanced tree:           
-     --       return (foldl Fork Done trcs)
-
-     --     runCallback :: a -> Trace
-     --     -- Run each callback with an etpmyt continuation:
-     --     runCallback elem = runCont (callb elem) (\_ -> Done)
-         
-     -- return (contents, fn)
+     let fresh = S.difference new old 
+         -- Spawn in parallel all new callbacks:
+         trcs = map runCallback (S.toList fresh)
+         runCallback :: a -> Trace
+         -- Run each callback with an empty continuation:
+         runCallback elem = runCont (callb elem) (\_ -> Done)
+     in
+     -- Would be nice if this were a balanced tree:      
+     foldl Fork Done trcs
 
 {- 
 -- | Put a single element in the set.
@@ -278,16 +270,6 @@ data Trace =
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
  where
-
-  -- -- Try to wake it up and remove from the wait list.  Returns true if this was the
-  -- -- call that actually removed the entry.
-  -- tryWake (Poller fn flag) waitmp uid = do
-  --   b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
-  --   case b of
-  --     True -> return False -- Already woken.
-  --     False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
-  --                 return True 
-        
   loop origt = case origt of
     New init cont -> do
       ref <- newIORef$ LVarContents init []
@@ -334,7 +316,6 @@ sched _doSync queue t = loop t
                 (LVarContents new' ls', woken')
       mapM_ (pushWork queue) cs
       loop tr              
-
 
     Fork child parent -> do
          pushWork queue parent -- "Work-first" policy.
