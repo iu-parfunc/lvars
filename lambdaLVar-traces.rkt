@@ -2,9 +2,9 @@
 (require redex
          "lambdaLVar.rkt")
 
-(define trace-base
+(define trace-slow
   (lambda (config)
-    (traces small-step-base-rr config)))
+    (traces small-step-slow-rr config)))
 
 (define trace-fast
   (lambda (config)
