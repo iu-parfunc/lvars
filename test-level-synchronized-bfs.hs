@@ -1,8 +1,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet,
-                          consumeSet)
+{-# LANGUAGE CPP #-}
+#ifdef PURE
+#warning "Using the PURE version"
+import LVarTracePure (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork)
+#else
+import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork)
+#endif
+
 import Control.Monad.Par.Combinator (parMapM)
 import Control.Monad.Par.Class (ParFuture)
 import Data.Maybe (fromJust)
@@ -85,16 +91,17 @@ main =
     let v = 'a'
     let f = \x -> x
     l_acc <- newEmptySet
+    -- "manually" add the first element to the set.
+    putInSet (f v) l_acc
     result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
     consumeSet l_acc
     -- return result
 
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
--- node labels, and the function f to be applied to each node.  We're
--- not actually doing anything with f yet.
-bf_traverse :: forall a b . (Show a, Ord a, NFData a) =>
-               (Graph a) -> ISet a -> Set.Set a -> Set.Set a -> (a -> b) ->
+-- node labels, and the function f to be applied to each node.
+bf_traverse :: forall a b . (Show a, Ord a, NFData a, Ord b) =>
+               (Graph a) -> ISet b -> Set.Set a -> Set.Set a -> (a -> b) ->
                Par (Set.Set b)
 bf_traverse g l_acc seen_rank new_rank f =
   -- Nothing in the new_rank set means nothing left to traverse.
@@ -108,7 +115,7 @@ bf_traverse g l_acc seen_rank new_rank f =
     let add :: a -> Par (Set.Set a)
         add n = if Set.member n seen_rank'
                 then return Set.empty
-                else do putInSet n l_acc
+                else do fork $ putInSet (f n) l_acc
                         return (Set.singleton n)
     
     new_rank' <- parMapM (parMapM add . (nbrLabels g)) (Set.toList new_rank)
