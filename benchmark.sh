@@ -1,0 +1,1 @@
+for i in {1..4}; do ./BFS -o BFS$i.html +RTS -N$i; done

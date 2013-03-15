@@ -16,6 +16,8 @@ import qualified Data.Set as Set
 import Control.DeepSeq (NFData)
 import Data.Traversable (Traversable)
 import Debug.Trace (trace)
+import Criterion.Main
+import Criterion.Config
 
 -- Graph representation
 data Node a = Node
@@ -84,19 +86,29 @@ breadth-first traversal.)
 
 -}
 
-main :: IO (Set.Set Char)
-main =
+main = defaultMainWith defaultConfig (return ()) [
+         bgroup "bf_traverse" [
+           bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         ]--,
+         -- bgroup "bf_traverse" [
+         --   bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- ]
+       ]
+
+start_traverse :: (Char -> Char) -> IO (Set.Set Char)
+start_traverse f =
   runParIO $ do
     let g = graphExample
     let v = 'a'
-    let f = \x -> x
     l_acc <- newEmptySet
     -- "manually" add the first element to the set.
     putInSet (f v) l_acc
     result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
     consumeSet l_acc
-    -- return result
-
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
