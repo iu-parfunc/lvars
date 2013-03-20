@@ -58,7 +58,7 @@ mkGraphFromFile = do
   mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs)
   
 -- Neighbors of a node with a given label
-nbrs :: Graph -> Int -> IO ([Int])
+nbrs :: Graph -> Int -> IO [Int]
 nbrs g lbl = do
   maybeVals <- H.lookup g lbl
   answer <- case maybeVals of
@@ -84,15 +84,14 @@ printGraph :: Graph -> IO ()
 printGraph g = do
   ls <- H.toList g
   putStrLn (show ls)
-  -- putStrLn . filter (`notElem` "'\"") (show ls)
   return ()
   
 main = do
-  g1 <- mkGraphFromFile
-  printGraph g1
+  -- g1 <- mkGraphFromFile
+  -- printGraph g1
   g2 <- graphExample
   printGraph g2
-
+  nbrs g2 1
 {-
 
 From Ryan's intro draft: "In a graph, find the connected component
@@ -118,55 +117,43 @@ breadth-first traversal.)
 --          -- ]
 --        ]
 
--- start_traverse :: (Int -> Int) -> IO (Set.Set Int)
--- start_traverse f =
---   runParIO $ do
---     let g = do 
---           graph <- mkGraphFromFile
---           return graph
---     let v = 1
---     l_acc <- newEmptySet
---     -- "manually" add the first element to the set.
---     putInSet (f v) l_acc
---     result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
---     consumeSet l_acc
+-- 
+start_traverse :: (Int -> Int) -> IO (Set.Set Int)
+start_traverse f = do
+      g <- graphExample
+      let v = 1
+      runParIO $ do
+        l_acc <- newEmptySet
+        -- "manually" add the first element to the set.
+        putInSet (f v) l_acc
+        result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
+        consumeSet l_acc
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
--- bf_traverse :: forall a . (Ord a) =>
---                Graph -> ISet a -> Set.Set Int -> Set.Set Int -> (Int -> a) ->
---                Par (Set.Set a)
--- bf_traverse g l_acc seen_rank new_rank f =
---   -- Nothing in the new_rank set means nothing left to traverse.
---   if Set.null new_rank
---   then return Set.empty
---   else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
---               "new_rank: " ++ show new_rank) $ do
---     -- Add new_rank stuff to the "seen" list
---     let seen_rank' =  Set.union seen_rank new_rank
---     -- Add to the next rank, and to the output/accumulator:
---     let add :: a -> Par (Set.Set a)
---         add n = if Set.member n seen_rank'
---                 then return Set.empty
---                 else do fork $ putInSet (f n) l_acc
---                         return (Set.singleton n)
-    
---     new_rank' <- parMapM (parMapM add . (nbrs g)) (Set.toList new_rank)
-    
---     -- Flatten it out, this should be a parallel fold ideally:
---     let new_rank'' = Set.unions $ concat new_rank'
---     bf_traverse g l_acc seen_rank' new_rank'' f 
+bf_traverse :: Graph -> ISet Int -> Set.Set Int -> Set.Set Int -> (Int -> Int)
+               -> Par (Set.Set Int)
+bf_traverse g l_acc seen_rank new_rank f =
+  -- Nothing in the new_rank set means nothing left to traverse.
+  if Set.null new_rank
+  then return Set.empty
+  else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
+              "new_rank: " ++ show new_rank) $ do
+    -- Add new_rank stuff to the "seen" list
+    let seen_rank' =  Set.union seen_rank new_rank
+    -- Add to the next rank, and to the output/accumulator:
+    let add :: Int -> Par (Set.Set Int)
+        add n = undefined
+        add n = if Set.member n seen_rank'
+                then return Set.empty
+                else do fork $ putInSet (f n) l_acc
+                        return (Set.singleton n)
+    -- -- Grab all the neighbor nodes of everything in the new_rank set.
+    -- That is, map (nbrs g) over (Set.toList new_rank).
+    --- Then, take that whole list and map 'add' over it.
 
---------------------------------------------------------------------------------
--- Oops, turns out there is a painful reason that we don't have a traversable
--- instance for Set:
---
--- http://www.haskell.org/pipermail/haskell-cafe/2010-July/080978.html
---------------------------------------------------------------------------------
+    -- new_rank' <- parMapM (parMapM add . (nbrs g)) (Set.toList new_rank)
     
--- instance Functor Set.Set where
---   fmap f s = Set.map f s
---   -- fromList $ fmap f $ Set.toList s  
-
--- instance Traversable Set.Set where
-  
+    -- -- Flatten it out, this should be a parallel fold ideally:
+    -- let new_rank'' = Set.unions $ concat new_rank'
+    bf_traverse g l_acc seen_rank new_rank f 
