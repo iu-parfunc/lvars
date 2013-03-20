@@ -15,9 +15,26 @@ import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Control.DeepSeq (NFData)
 import Data.Traversable (Traversable)
+import Data.Map as Map (toList, fromListWith)
+
 import Debug.Trace (trace)
 import Criterion.Main
 import Criterion.Config
+
+import qualified Data.HashTable.IO as H
+
+type HTGraph = H.BasicHashTable Int [Int]
+
+-- Create a graph from a flat list of key-value pairs.
+mkHTGraph :: [(Int, Int)] -> IO (HTGraph)
+mkHTGraph ls = do
+  -- Convert a flat list of key-value pairs to one that maps keys to
+  -- lists of values.
+  let convert :: (Ord a) => [(a, b)] -> [(a, [b])]
+      convert ls = 
+        (Map.toList . Map.fromListWith (++) . map (\(x,y) -> (x,[y]))) ls
+  ht <- H.fromList (convert ls)
+  return ht
 
 -- Graph representation
 data Node a = Node
