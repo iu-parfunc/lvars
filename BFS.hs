@@ -1,6 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 {-# LANGUAGE CPP #-}
 #ifdef PURE
 #warning "Using the PURE version"
@@ -11,15 +8,14 @@ import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet
 
 import Control.Monad.Par.Combinator (parMapM)
 import Control.Monad.Par.Class (ParFuture)
-import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Control.DeepSeq (NFData)
 import Data.Traversable (Traversable)
 import Data.Map as Map (toList, fromListWith)
 
 -- For parsing the file produced by pbbs
-import System.IO
 import Data.List.Split
+import System.IO
 
 -- So we can see the behavior of bf_traverse
 import Debug.Trace (trace)
@@ -28,6 +24,7 @@ import Debug.Trace (trace)
 import Criterion.Main
 import Criterion.Config
 
+-- For representing graphs
 import qualified Data.HashTable.IO as H
 
 -- a Graph is an IOHashTable Basic Int [Int]
@@ -86,38 +83,27 @@ printGraph g = do
   putStrLn (show ls)
   return ()
   
-main = do
-  -- g1 <- mkGraphFromFile
-  -- printGraph g1
+-- Just experimenting here.
+foo = do
+  g1 <- mkGraphFromFile
+  printGraph g1
   g2 <- graphExample
   printGraph g2
   nbrs g2 1
-{-
 
-From Ryan's intro draft: "In a graph, find the connected component
-containing a vertex V, and compute a function F over the labels of all
-vertices in that component, returning a set of results."
+main = defaultMainWith defaultConfig (return ()) [
+         bgroup "bf_traverse" [
+           bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         ]--,
+         -- bgroup "bf_traverse" [
+         --   bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
+         -- ]
+       ]
 
-Nothing about that problem statement says it has to be a breadth-first
-search.  Should it?  (Also, this isn't really a "search", just a
-breadth-first traversal.)
-
--}
-
--- main = defaultMainWith defaultConfig (return ()) [
---          bgroup "bf_traverse" [
---            bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          ]--,
---          -- bgroup "bf_traverse" [
---          --   bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
---          -- ]
---        ]
-
--- 
 start_traverse :: (Int -> Int) -> IO (Set.Set Int)
 start_traverse f = do
       g <- graphExample
@@ -148,12 +134,12 @@ bf_traverse g l_acc seen_rank new_rank f =
                 then return Set.empty
                 else do fork $ putInSet (f n) l_acc
                         return (Set.singleton n)
-    -- -- Grab all the neighbor nodes of everything in the new_rank set.
+    -- Grab all the neighbor nodes of everything in the new_rank set.
     -- That is, map (nbrs g) over (Set.toList new_rank).
-    --- Then, take that whole list and map 'add' over it.
+    -- Then, take that whole list and map 'add' over it.
 
     -- new_rank' <- parMapM (parMapM add . (nbrs g)) (Set.toList new_rank)
     
-    -- -- Flatten it out, this should be a parallel fold ideally:
+    -- Flatten it out, this should be a parallel fold ideally:
     -- let new_rank'' = Set.unions $ concat new_rank'
-    bf_traverse g l_acc seen_rank new_rank f 
+    bf_traverse g l_acc seen_rank new_rank f -- should really be new_rank''
