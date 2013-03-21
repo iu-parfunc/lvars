@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 {-# LANGUAGE CPP #-}
 #ifdef PURE
 #warning "Using the PURE version"
@@ -117,7 +119,11 @@ start_traverse f = do
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
-bf_traverse :: Graph -> ISet Int -> Set.Set Int -> Set.Set Int -> (Int -> Int)
+bf_traverse :: (NFData (Set.Set Int),
+                Show (Set.Set Int), 
+                Ord (Set.Set Int))
+                => 
+               Graph -> ISet Int -> Set.Set Int -> Set.Set Int -> (Int -> Int)
                -> Par (Set.Set Int)
 bf_traverse g l_acc seen_rank new_rank f =
   -- Nothing in the new_rank set means nothing left to traverse.
@@ -129,16 +135,20 @@ bf_traverse g l_acc seen_rank new_rank f =
     let seen_rank' =  Set.union seen_rank new_rank
     -- Add to the next rank, and to the output/accumulator:
     let add :: Int -> Par (Set.Set Int)
-        add n = undefined
         add n = if Set.member n seen_rank'
                 then return Set.empty
                 else do fork $ putInSet (f n) l_acc
                         return (Set.singleton n)
     -- Grab all the neighbor nodes of everything in the new_rank set.
     -- That is, map (nbrs g) over (Set.toList new_rank).
-    -- Then, take that whole list and map 'add' over it.
-
-    -- new_rank' <- parMapM (parMapM add . (nbrs g)) (Set.toList new_rank)
+    
+    -- e.g., for graphExample, if new_rank was [1, 2, 3],
+    -- new_rank_nbrs should be [[2,3], [1,4,5], [1,6,7]]
+                        
+    -- Then, take each of those lists and map 'add' over them.
+    
+    -- new_rank_nbrs <- parMapM (nbrs g) (Set.toList new_rank)
+    -- new_rank' <- parMapM add new_rank_nbrs
     
     -- Flatten it out, this should be a parallel fold ideally:
     -- let new_rank'' = Set.unions $ concat new_rank'
