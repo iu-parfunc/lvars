@@ -7,7 +7,7 @@ This is an umbrella repository for work related to LVars.
 Subdirectories include:
 
   * [redex]: a PLT Redex model of the lambdaLVar calculus ([see
-    README](https://github.com/iu-parfunc/lvars/tree/master/redex#readme));
+    README](https://github.com/iu-parfunc/lvars/tree/master/redex#readme)).
 
   * [race_detector_interps]: an implementation of lambdaLVar extended
      with a destructive `consume` operation and a data-race detector
