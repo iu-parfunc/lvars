@@ -35,14 +35,14 @@ import qualified Data.Vector as V
 type Graph = V.Vector [Int]
 
 -- Create a graph from a flat list of key-value pairs.
-mkGraph :: [(Int, Int)] -> IO Graph
-mkGraph ls = do
+mkGraph :: [(Int, Int)] -> Graph
+mkGraph ls = 
   -- Convert a flat list of key-value pairs to one that maps keys to
   -- lists of values.
   let convert :: (Ord a) => [(a, b)] -> [(a, [b])]
       convert = 
         Map.toList . Map.fromListWith (++) . map (\(x,y) -> (x,[y]))
-  return (V.fromList $ map snd $ convert ls)
+  in (V.fromList $ map snd $ convert ls)
 
 -- Slurp in key-value pairs from a file in pbbs EdgeArray format.
 -- Generate /tmp/grid using pbbs:
@@ -54,23 +54,23 @@ mkGraphFromFile = do
   inStr <- hGetContents inh
   let tuplify2 [x,y] = (x, y)
   -- Ignore the initial "EdgeArray" string in the pbbs-generated file.
-  let (ignored:stringpairs) = map tuplify2 (map (splitOn " ") (lines inStr))
-  mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs)
+  let (_:stringpairs) = map tuplify2 (map (splitOn " ") (lines inStr))
+  return (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
   
 -- Neighbors of a node with a given label
-nbrs :: Graph -> Int -> IO [Int]
-nbrs g lbl = do
+nbrs :: Graph -> Int -> [Int]
+nbrs g lbl = g V.! lbl
 --  maybeVals <- H.lookup g lbl
   -- answer <- case maybeVals of
   --   Just vals -> return vals
   --   Nothing -> return []
   -- return answer
-  return (g V.! lbl)
 
 -- A tiny example graph
-graphExample :: IO Graph
-graphExample = do  
-  let g = [(0,[]), -- RRN, added this node because vectors are zero-based
+graphExample :: Graph
+graphExample = 
+  let g :: [(Int,[Int])]
+      g = [(0,[]), -- RRN, added this node because vectors are zero-based
            (1, [2, 3]),
            (2, [1, 4, 5]),
            (3, [1, 6, 7]),
@@ -79,7 +79,7 @@ graphExample = do
            (6, [3, 5]),
            (7, [3]),
            (8, [4, 5])]
-  return (V.fromList $ map snd $ g) -- No need for IO actually.
+  in (V.fromList $ map snd $ g) -- No need for IO actually.
 --  ht <- H.new
 --  mapM (\x -> H.insert ht (fst x) (snd x)) g 
 --  return ht
@@ -100,6 +100,7 @@ foo = do
   nbrs g2 1
 -}
 
+main :: IO ()
 main = defaultMainWith defaultConfig (return ()) [
          bgroup "bf_traverse" [
            bench "bf_traverse with identity" $ start_traverse (\x -> x)
@@ -115,7 +116,7 @@ main = defaultMainWith defaultConfig (return ()) [
 
 start_traverse :: (Int -> Int) -> IO (Set.Set Int)
 start_traverse f = do
-      g <- graphExample
+      let g = graphExample
       let v = 1
       runParIO $ do
         l_acc <- newEmptySet
