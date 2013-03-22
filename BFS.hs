@@ -16,8 +16,8 @@ import Data.Traversable (Traversable)
 import Data.Map as Map (toList, fromListWith)
 
 -- For parsing the file produced by pbbs
-import Data.List.Split
-import System.IO
+import Data.List.Split (splitOn)
+import System.IO (openFile, hGetContents, IOMode(ReadMode))
 
 -- So we can see the behavior of bf_traverse
 import Debug.Trace (trace)
