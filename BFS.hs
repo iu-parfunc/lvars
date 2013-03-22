@@ -27,10 +27,12 @@ import Criterion.Main
 import Criterion.Config
 
 -- For representing graphs
-import qualified Data.HashTable.IO as H
+-- import qualified Data.HashTable.IO as H
+import qualified Data.Vector as V
 
 -- a Graph is an IOHashTable Basic Int [Int]
-type Graph = H.BasicHashTable Int [Int]
+-- type Graph = H.BasicHashTable Int [Int]
+type Graph = V.Vector [Int]
 
 -- Create a graph from a flat list of key-value pairs.
 mkGraph :: [(Int, Int)] -> IO Graph
@@ -40,8 +42,7 @@ mkGraph ls = do
   let convert :: (Ord a) => [(a, b)] -> [(a, [b])]
       convert = 
         Map.toList . Map.fromListWith (++) . map (\(x,y) -> (x,[y]))
-  ht <- H.fromList (convert ls)
-  return ht
+  return (V.fromList $ map snd $ convert ls)
 
 -- Slurp in key-value pairs from a file in pbbs EdgeArray format.
 -- Generate /tmp/grid using pbbs:
@@ -59,32 +60,37 @@ mkGraphFromFile = do
 -- Neighbors of a node with a given label
 nbrs :: Graph -> Int -> IO [Int]
 nbrs g lbl = do
-  maybeVals <- H.lookup g lbl
-  answer <- case maybeVals of
-    Just vals -> return vals
-    Nothing -> return []
-  return answer
-  
+--  maybeVals <- H.lookup g lbl
+  -- answer <- case maybeVals of
+  --   Just vals -> return vals
+  --   Nothing -> return []
+  -- return answer
+  return (g V.! lbl)
+
 -- A tiny example graph
 graphExample :: IO Graph
-graphExample = do
-  ht <- H.new
-  mapM (\x -> H.insert ht (fst x) (snd x)) [(1, [2, 3]),
-                                            (2, [1, 4, 5]),
-                                            (3, [1, 6, 7]),
-                                            (4, [2, 8]),
-                                            (5, [2, 6, 8]),
-                                            (6, [3, 5]),
-                                            (7, [3]),
-                                            (8, [4, 5])]
-  return ht
+graphExample = do  
+  let g = [(0,[]), -- RRN, added this node because vectors are zero-based
+           (1, [2, 3]),
+           (2, [1, 4, 5]),
+           (3, [1, 6, 7]),
+           (4, [2, 8]),
+           (5, [2, 6, 8]),
+           (6, [3, 5]),
+           (7, [3]),
+           (8, [4, 5])]
+  return (V.fromList $ map snd $ g) -- No need for IO actually.
+--  ht <- H.new
+--  mapM (\x -> H.insert ht (fst x) (snd x)) g 
+--  return ht
 
 printGraph :: Graph -> IO ()
 printGraph g = do
-  ls <- H.toList g
+  let ls = V.toList g
   putStrLn (show ls)
   return ()
-  
+
+{-
 -- Just experimenting here.
 foo = do
   g1 <- mkGraphFromFile
@@ -92,6 +98,7 @@ foo = do
   g2 <- graphExample
   printGraph g2
   nbrs g2 1
+-}
 
 main = defaultMainWith defaultConfig (return ()) [
          bgroup "bf_traverse" [
