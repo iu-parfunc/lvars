@@ -3,22 +3,21 @@ lvars
 
 #### A collection of prototype LVar implementations, tools, and mechanized semantics.
 
-This is an umbrella repository for work related to LVars, including:
+This is an umbrella repository for work related to LVars.
+Subdirectories include:
 
-  * [lambdaLVar-redex], a PLT Redex model of the lambdaLVar calculus
-    ([see
+  * [redex]: a PLT Redex model of the lambdaLVar calculus ([see
     README](https://github.com/iu-parfunc/lvars/tree/master/redex#readme));
 
-  * [race_detector_interps], an implementation of the lambdaLVar
-    calculus extended with destructive observations (`consume`), and a
-    data race detector for lambdaLVar + `consume` ([see
-    README](https://github.com/iu-parfunc/lvars/tree/master/race_detector_interps#readme));
+  * [race_detector_interps]: an implementation of lambdaLVar extended
+     with a destructive `consume` operation and a data-race detector
+     for lambdaLVar + `consume`.
 
-  * [haskell-prototype], a practical prototype implementation of LVars
-    in Haskell based on the monad-par library ([see
-    README](https://github.com/iu-parfunc/lvars/tree/master/haskell-prototype#readme)).
+  * [haskell-prototype]: a prototype implementation of LVars based on
+    the [monad-par](http://hackage.haskell.org/package/monad-par)
+    Haskell library.
 
 
-[lambdaLVar-redex]: https://github.com/iu-parfunc/lvars/tree/master/redex
+[redex]: https://github.com/iu-parfunc/lvars/tree/master/redex
 [race_detector_interps]: https://github.com/iu-parfunc/lvars/tree/master/race_detector_interps
 [haskell-prototype]: https://github.com/iu-parfunc/lvars/tree/master/haskell-prototype
