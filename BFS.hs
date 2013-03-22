@@ -27,18 +27,16 @@ import Criterion.Main
 import Criterion.Config
 
 -- For representing graphs
--- import qualified Data.HashTable.IO as H
 import qualified Data.Vector as V
 
--- a Graph is an IOHashTable Basic Int [Int]
--- type Graph = H.BasicHashTable Int [Int]
+-- Vector representation of graphs: the list at index k is the list of
+-- node k's neighbors.
 type Graph = V.Vector [Int]
 
 -- Create a graph from a flat list of key-value pairs.
 mkGraph :: [(Int, Int)] -> Graph
 mkGraph ls = 
-  -- Convert a flat list of key-value pairs to one that maps keys to
-  -- lists of values.
+  -- Convert a flat list of key-value pairs to a Graph.
   let convert :: (Ord a) => [(a, b)] -> [(a, [b])]
       convert = 
         Map.toList . Map.fromListWith (++) . map (\(x,y) -> (x,[y]))
@@ -60,17 +58,12 @@ mkGraphFromFile = do
 -- Neighbors of a node with a given label
 nbrs :: Graph -> Int -> [Int]
 nbrs g lbl = g V.! lbl
---  maybeVals <- H.lookup g lbl
-  -- answer <- case maybeVals of
-  --   Just vals -> return vals
-  --   Nothing -> return []
-  -- return answer
 
 -- A tiny example graph
 graphExample :: Graph
 graphExample = 
   let g :: [(Int,[Int])]
-      g = [(0,[]), -- RRN, added this node because vectors are zero-based
+      g = [(0, [1]),
            (1, [2, 3]),
            (2, [1, 4, 5]),
            (3, [1, 6, 7]),
@@ -79,26 +72,13 @@ graphExample =
            (6, [3, 5]),
            (7, [3]),
            (8, [4, 5])]
-  in (V.fromList $ map snd $ g) -- No need for IO actually.
---  ht <- H.new
---  mapM (\x -> H.insert ht (fst x) (snd x)) g 
---  return ht
+  in (V.fromList $ map snd $ g)
 
 printGraph :: Graph -> IO ()
 printGraph g = do
   let ls = V.toList g
   putStrLn (show ls)
   return ()
-
-{-
--- Just experimenting here.
-foo = do
-  g1 <- mkGraphFromFile
-  printGraph g1
-  g2 <- graphExample
-  printGraph g2
-  nbrs g2 1
--}
 
 main :: IO ()
 main = defaultMainWith defaultConfig (return ()) [
@@ -117,7 +97,7 @@ main = defaultMainWith defaultConfig (return ()) [
 start_traverse :: (Int -> Int) -> IO (Set.Set Int)
 start_traverse f = do
       let g = graphExample
-      let v = 1
+      let v = 0
       runParIO $ do
         l_acc <- newEmptySet
         -- "manually" add the first element to the set.
