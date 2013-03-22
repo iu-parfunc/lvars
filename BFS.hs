@@ -147,17 +147,11 @@ bf_traverse g l_acc seen_rank new_rank f =
                 then return Set.empty
                 else do fork $ putInSet (f n) l_acc
                         return (Set.singleton n)
-    -- Grab all the neighbor nodes of everything in the new_rank set.
-    -- That is, map (nbrs g) over (Set.toList new_rank).
-    
-    -- e.g., for graphExample, if new_rank was [1, 2, 3],
-    -- new_rank_nbrs should be [[2,3], [1,4,5], [1,6,7]]
-                        
-    -- Then, take each of those lists and map 'add' over them.
-    
-    -- new_rank_nbrs <- parMapM (nbrs g) (Set.toList new_rank)
-    -- new_rank' <- parMapM add new_rank_nbrs
+    -- Grab the neighbor nodes of everything in the new_rank set.
+    let parMapMAdd = parMapM add :: [Int] -> Par [Set.Set Int]
+    let getNeighbors = parMapMAdd . (nbrs g) :: Int -> Par [Set.Set Int]
+    new_rank' <- parMapM getNeighbors (Set.toList new_rank)
     
     -- Flatten it out, this should be a parallel fold ideally:
-    -- let new_rank'' = Set.unions $ concat new_rank'
-    bf_traverse g l_acc seen_rank new_rank f -- should really be new_rank''
+    let new_rank'' = Set.unions $ concat new_rank'
+    bf_traverse g l_acc seen_rank' new_rank'' f
