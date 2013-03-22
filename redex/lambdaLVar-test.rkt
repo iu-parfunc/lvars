@@ -479,6 +479,16 @@
              (((l 4)
                (l1 3))
               (4))))
+(test-->> rr
+            (term
+             (() ;; empty store
+              (let ((x_1 new))
+                (let par ((x_2 (put x_1 (2)))
+                          (x_3 (get x_1 (2))))
+                  (convert (get x_1 (2)))))))
+            (term
+             (((l 2))
+              (2))))
 
   (test-results))
 
