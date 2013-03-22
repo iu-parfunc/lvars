@@ -479,6 +479,8 @@
              (((l 4)
                (l1 3))
               (4))))
+  
+  ;;let par put and get
 (test-->> rr
             (term
              (() ;; empty store
