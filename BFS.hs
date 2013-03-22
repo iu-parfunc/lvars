@@ -81,28 +81,26 @@ printGraph g = do
   return ()
 
 main :: IO ()
-main = defaultMainWith defaultConfig (return ()) [
+main = do
+  g <- mkGraphFromFile
+  let startNode = 0
+  let graphThunk = start_traverse g 0
+  let f = (\x -> x) -- todo: more interesting function?
+  defaultMainWith defaultConfig (return ()) [
          bgroup "bf_traverse" [
-           bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         ]--,
-         -- bgroup "bf_traverse" [
-         --   bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         -- , bench "bf_traverse with identity" $ start_traverse (\x -> x)
-         -- ]
-       ]
+           bench "bf_traverse with identity" $ graphThunk f
+         ]
+         ]
 
-start_traverse :: (Int -> Int) -> IO (Set.Set Int)
-start_traverse f = do
-      let g = graphExample
-      let v = 0
+-- Takes a graph, a start node, and a function to be applied to each
+-- node.
+start_traverse :: Graph -> Int -> (Int -> Int) -> IO (Set.Set Int)
+start_traverse g startNode f = do
       runParIO $ do
         l_acc <- newEmptySet
-        -- "manually" add the first element to the set.
-        putInSet (f v) l_acc
-        result <- bf_traverse g l_acc Set.empty (Set.singleton v) f
+        -- "manually" add startNode
+        putInSet (f startNode) l_acc
+        result <- bf_traverse g l_acc Set.empty (Set.singleton startNode) f
         consumeSet l_acc
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
