@@ -43,9 +43,6 @@ mkGraph ls =
   in (V.fromList $ map snd $ convert ls)
 
 -- Slurp in key-value pairs from a file in pbbs EdgeArray format.
--- Generate /tmp/grid using pbbs:
--- ./gridGraph -d 3 10000 /tmp/grid
--- or something along those lines.
 mkGraphFromFile :: IO Graph
 mkGraphFromFile = do  
   inh <- openFile "/tmp/grid" ReadMode
@@ -115,8 +112,9 @@ bf_traverse g l_acc seen_rank new_rank f =
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
   then return Set.empty
-  else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
-              "new_rank: " ++ show new_rank) $ do
+  else do
+  -- else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
+  --             "new_rank: " ++ show new_rank) $ do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' =  Set.union seen_rank new_rank
     -- Add to the next rank, and to the output/accumulator:

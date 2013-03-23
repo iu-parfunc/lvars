@@ -1,4 +1,4 @@
-all := BFS.exe test
+all := BFS test
 
 ifeq ($(GHC),)
  GHC=ghc
@@ -6,7 +6,7 @@ endif
 
 all: $(all)
 
-%.exe: %.hs
+%: %.hs
 	$(GHC) -O2 -threaded --make $< -o $@
 
 test:
