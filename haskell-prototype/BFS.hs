@@ -76,38 +76,60 @@ printGraph g = do
   let ls = V.toList g
   putStrLn (show ls)
   return ()
+    
+-- Iterates the sin function x times on its input.  This takes a few
+-- seconds for, e.g., n = 10,000,000.
+sin_iter :: (Floating a) => Int -> a -> a
+sin_iter 0 x = x
+sin_iter n x = sin_iter (n - 1) (sin x)
+
+myConfig = defaultConfig {
+  cfgSamples = ljust 5,
+  cfgPerformGC = ljust True
+}
 
 main :: IO ()
 main = do
   g <- mkGraphFromFile
   let startNode = 0
-  let graphThunk = start_traverse g 0
-  let f = (\x -> x) -- todo: more interesting function?
-  defaultMainWith defaultConfig (return ()) [
+      
+  -- We have to pick a particular Floating type for the result of
+  -- sin_iter, or the typechecker will get confused.
+  let graphThunk = start_traverse g 0 :: (Float -> Float) -> IO (Set.Set Float)
+  let sin_iter_ten_million = sin_iter 10000000
+  
+  defaultMainWith myConfig (return ()) [
          bgroup "bf_traverse" [
-           bench "bf_traverse with identity" $ graphThunk f
+           bench "sin_iter_ten_million" $ graphThunk sin_iter_ten_million
          ]
          ]
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse :: Graph -> Int -> (Int -> Int) -> IO (Set.Set Int)
+start_traverse :: (NFData a,
+                   Show a,
+                   Floating a,
+                   Ord a)
+                  =>
+                  Graph -> Int -> (a -> a) -> IO (Set.Set a)
 start_traverse g startNode f = do
       runParIO $ do
         l_acc <- newEmptySet
         -- "manually" add startNode
-        putInSet (f startNode) l_acc
+        putInSet (f (fromIntegral startNode)) l_acc
         result <- bf_traverse g l_acc Set.empty (Set.singleton startNode) f
         consumeSet l_acc
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
-bf_traverse :: (NFData (Set.Set Int),
-                Show (Set.Set Int), 
-                Ord (Set.Set Int))
-                => 
-               Graph -> ISet Int -> Set.Set Int -> Set.Set Int -> (Int -> Int)
-               -> Par (Set.Set Int)
+bf_traverse :: (NFData (Set.Set a),
+                Show (Set.Set a), 
+                Ord (Set.Set a),
+                Ord a,
+                Floating a)
+               => 
+               Graph -> ISet a -> Set.Set Int -> Set.Set Int -> (a -> a)
+               -> Par (Set.Set a)
 bf_traverse g l_acc seen_rank new_rank f =
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
@@ -121,7 +143,7 @@ bf_traverse g l_acc seen_rank new_rank f =
     let add :: Int -> Par (Set.Set Int)
         add n = if Set.member n seen_rank'
                 then return Set.empty
-                else do fork $ putInSet (f n) l_acc
+                else do fork $ putInSet (f (fromIntegral n)) l_acc
                         return (Set.singleton n)
     -- Grab the neighbor nodes of everything in the new_rank set.
     let parMapMAdd = parMapM add :: [Int] -> Par [Set.Set Int]
