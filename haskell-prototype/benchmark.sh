@@ -3,12 +3,12 @@
 
 num_cores="1 2 4";
 
-# Impure version
 make clean
-make BFS
-for i in $num_cores; do ./BFS -o BFS_impure_$i.html +RTS -N$i; done
+make BFS_impure
+make BFS_pure
+
+# Impure version
+for i in $num_cores; do ./BFS_impure -o BFS_impure_$i.html +RTS -N$i; done
 
 # Pure version
-make clean
-make pure
-for i in $num_cores; do ./BFS -o BFS_pure_$i.html +RTS -N$i; done
+for i in $num_cores; do ./BFS_pure -o BFS_pure_$i.html +RTS -N$i; done
