@@ -56,21 +56,6 @@ mkGraphFromFile = do
 nbrs :: Graph -> Int -> [Int]
 nbrs g lbl = g V.! lbl
 
--- A tiny example graph
-graphExample :: Graph
-graphExample = 
-  let g :: [(Int,[Int])]
-      g = [(0, [1]),
-           (1, [2, 3]),
-           (2, [1, 4, 5]),
-           (3, [1, 6, 7]),
-           (4, [2, 8]),
-           (5, [2, 6, 8]),
-           (6, [3, 5]),
-           (7, [3]),
-           (8, [4, 5])]
-  in (V.fromList $ map snd $ g)
-
 printGraph :: Graph -> IO ()
 printGraph g = do
   let ls = V.toList g
