@@ -1,13 +1,13 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-{-# LANGUAGE RankNTypes, NamedFieldPuns, BangPatterns,
-             ExistentialQuantification, CPP
-	     #-}
+{-# LANGUAGE RankNTypes #-} 
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
--- | This (experimental) module generalizes the Par monad to allow arbitrary LVars
--- (lattice variables) not just IVars.
+-- | This (experimental) module generalizes the Par monad to allow
+-- arbitrary LVars (lattice variables), not just IVars.
 -- 
 -- This module exposes the internals of the @Par@ monad so that you
 -- can build your own scheduler or other extensions.  Do not use this
@@ -27,7 +27,8 @@ module LVarTracePure
    newPair, putFst, putSnd, getFst, getSnd, 
    
    -- * Example 3: Monotonically growing sets.
-   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet, waitForSetSize, consumeSet
+   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet,
+   waitForSetSize, consumeSet
 
   ) where
 
@@ -41,13 +42,12 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           GHC.Conc hiding (yield)
 import           System.IO.Unsafe (unsafePerformIO)
-import           Prelude  hiding (mapM, sequence, head,tail)
+import           Prelude  hiding (mapM, sequence, head, tail)
 
 import qualified Control.Monad.Par.Class as PC
 
 -- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
-import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
-
+import Algebra.Lattice (JoinSemiLattice(..))
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
@@ -56,7 +56,6 @@ import Algebra.Lattice (BoundedJoinSemiLattice(..), JoinSemiLattice(..))
 -- TODO: newtype and hide the constructor:
 newtype IVar a = IVar (LVar (IVarContents a))
 
--- data IVarContents a = EmptyIVar | FullIVar a 
 newtype IVarContents a = IVC (Maybe a)
 fromIVarContents :: IVarContents a -> Maybe a
 fromIVarContents (IVC x) = x
@@ -70,8 +69,6 @@ new = IVar <$> newLV (IVC Nothing)
 get :: IVar a -> Par a
 get (IVar lv) = getLV lv fromIVarContents
 
-
--- instance Eq a => JoinSemiLattice (IVarContents a) where
 instance JoinSemiLattice (IVarContents a) where 
   join a (IVC Nothing) = a
   join (IVC Nothing) b = b
@@ -82,7 +79,6 @@ instance JoinSemiLattice (IVarContents a) where
 -- are not allowed, and result in a runtime error.
 -- put_ :: Eq a => IVar a -> a -> Par ()
 put_ :: IVar a -> a -> Par ()
--- put_ = undefined
 put_ (IVar iv) elt = putLV iv (IVC (Just elt))
 
 spawn :: NFData a => Par a -> Par (IVar a)
@@ -107,7 +103,7 @@ instance PC.ParIVar IVar Par where
   new = new
 
 ------------------------------------------------------------------------------
--- IPair implemented on top of LVars:
+-- IPairs implemented on top of LVars:
 ------------------------------------------------------------------------------
 
 type IPair a b = LVar (IVarContents a, IVarContents b)
@@ -180,9 +176,10 @@ waitForSetSize sz (ISet lv) = getLV lv fn
     fn set | S.size set >= sz = Just ()
            | otherwise        = Nothing 
 
--- | Get the exact contents of the set.  Using this may cause your program exhibit a
--- limited form of non-determinism.  It will never return the wrong answer, but it
--- may include synchronization bugs that can (non-deterministically) cause exceptions.
+-- | Get the exact contents of the set.  Using this may cause your
+-- program exhibit a limited form of nondeterminism: it will never
+-- return the wrong answer, but it may include synchronization bugs
+-- that can (nondeterministically) cause exceptions.
 consumeSet :: ISet a -> Par (S.Set a)
 consumeSet (ISet lv) = consumeLV lv 
 
@@ -192,8 +189,9 @@ consumeSet (ISet lv) = consumeLV lv
 
 -- | An LVar is a box containing a purely functional data structure.
 -- 
--- This implementation cannot provide scalable LVars (e.g. a concurrent hashmap),
--- rather accesses to a single LVar will contend.  
+-- This implementation cannot provide scalable LVars (e.g., a
+-- concurrent hashmap); rather, accesses to a single LVar will
+-- contend.
 data LVar a = LVar {
   -- TODO: consider MutVar# 
   lvstate :: {-# UNPACK #-} !(IORef (LVarContents a)),
@@ -217,10 +215,9 @@ uidCntr = unsafePerformIO (newIORef 0)
 getUID :: IO UID
 getUID =  atomicIncr uidCntr
 
-
--- ---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 -- Generic scheduler with LVars:
--- ---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 newtype Par a = Par {
     runCont :: (a -> Trace) -> Trace
@@ -247,12 +244,13 @@ data Trace =
            | DoIO (IO ()) Trace
            | Yield Trace
 
-           -- Destructively consume the value (limited nondeterminism):
-           | forall a b . Consume (LVar a) (a -> Trace)
+           -- Destructively consume the value (limited
+           -- nondeterminism):
+           | forall a . Consume (LVar a) (a -> Trace)
 
-           -- The callback (unsafely) is scheduled when there is ANY change.  It does
-           -- NOT get a snapshot of the (continuously mutating) state, just the right
-           -- to read whatever it can.
+           -- The callback (unsafely) is scheduled when there is ANY
+           -- change.  It does NOT get a snapshot of the (continuously
+           -- mutating) state, just the right to read whatever it can.
            | forall a . NewWithCallBack a (a -> a -> Trace) (LVar a -> Trace)
 
 -- | The main scheduler loop.
@@ -268,10 +266,11 @@ sched _doSync queue t = loop t
       ref <- newIORef$ LVarContents init []
       loop (cont$ LVar ref (Just cb))
 
-    Get (LVar ref cb) thresh cont -> do
-      -- Tradeoff, we could do a plain read before the atomicModifyIORef.  But that
-      -- would require evaluating the threshold function TWICE if we need to block.
-      -- (Which is potentially more expensive than in the plain IVar case.)
+    Get (LVar ref _) thresh cont -> do
+      -- Tradeoff: we could do a plain read before the
+      -- atomicModifyIORef.  But that would require evaluating the
+      -- threshold function TWICE if we need to block.  (Which is
+      -- potentially more expensive than in the plain IVar case.)
       -- e <- readIORef ref
       let thisCB x = fmap cont $ thresh x
       r <- atomicModifyIORef ref $ \ st@(LVarContents a ls) ->
@@ -280,9 +279,9 @@ sched _doSync queue t = loop t
           Nothing -> (LVarContents a (thisCB:ls), reschedule queue)
       r
 
-    Consume (LVar ref cb) cont -> do
-      -- HACK!  We know nothing about the type of state.  But we CAN destroy it
-      -- to prevent any future access:
+    Consume (LVar ref _) cont -> do
+      -- HACK!  We know nothing about the type of state.  But we CAN
+      -- destroy it to prevent any future access:
       a <- atomicModifyIORef ref (\(LVarContents a _) ->
                                    (error "attempt to touch LVar after Consume operation!", a))
       loop (cont a)
@@ -315,27 +314,28 @@ sched _doSync queue t = loop t
     Done ->
          if _doSync
 	 then reschedule queue
-         -- We could fork an extra thread here to keep numCapabilities workers
-         -- even when the main thread returns to the runPar caller...
+         -- We could fork an extra thread here to keep numCapabilities
+         -- workers even when the main thread returns to the runPar
+         -- caller...
          else do putStrLn " [par] Forking replacement thread..\n"
                  forkIO (reschedule queue); return ()
          -- But even if we don't we are not orphaning any work in this
-         -- threads work-queue because it can be stolen by other threads.
-         --	 else return ()
+         -- thread's work-queue because it can be stolen by other
+         -- threads.
+	 --      else return ()
 
     DoIO io t -> io >> loop t
 
     Yield parent -> do 
         -- Go to the end of the worklist:
         let Sched { workpool } = queue
-        -- TODO: Perhaps consider Data.Seq here.
-	-- This would also be a chance to steal and work from opposite ends of the queue.
+        -- TODO: Perhaps consider Data.Seq here.  This would also be a
+	-- chance to steal and work from opposite ends of the queue.
         atomicModifyIORef workpool $ \ts -> (ts++[parent], ())
 	reschedule queue
 
-
 -- | Process the next item on the work queue or, failing that, go into
---   work-stealing mode.
+-- work-stealing mode.
 reschedule :: Sched -> IO ()
 reschedule queue@Sched{ workpool } = do
   e <- atomicModifyIORef workpool $ \ts ->
@@ -352,7 +352,6 @@ reschedule queue@Sched{ workpool } = do
 
 -- | Attempt to steal work or, failing that, give up and go idle.
 steal :: Sched -> IO ()
-steal _ = return ()
 steal q@Sched{ idle, scheds, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no
   go scheds
@@ -384,6 +383,8 @@ steal q@Sched{ idle, scheds, no=my_no } = do
               -- printf "cpu %d got work from cpu %d\n" my_no (no x)
               sched True q t
            Nothing -> go xs
+steal _ = return ()
+
 
 
 -- | If any worker is idle, wake one up and give it work to do.
@@ -407,8 +408,6 @@ data Sched = Sched
 -- Forcing evaluation of a LVar is fruitless.
 instance NFData (LVar a) where
   rnf _ = ()
-
-
 
 {-# INLINE runPar_internal #-}
 runPar_internal :: Bool -> Par a -> IO a
@@ -447,7 +446,6 @@ runPar_internal _doSync x = do
                     runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
    takeMVar m
 
-
 runPar :: Par a -> a
 runPar = unsafePerformIO . runPar_internal True
 
@@ -462,8 +460,7 @@ runParIO = runPar_internal True
 runParAsync :: Par a -> a
 runParAsync = unsafePerformIO . runPar_internal False
 
-
--- -----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- Basic stuff:
 
 -- Not in 6.12: {- INLINABLE fork -}
@@ -471,18 +468,19 @@ runParAsync = unsafePerformIO . runPar_internal False
 fork :: Par () -> Par ()
 fork p = Par $ \c -> Fork (runCont p (\_ -> Done)) (c ())
 
--- -----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 -- | Internal operation.  Creates a new @LVar@ with an initial value
 newLV :: lv -> Par (LVar lv)
 newLV init = Par $ New init
 
--- | In this internal version, the callback gets to see the OLD and the NEW version,
--- respectively.
+-- | In this internal version, the callback gets to see the OLD and
+-- the NEW version, respectively.
 newLVWithCallback :: lv -> (lv -> lv -> Trace) -> Par (LVar lv)
 newLVWithCallback st cb = Par $ NewWithCallBack st cb
                     
--- | Internal operation.  Test if the LVar satisfies the given threshold.
+-- | Internal operation.  Test if the LVar satisfies the given
+-- threshold.
 getLV :: LVar a -> (a -> Maybe b) -> Par b
 getLV lv test = Par $ Get lv test
 
@@ -490,10 +488,10 @@ getLV lv test = Par $ Get lv test
 putLV :: JoinSemiLattice a => LVar a -> a -> Par ()
 putLV lv st = Par $ \c -> Put lv st (c ())
 
--- | Internal operation. Destructively consume the LVar, yielding access to its precise state.
+-- | Internal operation. Destructively consume the LVar, yielding
+-- access to its precise state.
 consumeLV :: LVar a -> Par a
 consumeLV = Par . Consume 
 
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
-
