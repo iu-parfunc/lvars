@@ -12,7 +12,7 @@ make BFS_pure
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
     lock_for_experiments
-    num_cores="8 16";
+    num_cores="1 2 4 8 16";
 fi
 
 # Impure version
