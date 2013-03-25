@@ -1,10 +1,5 @@
 #!/bin/bash
 
-if [ $(hostname) = "hive.soic.indiana.edu" ];
-then
-    lock_for_experiments
-fi
-
 # Generate test data using PBBS.
 ../../pbbs/testData/graphData/gridGraph -d 3 100000 /tmp/grid
 
@@ -13,6 +8,12 @@ num_cores="1 2 4";
 make clean
 make BFS_impure
 make BFS_pure
+
+if [ $(hostname) = "hive.soic.indiana.edu" ];
+then
+    lock_for_experiments
+    num_cores="8 16";
+fi
 
 # Impure version
 for i in $num_cores; do ./BFS_impure -o BFS_impure_$i.html +RTS -N$i; done
