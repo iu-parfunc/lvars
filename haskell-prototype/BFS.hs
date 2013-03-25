@@ -69,7 +69,7 @@ sin_iter 0 x = x
 sin_iter n x = sin_iter (n - 1) (sin x)
 
 myConfig = defaultConfig {
-  cfgSamples = ljust 5,
+  cfgSamples = ljust 10,
   cfgPerformGC = ljust True
 }
 
