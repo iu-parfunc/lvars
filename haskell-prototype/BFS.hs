@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
-
 {-# LANGUAGE CPP #-}
+
 #ifdef PURE
 #warning "Using the PURE version"
 import LVarTracePure (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork)
@@ -8,6 +8,9 @@ import LVarTracePure (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fo
 import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork)
 #endif
 
+import GHC.Conc (numCapabilities)
+import Control.DeepSeq (deepseq)
+import Control.Exception (evaluate)
 import Control.Monad.Par.Combinator (parMapM)
 import Control.Monad.Par.Class (ParFuture)
 import qualified Data.Set as Set
@@ -64,14 +67,17 @@ printGraph g = do
     
 -- Iterates the sin function x times on its input.  This takes a few
 -- seconds for, e.g., n = 10,000,000.
-sin_iter :: (Floating a) => Int -> a -> a
+sin_iter :: Int -> Float -> Float
 sin_iter 0 x = x
-sin_iter n x = sin_iter (n - 1) (sin x)
+sin_iter n x = deepseq (sin_iter (n - 1)) (sin x)
 
 myConfig = defaultConfig {
   cfgSamples = ljust 10,
   cfgPerformGC = ljust True
 }
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
 
 main :: IO ()
 main = do
@@ -91,30 +97,20 @@ main = do
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse :: (NFData a,
-                   Show a,
-                   Floating a,
-                   Ord a)
-                  =>
-                  Graph -> Int -> (a -> a) -> IO (Set.Set a)
+start_traverse :: Graph -> Int -> (Float -> Float) -> IO (Set.Set Float)
 start_traverse g startNode f = do
-      runParIO $ do
+  runParIO $ do
+        prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
         putInSet (f (fromIntegral startNode)) l_acc
         result <- bf_traverse g l_acc Set.empty (Set.singleton startNode) f
-        consumeSet l_acc
+        consumeSet l_acc :: Par (Set.Set Float)
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
-bf_traverse :: (NFData (Set.Set a),
-                Show (Set.Set a), 
-                Ord (Set.Set a),
-                Ord a,
-                Floating a)
-               => 
-               Graph -> ISet a -> Set.Set Int -> Set.Set Int -> (a -> a)
-               -> Par (Set.Set a)
+bf_traverse :: Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
+               -> Par (Set.Set Float)
 bf_traverse g l_acc seen_rank new_rank f =
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank

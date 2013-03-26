@@ -1,4 +1,4 @@
-all := BFS_impure BFS_pure test
+all := BFS_impure BFS_pure pp_impure pp_pure test
 
 ifeq ($(GHC),)
  GHC=ghc
@@ -14,6 +14,12 @@ BFS_pure: BFS.hs
 
 BFS_impure: BFS.hs
 	$(GHC) -O2 -threaded -rtsopts -eventlog --make BFS.hs -o BFS_impure
+
+pp_pure: pleasantly_par.hs
+	$(GHC) -O2 -DPURE -threaded -rtsopts -eventlog --make pleasantly_par.hs -o pp_pure
+
+pp_impure: pleasantly_par.hs
+	$(GHC) -O2 -threaded -rtsopts -eventlog --make pleasantly_par.hs -o pp_impure
 
 test:
 
