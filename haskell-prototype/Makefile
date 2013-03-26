@@ -15,6 +15,9 @@ BFS_pure: BFS.hs
 BFS_impure: BFS.hs
 	$(GHC) -O2 -threaded -rtsopts -eventlog --make BFS.hs -o BFS_impure
 
+quick.exe: BFS.hs
+	$(GHC) -DNOCRITERION -O2 -threaded -rtsopts --make BFS.hs -o quick.exe
+
 pp_pure: pleasantly_par.hs
 	$(GHC) -O2 -DPURE -threaded -rtsopts -eventlog --make pleasantly_par.hs -o pp_pure
 

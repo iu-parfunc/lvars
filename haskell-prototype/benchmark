@@ -1,28 +1,32 @@
 #!/bin/bash
 
+PBBSDIR=../pbbs/testData/graphData/
+# TRIALS=
+
 # Generate test data using PBBS.
-../../pbbs/testData/graphData/gridGraph -d 3 100000 /tmp/grid
+(cd $PBBSDIR; make gridGraph)
+$PBBSDIR/gridGraph -d 3 100000 /tmp/grid
 
 num_cores="1 2 4";
 
 make BFS_impure
 make BFS_pure
-make pp_impure
-make pp_pure
+# make pp_impure
+# make pp_pure
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
-    lock_for_experiments
+    lock_for_experiments 1000
     num_cores="1 2 4 8 16";
 fi
 
 ## Embarrassingly parallel benchmark:
 
-# Impure version
-for i in $num_cores; do ./pp_impure -o pp_impure_$i.html +RTS -N$i; done
+# # Impure version
+# for i in $num_cores; do ./pp_impure -o pp_impure_$i.html +RTS -N$i; done
 
-# Pure version
-for i in $num_cores; do ./pp_pure -o pp_pure_$i.html +RTS -N$i; done
+# # Pure version
+# for i in $num_cores; do ./pp_pure -o pp_pure_$i.html +RTS -N$i; done
 
 ## BFS:
 

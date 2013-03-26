@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 
 #ifdef PURE
 #warning "Using the PURE version"
@@ -68,9 +69,10 @@ printGraph g = do
 -- Iterates the sin function x times on its input.  This takes a few
 -- seconds for, e.g., n = 10,000,000.
 sin_iter :: Int -> Float -> Float
-sin_iter 0 x = x
-sin_iter n x = deepseq (sin_iter (n - 1)) (sin x)
+sin_iter 0  x = x
+sin_iter n !x = sin_iter (n-1) (x + sin x)
 
+myConfig :: Config
 myConfig = defaultConfig {
   cfgSamples = ljust 10,
   cfgPerformGC = ljust True
@@ -86,14 +88,23 @@ main = do
       
   -- We have to pick a particular Floating type for the result of
   -- sin_iter, or the typechecker will get confused.
-  let graphThunk = start_traverse g 0 :: (Float -> Float) -> IO (Set.Set Float)
-  let sin_iter_ten_million = sin_iter 10000000
-  
+  let graphThunk :: (Float -> Float) -> IO ()
+      graphThunk fn = do st <- start_traverse g 0 fn
+                         putStrLn "Done with start_traverse, going to pop the final thunk."                         
+                         evaluate st                         
+                         putStrLn "Done!"
+--  let sin_iter_count = sin_iter 10000000
+  let sin_iter_count = sin_iter 10
+
+#ifdef NOCRITERION
+  graphThunk sin_iter_count
+#else
   defaultMainWith myConfig (return ()) [
          bgroup "bf_traverse" [
-           bench "sin_iter_ten_million" $ graphThunk sin_iter_ten_million
+           bench "sin_iter_ten_million" $ graphThunk sin_iter_count
          ]
          ]
+#endif
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
@@ -104,14 +115,20 @@ start_traverse g startNode f = do
         l_acc <- newEmptySet
         -- "manually" add startNode
         putInSet (f (fromIntegral startNode)) l_acc
-        result <- bf_traverse g l_acc Set.empty (Set.singleton startNode) f
-        consumeSet l_acc :: Par (Set.Set Float)
+        result <- bf_traverse 0 g l_acc Set.empty (Set.singleton startNode) f
+        prnt $ "Done with bf_traverse... "
+        s <- consumeSet l_acc :: Par (Set.Set Float)
+        prnt $ "Done consume set ... "
+        return s
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
-bf_traverse :: Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
+bf_traverse :: Int -> Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
                -> Par (Set.Set Float)
-bf_traverse g l_acc seen_rank new_rank f =
+bf_traverse n g l_acc !seen_rank !new_rank f = do 
+  trace ("Bf_traverse call.. "++show n++" seen/new size "
+         ++show (Set.size seen_rank, Set.size new_rank)) $ return () 
+  
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
   then return Set.empty
@@ -127,10 +144,15 @@ bf_traverse g l_acc seen_rank new_rank f =
                 else do fork $ putInSet (f (fromIntegral n)) l_acc
                         return (Set.singleton n)
     -- Grab the neighbor nodes of everything in the new_rank set.
-    let parMapMAdd = parMapM add :: [Int] -> Par [Set.Set Int]
+    let parMapMAdd :: [Int] -> Par [Set.Set Int]
+        parMapMAdd = myMapM add 
     let getNeighbors = parMapMAdd . (nbrs g) :: Int -> Par [Set.Set Int]
-    new_rank' <- parMapM getNeighbors (Set.toList new_rank)
+    new_rank' <- myMapM getNeighbors (Set.toList new_rank)
     
     -- Flatten it out, this should be a parallel fold ideally:
     let new_rank'' = Set.unions $ concat new_rank'
-    bf_traverse g l_acc seen_rank' new_rank'' f
+    bf_traverse (n+1) g l_acc seen_rank' new_rank'' f
+
+-- myMapM = parMapM
+myMapM = mapM
+
