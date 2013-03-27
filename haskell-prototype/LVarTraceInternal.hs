@@ -46,6 +46,8 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 
 import qualified Control.Monad.Par.Class as PC
 
+import           Common (forkWithExceptions)
+
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
 ------------------------------------------------------------------------------
@@ -507,7 +509,7 @@ runPar_internal _doSync x = do
 
    m <- newEmptyMVar
    forM_ (zip [0..] states) $ \(cpu,state) ->
-        forkOnIO cpu $
+        forkWithExceptions (forkOnIO cpu) "worker thread" $
           if (cpu /= main_cpu)
              then reschedule state
              else sched _doSync state $ runCont (do x' <- x; liftIO (putMVar m x')) (const Done)

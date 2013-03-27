@@ -297,9 +297,7 @@ start_traverse2 k !g startNode f = do
         l_acc <- newEmptySet
         -- "manually" add startNode
         putInSet (f (fromIntegral startNode)) l_acc
-        result <- bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
-        prnt $ "Evaling result..."
-        liftIO (do evaluate result; return ())
+        fork$ bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
         prnt $ "Done with bf_traverse... waiting on set results."
         let size = V.length g
 
@@ -307,9 +305,9 @@ start_traverse2 k !g startNode f = do
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result.
         -----------------------------------------
-        -- waitForSetSize size l_acc -- Depends on a bunch of forked computations
-        -- prnt$ "Set results all available! ("++show size++")"
-        -- return ()
+--        waitForSetSize size l_acc -- Depends on a bunch of forked computations
+        waitForSetSize 10 l_acc -- Depends on a bunch of forked computations            
+        prnt$ "Set results all available! ("++show size++")"
         
         s <- consumeSet l_acc :: Par (Set.Set Float)
         liftIO (do evaluate s; return ()) -- this explodes

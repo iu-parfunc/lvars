@@ -437,7 +437,7 @@ runPar_internal _doSync x = do
 
    m <- newEmptyMVar
    forM_ (zip [0..] states) $ \(cpu,state) ->
-        forkOnIO cpu $
+        forkWithExceptions (forkOnIO cpu) "worker thread"        
           if (cpu /= main_cpu)
              then reschedule state
              else sched _doSync state $
