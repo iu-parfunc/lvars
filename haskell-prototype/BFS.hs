@@ -166,6 +166,7 @@ main = do
                            2 -> start_traverse2 k g2 0 fn
                          putStrLn "Done with traversal."
   let sin_iter_count = sin_iter w
+--  let sin_iter_count = id
 
   printf " * Begining benchmark with k=%d and w=%d\n" k w
 #ifdef NOCRITERION
@@ -205,18 +206,16 @@ start_traverse k !g startNode f = do
         prnt $ "Done consume set ... "
         return ()
 
--- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
--- node labels, and the function f to be applied to each node.
 bf_traverse :: Int -> Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
-               -> Par ()
-bf_traverse 0 _ _ _ _ _ = return () 
+               -> Par (Set.Set Int)
+bf_traverse 0 _ _ seen _ _ = return seen
 bf_traverse k !g !l_acc !seen_rank !new_rank !f = do 
   trace ("bf_traverse call.. "++show k++" seen/new size "
          ++show (Set.size seen_rank, Set.size new_rank)) $ return () 
   
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
-  then return ()
+  then return seen_rank
   else do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' =  Set.union seen_rank new_rank
@@ -236,16 +235,20 @@ bf_traverse k !g !l_acc !seen_rank !new_rank !f = do
     let new_rank'' = Set.unions $ concat new_rank'
     bf_traverse (k-1) g l_acc seen_rank' new_rank'' f
 
+-- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
+-- node labels, and the function f to be applied to each node.
 bf_traverse2 :: Int -> Graph2 -> ISet Float -> IS.IntSet -> IS.IntSet -> (Float -> Float)
-               -> Par ()
-bf_traverse2 0 _ _ _ _ _ = return ()
+               -> Par (IS.IntSet)
+bf_traverse2 0 _ _ seen_rank new_rank _ = do
+  when verbose (prnt ("bf_traverse2 END..  seen/new size "
+                      ++show (IS.size seen_rank, IS.size new_rank)))
+  return (IS.union seen_rank new_rank)
 bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do 
-  when verbose
-    (trace ("bf_traverse2 call.. "++show k++" seen/new size "
-           ++show (IS.size seen_rank, IS.size new_rank)) $ return ())
+  when verbose (prnt ("bf_traverse2 call.. "++show k++" seen/new size "
+                      ++show (IS.size seen_rank, IS.size new_rank)))
   -- Nothing in the new_rank set means nothing left to traverse.
   if IS.null new_rank
-  then return ()
+  then return seen_rank
   else do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' = IS.union seen_rank new_rank
@@ -255,7 +258,9 @@ bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do
 
     -- We COULD use callbacks here, but rather we're modeling what happens in the
     -- current paper:
-    myMapM_ (\x -> fork$ putInSet (f (fromIntegral x)) l_acc) 
+    myMapM_ (\x -> do 
+              prnt$ " --> Calling putInSet, "++show x
+              putInSet (f (fromIntegral x)) l_acc)
             (IS.toList new_rank') -- toList is HORRIBLE
     bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
@@ -268,26 +273,25 @@ start_traverse2 k !g startNode f = do
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
-        putInSet (f (fromIntegral startNode)) l_acc
-        fork$ bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
-        prnt $ "Done with bf_traverse... waiting on set results."
-        let size = V.length g
-
-        -- Should be able to do this instead.. problems atm [2013.03.27]:
-        -- Actually, waiting is required in any case for correctness...
-        -- whether or not we consume the result.
-        -----------------------------------------
-        waitForSetSize (size `quot` 2) l_acc -- Depends on a bunch of forked computations
---        waitForSetSize 10 l_acc -- Depends on a bunch of forked computations            
-        prnt$ "Set results all available! ("++show size++")"
-
+        fork $ putInSet (f (fromIntegral startNode)) l_acc
+        set <- bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
+        prnt $ "Done with bf_traverse..."
+        let size = IS.size set
+        prnt$ " Waiting on "++show size++" set results"
         
+        -- Actually, waiting is required in any case for correctness...
+        -- whether or not we consume the result:
+--        waitForSetSize (size) l_acc -- Depends on a bunch of forked computations
+--        prnt$ "Set results all available! ("++show size++")"
 
+        forM_ [0..size] $ \ s -> do 
+          waitForSetSize s l_acc
+          prnt$ " ! "++show s++" elements are there in the set.."
 
         s <- consumeSet l_acc :: Par (Set.Set Float)
         liftIO (do evaluate s; return ()) -- this explodes
         prnt $ "Done consume set ... "
-        prnt $ "Set size: "++show (Set.size s)
+        prnt $ "Set size: "++show (Set.size s) ++"\n "
         prnt $ "Set sum: "++show (Set.fold (+) 0 s)
 
 -- myMapM = parMapM; myMapM_ = parMapM
