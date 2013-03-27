@@ -1,7 +1,10 @@
 all := BFS_impure BFS_pure pp_impure pp_pure test
 
-DATA = /tmp/grid
-DATASMALL = /tmp/grid_small
+# 97336 vertices:
+DATABIG    = /tmp/grid
+DATAMEDIUM = /tmp/grid_8000
+DATASMALL  = /tmp/grid_1000
+
 PBBSDIR = ../pbbs/testData/graphData/
 
 ifeq ($(GHC),)
@@ -28,12 +31,16 @@ pp_impure: pleasantly_par.hs
 #--------------------------------------------------------------------------------
 # Input data generation:
 
-data: $(DATA) $(DATASMALL)
+data: $(DATABIG) $(DATAMEDIUM) $(DATASMALL)
 
 # Generate test data using PBBS.
-$(DATA):
+$(DATABIG):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 100000 $(DATA)
+	$(PBBSDIR)/gridGraph -d 3 97336 $(DATABIG)
+
+$(DATAMEDIUM):
+	(cd $(PBBSDIR); make gridGraph)
+	$(PBBSDIR)/gridGraph -d 3 8000 $(DATAMEDIUM)
 
 $(DATASMALL):
 	(cd $(PBBSDIR); make gridGraph)
@@ -59,4 +66,4 @@ test: q qp
 	time ./quick_pure.exe +RTS -N4
 
 clean:
-	-rm -f *.hi *.o *.html *.eventlog $(all)
+	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) 

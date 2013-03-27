@@ -165,7 +165,7 @@ putInSet !elem (ISet lv) = putLV lv (S.singleton elem)
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv) = getLV lv fn
+waitForSet !elem (ISet lv) = getLV lv fn
   where
     fn set | S.member elem set = Just ()
            | otherwise         = Nothing

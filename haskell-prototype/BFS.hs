@@ -1,6 +1,16 @@
-{-# LANGUAGE FlexibleContexts #-}
+-- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+
+-- Compile time options:
+--   PURE        -- use LVarTracePure
+--   NOCRITERION -- turn off criterion and do one big run
+--
+-- Run-time options:
+--   W = work to do per vertex
+--   K = max hops of the connected component to explore
+--   (OR N = target vertices to visit (will overshoot))
+--   VER = 1 or 2
 
 #ifdef PURE
 #warning "Using the PURE version"
@@ -20,7 +30,9 @@ import Control.DeepSeq (NFData)
 import Data.Traversable (Traversable)
 import Data.Map as Map (toList, fromListWith)
 import Data.Time.Clock (getCurrentTime, diffUTCTime)
+import Text.Printf (printf)
 import System.Mem (performGC)
+import System.Environment (getEnvironment,getArgs)
 
 -- For parsing the file produced by pbbs
 import Data.List.Split (splitOn)
@@ -32,7 +44,6 @@ import Debug.Trace (trace)
 -- For representing graphs
 import qualified Data.Vector as V
 
-#define NOCRITERION
 #ifndef NOCRITERION
 -- For benchmarking
 import Criterion.Main ()
@@ -49,6 +60,7 @@ myConfig = defaultConfig {
 -- Vector representation of graphs: the list at index k is the list of
 -- node k's neighbors.
 type Graph = V.Vector [Int]
+type Graph2 = V.Vector IS.IntSet
 
 -- Create a graph from a flat list of key-value pairs.
 mkGraph :: [(Int, Int)] -> Graph
@@ -63,17 +75,24 @@ mkGraph ls =
 mkGraphFromFile :: IO Graph
 mkGraphFromFile = do
   putStrLn$"Begin loading graph..."
-  inh <- openFile "/tmp/grid_small" ReadMode
+--  inh <- openFile "/tmp/grid_1000" ReadMode
+--  inh <- openFile "/tmp/grid_8000" ReadMode
+  inh <- openFile "/tmp/grid" ReadMode
+
+  t0 <- getCurrentTime
   inStr <- hGetContents inh
   let tuplify2 [x,y] = (x, y)
   -- Ignore the initial "EdgeArray" string in the pbbs-generated file.
   let (_:stringpairs) = map tuplify2 (map (splitOn " ") (lines inStr))
   -- return (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
   g <- evaluate (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
-  -- Just to make sure:
+  -- Just to make SURE its computed:
   putStrLn$"Graph loaded, "++show(V.length g)++" vertices, first vertex: "++ show (nbrs g 0)
+  t1 <- getCurrentTime
+  putStrLn$ "Time reading/parsing data: "++show(diffUTCTime t1 t0)
   return g
-  
+
+
 -- Neighbors of a node with a given label
 nbrs :: Graph -> Int -> [Int]
 nbrs g lbl = g V.! lbl
@@ -95,19 +114,44 @@ prnt str = trace str $ return ()
 
 main :: IO ()
 main = do
+  -- Fetch runtime parameters:
+  -- First, defaults:
+  let k_,w_ :: Int
+--      n_ = 1000  -- Number of nodes.
+      k_ = 25    -- Number of hops to explore
+      w_ = 20000 -- Amount of work (sin's)
+  
+  -- theEnv = unsafePerformIO getEnvironment
+  -- checkEnv v def =
+  --   case lookup v theEnv of
+  --     Just s -> read s
+  --     Nothing -> def
+
+  args <- getArgs
+  -- TODO: this needs to use more sophisticated argument parsing if it will coexist
+  -- with criterion.  Or could use env vars instead.
+  let k,w,ver :: Int
+      (k,w,ver) = 
+        case args of
+          []      -> (k_,w_,2)
+          [ks]    -> (read ks,w_,2)
+          [ks,ws] -> (read ks,read ws,2)
+          [ks,ws,ver] -> (read ks,read ws,read ver)
+  
   g <- mkGraphFromFile
   let startNode = 0
       g2 = V.map IS.fromList g
   evaluate (g2 V.! 0)
+  printf "Using VER %d of the BFS code...\n" ver
   
   let graphThunk :: (Float -> Float) -> IO ()
-      graphThunk fn = do st <- start_traverse2 g2 0 fn
-                         putStrLn "Done with start_traverse, going to pop the final thunk."
-                         evaluate st
-                         putStrLn "Done!"
---  let sin_iter_count = sin_iter 10000000
-  let sin_iter_count = sin_iter 20000
+      graphThunk fn = do case ver of
+                           1 -> start_traverse  k g  0 fn
+                           2 -> start_traverse2 k g2 0 fn
+                         putStrLn "Done with traversal."
+  let sin_iter_count = sin_iter w
 
+  printf "Begining benchmark with k=%d and w=%d\n" k w
 #ifdef NOCRITERION
   performGC
   t0 <- getCurrentTime
@@ -122,38 +166,42 @@ main = do
          ]
 #endif
 
+------------------------------------------------------------------------------------------
+
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse :: Graph -> Int -> (Float -> Float) -> IO (Set.Set Float)
-start_traverse !g startNode f = do
+start_traverse :: Int -> Graph -> Int -> (Float -> Float) -> IO ()
+start_traverse k !g startNode f = do
   runParIO $ do
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
         fork$ putInSet (f (fromIntegral startNode)) l_acc
-        result <- bf_traverse 0 g l_acc Set.empty (Set.singleton startNode) f
+        result <- bf_traverse k g l_acc Set.empty (Set.singleton startNode) f
         prnt $ "Evaling result..."
         liftIO (do evaluate result; return ())
+
+        -- ERROR: This is our classic data-race... need to wait first.
+        
         prnt $ "Done with bf_traverse... "
         s <- consumeSet l_acc :: Par (Set.Set Float)
         liftIO (do evaluate s; return ()) -- this explodes
         prnt $ "Done consume set ... "
-        return s
+        return ()
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
 bf_traverse :: Int -> Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
-               -> Par (Set.Set Float)
-bf_traverse n !g !l_acc !seen_rank !new_rank !f = do 
-  trace ("bf_traverse call.. "++show n++" seen/new size "
+               -> Par ()
+bf_traverse 0 _ _ _ _ _ = return () 
+bf_traverse k !g !l_acc !seen_rank !new_rank !f = do 
+  trace ("bf_traverse call.. "++show k++" seen/new size "
          ++show (Set.size seen_rank, Set.size new_rank)) $ return () 
   
   -- Nothing in the new_rank set means nothing left to traverse.
   if Set.null new_rank
-  then return Set.empty
+  then return ()
   else do
-  -- else trace ("seen_rank: " ++ show seen_rank ++ "\n" ++
-  --             "new_rank: " ++ show new_rank) $ do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' =  Set.union seen_rank new_rank
     -- Add to the next rank, and to the output/accumulator:
@@ -170,19 +218,17 @@ bf_traverse n !g !l_acc !seen_rank !new_rank !f = do
     
     -- Flatten it out, this should be a parallel fold ideally:
     let new_rank'' = Set.unions $ concat new_rank'
-    bf_traverse (n+1) g l_acc seen_rank' new_rank'' f
-
-
-type Graph2 = V.Vector IS.IntSet
+    bf_traverse (k-1) g l_acc seen_rank' new_rank'' f
 
 bf_traverse2 :: Int -> Graph2 -> ISet Float -> IS.IntSet -> IS.IntSet -> (Float -> Float)
-               -> Par (Set.Set Float)
-bf_traverse2 n !g !l_acc !seen_rank !new_rank !f = do 
-  -- trace ("bf_traverse2 call.. "++show n++" seen/new size "
-  --        ++show (IS.size seen_rank, IS.size new_rank)) $ return () 
+               -> Par ()
+bf_traverse2 0 _ _ _ _ _ = return ()
+bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do 
+  trace ("bf_traverse2 call.. "++show k++" seen/new size "
+         ++show (IS.size seen_rank, IS.size new_rank)) $ return () 
   -- Nothing in the new_rank set means nothing left to traverse.
   if IS.null new_rank
-  then return Set.empty
+  then return ()
   else do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' = IS.union seen_rank new_rank
@@ -194,25 +240,28 @@ bf_traverse2 n !g !l_acc !seen_rank !new_rank !f = do
     -- current paper:
     myMapM_ (\x -> fork$ putInSet (f (fromIntegral x)) l_acc) 
             (IS.toList new_rank') -- toList is HORRIBLE
-    bf_traverse2 (n+1) g l_acc seen_rank' new_rank' f
+    bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse2 :: Graph2 -> Int -> (Float -> Float) -> IO ()
-start_traverse2 !g startNode f = do
+start_traverse2 :: Int -> Graph2 -> Int -> (Float -> Float) -> IO ()
+start_traverse2 k !g startNode f = do
   runParIO $ do        
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
         putInSet (f (fromIntegral startNode)) l_acc
-        result <- bf_traverse2 0 g l_acc IS.empty (IS.singleton startNode) f
+        result <- bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
         prnt $ "Evaling result..."
         liftIO (do evaluate result; return ())
         prnt $ "Done with bf_traverse... waiting on set results."
         let size = V.length g
 
         -- Should be able to do this instead.. problems atm [2013.03.27]:
+        -- Actually, waiting is required in any case for correctness...
+        -- whether or not we consume the result.
+        -----------------------------------------
         -- waitForSetSize size l_acc -- Depends on a bunch of forked computations
         -- prnt$ "Set results all available! ("++show size++")"
         -- return ()
