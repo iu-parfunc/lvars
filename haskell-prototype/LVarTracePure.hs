@@ -46,6 +46,8 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 
 import qualified Control.Monad.Par.Class as PC
 
+import Common (forkWithExceptions)
+
 -- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
 import Algebra.Lattice (JoinSemiLattice(..))
 
@@ -437,7 +439,7 @@ runPar_internal _doSync x = do
 
    m <- newEmptyMVar
    forM_ (zip [0..] states) $ \(cpu,state) ->
-        forkWithExceptions (forkOnIO cpu) "worker thread"        
+      forkWithExceptions (forkOnIO cpu) "worker thread" $ do 
           if (cpu /= main_cpu)
              then reschedule state
              else sched _doSync state $
