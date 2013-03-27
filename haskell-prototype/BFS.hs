@@ -260,7 +260,7 @@ bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do
     -- current paper:
     myMapM_ (\x -> do 
               prnt$ " --> Calling putInSet, "++show x
-              putInSet (f (fromIntegral x)) l_acc)
+              myfork$ putInSet (f (fromIntegral x)) l_acc)
             (IS.toList new_rank') -- toList is HORRIBLE
     bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
@@ -273,7 +273,7 @@ start_traverse2 k !g startNode f = do
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
-        fork $ putInSet (f (fromIntegral startNode)) l_acc
+        myfork $ putInSet (f (fromIntegral startNode)) l_acc
         set <- bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
         prnt $ "Done with bf_traverse..."
         let size = IS.size set
@@ -296,3 +296,6 @@ start_traverse2 k !g startNode f = do
 
 -- myMapM = parMapM; myMapM_ = parMapM
 myMapM = mapM; myMapM_ = mapM_
+
+-- myfork = fork
+myfork = id
