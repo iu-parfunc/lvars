@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes #-} 
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -117,7 +117,7 @@ newPair = newLV $
 -- where it's defined.
 
 putFst :: IPair a b -> a -> Par ()
-putFst lv@(LVar (refFst, _) _ _) elt = putLV lv putter
+putFst lv@(LVar (refFst, _) _ _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refFst
@@ -128,7 +128,7 @@ putFst lv@(LVar (refFst, _) _ _) elt = putLV lv putter
         Just _  -> error "multiple puts to first element of IPair"
         
 putSnd :: IPair a b -> b -> Par ()
-putSnd lv@(LVar (_, refSnd) _ _) elt = putLV lv putter
+putSnd lv@(LVar (_, refSnd) _ _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refSnd
@@ -182,9 +182,10 @@ newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback io
          
      return (contents, fn)
 
--- | Put a single element in the set.
+-- | Put a single element in the set.  (WHNF) Strict in the element being put in the
+-- set.     
 putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet elem (ISet lv) = putLV lv putter
+putInSet !elem (ISet lv) = putLV lv putter
   where
     putter ref = atomicModifyIORef ref (\set -> (S.insert elem set, ()))
 

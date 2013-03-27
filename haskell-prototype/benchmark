@@ -1,10 +1,8 @@
 #!/bin/bash
 
-PBBSDIR=../../pbbs/testData/graphData/
+set -e
 
-# Generate test data using PBBS.
-(cd $PBBSDIR; make gridGraph)
-$PBBSDIR/gridGraph -d 3 100000 /tmp/grid
+make /tmp/grid
 
 num_cores="1 2 4";
 

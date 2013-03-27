@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes #-} 
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -113,10 +113,10 @@ newPair = newLV (IVC Nothing,
                  IVC Nothing)
 
 putFst :: IPair a b -> a -> Par ()
-putFst lv elt = putLV lv (IVC (Just elt), IVC Nothing)
+putFst lv !elt = putLV lv (IVC (Just elt), IVC Nothing)
 
 putSnd :: IPair a b -> b -> Par ()
-putSnd lv elt = putLV lv (IVC Nothing, IVC (Just elt))
+putSnd lv !elt = putLV lv (IVC Nothing, IVC (Just elt))
 
 getFst :: IPair a b -> Par a
 getFst lv = getLV lv test
@@ -158,9 +158,10 @@ newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
      -- Would be nice if this were a balanced tree:      
      foldl Fork Done trcs
 
--- | Put a single element in the set.
+-- | Put a single element in the set.  (WHNF) Strict in the element being put in the
+-- set.
 putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet elem (ISet lv) = putLV lv (S.singleton elem)
+putInSet !elem (ISet lv) = putLV lv (S.singleton elem)
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
