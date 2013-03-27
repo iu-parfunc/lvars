@@ -1,6 +1,6 @@
 -- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings #-}
 
 -- Compile time options:
 --   PURE        -- use LVarTracePure
@@ -19,20 +19,23 @@ import LVarTracePure (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fo
 import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork, liftIO, waitForSetSize)
 #endif
 
-import GHC.Conc (numCapabilities)
-import Control.DeepSeq (deepseq)
-import Control.Exception (evaluate)
-import Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import Control.Monad.Par.Class (ParFuture)
+import           Control.DeepSeq (deepseq)
+import           Control.Exception (evaluate)
+import           Control.Monad (forM_)
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           Control.Monad.Par.Class (ParFuture)
+import           Control.DeepSeq         (NFData)
+import           Data.List as L
 import qualified Data.Set as Set
 import qualified Data.IntSet as IS
-import Control.DeepSeq (NFData)
-import Data.Traversable (Traversable)
-import Data.Map as Map (toList, fromListWith)
-import Data.Time.Clock (getCurrentTime, diffUTCTime)
-import Text.Printf (printf)
-import System.Mem (performGC)
-import System.Environment (getEnvironment,getArgs)
+import qualified Data.ByteString.Lazy.Char8 as B
+import           Data.Traversable (Traversable)
+import           Data.Map as Map (toList, fromListWith)
+import           Data.Time.Clock (getCurrentTime, diffUTCTime)
+import           GHC.Conc (numCapabilities)
+import           Text.Printf (printf)
+import           System.Mem (performGC)
+import           System.Environment (getEnvironment,getArgs)
 
 -- For parsing the file produced by pbbs
 import Data.List.Split (splitOn)
@@ -43,6 +46,7 @@ import Debug.Trace (trace)
 
 -- For representing graphs
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as MV
 
 #ifndef NOCRITERION
 -- For benchmarking
@@ -72,13 +76,10 @@ mkGraph ls =
   in (V.fromList $ map snd $ convert ls)
 
 -- Slurp in key-value pairs from a file in pbbs EdgeArray format.
-mkGraphFromFile :: IO Graph
-mkGraphFromFile = do
-  putStrLn$"Begin loading graph..."
---  inh <- openFile "/tmp/grid_1000" ReadMode
---  inh <- openFile "/tmp/grid_8000" ReadMode
-  inh <- openFile "/tmp/grid" ReadMode
-
+mkGraphFromFile :: String -> IO Graph
+mkGraphFromFile file = do
+  putStrLn$"Begin loading graph from "++file
+  inh <- openFile file ReadMode
   t0 <- getCurrentTime
   inStr <- hGetContents inh
   let tuplify2 [x,y] = (x, y)
@@ -87,9 +88,41 @@ mkGraphFromFile = do
   -- return (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
   g <- evaluate (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
   -- Just to make SURE its computed:
-  putStrLn$"Graph loaded, "++show(V.length g)++" vertices, first vertex: "++ show (nbrs g 0)
+  putStrLn$" * Graph loaded, "++show(V.length g)++" vertices, first vertex: "++ show (nbrs g 0)
   t1 <- getCurrentTime
-  putStrLn$ "Time reading/parsing data: "++show(diffUTCTime t1 t0)
+  putStrLn$ " * Time reading/parsing data: "++show(diffUTCTime t1 t0)
+  return g
+
+
+-- Optimized version:
+mkGraphFromFile2 :: String -> IO Graph
+mkGraphFromFile2 file = do
+  putStrLn$"Begin loading graph from "++file  
+  t0    <- getCurrentTime
+  inStr <- B.readFile file
+  let -- Returns a list of edges:
+      loop1 [] = []
+      loop1 (b1:b2:rst) = do
+        case (B.readInt b1, B.readInt b2) of
+          (Just (src,_), Just (dst,_)) -> (src,dst) : loop1 rst
+            -- let (ls,mx) = loop1 rst in
+            -- ((src,dst):ls, mx `max` src `max` dst)
+          _ -> error$"Failed parse of bytestrings: "++show(B.unwords[b1,b2])
+      loop1 _ = error "Odd number of integers in graph file!"
+--  g <- MV.new 
+  let edges = case B.words inStr of
+               ("EdgeArray":rst) -> loop1 rst
+      mx = foldl' (\mx (s,d) -> mx `max` s `max` d) 0 edges
+  mg <- MV.replicate (mx+1) []
+  forM_ edges $ \ (src,dst) -> do
+    -- Interpret this as a DIRECTED graph:    
+    ls <- MV.read mg src
+    MV.write mg src (dst:ls)
+  g <- V.freeze mg
+  -- Just to make SURE its computed:
+  putStrLn$" * Graph loaded, "++show(V.length g)++" vertices, first vertex: "++ show (nbrs g 0)
+  t1 <- getCurrentTime
+  putStrLn$ " * Time reading/parsing data: "++show(diffUTCTime t1 t0)
   return g
 
 
@@ -138,7 +171,10 @@ main = do
           [ks,ws] -> (read ks,read ws,2)
           [ks,ws,ver] -> (read ks,read ws,read ver)
   
-  g <- mkGraphFromFile
+--  g <- mkGraphFromFile2 "/tmp/grid_1000"
+--  g <- mkGraphFromFile2 "/tmp/grid_8000"
+  g <- mkGraphFromFile2 "/tmp/grid"
+
   let startNode = 0
       g2 = V.map IS.fromList g
   evaluate (g2 V.! 0)
@@ -151,7 +187,7 @@ main = do
                          putStrLn "Done with traversal."
   let sin_iter_count = sin_iter w
 
-  printf "Begining benchmark with k=%d and w=%d\n" k w
+  printf " * Begining benchmark with k=%d and w=%d\n" k w
 #ifdef NOCRITERION
   performGC
   t0 <- getCurrentTime
