@@ -453,8 +453,6 @@ steal q@Sched{ idle, scheds, no=my_no } = do
               -- printf "cpu %d got work from cpu %d\n" my_no (no x)
               sched True q t
            Nothing -> go xs
-steal _ = return ()
-
 
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: Sched -> Trace -> IO ()
