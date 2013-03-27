@@ -21,7 +21,7 @@ import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet
 
 import           Control.DeepSeq (deepseq)
 import           Control.Exception (evaluate)
-import           Control.Monad (forM_)
+import           Control.Monad (forM_, when)
 import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
 import           Control.Monad.Par.Class (ParFuture)
 import           Control.DeepSeq         (NFData)
@@ -35,6 +35,7 @@ import           Data.Time.Clock (getCurrentTime, diffUTCTime)
 import           GHC.Conc (numCapabilities)
 import           Text.Printf (printf)
 import           System.Mem (performGC)
+import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment (getEnvironment,getArgs)
 
 -- For parsing the file produced by pbbs
@@ -145,6 +146,19 @@ sin_iter n !x = sin_iter (n - 1) (x + sin x)
 prnt :: String -> Par ()
 prnt str = trace str $ return ()
 
+theEnv :: [(String,String)]
+theEnv = unsafePerformIO getEnvironment
+
+checkEnv :: Read a => String -> a -> a 
+checkEnv v def =
+  case lookup v theEnv of
+    Just "" -> def
+    Just s  -> read s    
+    Nothing -> def
+
+verbose :: Bool
+verbose = checkEnv "VERBOSE" False
+
 main :: IO ()
 main = do
   -- Fetch runtime parameters:
@@ -154,12 +168,6 @@ main = do
       k_ = 25    -- Number of hops to explore
       w_ = 20000 -- Amount of work (sin's)
   
-  -- theEnv = unsafePerformIO getEnvironment
-  -- checkEnv v def =
-  --   case lookup v theEnv of
-  --     Just s -> read s
-  --     Nothing -> def
-
   args <- getArgs
   -- TODO: this needs to use more sophisticated argument parsing if it will coexist
   -- with criterion.  Or could use env vars instead.
@@ -260,8 +268,9 @@ bf_traverse2 :: Int -> Graph2 -> ISet Float -> IS.IntSet -> IS.IntSet -> (Float 
                -> Par ()
 bf_traverse2 0 _ _ _ _ _ = return ()
 bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do 
-  trace ("bf_traverse2 call.. "++show k++" seen/new size "
-         ++show (IS.size seen_rank, IS.size new_rank)) $ return () 
+  when verbose
+    (trace ("bf_traverse2 call.. "++show k++" seen/new size "
+           ++show (IS.size seen_rank, IS.size new_rank)) $ return ())
   -- Nothing in the new_rank set means nothing left to traverse.
   if IS.null new_rank
   then return ()
