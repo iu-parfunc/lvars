@@ -5,7 +5,7 @@ DATABIG    = /tmp/grid
 DATAMEDIUM = /tmp/grid_8000
 DATASMALL  = /tmp/grid_1000
 
-PBBSDIR = ../pbbs/testData/graphData/
+PBBSDIR = ../pbbs/testData/graphData
 
 ifeq ($(GHC),)
  GHC=ghc
@@ -36,15 +36,15 @@ data: $(DATABIG) $(DATAMEDIUM) $(DATASMALL)
 # Generate test data using PBBS.
 $(DATABIG):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 97336 $(DATABIG)
+	$(PBBSDIR)/gridGraph -d 3 97336 $(DATABIG) # 46^3 -- switch to 125000 (50^3), maybe?
 
 $(DATAMEDIUM):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 8000 $(DATAMEDIUM)
+	$(PBBSDIR)/gridGraph -d 3 8000 $(DATAMEDIUM) # 20^3
 
 $(DATASMALL):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 1000 $(DATASMALL)
+	$(PBBSDIR)/gridGraph -d 3 1000 $(DATASMALL) # 10^3
 
 #--------------------------------------------------------------------------------
 # Ryan's quick hacks:

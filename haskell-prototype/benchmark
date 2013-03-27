@@ -2,7 +2,7 @@
 
 set -e
 
-make /tmp/grid
+make data
 
 num_cores="1 2 4";
 
