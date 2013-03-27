@@ -24,6 +24,10 @@
    (term 4))
 
   (test-equal
+   (term (lub 3 3))
+   (term 3))
+
+  (test-equal
    (term (leq 3 3))
    (term #t))
 
@@ -481,7 +485,7 @@
               (4))))
   
   ;;let par put and get
-(test-->> rr
+  (test-->> rr
             (term
              (() ;; empty store
               (let ((x_1 new))
