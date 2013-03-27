@@ -305,8 +305,8 @@ start_traverse2 k !g startNode f = do
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result.
         -----------------------------------------
---        waitForSetSize size l_acc -- Depends on a bunch of forked computations
-        waitForSetSize 10 l_acc -- Depends on a bunch of forked computations            
+        waitForSetSize size l_acc -- Depends on a bunch of forked computations
+--        waitForSetSize 10 l_acc -- Depends on a bunch of forked computations            
         prnt$ "Set results all available! ("++show size++")"
         
         s <- consumeSet l_acc :: Par (Set.Set Float)
