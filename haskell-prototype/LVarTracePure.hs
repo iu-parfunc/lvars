@@ -28,8 +28,10 @@ module LVarTracePure
    
    -- * Example 3: Monotonically growing sets.
    ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet,
-   waitForSetSize, consumeSet
-
+   waitForSetSize, consumeSet,
+   
+   -- * DEBUGGING only:
+   unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -184,7 +186,16 @@ waitForSetSize sz (ISet lv) = getLV lv fn
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 consumeSet :: ISet a -> Par (S.Set a)
-consumeSet (ISet lv) = consumeLV lv 
+consumeSet (ISet lv) = consumeLV lv
+
+unsafePeekSet :: ISet a -> Par (S.Set a)
+unsafePeekSet (ISet lv) = unsafePeekLV lv
+
+reallyUnsafePeekSet :: ISet a -> (S.Set a)
+reallyUnsafePeekSet (ISet (LVar {lvstate})) =
+  unsafePerformIO $ do
+    LVarContents {current} <- readIORef lvstate
+    return current
 
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
@@ -251,6 +262,9 @@ data Trace =
            -- nondeterminism):
            | forall a . Consume (LVar a) (a -> Trace)
 
+           -- For debugging:
+           | forall a . Peek (LVar a) (a -> Trace)
+
            -- The callback (unsafely) is scheduled when there is ANY
            -- change.  It does NOT get a snapshot of the (continuously
            -- mutating) state, just the right to read whatever it can.
@@ -288,6 +302,10 @@ sched _doSync queue t = loop t
       a <- atomicModifyIORef ref (\(LVarContents a _) ->
                                    (error "attempt to touch LVar after Consume operation!", a))
       loop (cont a)
+
+    Peek (LVar ref _) cont -> do
+      LVarContents {current} <- readIORef ref     
+      loop (cont current)
 
     Put (LVar ref cb) new tr  -> do
       cs <- atomicModifyIORef ref $ \e -> case e of
@@ -492,6 +510,9 @@ putLV lv st = Par $ \c -> Put lv st (c ())
 -- access to its precise state.
 consumeLV :: LVar a -> Par a
 consumeLV = Par . Consume 
+
+unsafePeekLV :: LVar a -> Par a
+unsafePeekLV = Par . Peek
 
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
