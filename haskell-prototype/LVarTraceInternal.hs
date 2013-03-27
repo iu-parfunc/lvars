@@ -28,7 +28,10 @@ module LVarTraceInternal
    
    -- * Example 3: Monotonically growing sets.
    ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet,
-   waitForSetSize, consumeSet
+   waitForSetSize, consumeSet,
+   
+   -- * DEBUGGING only:
+   unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
 
   ) where
 
@@ -218,6 +221,15 @@ waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
 consumeSet :: ISet a -> Par (S.Set a)
 consumeSet (ISet lv) = consumeLV lv readIORef
 
+unsafePeekSet :: ISet a -> Par (S.Set a)
+unsafePeekSet (ISet lv) = unsafePeekLV lv readIORef
+
+reallyUnsafePeekSet :: ISet a -> (S.Set a)
+reallyUnsafePeekSet (ISet (LVar {lvstate})) =
+  unsafePerformIO $ do
+    current <- readIORef lvstate
+    return current
+
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
@@ -288,6 +300,9 @@ data Trace =
            -- Destructively consume the value (limited
            -- nondeterminism):
            | forall a b . Consume (LVar a) (a -> IO b) (b -> Trace)
+             
+           -- For debugging:
+           | forall a b . Peek (LVar a) (a -> IO b) (b -> Trace)
 
            -- The callback (unsafely) is scheduled when there is ANY
            -- change.  It does NOT get a snapshot of the (continuously
@@ -352,6 +367,10 @@ sched _doSync queue t = loop t
       -- mutation, so this will be a delayed error.  It is recommended
       -- that higher level interfaces do their own corruption of the
       -- state in the extractor.
+      result <- extractor state
+      loop (cont result)
+      
+    Peek (LVar state _ _) extractor cont -> do
       result <- extractor state
       loop (cont result)
 
@@ -559,6 +578,9 @@ putLV lv fn = Par $ \c -> Put lv fn (c ())
 -- access to its precise state.
 consumeLV :: LVar a -> (a -> IO b) -> Par b
 consumeLV lv extractor = Par $ Consume lv extractor
+
+unsafePeekLV :: LVar a -> (a -> IO b) -> Par b
+unsafePeekLV lv extractor = Par $ Peek lv extractor
 
 liftIO :: IO () -> Par ()
 liftIO io = Par $ \c -> DoIO io (c ())
