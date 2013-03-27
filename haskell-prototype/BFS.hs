@@ -14,9 +14,9 @@
 
 #ifdef PURE
 #warning "Using the PURE version"
-import LVarTracePure (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork, liftIO, waitForSetSize)
+import LVarTracePure
 #else
-import LVarTraceInternal (newEmptySet, putInSet, Par, runParIO, ISet, consumeSet, fork, liftIO, waitForSetSize)
+import LVarTraceInternal 
 #endif
 
 import           Control.DeepSeq (deepseq)
@@ -115,6 +115,8 @@ sin_iter :: Int -> Float -> Float
 sin_iter 0  x = x
 sin_iter n !x = sin_iter (n - 1) (x + sin x)
 
+type WorkFn = (Float -> (Float,Float))
+
 prnt :: String -> Par ()
 prnt str = trace str $ return ()
 
@@ -160,13 +162,12 @@ main = do
   evaluate (g2 V.! 0)
   printf "Using VER %d of the BFS code...\n" ver
   
-  let graphThunk :: (Float -> Float) -> IO ()
+  let graphThunk :: WorkFn -> IO ()
       graphThunk fn = do case ver of
                            1 -> start_traverse  k g  0 fn
                            2 -> start_traverse2 k g2 0 fn
                          putStrLn "Done with traversal."
-  let sin_iter_count = sin_iter w
---  let sin_iter_count = id
+  let sin_iter_count x = (x,sin_iter w x)
 
   printf " * Begining benchmark with k=%d and w=%d\n" k w
 #ifdef NOCRITERION
@@ -187,7 +188,7 @@ main = do
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse :: Int -> Graph -> Int -> (Float -> Float) -> IO ()
+start_traverse :: Int -> Graph -> Int -> WorkFn -> IO ()
 start_traverse k !g startNode f = do
   runParIO $ do
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
@@ -201,12 +202,12 @@ start_traverse k !g startNode f = do
         -- ERROR: This is our classic data-race... need to wait first.
         
         prnt $ "Done with bf_traverse... "
-        s <- consumeSet l_acc :: Par (Set.Set Float)
+        s <- consumeSet l_acc :: Par (Set.Set (Float,Float))
         liftIO (do evaluate s; return ()) -- this explodes
         prnt $ "Done consume set ... "
         return ()
 
-bf_traverse :: Int -> Graph -> ISet Float -> Set.Set Int -> Set.Set Int -> (Float -> Float)
+bf_traverse :: Int -> Graph -> ISet (Float,Float) -> Set.Set Int -> Set.Set Int -> WorkFn
                -> Par (Set.Set Int)
 bf_traverse 0 _ _ seen _ _ = return seen
 bf_traverse k !g !l_acc !seen_rank !new_rank !f = do 
@@ -237,7 +238,7 @@ bf_traverse k !g !l_acc !seen_rank !new_rank !f = do
 
 -- Takes a graph, an LVar, a set of "seen" node labels, a set of "new"
 -- node labels, and the function f to be applied to each node.
-bf_traverse2 :: Int -> Graph2 -> ISet Float -> IS.IntSet -> IS.IntSet -> (Float -> Float)
+bf_traverse2 :: Int -> Graph2 -> ISet (Float,Float) -> IS.IntSet -> IS.IntSet -> WorkFn
                -> Par (IS.IntSet)
 bf_traverse2 0 _ _ seen_rank new_rank _ = do
   when verbose (prnt ("bf_traverse2 END..  seen/new size "
@@ -259,21 +260,23 @@ bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do
     -- We COULD use callbacks here, but rather we're modeling what happens in the
     -- current paper:
     myMapM_ (\x -> do 
-              prnt$ " --> Calling putInSet, "++show x
-              myfork$ putInSet (f (fromIntegral x)) l_acc)
+              -- st <- unsafePeekSet l_acc
+              -- prnt$ " --> Calling putInSet, "++show x
+              --     ++" size is "++show(Set.size$ st)
+              fork$ putInSet (f (fromIntegral x)) l_acc)
             (IS.toList new_rank') -- toList is HORRIBLE
     bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
 
 -- Takes a graph, a start node, and a function to be applied to each
 -- node.
-start_traverse2 :: Int -> Graph2 -> Int -> (Float -> Float) -> IO ()
+start_traverse2 :: Int -> Graph2 -> Int -> WorkFn -> IO ()
 start_traverse2 k !g startNode f = do
   runParIO $ do        
         prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
         l_acc <- newEmptySet
         -- "manually" add startNode
-        myfork $ putInSet (f (fromIntegral startNode)) l_acc
+        fork $ putInSet (f (fromIntegral startNode)) l_acc
         set <- bf_traverse2 k g l_acc IS.empty (IS.singleton startNode) f
         prnt $ "Done with bf_traverse..."
         let size = IS.size set
@@ -281,21 +284,22 @@ start_traverse2 k !g startNode f = do
         
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result:
---        waitForSetSize (size) l_acc -- Depends on a bunch of forked computations
---        prnt$ "Set results all available! ("++show size++")"
+        waitForSetSize (size) l_acc -- Depends on a bunch of forked computations
+        prnt$ "Set results all available! ("++show size++")"
 
-        forM_ [0..size] $ \ s -> do 
-          waitForSetSize s l_acc
-          prnt$ " ! "++show s++" elements are there in the set.."
+        -- When debug:
+        -- forM_ [0..size] $ \ s -> do 
+        --   waitForSetSize s l_acc
+        --   prnt$ " ! "++show s++" elements are there in the set.."
 
-        s <- consumeSet l_acc :: Par (Set.Set Float)
+        s <- consumeSet l_acc :: Par (Set.Set (Float,Float))
         liftIO (do evaluate s; return ()) -- this explodes
         prnt $ "Done consume set ... "
         prnt $ "Set size: "++show (Set.size s) ++"\n "
-        prnt $ "Set sum: "++show (Set.fold (+) 0 s)
+        prnt $ "Set sum: "++show (Set.fold (\(_,x) y -> x+y) 0 s)
 
 -- myMapM = parMapM; myMapM_ = parMapM
 myMapM = mapM; myMapM_ = mapM_
 
--- myfork = fork
-myfork = id
+myfork = fork
+-- myfork = id
