@@ -67,37 +67,9 @@ myConfig = defaultConfig {
 type Graph = V.Vector [Int]
 type Graph2 = V.Vector IS.IntSet
 
--- Create a graph from a flat list of key-value pairs.
-mkGraph :: [(Int, Int)] -> Graph
-mkGraph ls = 
-  -- Convert a flat list of key-value pairs to a Graph.
-  let convert :: (Ord a) => [(a, b)] -> [(a, [b])]
-      convert = 
-        Map.toList . Map.fromListWith (++) . map (\(x,y) -> (x,[y]))
-  in (V.fromList $ map snd $ convert ls)
-
--- Slurp in key-value pairs from a file in pbbs EdgeArray format.
+-- Optimized version:
 mkGraphFromFile :: String -> IO Graph
 mkGraphFromFile file = do
-  putStrLn$"Begin loading graph from "++file
-  inh <- openFile file ReadMode
-  t0 <- getCurrentTime
-  inStr <- hGetContents inh
-  let tuplify2 [x,y] = (x, y)
-  -- Ignore the initial "EdgeArray" string in the pbbs-generated file.
-  let (_:stringpairs) = map tuplify2 (map (splitOn " ") (lines inStr))
-  -- return (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
-  g <- evaluate (mkGraph (map (\(x,y) -> (read x::Int, read y::Int)) stringpairs))
-  -- Just to make SURE its computed:
-  putStrLn$" * Graph loaded, "++show(V.length g)++" vertices, first vertex: "++ show (nbrs g 0)
-  t1 <- getCurrentTime
-  putStrLn$ " * Time reading/parsing data: "++show(diffUTCTime t1 t0)
-  return g
-
-
--- Optimized version:
-mkGraphFromFile2 :: String -> IO Graph
-mkGraphFromFile2 file = do
   putStrLn$"Begin loading graph from "++file  
   t0    <- getCurrentTime
   inStr <- B.readFile file
@@ -179,9 +151,9 @@ main = do
           [ks,ws] -> (read ks,read ws,2)
           [ks,ws,ver] -> (read ks,read ws,read ver)
   
---  g <- mkGraphFromFile2 "/tmp/grid_1000"
---  g <- mkGraphFromFile2 "/tmp/grid_8000"
-  g <- mkGraphFromFile2 "/tmp/grid"
+--  g <- mkGraphFromFile "/tmp/grid_1000"
+--  g <- mkGraphFromFile "/tmp/grid_8000"
+  g <- mkGraphFromFile "/tmp/grid"
 
   let startNode = 0
       g2 = V.map IS.fromList g
@@ -305,10 +277,13 @@ start_traverse2 k !g startNode f = do
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result.
         -----------------------------------------
-        waitForSetSize size l_acc -- Depends on a bunch of forked computations
+        waitForSetSize (size `quot` 2) l_acc -- Depends on a bunch of forked computations
 --        waitForSetSize 10 l_acc -- Depends on a bunch of forked computations            
         prnt$ "Set results all available! ("++show size++")"
+
         
+
+
         s <- consumeSet l_acc :: Par (Set.Set Float)
         liftIO (do evaluate s; return ()) -- this explodes
         prnt $ "Done consume set ... "
