@@ -1,7 +1,6 @@
 #!/bin/bash
 
-PBBSDIR=../pbbs/testData/graphData/
-# TRIALS=
+PBBSDIR=../../pbbs/testData/graphData/
 
 # Generate test data using PBBS.
 (cd $PBBSDIR; make gridGraph)
