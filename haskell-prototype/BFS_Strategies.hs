@@ -21,7 +21,8 @@ bf_pure k !g  !seen_rank !new_rank !f = do
   else do
     -- Add new_rank stuff to the "seen" list
     let seen_rank' = IS.union seen_rank new_rank
---        allNbr     = 
+-- TODO: parMap version
+--        allNbr     = IS.fold IS.union                      
         allNbr'    = IS.fold (\i acc -> IS.union (g V.! i) acc) 
                         IS.empty new_rank
         new_rank'  = IS.difference allNbr' seen_rank' 

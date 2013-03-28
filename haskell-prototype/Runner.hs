@@ -103,7 +103,7 @@ sin_iter :: Int -> Float -> Float
 sin_iter 0  x = x
 sin_iter n !x = sin_iter (n - 1) (x + sin x)
 
-type WorkRet = (Int, Float)
+type WorkRet = (Float, Int)
 type WorkFn = (Int -> WorkRet)
 
 prnt :: String -> Par ()
@@ -163,7 +163,7 @@ main = do
   
   let sin_iter_count :: WorkFn
       sin_iter_count x = let f = fromIntegral x in
-                         (x, sin_iter w f)
+                         (sin_iter w f, x)
 
   printf "* Beginning benchmark with k=%d and w=%d\n" k w
 
