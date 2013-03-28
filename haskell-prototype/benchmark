@@ -6,9 +6,6 @@ make data
 
 num_cores="1 2 4";
 
-make q
-make qp
-
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
     lock_for_experiments 1000
@@ -17,10 +14,12 @@ fi
 
 ## BFS:
 
-# Impure version
-for i in $num_cores; do ./quick_io.exe +RTS -N$i; done
+# Impure version (experimental -- not working at the moment)
+# make q
+# for i in $num_cores; do ./quick_io.exe +RTS -N$i; done
 
 # Pure version
+make qp
 for i in $num_cores; do ./quick_pure.exe +RTS -N$i; done
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
