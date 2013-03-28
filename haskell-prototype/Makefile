@@ -1,4 +1,4 @@
-src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs
+src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs benchmark.hs
 
 GRID_DATABIG    = /tmp/grid_125000
 GRID_DATAMEDIUM = /tmp/grid_8000
@@ -41,13 +41,32 @@ $(GRID_DATASMALL):
 	(cd $(PBBSDIR); make gridGraph)
 	$(PBBSDIR)/gridGraph -d 3 1000 $(GRID_DATASMALL) # 10^3
 
-# Random local graph with 10,000 vertices and approximately 5 edges
-# per vertex (50,000 edges total), and dimension 5.  The graph is
-# generated so that the probability of each edge out of a vertex is
-# biased to nearby vertices.
+# Generate random local graphs with one of [10,000; 20,000; 40,000]
+# vertices and one of [40,000; 80,000; 160,000] edges, and dimension
+# 5.  The graph is generated so that the probability of each edge out
+# of a vertex is biased to nearby vertices.  Overall, a graph with,
+# say, 20,000 vertices and 80,000 edges will have an *average* degree
+# of 4.
+
+# We should produce 9 graphs in all.
+
+# Naming convention: /tmp/rand_E_V where E is the number of edges and
+# V is the number of vertices.
+
 $(RAND_DATA):
 	(cd $(PBBSDIR); make randLocalGraph)
-	$(PBBSDIR)/randLocalGraph -m 50000 -d 5 10000 $(RAND_DATA)
+# 40000 edges
+	$(PBBSDIR)/randLocalGraph -m  40000 -d 5 10000 $(RAND_DATA)_40000_10000
+	$(PBBSDIR)/randLocalGraph -m  40000 -d 5 20000 $(RAND_DATA)_40000_20000
+	$(PBBSDIR)/randLocalGraph -m  40000 -d 5 40000 $(RAND_DATA)_40000_40000
+# 80000 edges
+	$(PBBSDIR)/randLocalGraph -m  80000 -d 5 10000 $(RAND_DATA)_80000_10000
+	$(PBBSDIR)/randLocalGraph -m  80000 -d 5 20000 $(RAND_DATA)_80000_20000
+	$(PBBSDIR)/randLocalGraph -m  80000 -d 5 40000 $(RAND_DATA)_80000_40000
+# 160000 edges
+	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 10000 $(RAND_DATA)_160000_10000
+	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 20000 $(RAND_DATA)_160000_20000
+	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 40000 $(RAND_DATA)_160000_40000
 
 deps:
 	cabal install rdtsc
@@ -70,7 +89,7 @@ benchmark.run:
 	ghc --make benchmark.hs -o benchmark.run
 
 clean:
-	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) 
+	-rm -f *.hi *.o *.html *.eventlog *.exe *.run $(all) 
 # /tmp/grid* /tmp/rand*
 
 wipelogs:
