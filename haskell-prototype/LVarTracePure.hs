@@ -276,8 +276,8 @@ data Trace =
            | forall a . NewWithCallBack a (a -> a -> Trace) (LVar a -> Trace)
 
 -- | The main scheduler loop.
-sched :: Bool -> Sched -> Trace -> IO ()
-sched _doSync queue t = loop t
+sched :: Sched -> Trace -> IO ()
+sched queue t = loop t
  where
   loop origt = case origt of
     New init cont -> do
@@ -340,18 +340,7 @@ sched _doSync queue t = loop t
          -- pushWork queue child -- "Help-first" policy.  Generally bad.
          -- loop parent
 
-    Done ->
-         if _doSync
-	 then reschedule queue
-         -- We could fork an extra thread here to keep numCapabilities
-         -- workers even when the main thread returns to the runPar
-         -- caller...
-         else do putStrLn " [par] Forking replacement thread..\n"
-                 forkIO (reschedule queue); return ()
-         -- But even if we don't we are not orphaning any work in this
-         -- thread's work-queue because it can be stolen by other
-         -- threads.
-	 --      else return ()
+    Done -> reschedule queue
 
     DoIO io t -> io >> loop t
 
@@ -373,7 +362,7 @@ reschedule queue@Sched{ workpool } = do
            (t:ts') -> (ts', Just t)
   case e of
     Nothing -> steal queue
-    Just t  -> sched True queue t
+    Just t  -> sched queue t
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
 -- Cilk time/space bounds if one is running strictly nested (series
@@ -410,7 +399,7 @@ steal q@Sched{ idle, scheds, no=my_no } = do
          case r of
            Just t  -> do
               -- printf "cpu %d got work from cpu %d\n" my_no (no x)
-              sched True q t
+              sched q t
            Nothing -> go xs
 
 -- | If any worker is idle, wake one up and give it work to do.
@@ -436,8 +425,8 @@ instance NFData (LVar a) where
   rnf _ = ()
 
 {-# INLINE runPar_internal #-}
-runPar_internal :: Bool -> Par a -> IO a
-runPar_internal _doSync x = do
+runPar_internal :: Par a -> IO a
+runPar_internal  x = do
    workpools <- replicateM numCapabilities $ newIORef []
    idle <- newIORef []
    let states = [ Sched { no=x, workpool=wp, idle, scheds=states }
@@ -468,17 +457,17 @@ runPar_internal _doSync x = do
       forkWithExceptions (forkOnIO cpu) "worker thread" $ do 
           if (cpu /= main_cpu)
              then reschedule state
-             else sched _doSync state $
+             else sched state $
                     runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
    takeMVar m
 
 runPar :: Par a -> a
-runPar = unsafePerformIO . runPar_internal True
+runPar = unsafePerformIO . runPar_internal 
 
 -- | A version that avoids an internal `unsafePerformIO` for calling
 --   contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
-runParIO = runPar_internal True
+runParIO = runPar_internal 
 
 --------------------------------------------------------------------------------
 -- Basic stuff:
