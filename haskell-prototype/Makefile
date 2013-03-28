@@ -63,9 +63,12 @@ s: strategies.exe
 strategies.exe: $(src)
 	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
 
+benchmark.run:
+	ghc --make benchmark.hs -o benchmark.run
 
 clean:
-	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) /tmp/grid* /tmp/rand*
+	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) 
+# /tmp/grid* /tmp/rand*
 
 wipelogs:
 	-rm -f *.log

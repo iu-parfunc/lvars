@@ -1,0 +1,5 @@
+
+
+# Comments are allowed.
+
+BFS_LVar none /tmp/rand 10 10 
