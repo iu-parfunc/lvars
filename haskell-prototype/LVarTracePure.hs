@@ -35,7 +35,6 @@ module LVarTracePure
   ) where
 
 import           Control.Monad hiding (sequence, join)
-import           Control.Applicative ((<$>))
 import           Control.Concurrent hiding (yield)
 import           Control.DeepSeq
 import           Control.Applicative
@@ -146,7 +145,7 @@ newtype ISet a = ISet (LVar (S.Set a))
 newEmptySet :: Par (ISet a)
 newEmptySet = fmap ISet $ newLV S.empty
 
--- | Extended lambda-LVar (callbacks).  Create an empty set, but establish a callback
+-- | Extended lambdaLVar (callbacks).  Create an empty set, but establish a callback
 -- that will be invoked (in parallel) on each element added to the set.
 newEmptySetWithCallBack :: forall a . Ord a => (a -> Par ()) -> Par (ISet a)
 newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
@@ -434,7 +433,7 @@ runPar_internal  x = do
 
 #if __GLASGOW_HASKELL__ >= 701 /* 20110301 */
     --
-    -- We create a thread on each CPU with forkOnIO.  The CPU on which
+    -- We create a thread on each CPU with forkOn.  The CPU on which
     -- the current thread is running will host the main thread; the
     -- other CPUs will host worker threads.
     --
@@ -454,7 +453,7 @@ runPar_internal  x = do
 
    m <- newEmptyMVar
    forM_ (zip [0..] states) $ \(cpu,state) ->
-      forkWithExceptions (forkOnIO cpu) "worker thread" $ do 
+      forkWithExceptions (forkOn cpu) "worker thread" $ do 
           if (cpu /= main_cpu)
              then reschedule state
              else sched state $

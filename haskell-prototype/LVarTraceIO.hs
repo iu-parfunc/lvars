@@ -32,11 +32,9 @@ module LVarTraceIO
    
    -- * DEBUGGING only:
    unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
-
   ) where
 
 import           Control.Monad hiding (sequence, join)
-import           Control.Applicative ((<$>))
 import           Control.Concurrent hiding (yield)
 import           Control.DeepSeq
 import           Control.Applicative
@@ -508,7 +506,7 @@ runPar_internal _doSync x = do
 
 #if __GLASGOW_HASKELL__ >= 701 /* 20110301 */
     --
-    -- We create a thread on each CPU with forkOnIO.  The CPU on which
+    -- We create a thread on each CPU with forkOn.  The CPU on which
     -- the current thread is running will host the main thread; the
     -- other CPUs will host worker threads.
     --
@@ -528,7 +526,7 @@ runPar_internal _doSync x = do
 
    m <- newEmptyMVar
    forM_ (zip [0..] states) $ \(cpu,state) ->
-        forkWithExceptions (forkOnIO cpu) "worker thread" $
+        forkWithExceptions (forkOn cpu) "worker thread" $
           if (cpu /= main_cpu)
              then reschedule state
              else sched _doSync state $ runCont (do x' <- x; liftIO (putMVar m x')) (const Done)

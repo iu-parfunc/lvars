@@ -56,15 +56,15 @@ type Graph2 = V.Vector IS.IntSet
 -- Optimized version:
 mkGraphFromFile :: String -> IO Graph
 mkGraphFromFile file = do
-  putStrLn$"Begin loading graph from "++file  
+  putStrLn $ "* Begin loading graph from " ++ file ++ "..." 
   t0    <- getCurrentTime
   inStr <- B.readFile file
   let -- Returns a list of edges:
       loop1 [] = []
       loop1 (b1:b2:rst) = do
         case (B.readInt b1, B.readInt b2) of
-          (Just (src,_), Just (dst,_)) -> (src,dst) : loop1 rst
-          _ -> error$"Failed parse of bytestrings: "++show(B.unwords[b1,b2])
+          (Just (src, _), Just (dst, _)) -> (src, dst) : loop1 rst
+          _ -> error $ "Failed parse of bytestrings: " ++ show (B.unwords[b1, b2])
       loop1 _ = error "Odd number of integers in graph file!"
 
   let edges = case B.words inStr of
@@ -76,10 +76,12 @@ mkGraphFromFile file = do
     ls <- MV.read mg src
     MV.write mg src (dst:ls)
   g <- V.freeze mg
-  -- Just to make SURE its computed:
-  putStrLn$" * Graph loaded, "++show(V.length g)++" vertices, neighbors of vertex 0: "++ show (nbrs g 0)
+  -- Just to make SURE it's computed:
+  putStrLn $ " * Graph loaded: " 
+    ++ show(V.length g) ++ " vertices.  Neighbors of vertex 0: "
+    ++ show (nbrs g 0)
   t1 <- getCurrentTime
-  putStrLn$ " * Time reading/parsing data: "++show(diffUTCTime t1 t0)
+  putStrLn $ " * Time reading/parsing data: " ++ show(diffUTCTime t1 t0)
   return g
 
 -- Neighbors of a node with a given label
@@ -155,7 +157,7 @@ main = do
   let graphThunk :: WorkFn -> IO ()
       graphThunk fn = do
         start_traverse k g2 0 fn
-        putStrLn "Done with traversal."
+        putStrLn "All done."
   
   let sin_iter_count   :: WorkFn
       sin_iter_count x = (x, sin_iter w x)
@@ -166,7 +168,7 @@ main = do
   t0 <- getCurrentTime
   graphThunk sin_iter_count
   t1 <- getCurrentTime
-  putStrLn $ "SELFTIMED " ++ show (diffUTCTime t1 t0)
+  putStrLn $ "SELFTIMED " ++ show (diffUTCTime t1 t0) ++ "\n"
 
 ------------------------------------------------------------------------------------------
 
@@ -178,7 +180,7 @@ bf_traverse :: Int             -- iteration counter
                -> WorkFn       -- function to be applied to each node
                -> Par (IS.IntSet)
 bf_traverse 0 _ _ seen_rank new_rank _ = do
-  when verbose $ prnt $ "bf_traverse finished! seen/new size "
+  when verbose $ prnt $ "bf_traverse finished! seen/new size: "
     ++ show (IS.size seen_rank, IS.size new_rank)
   return (IS.union seen_rank new_rank)
 
@@ -217,28 +219,31 @@ start_traverse :: Int       -- iteration counter
                   -> IO ()
 start_traverse k !g startNode f = do
   runParIO $ do        
-        prnt $ "Running on " ++ show numCapabilities ++ " parallel resources..."
+        prnt $ " * Running on " ++ show numCapabilities ++ " parallel resources..."
+        
         l_acc <- newEmptySet
         -- "manually" add startNode
         fork $ putInSet (f (fromIntegral startNode)) l_acc
         -- pass in { startNode } as the initial "new" set
         set <- bf_traverse k g l_acc IS.empty (IS.singleton startNode) f
-        prnt $ "Done with bf_traverse..."
+        
+        prnt $ " * Done with bf_traverse..."
         let size = IS.size set
-        prnt$ " Waiting on "++show size++" set results"
+        
+        prnt$ " * Waiting on "++show size++" set results..."
 
         when dbg $ do 
           forM_ [0..size] $ \ s -> do
-            prnt$ " ? Blocking on "++show s++" elements to be in the set.."
+            prnt$ " ? Blocking on "++show s++" elements to be in the set..."
             waitForSetSize s l_acc
 
         -- Waiting is required in any case for correctness, whether or
         -- not we consume the result
         waitForSetSize (size) l_acc -- Depends on a bunch of forked computations
-        prnt$ "Set results all available! ("++show size++")"
+        prnt$ " * Set results all available! (" ++ show size ++ ")"
 
         s <- consumeSet l_acc :: Par (Set.Set (Float,Float))
         liftIO (do evaluate s; return ())
-        prnt $ "Done consume set ... "
-        prnt $ "Set size: "++show (Set.size s) ++"\n "
-        prnt $ "Set sum: "++show (Set.fold (\(_,x) y -> x+y) 0 s)
+        prnt $ " * Finished consumeSet:"
+        prnt $ "  * Set size: " ++ show (Set.size s)
+        prnt $ "  * Set sum: " ++ show (Set.fold (\(_,x) y -> x+y) 0 s)
