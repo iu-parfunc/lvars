@@ -12,7 +12,7 @@ ifeq ($(GHC),)
  GHC=ghc
 endif
 
-default: l1 l2 s3
+default: l1 l2 s
 
 %: %.hs
 	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
@@ -59,7 +59,7 @@ l2: lvar_pure.exe
 lvar_pure.exe: $(src)
 	$(GHC) -DPURE -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
 
-s3: strategies.exe
+s: strategies.exe
 strategies.exe: $(src)
 	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
 
