@@ -14,24 +14,16 @@ make BFS_pure
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
     lock_for_experiments 1000
-    num_cores="1 2 4 8 16";
+    num_cores="1 2 4 8 16 32";
 fi
-
-## Embarrassingly parallel benchmark:
-
-# # Impure version
-# for i in $num_cores; do ./pp_impure -o pp_impure_$i.html +RTS -N$i; done
-
-# # Pure version
-# for i in $num_cores; do ./pp_pure -o pp_pure_$i.html +RTS -N$i; done
 
 ## BFS:
 
 # Impure version
-for i in $num_cores; do ./BFS_impure -o BFS_impure_$i.html +RTS -N$i; done
+for i in $num_cores; do ./quick.exe +RTS -N$i; done
 
 # Pure version
-for i in $num_cores; do ./BFS_pure -o BFS_pure_$i.html +RTS -N$i; done
+for i in $num_cores; do ./quick_pure.exe +RTS -N$i; done
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
