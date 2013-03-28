@@ -475,12 +475,6 @@ runPar = unsafePerformIO . runPar_internal True
 runParIO :: Par a -> IO a
 runParIO = runPar_internal True
 
--- | An asynchronous version in which the main thread of control in a
--- Par computation can return while forked computations still run in
--- the background.  
-runParAsync :: Par a -> a
-runParAsync = unsafePerformIO . runPar_internal False
-
 --------------------------------------------------------------------------------
 -- Basic stuff:
 

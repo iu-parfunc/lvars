@@ -264,12 +264,13 @@ bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do
     -- current paper:
     myMapM_ (\x -> fork$ do 
               let elem = f (fromIntegral x)
+              putInSet elem l_acc
               when dbg $ do 
                  st <- unsafePeekSet l_acc
-                 prnt$ " --> Calling putInSet, node "++show x
+                 prnt$ " --> Called putInSet, node "++show x
                       ++" size is "++show(Set.size st) 
                       ++" elem is "++show elem --  ++" "++show st
-              putInSet elem l_acc)
+            )
             (IS.toList new_rank') -- toList is HORRIBLE
     bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
