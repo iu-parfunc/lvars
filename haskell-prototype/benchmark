@@ -20,7 +20,12 @@ fi
 
 # Pure version
 make qp
-for i in $num_cores; do ./quick_pure.exe +RTS -N$i; done
+
+# Grid graph.  Probably less realistic than a random graph.
+#for i in $num_cores; do ./quick_pure.exe +RTS -N$i 2>&1 | tee quick_pure_grid_N$i.log; done
+
+# Random graph.
+for i in $num_cores; do ./quick_pure.exe /tmp/rand +RTS -N$i 2>&1 | tee quick_pure_rand_N$i.log; done
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then

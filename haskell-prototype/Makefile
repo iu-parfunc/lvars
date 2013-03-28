@@ -1,8 +1,10 @@
 src = LVarTracePure.hs LVarTraceIO.hs BFS.hs
 
-DATABIG    = /tmp/grid_125000
-DATAMEDIUM = /tmp/grid_8000
-DATASMALL  = /tmp/grid_1000
+GRID_DATABIG    = /tmp/grid_125000
+GRID_DATAMEDIUM = /tmp/grid_8000
+GRID_DATASMALL  = /tmp/grid_1000
+
+RAND_DATA       = /tmp/rand
 
 PBBSDIR = ../pbbs/testData/graphData
 
@@ -18,20 +20,34 @@ default: q qp
 #--------------------------------------------------------------------------------
 # Input data generation:
 
-data: $(DATABIG) $(DATAMEDIUM) $(DATASMALL)
+data: grid_data rand_data
+
+grid_data: $(GRID_DATABIG) $(GRID_DATAMEDIUM) $(GRID_DATASMALL)
+
+rand_data: $(RAND_DATA)
 
 # Generate test data using PBBS.
-$(DATABIG):
-	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 125000 $(DATABIG) # 50^3
 
-$(DATAMEDIUM):
+# 3D grids.
+$(GRID_DATABIG):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 8000 $(DATAMEDIUM) # 20^3
+	$(PBBSDIR)/gridGraph -d 3 125000 $(GRID_DATABIG) # 50^3
 
-$(DATASMALL):
+$(GRID_DATAMEDIUM):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 1000 $(DATASMALL) # 10^3
+	$(PBBSDIR)/gridGraph -d 3 8000 $(GRID_DATAMEDIUM) # 20^3
+
+$(GRID_DATASMALL):
+	(cd $(PBBSDIR); make gridGraph)
+	$(PBBSDIR)/gridGraph -d 3 1000 $(GRID_DATASMALL) # 10^3
+
+# Random local graph with 10,000 vertices and approximately 5 edges
+# per vertex (50,000 edges total), and dimension 5.  The graph is
+# generated so that the probability of each edge out of a vertex is
+# biased to nearby vertices.
+$(RAND_DATA):
+	(cd $(PBBSDIR); make randLocalGraph)
+	$(PBBSDIR)/randLocalGraph -m 50000 -d 5 10000 $(RAND_DATA)
 
 #--------------------------------------------------------------------------------
 
@@ -52,4 +68,7 @@ test: q qp
 	time ./quick_pure.exe +RTS -N4
 
 clean:
-	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) 
+	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) /tmp/grid* /tmp/rand*
+
+wipelogs:
+	-rm -f *.log

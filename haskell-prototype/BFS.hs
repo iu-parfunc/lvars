@@ -128,25 +128,25 @@ main :: IO ()
 main = do
   -- Fetch runtime parameters:
   -- First, defaults:
+  let graphFile_ :: String
+      graphFile_ = "/tmp/grid_125000"
+  
   let k_ :: Int
       k_ = 25    -- Number of hops to explore
       
   let w_ :: Int
       w_ = 20000 -- Amount of work (iterations of sin)
 
-  let graphFile_ :: String
-      graphFile_ = "/tmp/grid_125000"
-  
   args <- getArgs
   
-  -- LK: this way of writing the type annotations is the only way I
+-- LK: this way of writing the type annotations is the only way I
   -- can get emacs to not think this is a parse error! :(
-  let (k,w,graphFile) = 
+  let (graphFile,k,w) = 
         case args of
-          []                  -> (k_, w_, graphFile_)
-          [ks]                -> (read ks :: Int, w_, graphFile_)
-          [ks, ws]            -> (read ks :: Int, read ws :: Int, graphFile_)
-          [ks, ws, graphFile] -> (read ks :: Int, read ws :: Int, read graphFile :: String)
+          []                   -> (graphFile_, k_, w_)
+          [graphFiles]         -> (graphFiles, k_, w_)
+          [graphFiles, ks]     -> (graphFiles, read ks :: Int, w_)
+          [graphFiles, ks, ws] -> (graphFiles, read ks :: Int, read ws :: Int)
   
   g <- mkGraphFromFile graphFile
 
