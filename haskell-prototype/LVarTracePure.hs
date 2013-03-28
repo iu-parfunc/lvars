@@ -45,6 +45,8 @@ import qualified Data.Set as S
 import           GHC.Conc hiding (yield)
 import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head, tail)
+import           Debug.Trace (trace)
+import           System.Mem.StableName (makeStableName, hashStableName)
 
 import qualified Control.Monad.Par.Class as PC
 
@@ -292,10 +294,13 @@ sched _doSync queue t = loop t
       -- threshold function TWICE if we need to block.  (Which is
       -- potentially more expensive than in the plain IVar case.)
       -- e <- readIORef ref
-      let thisCB x = fmap cont $ thresh x
+      let thisCB x =
+            trace ("... LVar blocked, thresh attempted "++show(hashStableName$ unsafePerformIO$ makeStableName x))
+            fmap cont $ thresh x
       r <- atomicModifyIORef ref $ \ st@(LVarContents a ls) ->
         case thresh a of
-          Just b  -> (st, loop (cont b))
+          Just b  -> trace ("... LVar get, thresh passed ")
+                     (st, loop (cont b))
           Nothing -> (LVarContents a (thisCB:ls), reschedule queue)
       r
 

@@ -290,9 +290,10 @@ start_traverse2 k !g startNode f = do
         prnt$ " Waiting on "++show size++" set results"
 
         when dbg $ do 
-          forM_ [0..size] $ \ s -> do 
+          forM_ [0..size] $ \ s -> do
+            prnt$ " ? Blocking on "++show s++" elements to be in the set.."
             waitForSetSize s l_acc
-            prnt$ " ! "++show s++" elements are there in the set.."
+
 
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result:

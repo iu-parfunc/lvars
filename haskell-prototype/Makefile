@@ -1,4 +1,5 @@
 all := BFS_impure BFS_pure pp_impure pp_pure test
+src = LVarTracePure.hs LVarTraceInternal.hs BFS.hs
 
 # 97336 vertices:
 DATABIG    = /tmp/grid
@@ -50,11 +51,11 @@ $(DATASMALL):
 # Ryan's quick hacks:
 
 q: quick.exe
-quick.exe: BFS.hs
+quick.exe: $(src)
 	$(GHC) -DNOCRITERION -O2 -threaded -rtsopts --make BFS.hs -o $@
 
 qp: quick_pure.exe
-quick_pure.exe: BFS.hs
+quick_pure.exe: $(src)
 	$(GHC) -DPURE -DNOCRITERION -O2 -threaded -rtsopts --make BFS.hs -o $@
 
 test: q qp
