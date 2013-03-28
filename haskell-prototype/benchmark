@@ -6,10 +6,8 @@ make data
 
 num_cores="1 2 4";
 
-make BFS_impure
-make BFS_pure
-# make pp_impure
-# make pp_pure
+make q
+make qp
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
@@ -20,7 +18,7 @@ fi
 ## BFS:
 
 # Impure version
-for i in $num_cores; do ./quick.exe +RTS -N$i; done
+for i in $num_cores; do ./quick_io.exe +RTS -N$i; done
 
 # Pure version
 for i in $num_cores; do ./quick_pure.exe +RTS -N$i; done
