@@ -5,6 +5,8 @@ set -e
 make data
 
 num_cores="1 2 4";
+# trials=100
+trials=9
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then
@@ -27,7 +29,9 @@ make qp
 #for i in $num_cores; do ./ntimes_minmedmax 100 ./quick_pure.exe +RTS -N$i; done
 
 # Random graph.
-for i in $num_cores; do ./ntimes_minmedmax 100 ./quick_pure.exe /tmp/rand +RTS -N$i; done
+for i in $num_cores; do 
+  ./ntimes_minmedmax $trials ./quick_lvarpure.exe /tmp/rand +RTS -s -N$i; 
+done
 
 if [ $(hostname) = "hive.soic.indiana.edu" ];
 then

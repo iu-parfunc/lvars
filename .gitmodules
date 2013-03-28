@@ -1,3 +1,6 @@
 [submodule "pbbs"]
 	path = pbbs
 	url = https://github.com/iu-parfunc/pbbs.git
+[submodule "HSBenchScaling"]
+	path = HSBenchScaling
+	url = https://github.com/rrnewton/HSBenchScaling.git

@@ -1,4 +1,4 @@
-src = LVarTracePure.hs LVarTraceIO.hs BFS.hs
+src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs
 
 GRID_DATABIG    = /tmp/grid_125000
 GRID_DATAMEDIUM = /tmp/grid_8000
@@ -12,7 +12,7 @@ ifeq ($(GHC),)
  GHC=ghc
 endif
 
-default: q qp
+default: l1 l2 s3
 
 %: %.hs
 	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
@@ -51,21 +51,18 @@ $(RAND_DATA):
 
 #--------------------------------------------------------------------------------
 
-q: quick_io.exe
-quick_io.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS.hs -o $@
+l1: lvar_io.exe
+lvar_io.exe: $(src)
+	$(GHC) -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
 
-qp: quick_pure.exe
-quick_pure.exe: $(src)
-	$(GHC) -DPURE -O2 -threaded -rtsopts --make BFS.hs -o $@
+l2: lvar_pure.exe
+lvar_pure.exe: $(src)
+	$(GHC) -DPURE -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
 
-test: q qp
-	time ./quick_io.exe +RTS -N1
-	time ./quick_io.exe +RTS -N4
-	@echo "\nPURE VERSION"
-	@echo "=============================================================="
-	time ./quick_pure.exe +RTS -N1
-	time ./quick_pure.exe +RTS -N4
+s3: strategies.exe
+strategies.exe: $(src)
+	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
+
 
 clean:
 	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) /tmp/grid* /tmp/rand*
