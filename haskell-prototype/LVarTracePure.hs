@@ -295,11 +295,11 @@ sched queue t = loop t
       -- potentially more expensive than in the plain IVar case.)
       -- e <- readIORef ref
       let thisCB x =
-            trace ("... LVar blocked, thresh attempted "++show(hashStableName$ unsafePerformIO$ makeStableName x))
+--            trace ("... LVar blocked, thresh attempted "++show(hashStableName$ unsafePerformIO$ makeStableName x))
             fmap cont $ thresh x
       r <- atomicModifyIORef ref $ \ st@(LVarContents a ls) ->
         case thresh a of
-          Just b  -> trace ("... LVar get, thresh passed ")
+          Just b  -> -- trace ("... LVar get, thresh passed ")
                      (st, loop (cont b))
           Nothing -> (LVarContents a (thisCB:ls), reschedule queue)
       r
@@ -322,7 +322,7 @@ sched queue t = loop t
                     (ls',woken) = loop ls [] []
                     loop [] f w = (f,w)
                     loop (hd:tl) f w =
-                      case hd new of
+                      case hd new' of
                         Just trc -> loop tl f (trc:w)
                         Nothing  -> loop tl (hd:f) w
                     -- Callbacks invoked: 

@@ -134,7 +134,8 @@ verbose :: Bool
 verbose = checkEnv "VERBOSE" False
 
 dbg :: Bool
-dbg = checkEnv "DEBUG" False
+-- dbg = checkEnv "DEBUG" False
+dbg = False -- Let it inline, DCE.
 
 main :: IO ()
 main = do
