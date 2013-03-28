@@ -1,4 +1,4 @@
-src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs
+src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs benchmark.hs
 
 GRID_DATABIG    = /tmp/grid_125000
 GRID_DATAMEDIUM = /tmp/grid_8000
@@ -89,7 +89,7 @@ benchmark.run:
 	ghc --make benchmark.hs -o benchmark.run
 
 clean:
-	-rm -f *.hi *.o *.html *.eventlog *.exe $(all) 
+	-rm -f *.hi *.o *.html *.eventlog *.exe *.run $(all) 
 # /tmp/grid* /tmp/rand*
 
 wipelogs:
