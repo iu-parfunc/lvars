@@ -49,6 +49,9 @@ $(RAND_DATA):
 	(cd $(PBBSDIR); make randLocalGraph)
 	$(PBBSDIR)/randLocalGraph -m 50000 -d 5 10000 $(RAND_DATA)
 
+deps:
+	cabal install rdtsc
+
 #--------------------------------------------------------------------------------
 
 l1: lvar_io.exe
