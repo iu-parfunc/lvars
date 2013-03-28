@@ -160,6 +160,9 @@ main = do
   
   g <- mkGraphFromFile graphFile
 
+  startT <- rdtsc
+  putStrLn$"Start time in cycles: "++commaint startT
+
   let startNode = 0
       g2 = V.map IS.fromList g
   evaluate (g2 V.! 0)
@@ -174,12 +177,14 @@ main = do
                          (sin_iter w f, x)
 
   freq <- measureFreq
-  printf "CPU Frequency: %s\n" (commaint freq)  
-  printf "* Beginning benchmark with k=%d and w=%d\n" k w
-  let busy_waiter :: WorkFn
+  let clocks_per_micro = freq `quot` (1000 * 1000)      
+      busy_waiter :: WorkFn
       busy_waiter n = unsafePerformIO $
-        wait_microsecs freq w n
-
+        wait_microsecs (w * clocks_per_micro) n
+  printf "CPU Frequency: %s, clocks per microsecond %s\n"
+           (commaint freq) (commaint clocks_per_micro)
+  printf "* Beginning benchmark with k=%d and w=%d\n" k w
+  
   performGC
   t0 <- getCurrentTime
 --  graphThunk sin_iter_count
@@ -187,15 +192,30 @@ main = do
   t1 <- getCurrentTime
   putStrLn $ "SELFTIMED " ++ show (diffUTCTime t1 t0) ++ "\n"
 
+  first <- readIORef first_hit
+  let first' = first - startT
+  putStrLn $ "First hit in raw clock cycles was " ++ commaint first'
+  let nanos = ((1000 * 1000 * 1000 * (fromIntegral first')) `quot` (fromIntegral freq :: Integer))
+  putStrLn $ " In nanoseconds: "++commaint nanos
+  putStrLn $ "FIRSTHIT " ++ show nanos
+
 ------------------------------------------------------------------------------------------
 
-first_hit :: IORef Int64
+first_hit :: IORef Word64
 first_hit = unsafePerformIO$ newIORef maxBound
 
 -- Wait for a certain number of milleseconds.
-wait_microsecs :: Word64 -> Word64 -> Node -> IO WorkRet
-wait_microsecs clockFreq micros n =
-  return (3.3, n)
+wait_microsecs :: Word64 -> Node -> IO WorkRet
+wait_microsecs clocks n = do
+  myT <- rdtsc
+  atomicModifyIORef first_hit (\ t -> (min t myT,()))
+  let loop !n = do
+        now <- rdtsc
+        if now - myT >= clocks
+        then return n   
+        else loop (n+1)
+  cnt <- loop 0
+  return (fromIntegral cnt, n)
 
 -- Measure clock frequency, spinning rather than sleeping to try to
 -- stay on the same core.
