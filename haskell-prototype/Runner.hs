@@ -160,9 +160,6 @@ main = do
   
   g <- mkGraphFromFile graphFile
 
-  startT <- rdtsc
-  putStrLn$"Start time in cycles: "++commaint startT
-
   let startNode = 0
       g2 = V.map IS.fromList g
   evaluate (g2 V.! 0)
@@ -187,6 +184,7 @@ main = do
   
   performGC
   t0 <- getCurrentTime
+  startT <- rdtsc  
 --  graphThunk sin_iter_count
   graphThunk busy_waiter  
   t1 <- getCurrentTime
@@ -194,6 +192,7 @@ main = do
 
   first <- readIORef first_hit
   let first' = first - startT
+  putStrLn$"Start time in cycles: "++commaint startT      
   putStrLn $ "First hit in raw clock cycles was " ++ commaint first'
   let nanos = ((1000 * 1000 * 1000 * (fromIntegral first')) `quot` (fromIntegral freq :: Integer))
   putStrLn $ " In nanoseconds: "++commaint nanos
