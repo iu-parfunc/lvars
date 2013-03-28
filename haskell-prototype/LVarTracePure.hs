@@ -27,8 +27,8 @@ module LVarTracePure
    newPair, putFst, putSnd, getFst, getSnd, 
    
    -- * Example 3: Monotonically growing sets.
-   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet,
-   waitForSetSize, consumeSet,
+   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, putInSet_,
+   waitForSet, waitForSetSize, consumeSet,
    
    -- * DEBUGGING only:
    unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
@@ -164,8 +164,11 @@ newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.
-putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet !elem (ISet lv) = putLV lv (S.singleton elem)
+putInSet_ :: Ord a => a -> ISet a -> Par () 
+putInSet_ !elem (ISet lv) = putLV lv (S.singleton elem)
+
+putInSet :: (NFData a, Ord a) => a -> ISet a -> Par ()
+putInSet e s = deepseq e (putInSet_ e s)
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()

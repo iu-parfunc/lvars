@@ -133,6 +133,9 @@ checkEnv v def =
 verbose :: Bool
 verbose = checkEnv "VERBOSE" False
 
+dbg :: Bool
+dbg = checkEnv "DEBUG" False
+
 main :: IO ()
 main = do
   -- Fetch runtime parameters:
@@ -260,10 +263,13 @@ bf_traverse2 k !g !l_acc !seen_rank !new_rank !f = do
     -- We COULD use callbacks here, but rather we're modeling what happens in the
     -- current paper:
     myMapM_ (\x -> do 
-              -- st <- unsafePeekSet l_acc
-              -- prnt$ " --> Calling putInSet, "++show x
-              --     ++" size is "++show(Set.size$ st)
-              fork$ putInSet (f (fromIntegral x)) l_acc)
+              let elem = f (fromIntegral x)
+              when dbg $ do 
+                 st <- unsafePeekSet l_acc
+                 prnt$ " --> Calling putInSet, "++show x
+                      ++" size is "++show(Set.size st) 
+                     -- ++" elem is "++show elem ++" "++show st
+              fork$ putInSet elem l_acc)
             (IS.toList new_rank') -- toList is HORRIBLE
     bf_traverse2 (k-1) g l_acc seen_rank' new_rank' f
 
@@ -281,16 +287,16 @@ start_traverse2 k !g startNode f = do
         prnt $ "Done with bf_traverse..."
         let size = IS.size set
         prnt$ " Waiting on "++show size++" set results"
-        
+
+        when dbg $ do 
+          forM_ [0..size] $ \ s -> do 
+            waitForSetSize s l_acc
+            prnt$ " ! "++show s++" elements are there in the set.."
+
         -- Actually, waiting is required in any case for correctness...
         -- whether or not we consume the result:
         waitForSetSize (size) l_acc -- Depends on a bunch of forked computations
         prnt$ "Set results all available! ("++show size++")"
-
-        -- When debug:
-        -- forM_ [0..size] $ \ s -> do 
-        --   waitForSetSize s l_acc
-        --   prnt$ " ! "++show s++" elements are there in the set.."
 
         s <- consumeSet l_acc :: Par (Set.Set (Float,Float))
         liftIO (do evaluate s; return ()) -- this explodes
