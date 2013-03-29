@@ -1,0 +1,68 @@
+# TestName Variant NumThreads   MinTime MedianTime MaxTime  Productivity1 Productivity2 Productivity3
+#    
+# Thu Mar 28 21:07:04 EDT 2013
+# Linux lenny 3.5.0-24-generic #37-Ubuntu SMP Thu Feb 7 01:50:30 UTC 2013 x86_64 x86_64 x86_64 GNU/Linux
+# Ran by: lkuper 
+# Determined machine to have 4 hardware threads.
+# The Glorious Glasgow Haskell Compilation System, version 7.4.2
+# 
+# Running each test for 1 trial(s).
+#  ... with compiler options: -O2 -rtsopts
+#  ... with runtime options: -qa  -s 
+# Benchmarks_File: benchlist.txt
+# Benchmarks_Variant: desktop
+# Benchmarks_Version: 2.0
+# Git_Branch: master
+# Git_Hash: 09cee3f9e09a78ed58941b90f95301a6cde1d8c1
+# Git_Depth: 173
+# Using the following settings from environment variables:
+#  ENV BENCHLIST=
+#  ENV THREADS=   1 2 4
+#  ENV TRIALS=    1
+#  ENV SHORTRUN=  
+#  ENV SCHEDS=    
+#  ENV KEEPGOING= 
+#  ENV GHC=       
+#  ENV GHC_FLAGS= 
+#  ENV GHC_RTS=   
+#  ENV ENVS=      
+BFS_LVar                            /tmp/rand_40000_10000_5_1000  None    1    1.210283s 1.210283s 1.210283s   96.575 96.575 96.575
+BFS_LVar                            /tmp/rand_40000_10000_5_1000  None    2    0.59533s 0.59533s 0.59533s   95.180 95.180 95.180
+BFS_LVar                            /tmp/rand_40000_10000_5_1000  None    4    0.220039s 0.220039s 0.220039s   80.487 80.487 80.487
+BFS_LVar                            /tmp/rand_40000_20000_5_1000  None    1    0.060581s 0.060581s 0.060581s   90.000 90.000 90.000
+BFS_LVar                            /tmp/rand_40000_20000_5_1000  None    2    0.029535s 0.029535s 0.029535s   88.461 88.461 88.461
+BFS_LVar                            /tmp/rand_40000_20000_5_1000  None    4    0.01157s 0.01157s 0.01157s   80.000 80.000 80.000
+BFS_LVar                            /tmp/rand_40000_40000_5_1000  None    1    0.006952s 0.006952s 0.006952s   88.000 88.000 88.000
+BFS_LVar                            /tmp/rand_40000_40000_5_1000  None    2    0.003743s 0.003743s 0.003743s   87.500 87.500 87.500
+BFS_LVar                            /tmp/rand_40000_40000_5_1000  None    4    0.002276s 0.002276s 0.002276s   72.727 72.727 72.727
+BFS_LVar                            /tmp/rand_80000_10000_5_1000  None    1    9.306425s 9.306425s 9.306425s   98.018 98.018 98.018
+BFS_LVar                            /tmp/rand_80000_10000_5_1000  None    2    4.444263s 4.444263s 4.444263s   96.602 96.602 96.602
+BFS_LVar                            /tmp/rand_80000_10000_5_1000  None    4    1.747083s 1.747083s 1.747083s   90.909 90.909 90.909
+BFS_LVar                            /tmp/rand_80000_20000_5_1000  None    1    1.264721s 1.264721s 1.264721s   95.483 95.483 95.483
+BFS_LVar                            /tmp/rand_80000_20000_5_1000  None    2    0.624309s 0.624309s 0.624309s   92.307 92.307 92.307
+BFS_LVar                            /tmp/rand_80000_20000_5_1000  None    4    0.193777s 0.193777s 0.193777s   75.609 75.609 75.609
+BFS_LVar                            /tmp/rand_80000_40000_5_1000  None    1    0.060574s 0.060574s 0.060574s   85.294 85.294 85.294
+BFS_LVar                            /tmp/rand_80000_40000_5_1000  None    2    0.029488s 0.029488s 0.029488s   80.645 80.645 80.645
+BFS_LVar                            /tmp/rand_80000_40000_5_1000  None    4    0.013108s 0.013108s 0.013108s   68.888 68.888 68.888
+BFS_LVar                            /tmp/rand_160000_10000_5_1000  None    1    10.172841s 10.172841s 10.172841s   97.245 97.245 97.245
+BFS_LVar                            /tmp/rand_160000_10000_5_1000  None    2    5.09604s 5.09604s 5.09604s   94.890 94.890 94.890
+BFS_LVar                            /tmp/rand_160000_10000_5_1000  None    4    2.248264s 2.248264s 2.248264s   88.122 88.122 88.122
+BFS_LVar                            /tmp/rand_160000_20000_5_1000  None    1    14.787031s 14.787031s 14.787031s   97.884 97.884 97.884
+BFS_LVar                            /tmp/rand_160000_20000_5_1000  None    2    7.138163s 7.138163s 7.138163s   96.010 96.010 96.010
+BFS_LVar                            /tmp/rand_160000_20000_5_1000  None    4    3.281312s 3.281312s 3.281312s   90.190 90.190 90.190
+BFS_LVar                            /tmp/rand_160000_40000_5_1000  None    1    1.302956s 1.302956s 1.302956s   92.771 92.771 92.771
+BFS_LVar                            /tmp/rand_160000_40000_5_1000  None    2    0.619076s 0.619076s 0.619076s   85.858 85.858 85.858
+BFS_LVar                            /tmp/rand_160000_40000_5_1000  None    4    0.27635s 0.27635s 0.27635s   75.384 75.384 75.384
+BFS_LVar                            /tmp/rand_40000_10000_5_10000  None    1    12.202721s 12.202721s 12.202721s   99.115 99.115 99.115
+BFS_LVar                            /tmp/rand_40000_10000_5_10000  None    2    5.536667s 5.536667s 5.536667s   98.606 98.606 98.606
+BFS_LVar                            /tmp/rand_40000_10000_5_10000  None    4    2.441928s 2.441928s 2.441928s   97.358 97.358 97.358
+BFS_LVar                            /tmp/rand_40000_20000_5_10000  None    1    0.598814s 0.598814s 0.598814s   96.385 96.385 96.385
+BFS_LVar                            /tmp/rand_40000_20000_5_10000  None    2    0.275928s 0.275928s 0.275928s   94.000 94.000 94.000
+BFS_LVar                            /tmp/rand_40000_20000_5_10000  None    4    0.130711s 0.130711s 0.130711s   88.235 88.235 88.235
+BFS_LVar                            /tmp/rand_40000_40000_5_10000  None    1    0.060146s 0.060146s 0.060146s   90.000 90.000 90.000
+BFS_LVar                            /tmp/rand_40000_40000_5_10000  None    2    0.029139s 0.029139s 0.029139s   88.888 88.888 88.888
+BFS_LVar                            /tmp/rand_40000_40000_5_10000  None    4    0.016958s 0.016958s 0.016958s   83.333 83.333 83.333
+BFS_LVar                            /tmp/rand_80000_10000_5_10000  None    1    90.994987s 90.994987s 90.994987s   99.233 99.233 99.233
+BFS_LVar                            /tmp/rand_80000_10000_5_10000  None    2    44.584062s 44.584062s 44.584062s   98.751 98.751 98.751
+BFS_LVar                            /tmp/rand_80000_10000_5_10000  None    4    20.352084s 20.352084s 20.352084s   92.001 92.001 92.001
+BFS_LVar                            /tmp/rand_80000_20000_5_10000  None    1    12.670997s 12.670997s 12.670997s   98.995 98.995 98.995
