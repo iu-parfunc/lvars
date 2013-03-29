@@ -1,0 +1,29 @@
+# TestName Variant NumThreads   MinTime MedianTime MaxTime  Productivity1 Productivity2 Productivity3
+#    
+# Thu Mar 28 21:06:27 EDT 2013
+# Linux lenny 3.5.0-24-generic #37-Ubuntu SMP Thu Feb 7 01:50:30 UTC 2013 x86_64 x86_64 x86_64 GNU/Linux
+# Ran by: lkuper 
+# Determined machine to have 4 hardware threads.
+# The Glorious Glasgow Haskell Compilation System, version 7.4.2
+# 
+# Running each test for 1 trial(s).
+#  ... with compiler options: -O2 -rtsopts
+#  ... with runtime options: -qa  -s 
+# Benchmarks_File: benchlist.txt
+# Benchmarks_Variant: desktop
+# Benchmarks_Version: 2.0
+# Git_Branch: master
+# Git_Hash: 09cee3f9e09a78ed58941b90f95301a6cde1d8c1
+# Git_Depth: 173
+# Using the following settings from environment variables:
+#  ENV BENCHLIST=
+#  ENV THREADS=   1 2 4
+#  ENV TRIALS=    1
+#  ENV SHORTRUN=  
+#  ENV SCHEDS=    
+#  ENV KEEPGOING= 
+#  ENV GHC=       
+#  ENV GHC_FLAGS= 
+#  ENV GHC_RTS=   
+#  ENV ENVS=      
+BFS_LVar                            /tmp/rand_40000_10000_5_1000  None    1    1.229421s 1.229421s 1.229421s   97.260 97.260 97.260
