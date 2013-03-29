@@ -1,0 +1,23 @@
+# Iteration space:
+#
+#   2 -- Which version of the code to run! (LVar, Strategies)
+#   3 -- Number of hops to make (5, 15, 25)
+#   3 -- Number of flops (1000, 10000, 100000)
+#   3 -- Number of edges in random graph (40000, 80000, 160000)
+#   3 -- Number of nodes in random graph (10000, 20000, 40000)
+#   6 -- Number of cores (1, 2, 4, 8, 16, 32)
+
+# Run this whole file for all numbers of cores!
+
+# Arguments to BFS_*: filename, hops, flops.
+
+###### LVar
+
+#### 5 hops
+
+BFS_monadpar none /tmp/rand_320000_40000 10 1
+BFS_monadpar none /tmp/rand_320000_40000 10 2
+BFS_monadpar none /tmp/rand_320000_40000 10 4 
+BFS_monadpar none /tmp/rand_320000_40000 10 8
+BFS_monadpar none /tmp/rand_320000_40000 10 16
+BFS_monadpar none /tmp/rand_320000_40000 10 32
