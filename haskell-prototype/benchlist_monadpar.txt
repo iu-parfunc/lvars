@@ -21,3 +21,4 @@ BFS_monadpar none /tmp/rand_320000_40000 10 4
 BFS_monadpar none /tmp/rand_320000_40000 10 8
 BFS_monadpar none /tmp/rand_320000_40000 10 16
 BFS_monadpar none /tmp/rand_320000_40000 10 32
+BFS_monadpar none /tmp/rand_320000_40000 10 64
