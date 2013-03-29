@@ -17,6 +17,13 @@ then
     export TRIALS=1
 fi
 
+
+if [ $(hostname) = "basalt.soic.indiana.edu" ]; # Mine
+then
+    export THREADS="1 2 3 4"
+    export TRIALS=5
+fi
+
 make benchmark.run
 ./benchmark.run
 

@@ -20,7 +20,7 @@ default: l1 l2 s
 #--------------------------------------------------------------------------------
 # Input data generation:
 
-data: grid_data rand_data
+gendata: grid_data rand_data
 
 grid_data: $(GRID_DATABIG) $(GRID_DATAMEDIUM) $(GRID_DATASMALL)
 
@@ -67,6 +67,7 @@ $(RAND_DATA):
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 10000 $(RAND_DATA)_160000_10000
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 20000 $(RAND_DATA)_160000_20000
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 40000 $(RAND_DATA)_160000_40000
+	$(PBBSDIR)/randLocalGraph -m 320000 -d 5 40000 $(RAND_DATA)_320000_40000
 
 deps:
 	cabal install rdtsc parallel monad-par lattices
