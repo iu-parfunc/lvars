@@ -93,4 +93,4 @@ clean:
 # /tmp/grid* /tmp/rand*
 
 wipelogs:
-	-rm -f *.log
+	-rm -rf *.log *.bak *.dat bin/ build/ runs/ *.out
