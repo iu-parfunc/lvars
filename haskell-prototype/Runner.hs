@@ -238,8 +238,8 @@ measureFreq :: IO Word64
 measureFreq = do
   let millisecond = 1000 * 1000 * 1000 -- picoseconds are annoying
       -- Measure for how long to be sure?      
-      measure = 200 * millisecond
---      measure = 1000 * millisecond      
+--      measure = 200 * millisecond
+      measure = 1000 * millisecond      
       scale :: Integer
       scale = 1000 * millisecond `quot` measure
   t1 <- rdtsc 
@@ -265,7 +265,7 @@ wait_sins :: Word64 -> Node -> IO WorkRet
 wait_sins num node = do
   myT <- rdtsc
   atomicModifyIORef first_hit (\ t -> (min t myT,()))
-  res <- evaluate (sin_iter num (fromIntegral node))
+  res <- evaluate (sin_iter num (2.222 + fromIntegral node))
   return (res, node)
 
 -- Measure the cost of N Sin operations.

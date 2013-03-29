@@ -77,7 +77,8 @@ start_traverse k !g startNode f = do
         liftIO (do evaluate s; return ())
         prnt $ " * Finished consumeSet:"
         prnt $ "  * Set size: " ++ show (Set.size s)
-        prnt $ "  * Set sum: " ++ show (Set.fold (\(_,x) y -> x+y) 0 s)
+--        prnt $ "  * Set sum: " ++ show (Set.fold (\(_,x) y -> x+y) 0 s)
+        prnt $ "  * Set sum: " ++ show (Set.fold (\(x,_) y -> x+y) 0 s)
 
 
 parMapM_ f l =
