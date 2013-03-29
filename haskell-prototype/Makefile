@@ -86,6 +86,10 @@ s: strategies.exe
 strategies.exe: $(src)
 	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
 
+p: par-monad.exe
+par-monad.exe: $(src)
+	$(GHC) -O2 -threaded -rtsopts --make BFS_monadpar.hs -o $@
+
 benchmark.run:
 	ghc --make benchmark.hs -o benchmark.run
 

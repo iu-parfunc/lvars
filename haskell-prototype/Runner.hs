@@ -19,6 +19,8 @@ import LVarTraceIO
 import           Control.DeepSeq (deepseq)
 import           Control.Exception (evaluate)
 import           Control.Monad (forM_, when)
+
+import qualified Control.Monad.Par as Par
 import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
 import           Control.Monad.Par.Class (ParFuture)
 import           Control.DeepSeq         (NFData)

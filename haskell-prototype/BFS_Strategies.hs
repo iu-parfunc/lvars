@@ -38,7 +38,12 @@ start_traverse k !g startNode f = do
   do        
     putStrLn $ " * Running on " ++ show numCapabilities ++ " parallel resources..."
     let set = bf_pure k g IS.empty (IS.singleton startNode) f
-        set2 = Set.fromList$ Strat.parMap Strat.rdeepseq f (IS.toList set)
+--        set2 = Set.fromList$ Strat.parMap Strat.rdeepseq f (IS.toList set)
+--        set2 = Set.fromList$ Strat.parMap Strat.rwhnf f (IS.toList set)
+
+        set2 = Set.fromList$ 
+               Strat.withStrategy (Strat.parBuffer 4 Strat.rdeepseq) (map f (IS.toList set))
+
 --        set2 = Set.fromList (map f (IS.toList set))
         size = Set.size set2
     t0 <- getCurrentTime    
