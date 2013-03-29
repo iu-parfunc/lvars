@@ -174,12 +174,27 @@ main = do
                          (sin_iter w f, x)
 
   freq <- measureFreq
-  let clocks_per_micro = freq `quot` (1000 * 1000)      
+  clocks_per_kilosin <- measureSin 1000
+  let clocks_per_micro, kilosins_per_micro :: Rational 
+      clocks_per_micro = (fromIntegral freq) / (1000 * 1000)
+      kilosins_per_micro = clocks_per_micro / (fromIntegral clocks_per_kilosin)
+      numSins :: Rational       
+      numSins = (fromIntegral w) * kilosins_per_micro * 1000
+      numSins' = round numSins
+
       busy_waiter :: WorkFn
       busy_waiter n = unsafePerformIO $
-        wait_microsecs (w * clocks_per_micro) n
+--        wait_microsecs (w * clocks_per_micro) n
+        wait_sins numSins' n
+
   printf "CPU Frequency: %s, clocks per microsecond %s\n"
-           (commaint freq) (commaint clocks_per_micro)
+           (commaint freq) (commaint (round clocks_per_micro))
+
+  printf "Time for 1K sins %s, Ksins per micro %s, numSins %s = %s\n"
+         (show clocks_per_kilosin) 
+         (show (fromRational kilosins_per_micro ::Double))
+         (show numSins) (show numSins')
+
   printf "* Beginning benchmark with k=%d and w=%d\n" k w
   
   performGC
@@ -216,6 +231,7 @@ wait_microsecs clocks n = do
   cnt <- loop 0
   return (fromIntegral cnt, n)
 
+
 -- Measure clock frequency, spinning rather than sleeping to try to
 -- stay on the same core.
 measureFreq :: IO Word64
@@ -243,6 +259,23 @@ measureFreq = do
     putStrLn$ "WARNING: rdtsc not monotonically increasing, first "++show t1++" then "++show t2++" on the same OS thread"
 
   return$ fromIntegral (fromIntegral scale * (t2 - t1))
+
+
+wait_sins :: Word64 -> Node -> IO WorkRet
+wait_sins num node = do
+  myT <- rdtsc
+  atomicModifyIORef first_hit (\ t -> (min t myT,()))
+  res <- evaluate (sin_iter num (fromIntegral node))
+  return (res, node)
+
+-- Measure the cost of N Sin operations.
+measureSin :: Word64 -> IO Word64
+measureSin n = do
+  t0 <- rdtsc
+  res <- evaluate (sin_iter n 38.38)
+  t1 <- rdtsc  
+  return$ t1-t0
+
 
 -- Readable large integer printing:
 commaint :: (Show a, Integral a) => a -> String

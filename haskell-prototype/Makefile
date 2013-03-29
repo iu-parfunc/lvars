@@ -69,7 +69,7 @@ $(RAND_DATA):
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 40000 $(RAND_DATA)_160000_40000
 
 deps:
-	cabal install rdtsc
+	cabal install rdtsc parallel monad-par lattices
 
 #--------------------------------------------------------------------------------
 
