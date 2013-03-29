@@ -42,7 +42,7 @@ start_traverse k !g startNode f = do
 --        set2 = Set.fromList$ Strat.parMap Strat.rwhnf f (IS.toList set)
 
         set2 = Set.fromList$ 
-               Strat.withStrategy (Strat.parBuffer 4 Strat.rdeepseq) (map f (IS.toList set))
+               Strat.withStrategy (Strat.parBuffer 16 Strat.rdeepseq) (map f (IS.toList set))
 
 --        set2 = Set.fromList (map f (IS.toList set))
         size = Set.size set2
