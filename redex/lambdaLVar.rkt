@@ -170,11 +170,11 @@
    "E-Get-2"]
 
   [(small-step-base (S (get l Q))
-                    (S (d_2)))
-   (where d_1 (store-lookup S l))
+                    (S (d_1)))
+   (where d_2 (store-lookup S l))
    (where #t (incomp Q))
    (where #t (valid Q))
-   (where d_2 (exists-d d_1 Q))
+   (where d_1 (exists-d d_2 Q))
    "E-GetVal"]
 
   [(small-step-base (S_1 (convert e_1))
@@ -267,12 +267,15 @@
    (where #f (store-top? (lubstore S S_2)))
    "E-App-2"] ;; only reduce right term; left term is a value
 
+  ;; Premises 1, 2, and 3 of E-GetVal hold, but there does not exist a
+  ;; d_1 in Q such that (leq d_1 d_2), so premises 4 and 5 do not
+  ;; (both) hold.
   [(small-step-fast (S (get l Q))
                     (S (get l Q)))
-   (where d_1 (store-lookup S l))
+   (where d_2 (store-lookup S l))
    (where #t (incomp Q))
    (where #t (valid Q))
-   (where #f (exists-d d_1 Q))
+   (where #f (exists-d d_2 Q))
    "E-GetValBlock"])
 
 (define-metafunction lambdaLVar
@@ -455,17 +458,22 @@
   valid : Q -> Bool
   [(valid Q) ,(not (null? (term Q)))])
 
-;; The fourth condition on the E-GetVal rule.
+;; The fourth and fifth premises of the E-GetVal rule.  If there
+;; exists a d_1 that is a member of Q and is less than or equal to
+;; d_2, returns that d_1.  Otherwise, returns #f.
 (define-metafunction lambdaLVar
   exists-d : d Q -> d/Bool
-  [(exists-d d_1 ()) #f]
-  ;; 
-  [(exists-d d_1 (d_2 d_3 ...)) #f
-   (where #f (leq d_2 d_1))]
-  [(exists-d d_1 (d_2 d_3 ...)) d_2
-   (where #t (leq d_2 d_1))]
-  [(exists-d d_1 (d_2 d_3 ...))
-   (exists-d d_1 (d_3 ...))])
+
+  ;; If Q is empty, then there definitely isn't a d_1.
+  [(exists-d d_2 ()) #f]
+
+  ;; If the first item in Q is less than d_2, return it.
+  [(exists-d d_2 (d_11 d_12 ...)) d_11
+   (where #t (leq d_11 d_2))]
+
+  ;; Otherwise, check the rest.
+  [(exists-d d_2 (d_11 d_12 ...)) (exists-d d_2 (d_12 ...))
+   (where #f (leq d_11 d_2))])
 
 (define-metafunction lambdaLVar
   delta : Q -> Q

@@ -8,8 +8,34 @@
 
 (define (meta-test-suite)
   (test-equal
+   (term (exists-d 6 ()))
+   (term #f))
+  
+  (test-equal
    (term (exists-d 6 (3)))
    (term 3))
+
+  (test-equal
+   (term (exists-d 6 (9)))
+   (term #f))
+
+  (test-equal
+   (term (exists-d 3 (3)))
+   (term 3))
+
+  ;; These next three are unrealistic for this lattice because Q would
+  ;; be a singleton set, but it's here to exercise exists-d.
+  (test-equal
+   (term (exists-d 6 (7 8 9)))
+   (term #f))
+
+  (test-equal
+   (term (exists-d 6 (7 8 9 6)))
+   (term 6))
+
+  (test-equal
+   (term (exists-d 6 (7 8 9 5)))
+   (term 5))
   
   (test-equal
    (term (lub Bot Bot))
