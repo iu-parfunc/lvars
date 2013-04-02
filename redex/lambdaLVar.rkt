@@ -28,7 +28,8 @@
 
 ;; We're assuming a domain where elements are of type `natural` for
 ;; simplicity.
-(define leq-op <=)
+
+;; All we have to specify is lub-op!  leq is implicitly <=
 (define lub-op max)
 
 (define-language lambdaLVar
@@ -327,21 +328,49 @@
   [(top? Top) ,#t]
   [(top? d) ,#f])
 
+;; Defined in terms of the user-provided lub-op procedure.
+;;
+;; N.B.: The lub of d_1 and d_2 is the element d_3 such that:
+;; -- (leq d_1 d_3)
+;; -- (leq d_2 d_3)
+;; -- for all d_4 s.t. (leq d_1 d_4) and (leq d_2 d_4), (leq d_3 d_4).
+;;
+;; But we can't get Redex to compute that, so instead, we ask the user
+;; to provide lub, then compute leq in terms of lub.
 (define-metafunction lambdaLVar
   lub : d d -> d
-  [(lub d_1 d_2) d_2
-   (where #t (leq d_1 d_2))]
-  [(lub d_1 d_2) d_1
-   (where #t (leq d_2 d_1))]
+  [(lub Bot d_2) d_2]
+  [(lub d_1 Bot) d_1]
+  [(lub Top d_2) Top]
+  [(lub d_1 Top) Top]
+
   [(lub d_1 d_2) ,(lub-op (term d_1) (term d_2))])
 
+;; Defined in terms of lub.
 (define-metafunction lambdaLVar
   leq : d d -> Bool
   [(leq Bot d_2) ,#t]
   [(leq d_1 Bot) ,#f]
   [(leq Top d_2) ,#f]
   [(leq d_1 Top) ,#t]
-  [(leq d_1 d_2) ,(leq-op (term d_1) (term d_2))])
+
+  ;; If d_1 = d_2, then (leq d_1 d_2).
+  [(leq d_1 d_2) ,#t
+   (side-condition (equal? (term d_1) (term d_2)))]
+
+  ;; If (lub d_1 d_2) = d_2, then (leq d_1 d_2).
+  [(leq d_1 d_2) ,#t
+   (side-condition (equal? (term (lub d_1 d_2)) (term d_2)))]
+
+  ;; If (lub d_1 d_2) = d_1, then (not (leq d_1 d_2)).  (This assumes
+  ;; that d_1 != d_2, but we've already covered the case where they're
+  ;; equal.)
+  [(leq d_1 d_2) ,#f
+   (side-condition (equal? (term (lub d_1 d_2)) (term d_1)))]
+
+  ;; The only case left: (lub d_1 d_2) = d_3, where d_3 is greater
+  ;; than both d_1 and d_2.  In this case, (not (leq d_1 d_2)).
+  [(leq d_1 d_2) ,#f])
 
 ;; Definition 3 in the TR.
 (define-metafunction lambdaLVar
