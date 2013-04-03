@@ -1,11 +1,53 @@
 #lang racket
+;; A test suite for the lambdaLVar-nats language: lambdaLVar
+;; specialized to a lattice of natural numbers with `max` as lub.
 
+;; Bring in main lambdaLVar stuff we need.
 (require redex/reduction-semantics
          "lambdaLVar.rkt")
 (require srfi/1)
 
 (provide test-all test-fast)
 
+;; Grammar for elements of a lattice of natural numbers.
+(define-extended-language lambdaLVar-nats
+  lambdaLVar
+  (StoreVal .... ;; Extend the original language
+            natural))
+
+;; All we have to specify is the lub operation; leq is implicitly <=
+(define-metafunction/extension lub lambdaLVar-nats
+  lub-nats : d d -> d
+  [(lub-nats d_1 d_2) ,(max (term d_1) (term d_2))])
+
+;; Boilerplate stuff
+(define nats-slow-rr
+  (extend-reduction-relation
+   slow-rr
+   lambdaLVar-nats
+   (--> Config_1 Config_2
+        (judgment-holds (small-step-slow-nats Config_1 Config_2)))))
+
+(define nats-fast-rr
+  (extend-reduction-relation
+   fast-rr
+   lambdaLVar-nats
+   (--> Config_1 Config_2
+        (judgment-holds (small-step-slow-nats Config_1 Config_2)))))
+
+;; More boilerplate...
+(define-extended-judgment-form lambdaLVar-nats small-step-base
+  #:mode (small-step-base-nats I O))
+(define-extended-judgment-form lambdaLVar-nats small-step-slow
+  #:mode (small-step-slow-nats I O))
+(define-extended-judgment-form lambdaLVar-nats small-step-fast
+  #:mode (small-step-fast-nats I O))
+
+;; This doesn't work.  :(
+(define-metafunction/extension variable-not-in-store lambdaLVar-nats
+  variable-not-in-store : S -> l)
+
+;; Test suite
 (define (meta-test-suite)
   (test-equal
    (term (exists-d 6 ()))
@@ -36,7 +78,7 @@
   (test-equal
    (term (exists-d 6 (7 8 9 5)))
    (term 5))
-  
+
   (test-equal
    (term (lub Bot Bot))
    (term Bot))
@@ -487,16 +529,16 @@
                           [x_4 (put x_2 (4))])
                   (convert (get x_2 (4)))))))
 
-            ;; When we're using small-step-slow-rr, we can end up with
+            ;; When we're using nats-slow-rr, we can end up with
             ;; a store of ((l 3) (l1 4)) or a permutation thereof --
             ;; that is, x_1 is allocated first, followed by x_2.  When
-            ;; we're using small-step-fast-rr, we always seem to get
+            ;; we're using nats-fast-rr, we always seem to get
             ;; the allocation in the opposite order.  This is not
             ;; nondeterministic in the sense that the result of
             ;; reading x_2 is always the same, but it ends up at a
             ;; different location in the store.  This is hack to
             ;; account for that.
-            (if (equal? rr small-step-slow-rr)
+            (if (equal? rr nats-slow-rr)
                 (term
                  (((l 3)
                    (l1 4))
@@ -524,9 +566,9 @@
 
   (test-results))
 
-;; Warning: Passing `small-step-slow-rr` to this procedure will take
+;; Warning: Passing `nats-slow-rr` to this procedure will take
 ;; several orders of magnitude longer to finish than passing
-;; `small-step-fast-rr`.
+;; `nats-fast-rr`.
 (define (slow-program-test-suite rr)
 
   ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock + E-Convert
@@ -572,21 +614,21 @@
   (flush-output)
   (time (meta-test-suite))
 
-  (display "Running test suite with small-step-fast-rr...")
+  (display "Running test suite with nats-fast-rr...")
   (flush-output)
-  (time (program-test-suite small-step-fast-rr))
+  (time (program-test-suite nats-fast-rr))
 
-  (display "Running test suite with small-step-slow-rr...")
+  (display "Running test suite with nats-slow-rr...")
   (flush-output)
-  (time (program-test-suite small-step-slow-rr))
+  (time (program-test-suite nats-slow-rr))
 
-  (display "Running slow test suite with small-step-fast-rr...")
+  (display "Running slow test suite with nats-fast-rr...")
   (flush-output)
-  (time (slow-program-test-suite small-step-fast-rr)))
+  (time (slow-program-test-suite nats-fast-rr)))
 
 (define (test-all)
   (test-fast)
-  (display "Running slow test suite with small-step-slow-rr...")
+  (display "Running slow test suite with nats-slow-rr...")
   (flush-output)
-  (time (slow-program-test-suite small-step-slow-rr)))
+  (time (slow-program-test-suite nats-slow-rr)))
 

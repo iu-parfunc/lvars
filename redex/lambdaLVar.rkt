@@ -9,14 +9,18 @@
 ;; Export things we want to use or test elsewhere.
 (provide
  lambdaLVar
+ small-step-base
+ small-step-slow
+ small-step-fast
+ variable-not-in-store
  exists-d
  leq
  lub
  lubstore
  lubstore-helper
  rename-locs
- small-step-slow-rr
- small-step-fast-rr
+ slow-rr
+ fast-rr
  store-dom
  store-dom-diff
  store-lookup
@@ -26,12 +30,40 @@
  top?
  valid)
 
-;; We're assuming a domain where elements are of type `natural` for
-;; simplicity.
+;; When you add a new lattice of foos, you have to give:
+;;
+;;  * A grammar for the lattice elements that extends the lambdaLVar
+;;    language: what is a foo?
+;;
+;;  * A metafunction extension for the lub operation: what do you get
+;;  when you join two foos?
+;;
+;;  * Reduction relations foos-slow-rr and foos-fast-rr, which should
+;;    be boilerplate extentions of slow-rr and fast-rr to your
+;;    extended language.
 
-;; All we have to specify is lub-op!  leq is implicitly <=
-(define lub-op max)
+;; (define natpairs-slow-rr
+;;   (extend-reduction-relation slow-rr
+;;                              lambdaLVar-natpairs))
 
+;; (define natpairs-fast-rr
+;;   (extend-reduction-relation fast-rr
+;;                              lambdaLVar-natpairs))
+
+;; ;; Grammar for elements of a lattice of pairs of natural numbers.
+;; (define-extended-language lambdaLVar-natpairs
+;;   lambdaLVar
+;;   (StoreVal .... ;; Extend the original language
+;;             (natural natural)
+;;             (natural Bot)
+;;             (Bot natural)
+;;             ;; (Bot Bot) is the same thing as Bot, which is already in
+;;             ;; the grammar
+;;             ))
+
+;; Base lambdaLVar language.  As it is, this language only has Top and
+;; Bot in its lattice.  You could write programs in this language, but
+;; they wouldn't be able to do anything interesting with the store!
 (define-language lambdaLVar
   ;; Configurations, on which the reduction relation is defined.
   (Config (S e) Error)
@@ -75,11 +107,11 @@
   (S ((l StoreVal) ...) TopS)
 
   ;; Domains contain elements d to which locations can be bound.  We
-  ;; assume a domain of naturals (plus Top and Bot) for now.  A
-  ;; StoreVal can be any element of the domain except Top (see
-  ;; Definition 1 in the TR).
+  ;; assume a domain of Top and Bot (which is intended to be
+  ;; extended).  A StoreVal can be any element of the domain except
+  ;; Top (see Definition 1 in the TR).
   (d Top StoreVal)
-  (StoreVal natural Bot)
+  (StoreVal Bot)
 
   ;; Ranges of a couple of metafunctions.
   (d/lookupfailed d lookupfailed)
@@ -98,13 +130,13 @@
 ;; We can, however, wrap the small-step relation in
 ;; 'reduction-relation'.
 
-(define small-step-slow-rr
+(define slow-rr
   (reduction-relation
    lambdaLVar
    (--> Config_1 Config_2
         (judgment-holds (small-step-slow Config_1 Config_2)))))
 
-(define small-step-fast-rr
+(define fast-rr
   (reduction-relation
    lambdaLVar
    (--> Config_1 Config_2
@@ -122,7 +154,7 @@
 ;; reduction relations defined below this one.
 (define-judgment-form lambdaLVar
   #:mode (small-step-base I O)
-  #:contract (small-step-base Config Config)
+  ;;#:contract (small-step-base Config Config)
 
   [(small-step-base (S (e_1 e_2))
                     ((lubstore S_11 S_2) (e_111 e_22)))
@@ -233,7 +265,7 @@
 ;; relation.
 (define-extended-judgment-form lambdaLVar small-step-base
   #:mode (small-step-slow I O)
-  #:contract (small-step-slow Config Config)
+  ;;#:contract (small-step-slow Config Config)
 
   [(small-step-slow (S (e_1 e_2)) (S_1 (e_11 e_2)))
    (small-step-slow (S e_1) (S_1 e_11))
@@ -328,8 +360,6 @@
   [(top? Top) ,#t]
   [(top? d) ,#f])
 
-;; Defined in terms of the user-provided lub-op procedure.
-;;
 ;; N.B.: The lub of d_1 and d_2 is the element d_3 such that:
 ;; -- (leq d_1 d_3)
 ;; -- (leq d_2 d_3)
@@ -337,14 +367,14 @@
 ;;
 ;; But we can't get Redex to compute that, so instead, we ask the user
 ;; to provide lub, then compute leq in terms of lub.
+;;
+;; Intended to be extended by a user-provided metafunction/extension.
 (define-metafunction lambdaLVar
   lub : d d -> d
   [(lub Bot d_2) d_2]
   [(lub d_1 Bot) d_1]
   [(lub Top d_2) Top]
-  [(lub d_1 Top) Top]
-
-  [(lub d_1 d_2) ,(lub-op (term d_1) (term d_2))])
+  [(lub d_1 Top) Top])
 
 ;; Defined in terms of lub.
 (define-metafunction lambdaLVar
