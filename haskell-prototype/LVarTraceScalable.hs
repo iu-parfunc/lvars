@@ -14,7 +14,7 @@
 -- module for purposes other than extending the @Par@ monad with new
 -- functionality.
 
-module LVarTraceIO 
+module LVarTraceScalable
   (
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
