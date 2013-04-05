@@ -6,11 +6,31 @@
 (require "../test-helpers.rkt")
 
 (provide
- meta-test-suite
- program-test-suite
- slow-program-test-suite
- slow-rr
- fast-rr)
+ test-fast
+ test-all)
+
+(define (test-fast)
+  (display "Running metafunction tests...")
+  (flush-output)
+  (time (meta-test-suite))
+
+  (display "Running test suite with fast-rr...")
+  (flush-output)
+  (time (program-test-suite fast-rr))
+
+  (display "Running test suite with slow-rr...")
+  (flush-output)
+  (time (program-test-suite slow-rr))
+
+  (display "Running slow test suite with fast-rr...")
+  (flush-output)
+  (time (slow-program-test-suite fast-rr)))
+
+(define (test-all)
+  (test-fast)
+  (display "Running slow test suite with slow-rr...")
+  (flush-output)
+  (time (slow-program-test-suite slow-rr)))
 
 ;; Test suite
 (define (meta-test-suite)
