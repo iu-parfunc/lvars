@@ -1,9 +1,9 @@
 #lang racket
 
 (require redex/reduction-semantics
-         "lambdaLVar-nat.rkt")
+         "nat.rkt")
 (require srfi/1)
-(require "test-helpers.rkt")
+(require "../test-helpers.rkt")
 
 (provide
  meta-test-suite

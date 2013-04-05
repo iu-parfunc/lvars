@@ -4,6 +4,6 @@
 
 #lang racket
 (require redex/reduction-semantics)
-(require "lambdaLVar.rkt")
+(require "../lambdaLVar.rkt")
 
 (define-lambdaLVar-language lambdaLVar-nat natural max)
