@@ -3,20 +3,20 @@
 (require "../lambdaLVar.rkt")
 
 (define-lambdaLVar-language lambdaLVar-natpair
-  ;; FIXME: lattice values go here
+  ;; TODO: lindsey needs to make sure this works.
   ((natural natural)
    (natural Bot)
    (Bot natural))
-  ;; FIXME: lub operation goes here
-  max
+  my-lub
   )
 
 ;; Write a function that takes two pairs (they might be of the form
 ;; (natural natural), (natural Bot), (Bot natural), or maybe (Bot
-;; Bot)) and returns a pair that is their least upper bound.
+;; Bot)) and returns a pair that is their least upper bound (using max)
 
 ;; use car and cadr.  you might have to write a helper
 
 (define my-lub
   (lambda (p1 p2)
+    ;; FIXME: define me!
     ... ))
