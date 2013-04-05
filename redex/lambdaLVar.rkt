@@ -1,11 +1,29 @@
 #lang racket
-(require redex/reduction-semantics)
-(require srfi/1)
 
 (provide define-lambdaLVar-language)
 
 (define-syntax-rule (define-lambdaLVar-language name lattice-values lub-op)
   (begin
+    (require redex/reduction-semantics)
+    (require srfi/1)
+
+    (provide slow-rr
+             fast-rr
+             exists-d
+             lub
+             leq
+             lubstore
+             lubstore-helper
+             store-dom
+             store-lookup
+             store-update
+             valid
+             store-dom-diff
+             store-top?
+             top?
+             subst
+             rename-locs)
+    
     (define-language name
       ;; Configurations, on which the reduction relation is defined.
       (Config (S e) Error)
