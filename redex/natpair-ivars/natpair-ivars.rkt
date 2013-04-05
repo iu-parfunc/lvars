@@ -2,14 +2,11 @@
 (require redex/reduction-semantics)
 (require "../lambdaLVar.rkt")
 
-(define-lambdaLVar-language lambdaLVar-natpair-ivar
-  ;; FIXME: lattice values go here
-  ((natural natural)
-   (natural Bot)
-   (Bot natural))
-  ;; FIXME: lub operation goes here
+(define-lambdaLVar-language lambdaLVar-natpair-ivars
   my-lub
-  )
+  (natural natural)
+  (natural Bot)
+  (Bot natural))
 
 ;; Write a function that takes two pairs (they might be of the form
 ;; (natural natural), (natural Bot), (Bot natural), or maybe (Bot
@@ -26,4 +23,4 @@
 (define my-lub
   (lambda (p1 p2)
     ;; FIXME: define me!
-    ... ))
+    p1))

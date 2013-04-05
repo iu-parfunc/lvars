@@ -1,7 +1,7 @@
 #lang racket
 
 (require redex/reduction-semantics
-         "natpair.rkt")
+         "natpair-ivars.rkt")
 (require srfi/1)
 (require "../test-helpers.rkt")
 
@@ -35,55 +35,7 @@
 ;; Test suite
 (define (meta-test-suite)
 
-  (test-equal
-   (term (lub Top (3 3)))
-   (term Top))
-
-  (test-equal
-   (term (lub Bot (3 3)))
-   (term (3 3)))
-
-  (test-equal
-   (term (lub Bot Bot))
-   (term Bot))
-
-  (test-equal
-   (term (lub Bot Top))
-   (term Top))
-
-  (test-equal
-   (term (lub (3 3) (4 4)))
-   (term (4 4)))
-
-  (test-equal
-   (term (lub (3 3) (3 3)))
-   (term (3 3)))
-
-  (test-equal
-   (term (lub (3 5) (7 3)))
-   (term (7 5)))
-
-  (test-equal
-   (term (lub (3 0) (2 0)))
-   (term (3 0)))
-
-  (test-equal
-   (term (lub (3 Bot) (2 0)))
-   (term (3 0)))
-
-  (test-equal
-   (term (lub (Bot 4) (2 0)))
-   (term (2 4)))
-
-  (test-equal
-   (term (lub (Bot 0) (2 0)))
-   (term (2 0)))
-
-  (test-equal
-   (term (lub (2 0) (2 Bot)))
-   (term (2 0)))
-
-  ;; FIXME: write more tests
+  ;; FIXME: write tests
 
   (test-results))
 

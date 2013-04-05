@@ -5,7 +5,7 @@
 
 (provide define-lambdaLVar-language)
 
-(define-syntax-rule (define-lambdaLVar-language name lattice-values lub-op)
+(define-syntax-rule (define-lambdaLVar-language name lub-op lattice-values ...)
   (begin
     (require redex/reduction-semantics)
     (require srfi/1)
@@ -74,7 +74,7 @@
       ;; extended).  A StoreVal can be any element of the domain except
       ;; Top (see Definition 1 in the TR).
       (d Top StoreVal)
-      (StoreVal lattice-values Bot)
+      (StoreVal lattice-values ... Bot)
 
       ;; Ranges of a couple of metafunctions.
       (d/lookupfailed d lookupfailed)

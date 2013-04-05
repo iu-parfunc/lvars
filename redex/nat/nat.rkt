@@ -2,4 +2,4 @@
 (require redex/reduction-semantics)
 (require "../lambdaLVar.rkt")
 
-(define-lambdaLVar-language lambdaLVar-nat natural max)
+(define-lambdaLVar-language lambdaLVar-nat max natural)
