@@ -2,7 +2,6 @@
 import numpy as np
 import matplotlib.pyplot as pyplot
 from matplotlib.mlab import csv2rec
-from csv import DictReader
 
 def importdata(filename):
     """Import CSV data into a list"""
@@ -28,7 +27,6 @@ def importdata(filename):
             pass
 
     return [StrategiesData, LVarPureData]
-
 
 def filterdata(data, numcores):
     StrategiesData = data[0]
@@ -97,5 +95,3 @@ if __name__ == '__main__':
 
     pyplot.savefig('%s.png' % "BFS_benchmark_data")
     pyplot.show()
-
-    
