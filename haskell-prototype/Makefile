@@ -1,4 +1,4 @@
-src = LVarTracePure.hs LVarTraceIO.hs BFS_LVar.hs BFS_Strategies.hs Runner.hs Common.hs benchmark.hs
+src = LVarTracePure.hs LVarTraceIO.hs bf_traverse_LVar.hs bf_traverse_Strategies.hs bf_traverse_monad-par.hs Runner.hs Common.hs benchmark.hs
 
 GRID_DATABIG    = /tmp/grid_125000
 GRID_DATAMEDIUM = /tmp/grid_8000
@@ -18,7 +18,7 @@ default: l1 l2 s
 	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
 
 #--------------------------------------------------------------------------------
-# Input data generation:
+# Input data generation: generate graphs using PBBS.
 
 gendata: grid_data rand_data
 
@@ -26,9 +26,7 @@ grid_data: $(GRID_DATABIG) $(GRID_DATAMEDIUM) $(GRID_DATASMALL)
 
 rand_data: $(RAND_DATA)
 
-# Generate test data using PBBS.
-
-# 3D grids.
+# 3D grids.  We're not using these for any benchmarks at the moment.
 $(GRID_DATABIG):
 	(cd $(PBBSDIR); make gridGraph)
 	$(PBBSDIR)/gridGraph -d 3 125000 $(GRID_DATABIG) # 50^3
@@ -40,6 +38,8 @@ $(GRID_DATAMEDIUM):
 $(GRID_DATASMALL):
 	(cd $(PBBSDIR); make gridGraph)
 	$(PBBSDIR)/gridGraph -d 3 1000 $(GRID_DATASMALL) # 10^3
+
+# Random graphs.
 
 # Generate random local graphs with one of [10,000; 20,000; 40,000]
 # vertices and one of [40,000; 80,000; 160,000] edges, and dimension
@@ -70,32 +70,31 @@ $(RAND_DATA):
 	$(PBBSDIR)/randLocalGraph -m 320000 -d 5 40000 $(RAND_DATA)_320000_40000
 
 deps:
-	cabal install rdtsc parallel monad-par lattices
+	cabal install rdtsc parallel monad-par lattices hydra-print
 
 #--------------------------------------------------------------------------------
 
 l1: lvar_io.exe
 lvar_io.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_LVar.hs -o $@
 
 l2: lvar_pure.exe
 lvar_pure.exe: $(src)
-	$(GHC) -DPURE -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
+	$(GHC) -DPURE -O2 -threaded -rtsopts --make bf_traverse_LVar.hs -o $@
 
 s: strategies.exe
 strategies.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_Strategies.hs -o $@
 
 p: par-monad.exe
 par-monad.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_monadpar.hs -o $@
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_monadpar.hs -o $@
 
 benchmark.run:
 	ghc --make benchmark.hs -o benchmark.run
 
 clean:
 	-rm -f *.hi *.o *.html *.eventlog *.exe *.run $(all) 
-# /tmp/grid* /tmp/rand*
 
 wipelogs:
 	-rm -rf *.log *.bak *.dat bin/ build/ runs/ *.out

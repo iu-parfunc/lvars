@@ -244,7 +244,6 @@ reallyUnsafePeekSet (ISet (LVar {lvstate})) =
 -- functions are in the IO monad.
 data LVar a = LVar {
   lvstate :: a,
---  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller)),
   callback :: Maybe (a -> IO Trace)
 }
 
@@ -373,23 +372,8 @@ sched _doSync queue t = loop t
       loop (cont result)
 
     Put (LVar state waitmp callback) mutator tr -> do
-      -- Here we follow an unfortunately expensive protocol.
       mutator state
-      -- Inefficiency: we must leave the pollers in the wait list,
-      -- where they may be redundantly evaluated:
-      -- pollers <- readIORef waitmp
-      -- -- (Ugh, there doesn't seem to be a M.traverseWithKey_, just for
-      -- -- effect)
-      -- forM_ (M.toList pollers) $ \ (uid, pl@(Poller poll _)) -> do
-      --   -- Here we try to wake ready threads.  TRADEOFF: we could wake
-      --   -- one at a time (currently), or in a batch:
-      --   e <- poll
-      --   case e of
-      --     Nothing -> return ()
-      --     Just trc -> do b <- tryWake pl waitmp uid
-      --                    case b of
-      --                      True  -> pushWork queue trc
-      --                      False -> return ()
+
       case callback of
         Nothing -> loop tr
         Just cb -> do tr2 <- cb state

@@ -1,7 +1,9 @@
 {-# LANGUAGE CPP #-}
 #include "Runner.hs"
 
-------------------------------------------------------------------------------------------
+-- An LVar-based version of bf_traverse.  As we traverse the graph,
+-- the results of applying f to each node accumulate in an LVar, where
+-- they are available to other computations, enabling pipelining.
 
 bf_traverse :: Int             -- iteration counter
                -> Graph2       -- graph
@@ -77,9 +79,7 @@ start_traverse k !g startNode f = do
         liftIO (do evaluate s; return ())
         prnt $ " * Finished consumeSet:"
         prnt $ "  * Set size: " ++ show (Set.size s)
---        prnt $ "  * Set sum: " ++ show (Set.fold (\(_,x) y -> x+y) 0 s)
         prnt $ "  * Set sum: " ++ show (Set.fold (\(x,_) y -> x+y) 0 s)
-
 
 parMapM_ f l =
   do parMapM f l

@@ -2,7 +2,7 @@
 
 set -e
 
-make data
+make rand_data
 
 export THREADS="1 2 3 4"
 export TRIALS=5

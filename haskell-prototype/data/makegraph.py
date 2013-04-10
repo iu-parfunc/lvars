@@ -15,11 +15,11 @@ def importdata(filename):
 
     # Disregard everything but work, cores, and med running time
     for row in data:
-        if row[0] == "BFS_Strategies":
+        if row[0] == "bf_traverse_Strategies":
             StrategiesData.append([row[1], # work
                                    row[2], # cores
                                    row[4]]) # med running time
-        elif row[0] == "BFS_LVar":
+        elif row[0] == "bf_traverse_LVar":
             LVarPureData.append([row[1], # work
                                  row[2], # cores
                                  row[4]]) # med running time
@@ -84,7 +84,7 @@ def autolabel(rects):
 
 if __name__ == '__main__':
 
-    filename = '%s.csv' % "BFS_benchmark_data"
+    filename = '%s.csv' % "bf_traverse_benchmark_data"
     data = importdata(filename)
     
     pyplot.figure(1)
@@ -93,5 +93,5 @@ if __name__ == '__main__':
     plotdata(filterdata(data,3), 3)
     plotdata(filterdata(data,4), 4)
 
-    pyplot.savefig('%s.png' % "BFS_benchmark_data")
+    pyplot.savefig('%s.png' % "bf_traverse_benchmark_data")
     pyplot.show()

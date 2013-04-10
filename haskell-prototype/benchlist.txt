@@ -1,32 +1,32 @@
-# Iteration space:
-#
-#   2 -- Which version of the code to run! (LVar, Strategies)
-#   3 -- Number of hops to make (5, 15, 25)
-#   3 -- Number of flops (1000, 10000, 100000)
-#   3 -- Number of edges in random graph (40000, 80000, 160000)
-#   3 -- Number of nodes in random graph (10000, 20000, 40000)
-#   6 -- Number of cores (1, 2, 4, 8, 16, 32)
+# Arguments to bf_traverse_*:
+#  - filename of graph
+#  - number of hops to take from node 0
+#  - microseconds of work to be done by function applied to each node
 
-# Run this whole file for all numbers of cores!
+# This set of configurations should be run once for each number of
+# cores we want to test.
 
-# Arguments to BFS_*: filename, hops, flops.
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 1
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 2
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 4 
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 8
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 16
+bf_traverse_Strategies none /tmp/rand_320000_40000 10 32
 
-###### LVar
+bf_traverse_LVar none /tmp/rand_320000_40000 10 1
+bf_traverse_LVar none /tmp/rand_320000_40000 10 2
+bf_traverse_LVar none /tmp/rand_320000_40000 10 4 
+bf_traverse_LVar none /tmp/rand_320000_40000 10 8
+bf_traverse_LVar none /tmp/rand_320000_40000 10 16
+bf_traverse_LVar none /tmp/rand_320000_40000 10 32
+bf_traverse_LVar none /tmp/rand_320000_40000 10 64
 
-#### 5 hops
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 1
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 2
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 4 
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 8
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 16
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 32
+bf_traverse_monad-par none /tmp/rand_320000_40000 10 64
 
-BFS_Strategies none /tmp/rand_320000_40000 10 1
-BFS_Strategies none /tmp/rand_320000_40000 10 2
-BFS_Strategies none /tmp/rand_320000_40000 10 4 
-BFS_Strategies none /tmp/rand_320000_40000 10 8
-BFS_Strategies none /tmp/rand_320000_40000 10 16
-BFS_Strategies none /tmp/rand_320000_40000 10 32
-
-
-BFS_LVar none /tmp/rand_320000_40000 10 1
-BFS_LVar none /tmp/rand_320000_40000 10 2
-BFS_LVar none /tmp/rand_320000_40000 10 4 
-BFS_LVar none /tmp/rand_320000_40000 10 8
-BFS_LVar none /tmp/rand_320000_40000 10 16
-BFS_LVar none /tmp/rand_320000_40000 10 32
 
