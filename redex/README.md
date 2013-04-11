@@ -8,21 +8,45 @@ A PLT Redex model of a variant of the lambdaLVar language.
 lambdaLVar is a deterministic parallel calculus with shared state.  It
 is an untyped lambda calculus extended with a store and with `put` and
 `get` operations that write to and read from shared variables.  In
-this setting of shared mutable state, the trick that lambdaLVar employs
-to maintain determinism is that writes must be _monotonically
-increasing_ with respect to the partial order on a user-specified
-partially ordered set, and reads must make only limited observations
-of the states of variables -- for instance, in a lambdaLVar program it
-might be possible to observe that a store location containes "at least
-4", but not possible to observe the precise value.
+this setting of shared mutable state, the trick that lambdaLVar
+employs to maintain determinism is that writes must be _monotonically
+increasing_ with respect to a user-specified partial order, and reads
+must make only limited observations of the states of variables -- for
+instance, in a lambdaLVar program it might be possible to observe that
+a store location containes "at least 4", but not possible to observe
+the precise value.
 
 Section 3 of the technical report ["A Lattice-Theoretical Approach to
 Deterministic Parallelism with Shared State"][lambdaLVar-TR] presents
-the syntax and semantics of lambdaLVar.  The code in this repository
-is a PLT Redex model of a variant of the semantics given in the TR,
-where the reduction relation has been tweaked a bit and the
-user-specified partially ordered set is the set of natural numbers
-ordered by Racket's `<=`.
+the syntax and semantics of lambdaLVar.  The code in this directory is
+a PLT Redex model of the semantics given in the TR.
+
+### Modeling lattice parameterization in Redex
+
+lambdaLVar's store contains "lattice variables", or LVars. An LVar is
+a variable whose value can only increase over time, where the meaning
+of "increase" is given by a partially ordered set, or _lattice_, that
+the user of the language specifies. Therefore lambdaLVar is really a
+family of languages.  Different instantiations of the lattice result
+in different languages, all of which are parallel and deterministic.
+
+In the Redex of today, it's not possible to parameterize a language
+definition by a lattice (see discussion
+[here](http://stackoverflow.com/questions/15800167/plt-redex-parameterizing-a-language-definition),
+for instance), so instead, we define a Racket macro,
+`define-lambdaLVar-language`, that takes a language name, a least
+upper bound operation, and a set of lattice values, and generates a
+Redex language definition.  For instance, to generate a Redex language
+model called `lambdaLVar-nat` where the user-specified lattice is the
+natural numbers with `max` as the least-upper-bound, one can write:
+
+```
+(define-lambdaLVar-language lambdaLVar-nat max natural)
+```
+
+The `nat` directory contains a test suite of programs for
+`lambdaLVar-nat`.  `natpair` and `natpair-ivars` are two more example
+instantiations.
 
 ### Modeling truly simultaneous reductions in Redex
 

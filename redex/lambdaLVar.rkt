@@ -20,6 +20,7 @@
              store-dom
              store-lookup
              store-update
+             incomp
              valid
              store-dom-diff
              store-top?
@@ -61,8 +62,6 @@
       ;; that passed (Top) as a threshold would block forever.
       ;; Nevertheless, the grammar admits it.
       (Q (d (... ...)))
-      ;; TODO: support for { d | pred(d) }-style threshold sets (issue
-      ;; #3).
 
       ;; Stores.  A store is either a finite partial mapping from
       ;; locations to domain values (excluding Top), or it is the
@@ -182,7 +181,6 @@
                         (S (delta Q)))
        "E-ConvertVal"]
 
-      ;; TODO: multiple bindings? (issue #4)
       [(small-step-base (S (let ((x_1 e_1)) e_2))
                         (S ((lambda (x_1) e_2) e_1)))]
 
@@ -422,8 +420,6 @@
     ;; Given a store location `l` and two stores `S_1` and `S_2`, return
     ;; the lub of S_1(l) and S_2(l).  We know that every l this function
     ;; gets is going to be in the domain of either S_1 or S_2 or both.
-
-    ;; TODO: could use style improvement with `where` clauses (issue #6).
     (define-metafunction name
       lubstore-helper : S S l -> d
       [(lubstore-helper S_1 S_2 l)
@@ -441,7 +437,6 @@
 
     (define-metafunction name
       store-lookup : S l -> d/lookupfailed
-      ;; TODO: more Redex-y way to express this? (issue #7)
       [(store-lookup S l) ,(let ([v (assq (term l) (term S))])
                              (if v
                                  (term ,(second v))
@@ -467,9 +462,7 @@
       incomp : Q -> Bool
       [(incomp ()) ,#t]
       [(incomp (d)) ,#t]
-      ;; TODO: deal with case where d = Top or Bot (issue #8)
       [(incomp (d_1 d_2)) ,(equal? (term (lub d_1 d_2)) (term Top))]
-      ;; Something like this?
       [(incomp (d_1 d_2 d_3 (... ...)))
        ,(and (equal? (term (lub d_1 d_2)) (term Top))
              (term (incomp (d_1 d_3 (... ...))))
