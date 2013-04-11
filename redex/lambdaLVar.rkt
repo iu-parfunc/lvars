@@ -449,18 +449,17 @@
 
     ;; Actually handles both updates and extensions.
     (define-metafunction name
-      store-update : S l d -> S/updatefailed
-      [(store-update () l d) ((l d))
-       ;; TODO: deal with case where d = Top, or tighten up to not accept
-       ;; Top (issue #8)
-       ]
-      [(store-update ((l_2 d_2) (l_3 d_3) (... ...)) l d)
-       ;; TODO: deal with case where (lub d_1 d_2) = Top (issue #8)
+      store-update : S l StoreVal -> S/updatefailed
+      [(store-update () l StoreVal) ((l StoreVal))]
+      [(store-update ((l_2 StoreVal_2) (l_3 StoreVal_3) (... ...)) l StoreVal)
        ,(if (equal? (term l) (term l_2))
-            (cons (term (l_2 (lub d d_2)))
-                  (term ((l_3 d_3) (... ...))))
-            (cons (term (l_2 d_2))
-                  (term (store-update ((l_3 d_3) (... ...)) l d))))])
+            ;; The side conditions on E-PutVal should ensure that the
+            ;; call to store-update only happens when the lub of the
+            ;; old and new values is non-Top.
+            (cons (term (l_2 (lub StoreVal StoreVal_2)))
+                  (term ((l_3 StoreVal_3) (... ...))))
+            (cons (term (l_2 StoreVal_2))
+                  (term (store-update ((l_3 StoreVal_3) (... ...)) l StoreVal))))])
 
     ;; The second condition on the E-GetVal rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.
