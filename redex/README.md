@@ -38,7 +38,7 @@ for instance), so instead, we define a Racket macro,
 upper bound operation, and a set of lattice values, and generates a
 Redex language definition.  For instance, to generate a Redex language
 model called `lambdaLVar-nat` where the user-specified lattice is the
-natural numbers with `max` as the least-upper-bound, one can write:
+natural numbers with `max` as the least upper bound, one can write:
 
 ```
 (define-lambdaLVar-language lambdaLVar-nat max natural)
@@ -112,7 +112,7 @@ Fortunately, there is a simple workaround: we drop the E-Refl and
  E-App-1 and E-App-2, by which parallel application expressions may
  take a step even if only one of their subexpressions can take a step.
  The result is a semantics that is feasible to test with Redex.
-This reduction relation is called `small-step-slow-rr`.
+This reduction relation is called `slow-rr`.
 
 ### Speed tweaks
 
@@ -120,22 +120,22 @@ Under the semantics just described, if both subexpressions in an
 application can step, then any of three rules can apply next --
 E-App-1, E-App-2, and E-ParApp -- leading to an exponential increase
 in the number of evaluation paths that an configuration might take. It
-is easy to construct [lambdaLVar programs that are very slow to test
-with `test-->>`][slow-test] under this semantics, because the system
-must take all evaluation paths.  Of course, taking all evaluation
-paths is exactly the behavior we want.  Although we can't prove
-determinism with Redex, we _can_ prove the _absence_ of determinism --
-a reduction graph that does not converge means that there's a
-nondeterminism-introducing bug somewhere.  Nevertheless, sometimes we
-just want to check that a program runs at all.  In that case, to
-ameliorate the slowness, we can define more restricted versions of
-E-App-1 and E-App-2, in which the subexpression that is not taking a
-step must be a _value_.  Finally, we add an E-GetValBlock rule, which
-allows a _blocked_ `get` expression to step to itself. This is
-necessary because a blocked `get` is not a value.  We call the
-resulting reduction relation `small-step-fast-rr`.
+is easy to construct lambdaLVar programs that are very slow to test
+with `test-->>` under this semantics, because the system must take all
+evaluation paths.  Of course, taking all evaluation paths is exactly
+the behavior we want.  Although we can't prove determinism with Redex,
+we _can_ prove the _absence_ of determinism -- a reduction graph that
+does not converge means that there's a nondeterminism-introducing bug
+somewhere.  Nevertheless, sometimes we just want to check that a
+program runs at all.  In that case, to ameliorate the slowness, we can
+define more restricted versions of E-App-1 and E-App-2, in which the
+subexpression that is not taking a step must be a _value_.  Finally,
+we add an E-GetValBlock rule, which allows a _blocked_ `get`
+expression to step to itself. This is necessary because a blocked
+`get` is not a value.  We call the resulting reduction relation
+`fast-rr`.
 
-Under the `small-step-fast-rr` rules, an application expression in
+Under the `fast-rr` rules, an application expression in
 which one subexpression is a blocked `get` will always be able to take
 a step under one of the three application rules, but not all thread
 interleavings will be explored.  The speed boost we get from that
@@ -144,36 +144,35 @@ implementations in which parallel evaluation is ``lockstep''.
 
 ### Building and running
 
-Running `make all` from the lambdaLVar-redex directory will build and
-all the tests will run, using both reduction relations.  There's [one
-particular test][slow-test] that runs so slowly under
-`small-step-slow-rr` that we put it in a "slow test suite" by itself.
-Here are what the performance results of from a recent run of `make
-all` look like:
+Running `make all` in this directory will build all the lambdaLVar
+languages and run all their test suites, using both reduction
+relations.  Be warned: in the test suite for the lambdaLVar-nats
+language, there's one particular that runs so slowly under `slow-rr`
+that we put it in a "slow test suite" by itself. (To avoid the slow
+test, simply run `make`.)
 
 ```
-Running metafunction tests...All 51 tests passed.
-cpu time: 22 real time: 22 gc time: 0
-Running test suite with small-step-fast-rr...All 17 tests passed.
-cpu time: 307 real time: 309 gc time: 0
-Running test suite with small-step-slow-rr...All 17 tests passed.
-cpu time: 1004 real time: 1012 gc time: 66
-Running slow test suite with small-step-fast-rr...One test passed.
-cpu time: 320 real time: 324 gc time: 15
-Running slow test suite with small-step-slow-rr...One test passed.
-cpu time: 1010991 real time: 1022071 gc time: 13267
+Running metafunction tests...All 57 tests passed.
+cpu time: 14 real time: 13 gc time: 0
+Running test suite with fast-rr...All 19 tests passed.
+cpu time: 127 real time: 128 gc time: 16
+Running test suite with slow-rr...All 19 tests passed.
+cpu time: 486 real time: 486 gc time: 8
+Running slow test suite with fast-rr...One test passed.
+cpu time: 153 real time: 154 gc time: 4
+Running slow test suite with slow-rr...One test passed.
+cpu time: 365914 real time: 365523 gc time: 7949
 ```
 
 The slow test takes several orders of magnitude longer when run with
-`small-step-slow-rr` than with `small-step-fast-rr`.  (Those numbers
-are in milliseconds -- so the slow test is taking about 17 minutes!)
-Stepping through the test manually using `traces` finds 64 terms for
-the slow version, and 15 for the fast version.
+`slow-rr` than with `fast-rr`.  Stepping through the test manually
+using `traces` finds 64 terms for the slow version, and 15 for the
+fast version.  
 
 ### Automated testing
 
-Some lambdaLVar tests are running (and, hopefully, passing) on [a
-Jenkins continuous integration server][jenkins].
+Some lambdaLVar tests are running on [a Jenkins continuous integration
+server][jenkins].
 
 [lambdaLVar-TR]: http://www.cs.indiana.edu/cgi-bin/techreports/TRNNN.cgi?trnum=TR702
 
@@ -186,7 +185,5 @@ Jenkins continuous integration server][jenkins].
 [traces]: http://docs.racket-lang.org/redex/GUI.html?q=traces#%28def._%28%28lib._redex/gui..rkt%29._traces%29%29
 
 [k-framework]: http://k-framework.org
-
-[slow-test]: https://github.com/lkuper/lambdaLVar-redex/blob/master/lambdaLVar-test.rkt#L463
 
 [jenkins]: http://tester-lin.soic.indiana.edu:8080/job/lambdaLVar-redex/
