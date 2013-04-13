@@ -35,7 +35,35 @@
 ;; Test suite
 (define (meta-test-suite)
 
-  ;; FIXME: write tests
+  (test-equal
+   (term (incomp ((3 Bot) (Bot 4))))
+   (term #f))
+
+  (test-equal
+   (term (incomp ((2 Bot) (3 Bot) (Bot 4))))
+   (term #f))
+
+  (test-equal
+   (term (incomp (Bot (4 Bot))))
+   (term #f))
+
+  (test-equal
+   (term (incomp ((3 Bot) (4 Bot))))
+   (term #t))
+
+  (test-equal
+   (term (incomp ((Bot 3) (Bot 4))))
+   (term #t))
+
+  (test-equal
+   (term (incomp ((Bot 1) (Bot 2) (Bot 3) (Bot 4) (Bot 5))))
+   (term #t))
+
+  (test-equal
+   (term (incomp ((Bot 1) (Bot 2) (Bot 3) (Bot 4) (Bot 5) (1 Bot))))
+   (term #f))
+
+  ;; FIXME: write more tests
 
   (test-results))
 
