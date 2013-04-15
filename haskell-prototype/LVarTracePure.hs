@@ -19,6 +19,8 @@ module LVarTracePure
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
    Par(),
+   Trace(..), runCont, consumeLV, newLVWithCallback,   
+   LVarContents(..),
    
    -- * Example use case: Basic IVar ops.
    runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
