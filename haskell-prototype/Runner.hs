@@ -12,8 +12,10 @@
 #ifdef PURE
 #warning "Using the PURE version"
 import LVarTracePure
+import Data.LVar.SetPure
 #else
 import LVarTraceIO
+import Data.LVar.SetIO
 #endif
 
 import           Control.DeepSeq (deepseq)
