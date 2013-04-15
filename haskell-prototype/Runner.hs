@@ -12,6 +12,9 @@
 #ifdef PURE
 #warning "Using the PURE version"
 import LVarTracePure
+#elif defined(SCALABLE)
+#warning "Using the SCALABLE version"
+import LVarTraceScalable
 #else
 import LVarTraceIO
 #endif
