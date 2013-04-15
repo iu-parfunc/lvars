@@ -67,7 +67,7 @@ new = IVar <$> newLV (newIORef (IVarContents Nothing))
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get (IVar lv@(LVar ref _ _)) = getLV lv poll
+get (IVar lv@(LVar ref _)) = getLV lv poll
  where
    poll = fmap fromIVarContents $ readIORef ref
 
@@ -120,7 +120,7 @@ newPair = newLV $
 -- where it's defined.
 
 putFst :: IPair a b -> a -> Par ()
-putFst lv@(LVar (refFst, _) _ _) !elt = putLV lv putter
+putFst lv@(LVar (refFst, _) _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refFst
@@ -131,7 +131,7 @@ putFst lv@(LVar (refFst, _) _ _) !elt = putLV lv putter
         Just _  -> error "multiple puts to first element of IPair"
         
 putSnd :: IPair a b -> b -> Par ()
-putSnd lv@(LVar (_, refSnd) _ _) !elt = putLV lv putter
+putSnd lv@(LVar (_, refSnd) _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refSnd
@@ -142,12 +142,12 @@ putSnd lv@(LVar (_, refSnd) _ _) !elt = putLV lv putter
         Just _  -> error "multiple puts to second element of IPair"
 
 getFst :: IPair a b -> Par a
-getFst iv@(LVar (ref1,_) _ _) = getLV iv poll
+getFst iv@(LVar (ref1,_)  _) = getLV iv poll
  where
    poll = fmap fromIVarContents $ readIORef ref1
 
 getSnd :: IPair a b -> Par b
-getSnd iv@(LVar (_,ref2) _ _) = getLV iv poll
+getSnd iv@(LVar (_,ref2) _) = getLV iv poll
  where
    poll = fmap fromIVarContents $ readIORef ref2
 
@@ -194,7 +194,7 @@ putInSet !elem (ISet lv) = putLV lv putter
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -204,7 +204,7 @@ waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
 
 -- | Wait on the SIZE of the set, not its contents.
 waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSetSize sz (ISet lv@(LVar ref _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -324,19 +324,18 @@ sched _doSync queue t = loop t
   loop origt = case origt of
     New io fn -> do
       x  <- io
-      ls <- newIORef M.empty
-      loop (fn (LVar x ls Nothing))
+      loop (fn (LVar x Nothing))
 
     NewWithCallBack io cont -> do
       (st0, cb) <- io
-      wait <- newIORef M.empty
-      loop (cont$ LVar st0 wait (Just cb))
+      loop (cont$ LVar st0 (Just cb))
 
-    Get (LVar _ waitmp _) poll cont -> do
+    Get (LVar _ _) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
-         Nothing -> do -- Register on the waitlist:
+         Nothing -> reschedule queue
+{- -- Register on the waitlist:          
            uid <- getUID
            flag <- newIORef False
            -- Data-race here: if a putter runs to completion right
@@ -344,7 +343,9 @@ sched _doSync queue t = loop t
            -- we self-poll at the end.
            let fn = fmap cont <$> poll
                retry = Poller fn flag
-           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
+               
+--           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
+               
            -- We must SELF POLL here to make sure there wasn't a race
            -- with a putter.  Now we KNOW that our poller is
            -- "published", so any puts that sneak in here are fine.
@@ -355,11 +356,14 @@ sched _doSync queue t = loop t
                            case b of
                              True  -> loop tr
                              False -> reschedule queue -- Already woken
-
-    Consume (LVar state waittmp _) extractor cont -> do
+-}
+    Consume (LVar state _) extractor cont -> do
       -- HACK!  We know nothing about the type of state.  But we CAN
       -- destroy waittmp to prevent any future access.
-      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
+--      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
+
+      -- TODO/FIXME: We could do a PUT here with an error thunk.
+      
       -- CAREFUL: Putters only read waittmp AFTER they do the
       -- mutation, so this will be a delayed error.  It is recommended
       -- that higher level interfaces do their own corruption of the
@@ -367,11 +371,11 @@ sched _doSync queue t = loop t
       result <- extractor state
       loop (cont result)
       
-    Peek (LVar state _ _) extractor cont -> do
+    Peek (LVar state _) extractor cont -> do
       result <- extractor state
       loop (cont result)
 
-    Put (LVar state waitmp callback) mutator tr -> do
+    Put (LVar state callback) mutator tr -> do
       mutator state
 
       case callback of
