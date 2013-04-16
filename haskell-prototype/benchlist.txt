@@ -12,14 +12,22 @@ bf_traverse_Strategies none /tmp/rand_320000_40000 10 4
 bf_traverse_Strategies none /tmp/rand_320000_40000 10 8
 bf_traverse_Strategies none /tmp/rand_320000_40000 10 16
 bf_traverse_Strategies none /tmp/rand_320000_40000 10 32
+ 
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 1
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 2
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 4 
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 8
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 16
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 32
+bf_traverse_LVarPure none /tmp/rand_320000_40000 10 64
 
-bf_traverse_LVar none /tmp/rand_320000_40000 10 1
-bf_traverse_LVar none /tmp/rand_320000_40000 10 2
-bf_traverse_LVar none /tmp/rand_320000_40000 10 4 
-bf_traverse_LVar none /tmp/rand_320000_40000 10 8
-bf_traverse_LVar none /tmp/rand_320000_40000 10 16
-bf_traverse_LVar none /tmp/rand_320000_40000 10 32
-bf_traverse_LVar none /tmp/rand_320000_40000 10 64
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 1
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 2
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 4 
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 8
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 16
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 32
+bf_traverse_LVarIO none /tmp/rand_320000_40000 10 64
 
 bf_traverse_monad-par none /tmp/rand_320000_40000 10 1
 bf_traverse_monad-par none /tmp/rand_320000_40000 10 2

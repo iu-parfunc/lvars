@@ -1,3 +1,3 @@
 {-# LANGUAGE CPP #-}
-#define LVARPURE
+#define LVARIO
 #include "bf_traverse_LVar.hs"

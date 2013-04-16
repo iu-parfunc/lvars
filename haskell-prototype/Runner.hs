@@ -3,30 +3,18 @@
 
 -- Compile-time options:
 --   PURE        -- use LVarTracePure
+--   IMPURE      -- use LVarTraceIO
+--   STRATEGIES  -- use Strategies, no LVars
+--   PAR         -- use Par, no LVars
 --
 -- Run-time options:
 --   W = work to do per vertex
 --   K = max hops of the connected component to explore
 --   (OR N = target vertices to visit (will overshoot))
 
-#ifdef PURE
-#warning "Using the PURE version"
-import LVarTracePure
-#elif defined(SCALABLE)
-#warning "Using the SCALABLE version"
-import LVarTraceScalable
-#else
-import LVarTraceIO
-#endif
-
-import           Control.DeepSeq (deepseq)
 import           Control.Exception (evaluate)
 import           Control.Monad (forM_, when)
-
-import qualified Control.Monad.Par as Par
-import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           Control.Monad.Par.Class (ParFuture)
-import           Control.DeepSeq         (NFData)
+import           Control.DeepSeq (NFData)
 import           Data.Int
 import           Data.Word
 import           Data.IORef
@@ -46,18 +34,59 @@ import           System.Environment (getEnvironment,getArgs)
 import           System.CPUTime.Rdtsc (rdtsc)
 -- import           Data.Time.Clock (getCurrentTime)
 import           System.CPUTime  (getCPUTime)
-import qualified Control.Parallel.Strategies as Strat
 
 -- For parsing the file produced by pbbs
 import Data.List.Split (splitOn)
 import System.IO (openFile, hGetContents, IOMode(ReadMode))
 
--- For printing inside Par
-import Debug.Trace (trace)
-
 -- For representing graphs
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
+
+-- This is a hacky attempt at only importing the stuff that every
+-- version needs.  We could just have everything import everything,
+-- but we want to make it very obvious that, for instance, the
+-- Strategies version doesn't use Par, and vice versa.
+
+#ifdef LVARPURE
+#warning "Using the LVar Pure version"
+import qualified Control.Monad.Par as Par
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           LVarTracePure
+import           Data.LVar.SetPure 
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
+
+#ifdef LVARIO
+#warning "Using the LVar IO version"
+import qualified Control.Monad.Par as Par
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           LVarTraceIO
+import           Data.LVar.SetIO
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
+
+#ifdef STRATEGIES
+#warning "Using the Strategies version"
+import           Control.DeepSeq (deepseq)
+import qualified Control.Parallel.Strategies as Strat
+#endif
+
+#ifdef PAR
+#warning "Using the Par-only version"
+import           Control.Monad.Par (Par, runParIO)
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -119,9 +148,6 @@ sin_iter n !x = sin_iter (n - 1) (x + sin x)
 type WorkRet = (Float, Node)
 type WorkFn = (Node -> WorkRet)
 
-prnt :: String -> Par ()
-prnt str = trace str $ return ()
-
 theEnv :: [(String,String)]
 theEnv = unsafePerformIO getEnvironment
 
@@ -154,7 +180,7 @@ main = do
 
   args <- getArgs
   
--- LK: this way of writing the type annotations is the only way I
+  -- LK: this way of writing the type annotations is the only way I
   -- can get emacs to not think this is a parse error! :(
   let (graphFile,k,w) = 
         case args of
@@ -174,10 +200,14 @@ main = do
         start_traverse k g2 0 fn
         putStrLn "All done."
   
+  -- Takes a node ID (which is just an int) and returns it paired with
+  -- a floating-point number that's the value of iterating the sin
+  -- function w times on that node ID.
   let sin_iter_count :: WorkFn
       sin_iter_count x = let f = fromIntegral x in
                          (sin_iter w f, x)
 
+  -- Reeeealllllly want to audit this code. -- LK
   freq <- measureFreq
   clocks_per_kilosin <- measureSin 1000
   let clocks_per_micro, kilosins_per_micro :: Rational 
@@ -239,7 +269,7 @@ wait_microsecs clocks n = do
 
 -- Measure clock frequency, spinning rather than sleeping to try to
 -- stay on the same core.
-measureFreq :: IO Word64
+measureFreq :: IO Word64 -- What units is this in? -- LK
 measureFreq = do
   let millisecond = 1000 * 1000 * 1000 -- picoseconds are annoying
       -- Measure for how long to be sure?      

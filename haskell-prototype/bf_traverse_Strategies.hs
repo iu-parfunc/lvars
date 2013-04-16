@@ -1,12 +1,13 @@
 {-# LANGUAGE CPP #-}
+#define STRATEGIES
 #include "Runner.hs"
 
 bf_pure :: Int             -- iteration counter
-               -> Graph2       -- graph
-               -> IS.IntSet    -- set of "seen" node labels, initially size 0
-               -> IS.IntSet    -- set of "new" node labels, initially size 1
-               -> WorkFn       -- function to be applied to each node
-               -> IS.IntSet
+           -> Graph2       -- graph
+           -> IS.IntSet    -- set of "seen" node labels, initially size 0
+           -> IS.IntSet    -- set of "new" node labels, initially size 1
+           -> WorkFn       -- function to be applied to each node
+           -> IS.IntSet
 bf_pure 0 _ seen_rank new_rank _ = do
   -- when verbose $ prnt $ "bf_pure finished! seen/new size: "
   --   ++ show (IS.size seen_rank, IS.size new_rank)

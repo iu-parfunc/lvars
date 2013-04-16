@@ -76,19 +76,19 @@ deps:
 
 l1: lvar_io.exe
 lvar_io.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_LVar.hs -o $@
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_LVarIO.hs -o $@
 
 l2: lvar_pure.exe
 lvar_pure.exe: $(src)
-	$(GHC) -DPURE -O2 -threaded -rtsopts --make bf_traverse_LVar.hs -o $@
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_LVarPure.hs -o $@
 
 s: strategies.exe
 strategies.exe: $(src)
 	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_Strategies.hs -o $@
 
-p: par-monad.exe
-par-monad.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_monadpar.hs -o $@
+p: monad-par.exe
+monad-par.exe: $(src)
+	$(GHC) -O2 -threaded -rtsopts --make bf_traverse_monad-par.hs -o $@
 
 benchmark.run:
 	ghc --make benchmark.hs -o benchmark.run

@@ -18,20 +18,15 @@ module LVarTracePure
   (
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
-   Par(), 
+   Par(),
+   Trace(..), runCont, consumeLV, newLVWithCallback,   
+   LVarContents(..),
    
    -- * Example use case: Basic IVar ops.
    runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
-
-   -- * Example 2: Pairs (of Ivars).
-   newPair, putFst, putSnd, getFst, getSnd, 
-   
-   -- * Example 3: Monotonically growing sets.
-   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, putInSet_,
-   waitForSet, waitForSetSize, consumeSet,
    
    -- * DEBUGGING only:
-   unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
+   unsafePeekLV
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -106,100 +101,6 @@ instance PC.ParIVar IVar Par where
   fork = fork  
   put_ = put_
   new = new
-
-------------------------------------------------------------------------------
--- IPairs implemented on top of LVars:
-------------------------------------------------------------------------------
-
-type IPair a b = LVar (IVarContents a, IVarContents b)
-
-newPair :: Par (IPair a b)
-newPair = newLV (IVC Nothing,
-                 IVC Nothing)
-
-putFst :: IPair a b -> a -> Par ()
-putFst lv !elt = putLV lv (IVC (Just elt), IVC Nothing)
-
-putSnd :: IPair a b -> b -> Par ()
-putSnd lv !elt = putLV lv (IVC Nothing, IVC (Just elt))
-
-getFst :: IPair a b -> Par a
-getFst lv = getLV lv test
- where
-   test (IVC (Just x),_) = Just x
-   test (IVC Nothing,_)  = Nothing
-
-getSnd :: IPair a b -> Par b
-getSnd lv = getLV lv test
- where
-   test (_,IVC (Just x)) = Just x
-   test (_,IVC Nothing)  = Nothing
-
-------------------------------------------------------------------------------
--- ISets and setmap implemented on top of LVars:
-------------------------------------------------------------------------------
-
--- Abstract data type:
-newtype ISet a = ISet (LVar (S.Set a))
-
-newEmptySet :: Par (ISet a)
-newEmptySet = fmap ISet $ newLV S.empty
-
--- | Extended lambdaLVar (callbacks).  Create an empty set, but establish a callback
--- that will be invoked (in parallel) on each element added to the set.
-newEmptySetWithCallBack :: forall a . Ord a => (a -> Par ()) -> Par (ISet a)
-newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback S.empty cb
- where -- Every time the set is updated we fork callbacks on new elements:
-   cb :: S.Set a -> S.Set a -> Trace
-   cb old new =
-     -- Unfortunately we need to do a set diff every time.
-     let fresh = S.difference new old 
-         -- Spawn in parallel all new callbacks:
-         trcs = map runCallback (S.toList fresh)
-         runCallback :: a -> Trace
-         -- Run each callback with an empty continuation:
-         runCallback elem = runCont (callb elem) (\_ -> Done)
-     in
-     -- Would be nice if this were a balanced tree:      
-     foldl Fork Done trcs
-
--- | Put a single element in the set.  (WHNF) Strict in the element being put in the
--- set.
-putInSet_ :: Ord a => a -> ISet a -> Par () 
-putInSet_ !elem (ISet lv) = putLV lv (S.singleton elem)
-
-putInSet :: (NFData a, Ord a) => a -> ISet a -> Par ()
-putInSet e s = deepseq e (putInSet_ e s)
-
--- | Wait for the set to contain a specified element.
-waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet !elem (ISet lv) = getLV lv fn
-  where
-    fn set | S.member elem set = Just ()
-           | otherwise         = Nothing
-
--- | Wait on the SIZE of the set, not its contents.
-waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv) = getLV lv fn
-  where
-    fn set | S.size set >= sz = Just ()
-           | otherwise        = Nothing 
-
--- | Get the exact contents of the set.  Using this may cause your
--- program exhibit a limited form of nondeterminism: it will never
--- return the wrong answer, but it may include synchronization bugs
--- that can (nondeterministically) cause exceptions.
-consumeSet :: ISet a -> Par (S.Set a)
-consumeSet (ISet lv) = consumeLV lv
-
-unsafePeekSet :: ISet a -> Par (S.Set a)
-unsafePeekSet (ISet lv) = unsafePeekLV lv
-
-reallyUnsafePeekSet :: ISet a -> (S.Set a)
-reallyUnsafePeekSet (ISet (LVar {lvstate})) =
-  unsafePerformIO $ do
-    LVarContents {current} <- readIORef lvstate
-    return current
 
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
