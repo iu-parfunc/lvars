@@ -3,29 +3,16 @@
 
 -- Compile-time options:
 --   PURE        -- use LVarTracePure
+--   IMPURE      -- use LVarTraceIO
 --
 -- Run-time options:
 --   W = work to do per vertex
 --   K = max hops of the connected component to explore
 --   (OR N = target vertices to visit (will overshoot))
 
-#ifdef PURE
-#warning "Using the PURE version"
-import LVarTracePure
-import Data.LVar.SetPure
-#else
-import LVarTraceIO
-import Data.LVar.SetIO
-#endif
-
-import           Control.DeepSeq (deepseq)
 import           Control.Exception (evaluate)
 import           Control.Monad (forM_, when)
-
-import qualified Control.Monad.Par as Par
-import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           Control.Monad.Par.Class (ParFuture)
-import           Control.DeepSeq         (NFData)
+import           Control.DeepSeq (NFData)
 import           Data.Int
 import           Data.Word
 import           Data.IORef
@@ -45,18 +32,59 @@ import           System.Environment (getEnvironment,getArgs)
 import           System.CPUTime.Rdtsc (rdtsc)
 -- import           Data.Time.Clock (getCurrentTime)
 import           System.CPUTime  (getCPUTime)
-import qualified Control.Parallel.Strategies as Strat
 
 -- For parsing the file produced by pbbs
 import Data.List.Split (splitOn)
 import System.IO (openFile, hGetContents, IOMode(ReadMode))
 
--- For printing inside Par
-import Debug.Trace (trace)
-
 -- For representing graphs
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
+
+-- This is a hacky attempt at only importing the stuff that every
+-- version needs.  We could just have everything import everything,
+-- but we want to make it very obvious that, for instance, the
+-- Strategies version doesn't use Par, and vice versa.
+
+#ifdef LVARPURE
+#warning "Using the LVar Pure version"
+import qualified Control.Monad.Par as Par
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           LVarTracePure
+import           Data.LVar.SetPure 
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
+
+#ifdef LVARIO
+#warning "Using the LVar IO version"
+import qualified Control.Monad.Par as Par
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           LVarTraceIO
+import           Data.LVar.SetIO
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
+
+#ifdef STRATEGIES
+#warning "Using the Strategies version"
+import           Control.DeepSeq (deepseq)
+import qualified Control.Parallel.Strategies as Strat
+#endif
+
+#ifdef PAR
+#warning "Using the Par-only version"
+import           Control.Monad.Par (Par, runParIO)
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           Debug.Trace (trace)
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -117,9 +145,6 @@ sin_iter n !x = sin_iter (n - 1) (x + sin x)
 
 type WorkRet = (Float, Node)
 type WorkFn = (Node -> WorkRet)
-
-prnt :: String -> Par ()
-prnt str = trace str $ return ()
 
 theEnv :: [(String,String)]
 theEnv = unsafePerformIO getEnvironment

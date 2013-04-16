@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 #include "Runner.hs"
 
 -- An LVar-based version of bf_traverse.  As we traverse the graph,

@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+#define PAR
 #include "Runner.hs"
 
 -- This version of bf_traverse is based on monad-par, but it doesn't
