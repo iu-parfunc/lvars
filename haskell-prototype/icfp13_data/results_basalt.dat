@@ -1,0 +1,76 @@
+# TestName Variant NumThreads   MinTime MedianTime MaxTime  Productivity1 Productivity2 Productivity3
+#    
+# Fri Mar 29 03:15:47 EDT 2013
+# Linux basalt.soic.indiana.edu 2.6.32-358.2.1.el6.x86_64 #1 SMP Wed Feb 20 12:17:37 EST 2013 x86_64 x86_64 x86_64 GNU/Linux
+# Ran by: rrnewton 
+# Determined machine to have 4 hardware threads.
+# The Glorious Glasgow Haskell Compilation System, version 7.6.2
+# 
+# Running each test for 5 trial(s).
+#  ... with compiler options: -O2 -rtsopts
+#  ... with runtime options: -qa  -s 
+# Benchmarks_File: benchlist.txt
+# Benchmarks_Variant: desktop
+# Benchmarks_Version: 2.0
+# Git_Branch: master
+# Git_Hash: 07bea596380cd2299cf60d8ffa3efc46712edc70
+# Git_Depth: 186
+# Using the following settings from environment variables:
+#  ENV BENCHLIST=
+#  ENV THREADS=   1 2 3 4
+#  ENV TRIALS=    5
+#  ENV SHORTRUN=  
+#  ENV SCHEDS=    
+#  ENV KEEPGOING= 
+#  ENV GHC=       
+#  ENV GHC_FLAGS= 
+#  ENV GHC_RTS=   
+#  ENV ENVS=      
+BFS_Strategies                      /tmp/rand_320000_40000_10_1  None    1    0.399957s 0.428029s 0.428216s   87.730 87.951 87.951
+BFS_Strategies                      /tmp/rand_320000_40000_10_1  None    2    0.417619s 0.432155s 0.445399s   87.654 87.804 87.951
+BFS_Strategies                      /tmp/rand_320000_40000_10_1  None    3    0.364125s 0.417159s 0.420144s   86.928 87.421 87.421
+BFS_Strategies                      /tmp/rand_320000_40000_10_1  None    4    0.708443s 0.728546s 0.735884s   87.165 86.842 87.434
+BFS_Strategies                      /tmp/rand_320000_40000_10_2  None    1    0.736828s 0.749379s 0.750649s   89.847 89.898 89.898
+BFS_Strategies                      /tmp/rand_320000_40000_10_2  None    2    0.733965s 0.735196s 0.759022s   89.690 89.690 89.847
+BFS_Strategies                      /tmp/rand_320000_40000_10_2  None    3    0.710346s 0.716655s 0.718268s   89.473 89.473 89.417
+BFS_Strategies                      /tmp/rand_320000_40000_10_2  None    4    1.104888s 1.158671s 1.190425s   90.265 89.610 87.711
+BFS_Strategies                      /tmp/rand_320000_40000_10_4  None    1    1.381751s 1.385413s 1.39533s   92.337 92.366 92.366
+BFS_Strategies                      /tmp/rand_320000_40000_10_4  None    2    1.350399s 1.444148s 1.469492s   92.187 92.481 92.537
+BFS_Strategies                      /tmp/rand_320000_40000_10_4  None    3    1.292157s 1.312213s 1.334656s   91.902 91.935 92.063
+BFS_Strategies                      /tmp/rand_320000_40000_10_4  None    4    1.567723s 1.599199s 1.621453s   91.240 90.579 91.459
+BFS_Strategies                      /tmp/rand_320000_40000_10_8  None    1    2.633554s 2.685817s 2.700705s   94.818 94.897 94.910
+BFS_Strategies                      /tmp/rand_320000_40000_10_8  None    2    2.760833s 2.911965s 2.98288s   94.949 95.157 95.226
+BFS_Strategies                      /tmp/rand_320000_40000_10_8  None    3    2.159408s 2.202598s 2.281695s   93.731 93.786 93.930
+BFS_Strategies                      /tmp/rand_320000_40000_10_8  None    4    2.465992s 2.50351s 2.579312s   93.150 93.442 93.600
+BFS_Strategies                      /tmp/rand_320000_40000_10_16  None    1    5.13965s 5.278661s 5.303205s   96.860 96.927 96.937
+BFS_Strategies                      /tmp/rand_320000_40000_10_16  None    2    4.334589s 4.512568s 4.837559s   96.389 96.503 96.688
+BFS_Strategies                      /tmp/rand_320000_40000_10_16  None    3    2.53765s 2.674014s 2.764857s   94.609 94.818 94.923
+BFS_Strategies                      /tmp/rand_320000_40000_10_16  None    4    3.891406s 3.960146s 4.095286s   94.861 95.516 95.238
+BFS_Strategies                      /tmp/rand_320000_40000_10_32  None    1    10.258545s 10.378604s 10.463541s   98.259 98.277 98.289
+BFS_Strategies                      /tmp/rand_320000_40000_10_32  None    2    7.00909s 7.158841s 7.302561s   97.560 97.607 97.649
+BFS_Strategies                      /tmp/rand_320000_40000_10_32  None    3    3.95633s 4.133057s 4.262311s   96.101 96.240 96.336
+BFS_Strategies                      /tmp/rand_320000_40000_10_32  None    4    4.0708s 4.091473s 4.605994s   95.038 95.419 96.341
+BFS_LVar                            /tmp/rand_320000_40000_10_1  None    1    0.547646s 0.553537s 0.559669s   84.090 84.180 84.180
+BFS_LVar                            /tmp/rand_320000_40000_10_1  None    2    0.363343s 0.368254s 0.377341s   83.225 82.911 83.439
+BFS_LVar                            /tmp/rand_320000_40000_10_1  None    3    0.306415s 0.307567s 0.309153s   82.993 82.550 83.108
+BFS_LVar                            /tmp/rand_320000_40000_10_1  None    4    0.277813s 0.279844s 0.284328s   81.690 82.394 81.944
+BFS_LVar                            /tmp/rand_320000_40000_10_2  None    1    0.865879s 0.877147s 0.877839s   86.538 86.602 86.602
+BFS_LVar                            /tmp/rand_320000_40000_10_2  None    2    0.528774s 0.530999s 0.536502s   84.393 84.883 84.971
+BFS_LVar                            /tmp/rand_320000_40000_10_2  None    3    0.402792s 0.403765s 0.409137s   83.974 83.870 84.076
+BFS_LVar                            /tmp/rand_320000_40000_10_2  None    4    0.346136s 0.347966s 0.352164s   82.993 82.876 82.550
+BFS_LVar                            /tmp/rand_320000_40000_10_4  None    1    1.511316s 1.522569s 1.542347s   89.743 89.416 89.492
+BFS_LVar                            /tmp/rand_320000_40000_10_4  None    2    0.871776s 0.944824s 1.168096s   86.538 85.520 86.363
+BFS_LVar                            /tmp/rand_320000_40000_10_4  None    3    0.713414s 0.917507s 0.972963s   42.433 85.446 85.253
+BFS_LVar                            /tmp/rand_320000_40000_10_4  None    4    0.492126s 0.500189s 0.862534s   84.276 84.242 69.884
+BFS_LVar                            /tmp/rand_320000_40000_10_8  None    1    2.406907s 2.810789s 2.836356s   92.265 93.052 93.086
+BFS_LVar                            /tmp/rand_320000_40000_10_8  None    2    1.44276s 1.463801s 1.480845s   89.772 89.887 90.262
+BFS_LVar                            /tmp/rand_320000_40000_10_8  None    3    0.981804s 0.995771s 1.016873s   88.372 88.317 88.127
+BFS_LVar                            /tmp/rand_320000_40000_10_8  None    4    0.784197s 0.795847s 0.805434s   86.315 86.979 87.179
+BFS_LVar                            /tmp/rand_320000_40000_10_16  None    1    4.065307s 5.357001s 5.50737s   94.507 95.585 95.690
+BFS_LVar                            /tmp/rand_320000_40000_10_16  None    2    2.94766s 3.255129s 3.427418s   92.822 90.254 90.573
+BFS_LVar                            /tmp/rand_320000_40000_10_16  None    3    1.792135s 2.455807s 2.558713s   91.467 90.000 91.005
+BFS_LVar                            /tmp/rand_320000_40000_10_16  None    4    1.348164s 1.371292s 1.425907s   89.430 89.919 89.922
+BFS_LVar                            /tmp/rand_320000_40000_10_32  None    1    10.405857s 10.508465s 11.049832s   97.506 97.612 97.636
+BFS_LVar                            /tmp/rand_320000_40000_10_32  None    2    4.999605s 5.199159s 5.717066s   95.799 95.781 94.257
+BFS_LVar                            /tmp/rand_320000_40000_10_32  None    3    3.236585s 3.378315s 3.445084s   93.018 94.481 94.360
+BFS_LVar                            /tmp/rand_320000_40000_10_32  None    4    2.404598s 2.478476s 2.541304s   92.877 93.055 92.896
