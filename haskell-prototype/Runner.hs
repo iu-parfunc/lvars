@@ -4,6 +4,8 @@
 -- Compile-time options:
 --   PURE        -- use LVarTracePure
 --   IMPURE      -- use LVarTraceIO
+--   STRATEGIES  -- use Strategies, no LVars
+--   PAR         -- use Par, no LVars
 --
 -- Run-time options:
 --   W = work to do per vertex
@@ -178,7 +180,7 @@ main = do
 
   args <- getArgs
   
--- LK: this way of writing the type annotations is the only way I
+  -- LK: this way of writing the type annotations is the only way I
   -- can get emacs to not think this is a parse error! :(
   let (graphFile,k,w) = 
         case args of
@@ -198,10 +200,14 @@ main = do
         start_traverse k g2 0 fn
         putStrLn "All done."
   
+  -- Takes a node ID (which is just an int) and returns it paired with
+  -- a floating-point number that's the value of iterating the sin
+  -- function w times on that node ID.
   let sin_iter_count :: WorkFn
       sin_iter_count x = let f = fromIntegral x in
                          (sin_iter w f, x)
 
+  -- Reeeealllllly want to audit this code. -- LK
   freq <- measureFreq
   clocks_per_kilosin <- measureSin 1000
   let clocks_per_micro, kilosins_per_micro :: Rational 
@@ -263,7 +269,7 @@ wait_microsecs clocks n = do
 
 -- Measure clock frequency, spinning rather than sleeping to try to
 -- stay on the same core.
-measureFreq :: IO Word64
+measureFreq :: IO Word64 -- What units is this in? -- LK
 measureFreq = do
   let millisecond = 1000 * 1000 * 1000 -- picoseconds are annoying
       -- Measure for how long to be sure?      
