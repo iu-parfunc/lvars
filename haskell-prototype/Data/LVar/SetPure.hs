@@ -1,18 +1,14 @@
-{-# LANGUAGE RankNTypes #-} 
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 module Data.LVar.SetPure
        (
-         -- * Example 3: Monotonically growing sets.
          ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, putInSet_,
          waitForSet, waitForSetSize, consumeSet,
          
-         -- * DEBUGGING only:
+         -- For debugging only!
          unsafePeekSet, reallyUnsafePeekSet
          ) where
 import LVarTracePure

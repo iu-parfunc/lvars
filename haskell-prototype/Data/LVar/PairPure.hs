@@ -2,8 +2,11 @@
 
 module Data.LVar.PairPure
        (
-         -- * Example 2: Pairs (of Ivars).
-         newPair, putFst, putSnd, getFst, getSnd, 
+         newPair,
+         putFst,
+         putSnd,
+         getFst,
+         getSnd, 
          ) where
 import LVarTracePure
 

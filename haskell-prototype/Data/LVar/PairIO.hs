@@ -1,10 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Data.LVar.PairIO
-       (
-         -- * Example 2: Pairs (of Ivars).
-         newPair, putFst, putSnd, getFst, getSnd,          
-         ) where
+       (newPair,
+        putFst,
+        putSnd,
+        getFst,
+        getSnd,
+        ) where
 import LVarTraceIO
 import Data.IORef
 
