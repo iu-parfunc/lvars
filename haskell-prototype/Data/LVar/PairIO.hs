@@ -1,8 +1,12 @@
-module PairIO
+{-# LANGUAGE BangPatterns #-}
+
+module Data.LVar.PairIO
        (
          -- * Example 2: Pairs (of Ivars).
          newPair, putFst, putSnd, getFst, getSnd,          
-         )
+         ) where
+import LVarTraceIO
+import Data.IORef
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of LVars:
@@ -16,9 +20,6 @@ newPair = newLV $
           do r1 <- newIORef (IVarContents Nothing)
              r2 <- newIORef (IVarContents Nothing)
              return (r1,r2)
-
--- What is fromIVarContents?  If it's a function, I can't figure out
--- where it's defined.
 
 putFst :: IPair a b -> a -> Par ()
 putFst lv@(LVar (refFst, _) _ _) !elt = putLV lv putter

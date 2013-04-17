@@ -1,8 +1,11 @@
-module PairPure
+{-# LANGUAGE BangPatterns #-}
+
+module Data.LVar.PairPure
        (
          -- * Example 2: Pairs (of Ivars).
          newPair, putFst, putSnd, getFst, getSnd, 
-         )
+         ) where
+import LVarTracePure
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of LVars:

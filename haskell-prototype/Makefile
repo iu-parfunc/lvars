@@ -70,7 +70,7 @@ $(RAND_DATA):
 	$(PBBSDIR)/randLocalGraph -m 320000 -d 5 40000 $(RAND_DATA)_320000_40000
 
 deps:
-	cabal install rdtsc parallel monad-par lattices hydra-print
+	cabal install rdtsc parallel monad-par lattices hydra-print test-framework test-framework-th HUnit
 
 #--------------------------------------------------------------------------------
 
@@ -98,3 +98,13 @@ clean:
 
 wipelogs:
 	-rm -rf *.log *.bak *.dat bin/ build/ runs/ *.out
+
+#--------------------------------------------------------------------------------
+
+test: test_pure.exe test_io.exe test_scalable.exe
+test_pure.exe:
+	$(GHC) -DLVARPURE -O2 -threaded -rtsopts --make test.hs -o $@
+test_io.exe:
+	$(GHC) -DLVARIO -O2 -threaded -rtsopts --make test.hs -o $@
+test_scalable.exe:
+	$(GHC) -DLVARSCALABLE -O2 -threaded -rtsopts --make test.hs -o $@
