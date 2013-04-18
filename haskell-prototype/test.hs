@@ -85,6 +85,19 @@ t3 = runParIO $
         waitForSetSize 10 s1
         consumeSet s1
 
+-- | An under-synchronized test.  This should always return the same result OR throw
+-- an exception.  In this case it should always return a list of 10 elements, or
+-- throw an exception.
+t3b :: IO (S.Set Int)
+t3b = runParIO $
+     do s1 <- newEmptySet
+        let fn e = putInSet (e*10) s1 
+        s2 <- newEmptySetWithCallBack fn
+
+        mapM_ (\n -> fork$ putInSet n s2) [1..10]
+        waitForSetSize 1 s1
+        consumeSet s1
+
 
 -- | Simple test of pairs.
 t4 = runParIO $
