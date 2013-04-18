@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 
 #if defined(LVARPURE)
 #warning "Using the LVar Pure version"
@@ -21,8 +23,8 @@ import Data.LVar.SetScalable
 
 import Data.Set as S
 import Test.HUnit (Assertion, assertEqual, assertBool)
-import Test.Framework.Providers.HUnit
-import Test.Framework (Test)
+import Test.Framework.Providers.HUnit 
+import Test.Framework (Test, defaultMain)
 --import Test.Framework.TH (defaultMainGenerator)
 
 main :: IO ()
@@ -30,17 +32,21 @@ main :: IO ()
 
 -- Temporary until I can figure out why Test.Framework.TH doesn't work
 -- for me. -- LK
-main = do
-  case_t0
-  case_t1
-  case_t2
-  case_t2b
-  t3
-  t4
-  t5
-  t6
-  return ()
-  
+main =
+  defaultMain
+  [ testCase "t0"  case_t0
+  , testCase "t1"  case_t1
+  , testCase "t2"  case_t2
+  , testCase "t2b" case_t2b
+  -- , testCase "t3"  t3
+  -- , testCase "t4"  t4
+  -- , testCase "t5"  t5
+  -- , testCase "t5"  t5b
+  -- , testCase "t5"  t5c
+  -- , testCase "t6"  t6
+  ]
+
+
 --------------------------------------------------------------------------------
 
 case_t0 :: Assertion
@@ -79,6 +85,19 @@ t3 = runParIO $
         waitForSetSize 10 s1
         consumeSet s1
 
+-- | An under-synchronized test.  This should always return the same result OR throw
+-- an exception.  In this case it should always return a list of 10 elements, or
+-- throw an exception.
+t3b :: IO (S.Set Int)
+t3b = runParIO $
+     do s1 <- newEmptySet
+        let fn e = putInSet (e*10) s1 
+        s2 <- newEmptySetWithCallBack fn
+
+        mapM_ (\n -> fork$ putInSet n s2) [1..10]
+        waitForSetSize 1 s1
+        consumeSet s1
+
 
 -- | Simple test of pairs.
 t4 = runParIO $
@@ -96,6 +115,32 @@ t5 = runParIO $
         putSnd p "hi"
         putSnd p "there"        
         getFst p
+
+-- | A genuine data race.  This one requires that ANY tops get thrown as exceptions,
+-- or we have full nondeterminism (not even limited guarantees).
+t5b = runParIO $
+     do p <- newPair
+        putFst p 3
+        putSnd p "hi"
+        fork$ do waste_time
+                 putSnd p "there"
+        getSnd p
+
+-- | Same as t5b but with the branches flipped.
+t5c = runParIO $
+     do p <- newPair
+        putSnd p "hi"
+        fork$ putFst p =<< getSnd p
+        waste_time
+        putSnd p "there"
+        getFst p
+        
+
+
+waste_time = loop 1000 3.3
+ where
+   loop 0 acc  = if acc < 10 then return acc else return 0
+   loop i !acc = loop (i - 1) (sin acc + 1.0)
 
 -- More pairs
 t6 = runParIO $
