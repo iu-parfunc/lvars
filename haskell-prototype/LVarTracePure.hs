@@ -231,7 +231,7 @@ sched queue t = loop t
                               Nothing -> woken
                               Just fn -> fn a new' : woken
                 in 
-                (LVarContents new' ls', woken')
+                seq new' (LVarContents new' ls', woken')
       mapM_ (pushWork queue) cs
       loop tr              
 
