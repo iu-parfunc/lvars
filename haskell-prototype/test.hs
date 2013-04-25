@@ -51,17 +51,17 @@ main =
 
 case_t0 :: Assertion
 case_t0 = assertEqual "useless fork" (4::Int) $ 
-          runPar$ do i<-new; fork (return ()); put i 4; get i
+          runPar $ do i<-new; fork (return ()); put i 4; get i
 
 case_t1 :: Assertion
 case_t1 = assertEqual "fork put" (4::Int) $
-          runPar$ do i<-new; fork (put i 4); get i
+          runPar $ do i<-new; fork (put i 4); get i
 
 case_t2 :: Assertion -- IO (S.Set Int)
 case_t2 = assertEqual "put 10 in & wait"
           (S.fromList [1..10] :: S.Set Int) =<< runParIO (
      do s <- newEmptySet
-        mapM_ (\n -> fork$ putInSet n s) [1..10]
+        mapM_ (\n -> fork $ putInSet n s) [1..10]
         waitForSetSize 10 s 
         consumeSet s)
 
@@ -70,7 +70,7 @@ case_t2b :: Assertion
 case_t2b = assertEqual "t2 with spawn instead of fork"
            (S.fromList [1..10] :: S.Set Int) =<< runParIO (
      do s <- newEmptySet
-        ivs <- mapM (\n -> spawn_$ putInSet n s) [1..10]
+        ivs <- mapM (\n -> spawn_ $ putInSet n s) [1..10]
         mapM_ get ivs -- Join point.
         consumeSet s)
 
@@ -81,7 +81,7 @@ t3 = runParIO $
         let fn e = putInSet (e*10) s1 
         s2 <- newEmptySetWithCallBack fn
 
-        mapM_ (\n -> fork$ putInSet n s2) [1..10]
+        mapM_ (\n -> fork $ putInSet n s2) [1..10]
         waitForSetSize 10 s1
         consumeSet s1
 
@@ -122,7 +122,7 @@ t5b = runParIO $
      do p <- newPair
         putFst p 3
         putSnd p "hi"
-        fork$ do waste_time
+        fork $ do waste_time
                  putSnd p "there"
         getSnd p
 
@@ -130,7 +130,7 @@ t5b = runParIO $
 t5c = runParIO $
      do p <- newPair
         putSnd p "hi"
-        fork$ putFst p =<< getSnd p
+        fork $ putFst p =<< getSnd p
         waste_time
         putSnd p "there"
         getFst p
@@ -146,9 +146,9 @@ waste_time = loop 1000 3.3
 t6 = runParIO $
      do p1 <- newPair
         p2 <- newPair
-        fork$ do x <- getFst p1
-                 putSnd p2 x 
-        fork$ do x <- getSnd p2
-                 putSnd p1 x
+        fork $ do x <- getFst p1
+                  putSnd p2 x 
+        fork $ do x <- getSnd p2
+                  putSnd p1 x
         putFst p1 33
         getSnd p1
