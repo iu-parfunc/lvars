@@ -18,20 +18,15 @@ module LVarTraceScalable
   (
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
-   Par(), 
+   Par(),
+   Trace(..), runCont, consumeLV, newLVWithCallback,
+   IVarContents(..), fromIVarContents,
    
    -- * Example use case: Basic IVar ops.
    runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
-
-   -- * Example 2: Pairs (of Ivars).
-   newPair, putFst, putSnd, getFst, getSnd, 
-   
-   -- * Example 3: Monotonically growing sets.
-   ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, waitForSet,
-   waitForSetSize, consumeSet,
    
    -- * DEBUGGING only:
-   unsafePeekSet, reallyUnsafePeekSet, unsafePeekLV
+   unsafePeekLV
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -102,155 +97,17 @@ instance PC.ParIVar IVar Par where
   fork = fork  
   put_ = put_
   new = new
-  
-------------------------------------------------------------------------------
--- IPairs implemented on top of LVars:
-------------------------------------------------------------------------------
-
-type IPair a b = LVar (IORef (IVarContents a),
-                       IORef (IVarContents b))
-
-newPair :: Par (IPair a b)
-newPair = newLV $
-          do r1 <- newIORef (IVarContents Nothing)
-             r2 <- newIORef (IVarContents Nothing)
-             return (r1,r2)
-
--- What is fromIVarContents?  If it's a function, I can't figure out
--- where it's defined.
-
-putFst :: IPair a b -> a -> Par ()
-putFst lv@(LVar (refFst, _) _) !elt = putLV lv putter
-  where
-    -- putter takes the whole pair as an argument, but ignore it and
-    -- just deal with refFst
-    putter _ =
-      atomicModifyIORef refFst $ \x -> 
-      case fromIVarContents x of
-        Nothing -> (IVarContents (Just elt), ())
-        Just _  -> error "multiple puts to first element of IPair"
-        
-putSnd :: IPair a b -> b -> Par ()
-putSnd lv@(LVar (_, refSnd) _) !elt = putLV lv putter
-  where
-    -- putter takes the whole pair as an argument, but ignore it and
-    -- just deal with refSnd
-    putter _ =
-      atomicModifyIORef refSnd $ \x -> 
-      case fromIVarContents x of
-        Nothing -> (IVarContents (Just elt), ())
-        Just _  -> error "multiple puts to second element of IPair"
-
-getFst :: IPair a b -> Par a
-getFst iv@(LVar (ref1,_)  _) = getLV iv poll
- where
-   poll = fmap fromIVarContents $ readIORef ref1
-
-getSnd :: IPair a b -> Par b
-getSnd iv@(LVar (_,ref2) _) = getLV iv poll
- where
-   poll = fmap fromIVarContents $ readIORef ref2
-
-------------------------------------------------------------------------------
--- ISets and setmap implemented on top of LVars:
-------------------------------------------------------------------------------
-
-newtype ISet a = ISet (LVar (IORef (S.Set a)))
-
-newEmptySet :: Par (ISet a)
-newEmptySet = fmap ISet $ newLV$ newIORef S.empty
-
--- | Extended lambdaLVar (callbacks).  Create an empty set, but
--- establish a callback that will be invoked (in parallel) on each
--- element added to the set.
-newEmptySetWithCallBack :: forall a . Ord a => (a -> Par ()) -> Par (ISet a)
-newEmptySetWithCallBack callb = fmap ISet $ newLVWithCallback io
- where -- Every time the set is updated we fork callbacks:
-   io = do
-     alreadyCalled <- newIORef S.empty
-     contents <- newIORef S.empty   
-     let fn :: IORef (S.Set a) -> IO Trace
-         fn _ = do
-           curr <- readIORef contents
-           old <- atomicModifyIORef alreadyCalled (\set -> (curr,set))
-           let new = S.difference curr old
-           -- Spawn in parallel all new callbacks:
-           let trcs = map runCallback (S.toList new)
-           -- Would be nice if this were a balanced tree:           
-           return (foldl Fork Done trcs)
-
-         runCallback :: a -> Trace
-         -- Run each callback with an etpmyt continuation:
-         runCallback elem = runCont (callb elem) (\_ -> Done)
-         
-     return (contents, fn)
-
--- | Put a single element in the set.  (WHNF) Strict in the element being put in the
--- set.     
-putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet !elem (ISet lv) = putLV lv putter
-  where
-    putter ref = atomicModifyIORef ref (\set -> (S.insert elem set, ()))
-
--- | Wait for the set to contain a specified element.
-waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
-  where
-    getter = do
-      set <- readIORef ref
-      case S.member elem set of
-        True  -> return (Just ())
-        False -> return (Nothing)
-
--- | Wait on the SIZE of the set, not its contents.
-waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv@(LVar ref _)) = getLV lv getter
-  where
-    getter = do
-      set <- readIORef ref
-      if S.size set >= sz
-         then return (Just ())
-         else return Nothing     
-
--- | Get the exact contents of the set.  Using this may cause your
--- program to exhibit a limited form of nondeterminism: it will never
--- return the wrong answer, but it may include synchronization bugs
--- that can (nondeterministically) cause exceptions.
-consumeSet :: ISet a -> Par (S.Set a)
-consumeSet (ISet lv) = consumeLV lv readIORef
-
-unsafePeekSet :: ISet a -> Par (S.Set a)
-unsafePeekSet (ISet lv) = unsafePeekLV lv readIORef
-
-reallyUnsafePeekSet :: ISet a -> (S.Set a)
-reallyUnsafePeekSet (ISet (LVar {lvstate})) =
-  unsafePerformIO $ do
-    current <- readIORef lvstate
-    return current
 
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
--- | An LVar consists of a piece of mutable state and a list of
--- polling functions that produce continuations when they are
--- successful.
--- 
--- This implementation cannot provide scalable LVars (e.g., a
--- concurrent hashmap); rather, accesses to a single LVar will
--- contend.  But even if operations on an LVar are serialized, they
--- cannot all be a single "atomicModifyIORef", because atomic
--- modifications must be pure functions, whereas the LVar polling
--- functions are in the IO monad.
+-- | An LVar consists of a piece of mutable state and an optional
+-- callback function, triggered after every write to the LVar, that
+-- takes the just-written value as its argument.
 data LVar a = LVar {
   lvstate :: a,
   callback :: Maybe (a -> IO Trace)
-}
-
--- A poller can only be removed from the Map when it is woken.
-data Poller = Poller {
-   poll  :: IO (Maybe Trace),
-   woken :: {-# UNPACK #-}! (IORef Bool)
 }
 
 -- Return the old value.  Could replace with a true atomic op.
@@ -311,15 +168,6 @@ data Trace =
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
  where
-
-  -- Try to wake it up and remove from the wait list.  Returns true if
-  -- this was the call that actually removed the entry.
-  tryWake (Poller fn flag) waitmp uid = do
-    b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
-    case b of
-      True -> return False -- Already woken.
-      False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
-                  return True 
         
   loop origt = case origt of
     New io fn -> do
@@ -335,28 +183,7 @@ sched _doSync queue t = loop t
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
          Nothing -> reschedule queue
-{- -- Register on the waitlist:          
-           uid <- getUID
-           flag <- newIORef False
-           -- Data-race here: if a putter runs to completion right
-           -- now, it might finish before we get our poller in.  Thus
-           -- we self-poll at the end.
-           let fn = fmap cont <$> poll
-               retry = Poller fn flag
-               
---           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
-               
-           -- We must SELF POLL here to make sure there wasn't a race
-           -- with a putter.  Now we KNOW that our poller is
-           -- "published", so any puts that sneak in here are fine.
-           trc <- fn           
-           case trc of
-             Nothing -> reschedule queue
-             Just tr -> do b <- tryWake retry waitmp uid 
-                           case b of
-                             True  -> loop tr
-                             False -> reschedule queue -- Already woken
--}
+    
     Consume (LVar state _) extractor cont -> do
       -- HACK!  We know nothing about the type of state.  But we CAN
       -- destroy waittmp to prevent any future access.
