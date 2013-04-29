@@ -102,9 +102,10 @@ instance PC.ParIVar IVar Par where
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
--- | An LVar consists of a piece of mutable state and a list of
--- polling functions that produce continuations when they are
--- successful.
+-- | An LVar consists of a piece of mutable state, a list of polling
+-- functions that produce continuations when they are successful, and
+-- an optional callback, triggered after every write to the LVar, that
+-- takes the written value as its argument.
 -- 
 -- This implementation cannot provide scalable LVars (e.g., a
 -- concurrent hashmap); rather, accesses to a single LVar will

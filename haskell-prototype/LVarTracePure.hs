@@ -107,7 +107,10 @@ instance PC.ParIVar IVar Par where
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
--- | An LVar is a box containing a purely functional data structure.
+-- | An LVar consists of: a box containing a purely functional data
+-- structure, and an optional callback function, triggered after every
+-- write to the LVar, that takes the just-written value as its
+-- argument.
 -- 
 -- This implementation cannot provide scalable LVars (e.g., a
 -- concurrent hashmap); rather, accesses to a single LVar will
