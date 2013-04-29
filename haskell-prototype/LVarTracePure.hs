@@ -82,6 +82,10 @@ instance JoinSemiLattice (IVarContents a) where
 put_ :: IVar a -> a -> Par ()
 put_ (IVar iv) elt = putLV iv (IVC (Just elt))
 
+instance NFData (IVarContents a) where
+  rnf (IVC (Just _)) = ()
+  rnf (IVC Nothing)  = ()
+
 spawn :: NFData a => Par a -> Par (IVar a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
               
@@ -160,7 +164,7 @@ instance Applicative Par where
 -- | Trying this using only parametric polymorphism:
 data Trace =
              forall a b . Get (LVar a) (a -> Maybe b) (b -> Trace)
-           | forall a . JoinSemiLattice a => Put (LVar a) a Trace
+           | forall a . (JoinSemiLattice a, NFData a) => Put (LVar a) a Trace
            | forall a . New a (LVar a -> Trace)
            | Fork Trace Trace
            | Done
@@ -234,7 +238,7 @@ sched queue t = loop t
                               Nothing -> woken
                               Just fn -> fn a new' : woken
                 in 
-                seq new' (LVarContents new' ls', woken')
+                deepseq new' (LVarContents new' ls', woken')
       mapM_ (pushWork queue) cs
       loop tr              
 
@@ -398,7 +402,7 @@ getLV :: LVar a -> (a -> Maybe b) -> Par b
 getLV lv test = Par $ Get lv test
 
 -- | Internal operation.  Modify the LVar.  Had better be monotonic.
-putLV :: JoinSemiLattice a => LVar a -> a -> Par ()
+putLV :: (JoinSemiLattice a, NFData a) => LVar a -> a -> Par ()
 putLV lv st = Par $ \c -> Put lv st (c ())
 
 -- | Internal operation. Destructively consume the LVar, yielding
