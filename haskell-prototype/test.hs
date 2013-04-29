@@ -2,6 +2,8 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+module Main where
+
 #if defined(LVARPURE)
 #warning "Using the LVar Pure version"
 import LVarTracePure
@@ -31,11 +33,11 @@ import Test.Framework.TH (defaultMainGenerator)
 main :: IO ()
 main = $(defaultMainGenerator)
 
--- | Ensure that evaluating an expression returns an exception
+-- | Ensure that executing an action returns an exception
 -- containing one of the expected messages.
-assertException  :: [String] -> a -> IO ()
-assertException msgs val = do
- x <- catch (do evaluate val; return Nothing) 
+assertException  :: [String] -> IO a -> IO ()
+assertException msgs action = do
+ x <- catch (do action; return Nothing) 
             (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
                       return (Just $ show e))
  case x of 
@@ -45,6 +47,11 @@ assertException msgs val = do
    then return () 
    else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
         ++ "\nInstead got this exception:\n  " ++ show s
+
+
+-- TODO:
+assertOr :: Assertion -> Assertion -> Assertion
+assertOr = error "TODO: Disjunction over assertions..." 
 
 --------------------------------------------------------------------------------
 
@@ -113,30 +120,36 @@ case_v3b = assertEqual "under-synchronized"
 
 -- | Simple test of pairs.
 case_v4 :: Assertion
-case_v4 = assertEqual "simple-pair"
-          (3, "hi") =<< runParIO (
+case_v4 = v4 >>= assertEqual "simple-pair" (3, "hi") 
+
+v4 :: IO (Int,String)
+v4 = runParIO $
      do p <- newPair
         putFst p 3
         putSnd p "hi"        
         x <- getFst p
         y <- getSnd p
-        return (x,y))
+        return (x,y)
 
--- | This seems pretty naughty, but for now it works!
-case_v5 :: Assertion
-case_v5 = assertEqual "lazy-pair"
-          3 =<< runParIO (
+-- | This program should throw an exception due to multiple puts.
+case_i5a :: Assertion
+case_i5a = assertException ["Multiple puts to an IVar!"] i5a
+
+i5a :: IO Int
+i5a = runParIO (
      do p <- newPair
         putFst p 3
         putSnd p "hi"
         putSnd p "there"        
         getFst p)
 
--- | A genuine data race.  This one requires that ANY tops get thrown
--- as exceptions, or we have full nondeterminism (not even limited
--- guarantees).
+-- | Another exception due to multiple puts.  This tests whether the scheduler waits
+-- around for a trailing (errorful) computation that is not on the main thread.
 case_i5b :: Assertion
-case_i5b = assertException ["Multiple puts to an IVar!"] $ runParIO (
+case_i5b = assertException ["Multiple puts to an IVar!"] i5b
+
+i5b = 
+  runParIO $
      do p <- newPair
         putFst p 3
         putSnd p "hi"
@@ -144,23 +157,50 @@ case_i5b = assertException ["Multiple puts to an IVar!"] $ runParIO (
                   putSnd p "there"
         -- There's no 'consume' here; so we should really just get a
         -- "Multiple puts to an IVar!" exception.
-        getSnd p)
+        getSnd p
 
--- | Same as t5b but with the branches flipped.
-case_v5c :: Assertion
-case_v5c = assertEqual "double put"
-           "hi" =<< runParIO (
+-- | Similar to 5b but with the branches flipped.
+case_i5c :: Assertion
+case_i5c = assertException ["Multiple puts to an IVar!"] i5c
+
+i5c = runParIO $
      do p <- newPair
         putSnd p "hi"
+
+        -- The forked thread's value is not returned, so we go to a little extra work
+        -- here to bounce the value through the First of the pair.
         fork $ putFst p =<< getSnd p
         waste_time
         
-        -- LK: I think this test is actually of a different nature
-        -- than t5b because we never try to read the doubly-written
-        -- value.  This one's more like t5, and if this behavior is
-        -- wrong, then so is t5's.
         putSnd p "there"
-        getFst p)
+        getFst p
+
+-- | Another multiple put error.  This one makes sure that ANY tops get thrown as
+-- exceptions, or we have full nondeterminism (not even limited guarantees), the
+-- program would return "a" or "b".
+case_i6a :: Assertion
+case_i6a = assertException ["Multiple puts to an IVar!"] i6a
+i6a = runParIO (
+     do p <- newPair
+        putFst p 3
+
+        -- TODO: Randomize these amounts of time:
+        fork $ do waste_time
+                  putSnd p "a"
+        fork $ do waste_time
+                  putSnd p "b"
+        -- There's no 'consume' here; so we should really just get a
+        -- "Multiple puts to an IVar!" exception.
+        getSnd p)
+
+
+-- TODO:
+--------------------------------
+-- | This test, semantically, has two possible outcomes.  It can return "hi" or an
+-- error.  That's quasi-determinism.  In practice, we force it to have one outcome by
+-- wasting a significant amount of time in one branch.
+--------------------------------
+
 
 waste_time = loop 1000 3.3
  where
@@ -179,3 +219,4 @@ case_v6 = assertEqual "fancy pairs"
                   putSnd p1 x
         putFst p1 33
         getSnd p1)
+

@@ -14,8 +14,8 @@ endif
 
 default: l1 l2 s
 
-%: %.hs
-	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
+# %: %.hs
+#	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
 
 #--------------------------------------------------------------------------------
 # Input data generation: generate graphs using PBBS.
@@ -101,7 +101,12 @@ wipelogs:
 
 #--------------------------------------------------------------------------------
 
-test: test_pure.exe test_io.exe test_scalable.exe
+alltests: test_pure.exe test_io.exe test_scalable.exe
+runtests:
+	./test_pure.exe 
+	./test_io.exe 
+	./test_scalable.exe
+
 test_pure.exe:
 	$(GHC) -DLVARPURE -O2 -threaded -rtsopts --make test.hs -o $@
 test_io.exe:
