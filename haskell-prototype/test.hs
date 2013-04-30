@@ -56,34 +56,45 @@ assertOr = error "TODO: Disjunction over assertions..."
 --------------------------------------------------------------------------------
 
 case_v0 :: Assertion
-case_v0 = assertEqual "useless fork" (4::Int) $ 
-          runPar $ do i<-new; fork (return ()); put i 4; get i
+case_v0 = assertEqual "useless fork" (4::Int) v0
+          
+v0 = runPar $ do i<-new; fork (return ()); put i 4; get i
 
 case_v1 :: Assertion
-case_v1 = assertEqual "fork put" (4::Int) $
-          runPar $ do i<-new; fork (put i 4); get i
+case_v1 = assertEqual "fork put" (4::Int) v1
+
+v1 = runPar $ do i<-new; fork (put i 4); get i
 
 case_v2 :: Assertion
-case_v2 = assertEqual "put 10 in & wait"
-          (S.fromList [1..10] :: S.Set Int) =<< runParIO (
+case_v2 = v2 >>= assertEqual "put 10 in & wait"
+          (S.fromList [1..10] :: S.Set Int)
+          
+v2 :: IO (S.Set Int)          
+v2 = runParIO $
      do s <- newEmptySet
         mapM_ (\n -> fork $ putInSet n s) [1..10]
         waitForSetSize 10 s 
-        consumeSet s)
+        consumeSet s
 
 -- | This version uses a fork-join so it doesn't need the waitForSetSize:
 case_v2b :: Assertion
-case_v2b = assertEqual "t2 with spawn instead of fork"
-           (S.fromList [1..10] :: S.Set Int) =<< runParIO (
+case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
+           (S.fromList [1..10] :: S.Set Int)
+           
+v2b :: IO (S.Set Int)
+v2b = runParIO $
      do s <- newEmptySet
         ivs <- mapM (\n -> spawn_ $ putInSet n s) [1..10]
         mapM_ get ivs -- Join point.
-        consumeSet s)
+        consumeSet s
 
 -- | Simple callback test.
 case_v3 :: Assertion
-case_v3 = assertEqual "simple callback test"
-          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int) =<< runParIO (
+case_v3 = v3 >>= assertEqual "simple callback test"
+          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
+          
+v3 :: IO (S.Set Int)          
+v3 = runParIO $
      do s1 <- newEmptySet
         let fn e = putInSet (e*10) s1 
             
@@ -95,14 +106,17 @@ case_v3 = assertEqual "simple callback test"
         -- to s2 as their argument.  So eventually, ten elements are
         -- written to s1.
         waitForSetSize 10 s1
-        consumeSet s1)
+        consumeSet s1
 
 -- | An under-synchronized test.  This should always return the same
 -- result OR throw an exception.  In this case it should always return
 -- a list of 10 elements, or throw an exception.
 case_v3b :: Assertion
-case_v3b = assertEqual "under-synchronized"
-          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int) =<< runParIO (
+case_v3b = v3b >>= assertEqual "under-synchronized"
+           (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
+          
+v3b :: IO (S.Set Int)
+v3b = runParIO $
      do s1 <- newEmptySet
         let fn e = putInSet (e*10) s1 
         
@@ -116,7 +130,7 @@ case_v3b = assertEqual "under-synchronized"
         -- on the other hand, it occurs after they've all happened,
         -- then we won't notice that anything is wrong and we'll get
         -- the same result we would have in case_v3.
-        consumeSet s1)
+        consumeSet s1
 
 -- | Simple test of pairs.
 case_v4 :: Assertion
