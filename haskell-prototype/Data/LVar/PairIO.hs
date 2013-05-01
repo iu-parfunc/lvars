@@ -1,11 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Data.LVar.PairIO
-       (newPair,
-        putFst,
-        putSnd,
-        getFst,
-        getSnd,
+       (
+         IPair,
+         newPair,
+         putFst,
+         putSnd,
+         getFst,
+         getSnd,
         ) where
 import LVarTraceIO
 import Data.IORef

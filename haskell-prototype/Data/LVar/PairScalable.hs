@@ -1,11 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Data.LVar.PairScalable
-       (newPair,
-        putFst,
-        putSnd,
-        getFst,
-        getSnd,
+       (
+         IPair,
+         newPair,
+         putFst,
+         putSnd,
+         getFst,
+         getSnd,
         ) where
 import LVarTraceScalable
 import Data.IORef

@@ -2,6 +2,7 @@
 
 module Data.LVar.PairPure
        (
+         IPair,
          newPair,
          putFst,
          putSnd,
