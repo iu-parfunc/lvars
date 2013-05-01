@@ -46,7 +46,8 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 
 import qualified Control.Monad.Par.Class as PC
 
-import Common (forkWithExceptions)
+import Control.Concurrent.Async (asyncOn, withAsync, withAsyncOn, wait, mapConcurrently)
+-- import Common (forkWithExceptions)
 
 -- From 'lattices' package:  Classes for join semi-lattices, top, bottom:
 import Algebra.Lattice (JoinSemiLattice(..))
@@ -361,26 +362,35 @@ runPar_internal usercomp = do
     --
    let main_cpu = 0
 #endif
-
    answerMV <- newEmptyMVar
-   otherMVs :: [MVar ()] <- forM states $ \ state -> do       
-      let cpu = no state
-      otherMV <- newEmptyMVar 
-      forkWithExceptions (forkOn cpu) "worker thread" $ do 
-          if (cpu /= main_cpu)
-             then reschedule state
-             else sched state $
-		    runCont (do x' <- usercomp
-				liftIO (putMVar answerMV x'))
-			    (const Done)
-          putMVar otherMV ()
-      return otherMV
+   let runWorker state = do 
+         let cpu = no state
+	 if (cpu /= main_cpu)
+	    then reschedule state
+	    else sched state $
+		   runCont (do x' <- usercomp
+			       liftIO (putMVar answerMV x'))
+			   (const Done)
 
-   -- We want to "fake" fork-join behavior by making the main thread
-   -- wait for child threads to finish.  We need this to guarantee
-   -- determinism.
-   mapM_ takeMVar otherMVs
+   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
+   let loop [] asyncs = mapM_ wait asyncs
+       loop (state:tl) asyncs = 
+--         withAsync (runWorker state)
+         withAsyncOn (no state) (runWorker state)
+                     (\a -> loop tl (a:asyncs))
 
+----------------------------------------
+-- (1) There is a BUG in 'loop' presently:
+--    "thread blocked indefinitely in an STM transaction"
+--   loop states []
+----------------------------------------
+-- (2) This has the same problem as 'loop':
+--   ls <- mapM (\ x -> asyncOn (no x) (runWorker x)) states
+--   mapM_ wait ls
+----------------------------------------
+-- (3) Using this FOR NOW, but it does NOT pin to the right processors:
+   mapConcurrently runWorker states
+----------------------------------------
    -- Now that child threads are done, it's safe for the main thread
    -- to call it quits.
    takeMVar answerMV
