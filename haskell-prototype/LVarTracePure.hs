@@ -22,7 +22,7 @@ module LVarTracePure
    Trace(..), runCont, consumeLV, newLVWithCallback,
    IVarContents(..),
    LVarContents(..),
-   
+
    -- * Example use case: Basic IVar ops.
    runPar, IVar(), new, put, put_, get, spawn, spawn_, spawnP,
    
@@ -35,6 +35,7 @@ import           Control.Concurrent hiding (yield)
 import           Control.DeepSeq
 import           Control.Applicative
 import           Data.IORef
+import           Data.Maybe (catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           GHC.Conc hiding (yield)
@@ -334,8 +335,9 @@ instance NFData (LVar a) where
 
 {-# INLINE runPar_internal #-}
 runPar_internal :: Par a -> IO a
-runPar_internal  x = do
-   workpools <- replicateM numCapabilities $ newIORef []
+runPar_internal usercomp = do
+   let numWorkers = numCapabilities
+   workpools <- replicateM numWorkers $ newIORef []
    idle <- newIORef []
    let states = [ Sched { no=x, workpool=wp, idle, scheds=states }
                 | (x,wp) <- zip [0..] workpools ]
@@ -360,14 +362,28 @@ runPar_internal  x = do
    let main_cpu = 0
 #endif
 
-   m <- newEmptyMVar
-   forM_ (zip [0..] states) $ \(cpu,state) ->
+   answerMV <- newEmptyMVar
+   otherMVs :: [MVar ()] <- forM states $ \ state -> do       
+      let cpu = no state
+      otherMV <- newEmptyMVar 
       forkWithExceptions (forkOn cpu) "worker thread" $ do 
           if (cpu /= main_cpu)
              then reschedule state
              else sched state $
-                    runCont (do x' <- x; liftIO (putMVar m x')) (const Done)
-   takeMVar m
+		    runCont (do x' <- usercomp
+				liftIO (putMVar answerMV x'))
+			    (const Done)
+          putMVar otherMV ()
+      return otherMV
+
+   -- We want to "fake" fork-join behavior by making the main thread
+   -- wait for child threads to finish.  We need this to guarantee
+   -- determinism.
+   mapM_ takeMVar otherMVs
+
+   -- Now that child threads are done, it's safe for the main thread
+   -- to call it quits.
+   takeMVar answerMV
 
 runPar :: Par a -> a
 runPar = unsafePerformIO . runPar_internal 
