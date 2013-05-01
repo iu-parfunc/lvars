@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 
+-- | This file is #included into the benchmark variants.
+
 -- Compile-time options:
 --   PURE        -- use LVarTracePure
 --   IMPURE      -- use LVarTraceIO
