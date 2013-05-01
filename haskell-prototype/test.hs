@@ -23,15 +23,31 @@ import Data.LVar.SetScalable
 
 import Prelude hiding (catch)
 import Control.Exception (catch, evaluate, SomeException)
+import Control.Concurrent (setNumCapabilities)
 import Data.List (isInfixOf)
-import Data.Set as S
+import qualified Data.Set as S
 import Test.HUnit (Assertion, assertEqual, assertBool)
 import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain)
-import Test.Framework.TH (defaultMainGenerator)
+import Test.Framework (Test, defaultMainWithArgs, testGroup)
+import Test.Framework.TH (testGroupGenerator)
+import System.Environment (getArgs)
 
 main :: IO ()
-main = $(defaultMainGenerator)
+main = do 
+  args <- getArgs
+  -- Set the number of threads on the command line: Here we snatch an
+  -- argument before test-framework gets to it.
+  let (threads,args') = 
+         case concatMap reads args of 
+           (x,_):_ -> (x, tail args)
+           _       -> (4, args)
+  putStrLn$ "Setting the number of threads to: "++show threads
+  setNumCapabilities threads
+  -- Template haskell magic to aggregate the tests from this file:
+  let alltests :: Test
+      alltests = $(testGroupGenerator)
+  defaultMainWithArgs [alltests] args'
+--  defaultMainWithArgs (testGroup "LVar tests"  alltests) args'
 
 -- | Ensure that executing an action returns an exception
 -- containing one of the expected messages.
