@@ -65,7 +65,8 @@ assertException msgs action = do
    else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
         ++ "\nInstead got this exception:\n  " ++ show s
 
--- | A test which may c
+-- | For testing quasi-deterministic programs: programs that always
+-- either raise a particular exception or produce a particular answer.
 allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
 allowSomeExceptions msgs action = do
  catch (do a <- action; return (Right a))
