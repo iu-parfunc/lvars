@@ -24,7 +24,11 @@ import Data.LVar.SetScalable
 
 import Prelude hiding (catch)
 import Control.Exception (catch, evaluate, SomeException)
+#if __GLASGOW_HASKELL__ >= 761
 import Control.Concurrent (setNumCapabilities)
+#else
+import Control.Concurrent (getNumCapabilities)
+#endif
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import Test.HUnit (Assertion, assertEqual, assertBool)
@@ -42,8 +46,17 @@ main = do
          case concatMap reads args of 
            (x,_):_ -> (x, tail args)
            _       -> (4, args)
-  putStrLn$ "Setting the number of threads to: "++show threads
+
+#if __GLASGOW_HASKELL__ >= 761
+  -- GHC 7.6.1 introduced setNumCapabilities
+  putStrLn $ "Setting the number of threads to: " ++ show threads
   setNumCapabilities threads
+#else
+  -- Otherwise we have to specify it with -N on the command line
+  do n <- getNumCapabilities
+     putStrLn $ "Number of threads specified with -N: " ++ show n
+#endif
+
   -- Template haskell magic to aggregate the tests from this file:
   let alltests :: Test
       alltests = $(testGroupGenerator)
