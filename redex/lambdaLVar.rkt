@@ -181,11 +181,12 @@
        "E-ConvertVal"]
 
       [(small-step-base (S (let ((x_1 e_1)) e_2))
-                        (S ((lambda (x_1) e_2) e_1)))]
+                        (S ((lambda (x_1) e_2) e_1)))
+       "Desugaring of let"]
 
       [(small-step-base (S (let par ((x_1 e_1) (x_2 e_2)) e_3))
                         (S (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))
-       "Desugaring of lets"]
+       "Desugaring of let par"]
 
       [(small-step-base (S (e_1 e_2))
                         Error)
