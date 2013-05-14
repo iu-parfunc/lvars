@@ -226,7 +226,7 @@
     ;; relation.
     (define-extended-judgment-form name small-step-base
       #:mode (small-step-slow I O)
-      ;;#:contract (small-step-slow Config Config)
+      #:contract (small-step-slow Config Config)
 
       [(small-step-slow (S (e_1 e_2)) (S_1 (e_11 e_2)))
        (small-step-slow (S e_1) (S_1 e_11))
