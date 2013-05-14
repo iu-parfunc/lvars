@@ -77,7 +77,6 @@
 
       ;; Ranges of a couple of metafunctions.
       (d/lookupfailed d lookupfailed)
-      (S/updatefailed S updatefailed)
       (Bool #t #f)
       (d/Bool d Bool)
 
@@ -116,7 +115,7 @@
     ;; reduction relations defined below this one.
     (define-judgment-form name
       #:mode (small-step-base I O)
-      ;;#:contract (small-step-base Config Config)
+      #:contract (small-step-base Config Config)
 
       [(small-step-base (S (e_1 e_2))
                         ((lubstore S_11 S_2) (e_111 e_22)))
@@ -444,7 +443,7 @@
 
     ;; Actually handles both updates and extensions.
     (define-metafunction name
-      store-update : S l StoreVal -> S/updatefailed
+      store-update : S l StoreVal -> S
       [(store-update () l StoreVal) ((l StoreVal))]
       [(store-update ((l_2 StoreVal_2) (l_3 StoreVal_3) (... ...)) l StoreVal)
        ,(if (equal? (term l) (term l_2))
