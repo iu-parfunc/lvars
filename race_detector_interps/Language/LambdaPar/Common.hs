@@ -31,7 +31,7 @@ import System.IO.Unsafe   (unsafePerformIO)
 --------------------------------------------------------------------------------
 -- Several modules offer this, with varying problems:
 ----------------------------
-#define USE_STRINGTABLE
+#define USE_SYMBOL
 #ifdef USE_STRINGTABLE
 -- 'stringtable-atom' package:
 -- I'm getting some segfaults here [2012.05.19];
@@ -61,8 +61,8 @@ import Data.Symbol
 import Data.Map as M
 var = intern
 type Var = Symbol 
-instance Show Symbol where 
- show = unintern
+-- instance Show Symbol where 
+--  show = unintern
 -- instance Read Symbol where 
 type SymbolMap a = M.Map Symbol a
 -- NOTE - this package would seem to be unsafe because the Symbol type
@@ -78,6 +78,7 @@ symMapElems  = M.elems
 #endif
   
 var :: String -> Var
+symMapFromList :: [(Var,a)] -> SymbolMap a 
 
 --------------------------------------------------------------------------------
 -- * IVar lattices, no ordering on contents, top omitted:

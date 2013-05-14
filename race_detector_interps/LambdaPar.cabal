@@ -27,8 +27,9 @@ library
                   GenericPretty >= 1.2.0, pretty,
                   template-haskell, HUnit, test-framework, 
                   test-framework-th, test-framework-quickcheck2, test-framework-hunit,
-                  symbol,
-                  stringtable-atom
+                  symbol
+--                  simple-atom 
+--                  stringtable-atom
 
 -- Test-Suite test-lambdapar
 --  type:       exitcode-stdio-1.0
@@ -38,5 +39,6 @@ executable test-lambdapar
                   GenericPretty >= 1.2.0, pretty,
                   template-haskell, HUnit, test-framework, 
                   test-framework-th, test-framework-quickcheck2, test-framework-hunit,
-                  symbol, 
-                  stringtable-atom
+                  symbol
+--                  simple-atom 
+--                  stringtable-atom
