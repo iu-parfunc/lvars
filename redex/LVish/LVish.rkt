@@ -38,8 +38,7 @@
          (consume e)
          (let handlers x be (bind (δ) e) with e in e)
 
-         ;; These don't appear in the grammar in the TR, because they
-         ;; immediately desugar to application and lambda.
+         ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
 
@@ -70,13 +69,11 @@
       ;; Lattice elements, representing the state of an LVar.  We
       ;; assume Top and Bot lattice elements in addition to the
       ;; user-specified lattice-values.  A StoreVal can be any element
-      ;; of the domain except Top (see Definition 1 in the TR).
+      ;; of the domain except Top.
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
       ;; Ranges of a couple of metafunctions.
-      (d/lookupfailed d lookupfailed)
-      (Bool/lookupfailed Bool lookupfailed)
       (Bool #t #f)
       (d/Bool d Bool)
 
@@ -166,15 +163,17 @@
             Error
             (where d_1 (store-lookup S l))
             (where #t (top? (lub d_1 d_2)))
-            "E-PutErr")
+            "E-Put-Err")
 
-       ;; TODO: handle `let handlers`.
-       
        (--> (S_1 (in-hole E (consume l)))
             (S_2 (in-hole E (d)))
             (where d (store-lookup S_1 l))
             (where S_2 (consume-helper S_1 d))
-            "E-Consume")))
+            "E-Consume")
+
+       ;; TODO: handle `let handlers`.
+
+       ))
 
     ;; Some convenience functions: LVar accessors and constructor.
 
@@ -245,7 +244,7 @@
     ;; But we can't get Redex to compute that, so instead, we ask the user
     ;; to provide lub, then compute leq in terms of lub.
     ;;
-    ;; Intended to be extended by a user-provided metafunction/extension.
+    ;; Intended to be extended by a user-provided operation.
     (define-metafunction name
       lub : d d -> d
       [(lub Bot d_2) d_2]
@@ -287,11 +286,11 @@
        ,(variable-not-in (term S) (term l))])
 
     (define-metafunction name
-      store-lookup : S l -> d/lookupfailed
+      store-lookup : S l -> d
       [(store-lookup S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
                                  (term (lvstate ,lv))
-                                 (term lookupfailed)))])
+                                 (error "store-lookup: lookup failed")))])
 
     (define-metafunction name
       frozen? : S l -> Bool
@@ -312,7 +311,7 @@
       [(store-update ((l_2 (StoreVal_2 frozenness_2))
                       (l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal)
        ,(if (equal? (term l) (term l_2))
-            ;; The side conditions on E-PutVal should ensure that the
+            ;; The side conditions on E-Put should ensure that the
             ;; call to store-update only happens when the lub of the
             ;; old and new values is non-Top.
             (cons (term (l_2 ((lub StoreVal StoreVal_2) frozenness_2)))
@@ -320,7 +319,7 @@
             (cons (term (l_2 (StoreVal_2 frozenness_2)))
                   (term (store-update ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
 
-    ;; The second condition on the E-GetVal rule.  For any two distinct
+    ;; The second condition on the E-Get rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.
     (define-metafunction name
       incomp : Q -> Bool
@@ -332,12 +331,12 @@
              (term (incomp (d_1 d_3 (... ...))))
              (term (incomp (d_2 d_3 (... ...)))))])
 
-    ;; The third condition on the E-GetVal rule.
+    ;; The third condition on the E-Get rule.
     (define-metafunction name
       valid : Q -> Bool
       [(valid Q) ,(not (null? (term Q)))])
 
-    ;; The fourth and fifth premises of the E-GetVal rule.  If there
+    ;; The fourth and fifth premises of the E-Get rule.  If there
     ;; exists a d_1 that is a member of Q and is less than or equal to
     ;; d_2, returns that d_1.  Otherwise, returns #f.
     (define-metafunction name

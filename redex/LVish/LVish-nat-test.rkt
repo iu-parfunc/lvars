@@ -283,7 +283,7 @@
              (((l (3 #f)) (l1 (4 #f)) (l2 (Bot #f)))
               l2)))
 
-  ;; E-PutVal
+  ;; E-Put
   (test-->> rr
             (term
              (((l (Bot #f)))
@@ -340,7 +340,7 @@
              (((l (Bot #f)))
               l)))
 
-  ;; let + E-New + E-PutVal + E-GetVal + E-Convert
+  ;; let + E-New + E-Put + E-Get + E-Convert
   (test-->> rr
             (term
              (() ;; empty store
@@ -352,7 +352,7 @@
              (((l (3 #f)))
               (2))))
   
-  ;; let par + E-New + E-PutVal + E-GetVal + E-Convert
+  ;; let par + E-New + E-Put + E-Get + E-Convert
   (test-->> rr
             (term
              (() ;; empty store
@@ -364,7 +364,7 @@
              (((l (3 #f)))
               (2))))
 
-  ;; Another aspect of E-PutVal's behavior
+  ;; Another aspect of E-Put's behavior
   (test-->> rr
             (term
              (() ;; empty store
@@ -378,7 +378,7 @@
              (((l (5 #f)))
               (5))))
 
-  ;; E-PutValErr
+  ;; E-Put-Err
   (test-->> rr
             (term
              (() ;; empty store
@@ -402,7 +402,7 @@
                (l1 (4 #f)))
               (4))))
   
-  ;;let par put and get
+  ;;let par + E-New + E-Put + E-Get
   (test-->> rr
             (term
              (() ;; empty store
@@ -415,7 +415,7 @@
               (2))))
 
   ;; FIXME: this test gets stuck reducing.  Figure out what's wrong.
-  ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock + E-Convert
+  ;; let par + E-New + E-Put + E-Get
   (test-->> rr
             (term
              (() ;; empty store
