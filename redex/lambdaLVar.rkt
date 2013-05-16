@@ -63,20 +63,21 @@
       ;; Nevertheless, the grammar admits it.
       (Q (d (... ...)))
 
-      ;; Stores.  A store is either a finite partial mapping from
-      ;; locations to domain values (excluding Top), or it is the
-      ;; distinguished element TopS.
-      (S ((l StoreVal) (... ...)) TopS)
+      ;; Stores.  A store is either a set of LVars (that is, a finite
+      ;; partial mapping from locations to StoreVals) or a
+      ;; distinguished value TopS.
+      (S (LVar (... ...)) TopS)
+      (LVar (l StoreVal))
 
-      ;; Domains contain elements d to which locations can be bound.  We
-      ;; assume a domain of Top and Bot (which is intended to be
-      ;; extended).  A StoreVal can be any element of the domain except
-      ;; Top (see Definition 1 in the TR).
+      ;; Lattice elements, representing the state of an LVar.  We
+      ;; assume Top and Bot lattice elements in addition to the
+      ;; user-specified lattice-values. A StoreVal can be any element
+      ;; of the lattice except Top (see Definition 1 in the TR).
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
       ;; Ranges of a couple of metafunctions.
-      (d/lookupfailed d lookupfailed)
+      (StoreVal/lookupfailed StoreVal lookupfailed)
       (Bool #t #f)
       (d/Bool d Bool)
 
@@ -272,11 +273,26 @@
        (where #f (exists-d d_2 Q))
        "E-GetValBlock"])
 
+    ;; Some convenience functions: LVar accessors and constructor.
+
+    (define-metafunction name
+      lvloc : LVar -> l
+      [(lvloc LVar) ,(first (term LVar))])
+
+    (define-metafunction name
+      lvstate : LVar -> StoreVal
+      [(lvstate LVar) ,(second (term LVar))])
+
+    (define-metafunction name
+      build-lv : l StoreVal -> LVar
+      [(build-lv l StoreVal)
+       (l StoreVal)])
+    
     (define-metafunction name
       store-dom : S -> (l (... ...))
       [(store-dom ()) ()]
-      [(store-dom ((l_1 d_1) (l_2 d_2) (... ...)))
-       ,(cons (term l_1) (term (store-dom ((l_2 d_2) (... ...)))))])
+      [(store-dom ((l_1 StoreVal_1) (l_2 StoreVal_2) (... ...)))
+       ,(cons (term l_1) (term (store-dom ((l_2 StoreVal_2) (... ...)))))])
 
     ;; Return a list of locations in dom(S_1) that are not in dom(S_2).
     (define-metafunction name
@@ -436,10 +452,10 @@
        ,(variable-not-in (term S) (term l))])
 
     (define-metafunction name
-      store-lookup : S l -> d/lookupfailed
-      [(store-lookup S l) ,(let ([v (assq (term l) (term S))])
-                             (if v
-                                 (term ,(second v))
+      store-lookup : S l -> StoreVal/lookupfailed
+      [(store-lookup S l) ,(let ([lv (assq (term l) (term S))])
+                             (if lv
+                                 (term (lvstate ,lv))
                                  (term lookupfailed)))])
 
     ;; Actually handles both updates and extensions.

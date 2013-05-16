@@ -69,7 +69,7 @@
       ;; Lattice elements, representing the state of an LVar.  We
       ;; assume Top and Bot lattice elements in addition to the
       ;; user-specified lattice-values.  A StoreVal can be any element
-      ;; of the domain except Top.
+      ;; of the lattice except Top.
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
@@ -286,7 +286,7 @@
        ,(variable-not-in (term S) (term l))])
 
     (define-metafunction name
-      store-lookup : S l -> d
+      store-lookup : S l -> StoreVal
       [(store-lookup S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
                                  (term (lvstate ,lv))
