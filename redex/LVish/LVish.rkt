@@ -12,8 +12,6 @@
              exists-d
              lub
              leq
-             lubstore
-             lubstore-helper
              store-dom
              store-lookup
              store-update
@@ -62,20 +60,23 @@
       ;; Nevertheless, the grammar admits it.
       (Q (d (... ...)))
 
-      ;; Stores.  A store is either a finite partial mapping from
-      ;; locations to domain values (excluding Top), or it is the
-      ;; distinguished element TopS.
-      (S ((l StoreVal) (... ...)) TopS)
+      ;; Stores.  A store is either a set of LVars (that is, a finite
+      ;; partial mapping from locations l to pairs of StoreVals and
+      ;; frozenness flags) or a distinguished value TopS.
+      (S (LVar (... ...)) TopS)
+      (LVar (l (StoreVal frozenness)))
+      (frozenness #t #f)
 
-      ;; Domains contain elements d to which locations can be bound.  We
-      ;; assume a domain of Top and Bot (which is intended to be
-      ;; extended).  A StoreVal can be any element of the domain except
-      ;; Top (see Definition 1 in the TR).
+      ;; Lattice elements, representing the state of an LVar.  We
+      ;; assume Top and Bot lattice elements in addition to the
+      ;; user-specified lattice-values.  A StoreVal can be any element
+      ;; of the domain except Top (see Definition 1 in the TR).
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
       ;; Ranges of a couple of metafunctions.
       (d/lookupfailed d lookupfailed)
+      (Bool/lookupfailed Bool lookupfailed)
       (Bool #t #f)
       (d/Bool d Bool)
 
@@ -110,8 +111,28 @@
        (--> (S (in-hole E (put l (d_2))))
             ((store-update S l d_2) (in-hole E ()))
             (where d_1 (store-lookup S l))
+            (where #f (frozen? S l))
             (where #f (top? (lub d_1 d_2)))
-            "E-PutVal")
+            "E-Put")
+
+       ;; If an LVar is frozen, putting a value that is less than or
+       ;; equal to the current value has no effect...
+       (--> (S (in-hole E (put l (d_2))))
+            (S (in-hole E ()))
+            (where #t (frozen? S l))
+            (where d_1 (store-lookup S l))
+            (where #t (leq d_2 d_1))
+            "E-Put-Frozen")
+
+       ;; ...but putting a value that is greater than the current
+       ;; value, or has no order with the current value, raises an
+       ;; error.
+       (--> (S (in-hole E (put l (d_2))))
+            Error
+            (where #t (frozen? S l))
+            (where d_1 (store-lookup S l))
+            (where #f (leq d_2 d_1))
+            "E-Put-Frozen-Err")
 
        (--> (S (in-hole E (get l Q)))
             (S (in-hole E (d_1)))
@@ -119,7 +140,7 @@
             (where #t (incomp Q))
             (where #t (valid Q))
             (where d_1 (exists-d d_2 Q))
-            "E-GetVal")
+            "E-Get")
 
        (--> (S (in-hole E (let ((x_1 e_1)) e_2)))
             (S (in-hole E ((lambda (x_1) e_2) e_1)))
@@ -138,25 +159,63 @@
 
        (--> (S (in-hole E (convert Q)))
             (S (in-hole E (conv Q)))
-            "E-ConvertVal")
+            "E-Convert")
 
        ;; Propagates errors due to conflicting writes.
        (--> (S (in-hole E (put l (d_2))))
             Error
             (where d_1 (store-lookup S l))
             (where #t (top? (lub d_1 d_2)))
-            "E-PutValErr")
+            "E-PutErr")
 
        ;; TODO: handle `let handlers`.
-       ;; TODO: handle `consume`.
+       
+       (--> (S_1 (in-hole E (consume l)))
+            (S_2 (in-hole E (d)))
+            (where d (store-lookup S_1 l))
+            (where S_2 (consume-helper S_1 d))
+            "E-Consume")))
 
-))
+    ;; Some convenience functions: LVar accessors and constructor.
+
+    (define-metafunction name
+      lvloc : LVar -> l
+      [(lvloc LVar) ,(first (term LVar))])
+    
+    (define-metafunction name
+      lvstate : LVar -> StoreVal
+      [(lvstate LVar) ,(first (second (term LVar)))])
+
+    (define-metafunction name
+      lvfrozenness : LVar -> frozenness
+      [(lvfrozenness LVar) ,(second (second (term LVar)))])
+
+    (define-metafunction name
+      build-lv : l StoreVal frozenness -> LVar
+      [(build-lv l StoreVal frozenness)
+       (l (StoreVal frozenness))])
+
+    ;; Returns a store that is the same as the original store S, but
+    ;; with S(l) modified to be frozen.
+    (define-metafunction name
+      consume-helper : S l -> S
+      [(consume-helper S l)
+       ,(let ([lv (assq (term l) (term S))]
+              [update (lambda (lv)
+                        (if (equal? (term (lvloc ,lv)) (term l))
+                            (term (build-lv (lvloc ,lv) (lvstate ,lv) #t)) 
+                            lv))])
+          (if lv
+              (term ,(map update (term S)))
+              (error "consume-helper: lookup failed")))])
 
     (define-metafunction name
       store-dom : S -> (l (... ...))
       [(store-dom ()) ()]
-      [(store-dom ((l_1 d_1) (l_2 d_2) (... ...)))
-       ,(cons (term l_1) (term (store-dom ((l_2 d_2) (... ...)))))])
+      [(store-dom ((l_1 (StoreVal_1 frozenness_1))
+                   (l_2 (StoreVal_2 frozenness_2)) (... ...)))
+       ,(cons (term l_1)
+              (term (store-dom ((l_2 (StoreVal_2 frozenness_2)) (... ...)))))])
 
     ;; Return a list of locations in dom(S_1) that are not in dom(S_2).
     (define-metafunction name
@@ -221,71 +280,6 @@
       ;; than both d_1 and d_2.  In this case, (not (leq d_1 d_2)).
       [(leq d_1 d_2) ,#f])
 
-    ;; Definition 3 in the TR.
-    (define-metafunction name
-      lubstore : S S -> S
-      [(lubstore S_1 ()) S_1]
-      [(lubstore () S_2) S_2]
-
-      ;; The TopS case.
-      [(lubstore S_1 S_2)
-       TopS
-       (where #t (lubstore-TopS? S_1 S_2))]
-
-      ;; Otherwise, (lubstore S_1 S_2) is the store S such that (store-dom
-      ;; S) = (union (store-dom S_1) (store-dom S_2)), and, for all l in
-      ;; (store-dom S),
-
-      ;; S(l) = (lub S_1(l) S_2(l))
-      ;;        if (member? l (intersection (store-dom S_1) (store_dom S_2)))
-      ;; S(l) = S_1(l) if (not (member? l (store-dom S_2)))
-      ;; S(l) = S_2(l) if (not (member? l (store-dom S_1)))
-
-      [(lubstore S_1 S_2)
-       ;; Get the union of labels from S_1 and S_2
-       ,(let* ([locs (lset-union equal?
-                                 (term (store-dom S_1))
-                                 (term (store-dom S_2)))]
-               ;; For each label in the list, take the lub of S_1(l) and S_2(l),
-               [lubs (term ,(map (lambda (loc)
-                                   (term (lubstore-helper S_1 S_2 ,loc)))
-                                 locs))])
-          ;; Put labels back together with their lubs.
-          (zip locs lubs))])
-
-    (define-metafunction name
-      lubstore-TopS? : S S -> Bool
-      [(lubstore-TopS? S_1 S_2)
-       ;; (lubstore-TopS? S_1 S_2) == #t iff there exists some l in
-       ;; (intersection (store-dom S_1) (store-dom S_2)) such that (lub
-       ;; (store-lookup S_1 l) (store-lookup S_2 l)) == Top.
-       
-       ;; First, get the intersection of the domains of S_1 and S_2.
-       ,(let* ([locs (lset-intersection equal?
-                                        (term (store-dom S_1))
-                                        (term (store-dom S_2)))]
-               ;; For each such label l, take the lub of S_1(l) and S_2(l).
-               [lubs (term ,(map (lambda (loc)
-                                   (term (lubstore-helper S_1 S_2 ,loc)))
-                                 locs))])
-          ;; If any lub in the resulting list is Top, return #t;
-          ;; otherwise, return #f.
-          (if (member (term Top) lubs)
-              #t
-              #f))])
-
-    ;; Given a store location `l` and two stores `S_1` and `S_2`, return
-    ;; the lub of S_1(l) and S_2(l).  We know that every l this function
-    ;; gets is going to be in the domain of either S_1 or S_2 or both.
-    (define-metafunction name
-      lubstore-helper : S S l -> d
-      [(lubstore-helper S_1 S_2 l)
-       ,(let ([d_1 (term (store-lookup S_1 l))]
-              [d_2 (term (store-lookup S_2 l))])
-          (cond
-            [(equal? d_1 (term lookupfailed)) d_2]
-            [(equal? d_2 (term lookupfailed)) d_1]
-            [else (term (lub ,d_1 ,d_2))]))])
 
     (define-metafunction name
       variable-not-in-store : S -> l
@@ -294,24 +288,37 @@
 
     (define-metafunction name
       store-lookup : S l -> d/lookupfailed
-      [(store-lookup S l) ,(let ([v (assq (term l) (term S))])
-                             (if v
-                                 (term ,(second v))
+      [(store-lookup S l) ,(let ([lv (assq (term l) (term S))])
+                             (if lv
+                                 (term (lvstate ,lv))
                                  (term lookupfailed)))])
 
-    ;; Actually handles both updates and extensions.
+    (define-metafunction name
+      frozen? : S l -> Bool
+      [(frozen? S l) ,(let ([lv (assq (term l) (term S))])
+                             (if lv
+                                 (term (lvfrozenness ,lv))
+                                 (error "frozen?: lookup failed")))])
+
+    ;; Actually handles both updates and extensions.  Assumes that if
+    ;; l is in dom(S), that it is unfrozen.
     (define-metafunction name
       store-update : S l StoreVal -> S
-      [(store-update () l StoreVal) ((l StoreVal))]
-      [(store-update ((l_2 StoreVal_2) (l_3 StoreVal_3) (... ...)) l StoreVal)
+
+      ;; If adding a binding that wasn't in the store before (an
+      ;; extension), it is unfrozen.
+      [(store-update () l StoreVal) ((l (StoreVal #f)))]
+
+      [(store-update ((l_2 (StoreVal_2 frozenness_2))
+                      (l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal)
        ,(if (equal? (term l) (term l_2))
             ;; The side conditions on E-PutVal should ensure that the
             ;; call to store-update only happens when the lub of the
             ;; old and new values is non-Top.
-            (cons (term (l_2 (lub StoreVal StoreVal_2)))
-                  (term ((l_3 StoreVal_3) (... ...))))
-            (cons (term (l_2 StoreVal_2))
-                  (term (store-update ((l_3 StoreVal_3) (... ...)) l StoreVal))))])
+            (cons (term (l_2 ((lub StoreVal StoreVal_2) frozenness_2)))
+                  (term ((l_3 (StoreVal_3 frozenness_3)) (... ...))))
+            (cons (term (l_2 (StoreVal_2 frozenness_2)))
+                  (term (store-update ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
 
     ;; The second condition on the E-GetVal rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.

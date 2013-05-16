@@ -102,116 +102,24 @@
    (term #f))
 
   (test-equal
-   (term (store-dom ((l1 4) (l2 5) (l3 Bot))))
+   (term (store-dom ((l1 (4 #f)) (l2 (5 #f)) (l3 (Bot #f)))))
    (term (l1 l2 l3)))
-
-  (test-equal
-   (stores-equal-modulo-perms?
-    (term (lubstore ((l1 5)
-                     (l2 6)
-                     (l3 7))
-                    ((l2 2)
-                     (l4 9))))
-    (term ((l1 5)
-           (l3 7)
-           (l2 6)
-           (l4 9))))
-   #t)
-
-  (test-equal
-   (stores-equal-modulo-perms?
-    (term (lubstore ((l1 5)
-                     (l2 6)
-                     (l3 7))
-                    ((l1 5)
-                     (l4 9)
-                     (l2 4))))
-    (term ((l3 7)
-           (l1 5)
-           (l4 9)
-           (l2 6))))
-   #t)
-
-  (test-equal
-   (stores-equal-modulo-perms?
-    (term (lubstore ((l1 Bot)
-                     (l2 6)
-                     (l3 Bot))
-                    ((l1 5)
-                     (l4 9)
-                     (l2 4))))
-    (term ((l3 Bot)
-           (l1 5)
-           (l4 9)
-           (l2 6))))
-   #t)
-
-  (test-equal
-   (term (lubstore-helper ((l1 5))
-                          ()
-                          l1))
-   (term 5))
-
-  (test-equal
-   (term (lubstore-helper ((l1 5))
-                          ((l1 6))
-                          l1))
-   (term 6))
-
-  (test-equal
-   (term (lubstore-helper ((l1 5)
-                           (l2 6)
-                           (l3 7))
-                          ((l2 2)
-                           (l4 9))
-                          l2))
-   (term 6))
   
   (test-equal
-   (lset= equal?
-          (lset-union equal? (term ()) (term ()))
-          (term ()))
-   #t)
-
-  (test-equal
-   (lset= equal?
-          (lset-union equal? (term ()) (term (l1)))
-          (term (l1)))
-   #t)
-
-  (test-equal
-   (lset= equal?
-          (lset-union equal? (term (l1 l2)) (term (l1 l2 l3)))
-          (term (l1 l2 l3)))
-   #t)
-
-  (test-equal
-   (lset= equal?
-          (lset-union equal? (term (l2 l3)) (term (l1 l4)))
-          (term (l2 l3 l1 l4)))
-   #t)
-
-  (test-equal
-   (lset= equal?
-          (lset-union equal? (term (l2 l3)) (term (l1 l2 l4)))
-          (term (l3 l1 l2 l4)))
-   #t)
-
-  (test-equal
-   (term (store-lookup ((l 2)) l))
+   (term (store-lookup ((l (2 #f))) l))
    (term 2))
   
   (test-equal
    (term (store-update () l 4))
-   (term ((l 4))))
+   (term ((l (4 #f)))))
   
   (test-equal
-   (term (store-update ((l 3)) l 4))
-   (term ((l 4))))
+   (term (store-update ((l (3 #f))) l 4))
+   (term ((l (4 #f)))))
 
   (test-equal
    (term (store-update () l Bot))
-   (term ((l Bot))))
+   (term ((l (Bot #f)))))
 
   (test-equal
    (term (valid ()))
@@ -230,26 +138,26 @@
    (term ()))
 
   (test-equal
-   (term (store-dom ((l 3) (l1 4))))
+   (term (store-dom ((l (3 #f)) (l1 (4 #f)))))
    (term (l l1)))
 
   (test-equal
-   (term (store-dom-diff ((l 3) (l1 4))
-                         ((l 4) (l1 3))))
+   (term (store-dom-diff ((l (3 #f)) (l1 (4 #f)))
+                         ((l (4 #f)) (l1 (3 #f)))))
    (term ()))
 
   (test-equal
-   (term (store-dom-diff ((l 3))
-                         ((l 4) (l1 3))))
+   (term (store-dom-diff ((l (3 #f)))
+                         ((l (4 #f)) (l1 (3 #f)))))
    (term ()))
 
   (test-equal
-   (term (store-dom-diff ((l 4) (l1 3))
-                         ((l 3))))
+   (term (store-dom-diff ((l (4 #f)) (l1 (3 #f)))
+                         ((l (3 #f)))))
    (term (l1)))
 
   (test-equal
-   (term (store-dom-diff ((l 4))
+   (term (store-dom-diff ((l (4 #f)))
                          ()))
    (term (l)))
 
@@ -258,7 +166,7 @@
    (term #f))
 
   (test-equal
-   (term (store-top? ((l 3) (l1 4))))
+   (term (store-top? ((l (3 #f)) (l1 (4 #f)))))
    (term #f))
 
   (test-equal
@@ -279,32 +187,32 @@
 
   (test-equal
    (cfgs-equal-modulo-perms?
-    '(((l 4) (l1 3)) ())
-    '(((l1 3) (l 4)) ()))
+    '(((l (4 #f)) (l1 (3 #f))) ())
+    '(((l1 (3 #f)) (l (4 #f))) ()))
    #t)
 
   (test-equal
    (cfgs-equal-modulo-perms?
-    '(((l1 3) (l 4)) ())
-    '(((l1 3) (l 4)) (3)))
+    '(((l1 (3 #f)) (l (4 #f))) ())
+    '(((l1 (3 #f)) (l (4 #f))) (3)))
    #f)
 
   (test-equal
    (cfgs-equal-modulo-perms?
-    '(((l 4) (l1 3)) ())
-    '(((l1 3) (l 4)) (3)))
+    '(((l (4 #f)) (l1 (3 #f))) ())
+    '(((l1 (3 #f)) (l (4 #f))) (3)))
    #f)
 
   (test-equal
    (cfgs-equal-modulo-perms?
-    '(((l 3) (l1 4)) ())
-    '(((l1 3) (l 4)) ()))
+    '(((l (3 #f)) (l1 (4 #f))) ())
+    '(((l1 (3 #f)) (l (4 #f))) ()))
    #f)
 
   (test-equal
-   (term (subst l l1 (((l Bot))
+   (term (subst l l1 (((l (Bot #f)))
                       (put l (3)))))
-   (term (((l1 Bot))
+   (term (((l1 (Bot #f)))
           (put l1 (3)))))
 
   (test-results))
@@ -361,44 +269,44 @@
   ;; E-New
   (test-->> rr
             (term
-             (((l 3))
+             (((l (3 #f)))
               new))
             (term
-             (((l 3) (l1 Bot))
+             (((l (3 #f)) (l1 (Bot #f)))
               l1)))
   
   (test-->> rr
             (term
-             (((l 3) (l1 4))
+             (((l (3 #f)) (l1 (4 #f)))
               new))
             (term
-             (((l 3) (l1 4) (l2 Bot))
+             (((l (3 #f)) (l1 (4 #f)) (l2 (Bot #f)))
               l2)))
 
   ;; E-PutVal
   (test-->> rr
             (term
-             (((l Bot))
+             (((l (Bot #f)))
               (put l (3))))
             (term
-             (((l 3))
+             (((l (3 #f)))
               ())))
   
   (test-->> rr
             (term
-             (((l 2))
+             (((l (2 #f)))
               (put l (3))))
             (term
-             (((l 3))
+             (((l (3 #f)))
               ())))
 
   ;; This should work because put just puts the max of the current value and the new value.
   (test-->> rr
             (term
-             (((l 2))
+             (((l (2 #f)))
               (put l (1))))
             (term
-             (((l 2))
+             (((l (2 #f)))
               ())))
   
   ;; let
@@ -429,7 +337,7 @@
              (() ;; empty store
               ((lambda (x) x) new)))
             (term
-             (((l Bot))
+             (((l (Bot #f)))
               l)))
 
   ;; let + E-New + E-PutVal + E-GetVal + E-Convert
@@ -441,7 +349,7 @@
                   (let ((x_3 (get x_1 (2))))
                     (convert x_3))))))
             (term
-             (((l 3))
+             (((l (3 #f)))
               (2))))
   
   ;; let par + E-New + E-PutVal + E-GetVal + E-Convert
@@ -453,7 +361,7 @@
                           (x_3 (put x_1 (3))))
                   (convert (get x_1 (2)))))))
             (term
-             (((l 3))
+             (((l (3 #f)))
               (2))))
 
   ;; Another aspect of E-PutVal's behavior
@@ -467,7 +375,7 @@
                   (let ((x_3 (put x_1 (4))))
                     (convert (get x_1 (5))))))))
             (term
-             (((l 5))
+             (((l (5 #f)))
               (5))))
 
   ;; E-PutValErr
@@ -490,8 +398,8 @@
                           [x_4 (put x_2 (4))])
                   (convert (get x_2 (4)))))))
             (term
-             (((l 3)
-               (l1 4))
+             (((l (3 #f))
+               (l1 (4 #f)))
               (4))))
   
   ;;let par put and get
@@ -503,7 +411,7 @@
                           (x_3 (get x_1 (2))))
                   (convert (get x_1 (2)))))))
             (term
-             (((l 2))
+             (((l (2 #f)))
               (2))))
 
   ;; FIXME: this test gets stuck reducing.  Figure out what's wrong.
@@ -528,7 +436,7 @@
                                          (put x_1 (4))) ())) ())) ())) ())) ())))
                   (convert x_4)))))
             (term
-             (((l 4))
+             (((l (4 #f)))
               (4))))
 
   (test-results))
