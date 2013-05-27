@@ -456,26 +456,26 @@
              (((l Bot))
               l)))
 
-  ;; let + E-New + E-PutVal + E-GetVal + E-Convert
+  ;; let + E-New + E-PutVal + E-GetVal
   (test-->> rr
             (term
              (() ;; empty store
               (let ((x_1 new))
                 (let ((x_2 (put x_1 (3))))
                   (let ((x_3 (get x_1 (2))))
-                    (convert x_3))))))
+                    x_3)))))
             (term
              (((l 3))
               (2))))
   
-  ;; let par + E-New + E-PutVal + E-GetVal + E-Convert
+  ;; let par + E-New + E-PutVal + E-GetVal
   (test-->> rr
             (term
              (() ;; empty store
               (let ((x_1 new))
                 (let par ((x_2 (put x_1 (2)))
                           (x_3 (put x_1 (3))))
-                  (convert (get x_1 (2)))))))
+                  (get x_1 (2))))))
             (term
              (((l 3))
               (2))))
@@ -489,7 +489,7 @@
                   ;; This should just take the lub of the old and new
                   ;; values, i.e., 5.
                   (let ((x_3 (put x_1 (4))))
-                    (convert (get x_1 (5))))))))
+                    (get x_1 (5)))))))
             (term
              (((l 5))
               (5))))
@@ -500,7 +500,7 @@
              (() ;; empty store
               (let ((x_1 new))
                 (let ((x_2 (put x_1 (Top))))
-                  (convert x_2)))))
+                  x_2))))
             (term
              Error))
 
@@ -512,7 +512,7 @@
                         [x_2 new])
                 (let par ([x_3 (put x_1 (3))]
                           [x_4 (put x_2 (4))])
-                  (convert (get x_2 (4)))))))
+                  (get x_2 (4))))))
 
             ;; When we're using slow-rr, we can end up with
             ;; a store of ((l 3) (l1 4)) or a permutation thereof --
@@ -544,7 +544,7 @@
               (let ((x_1 new))
                 (let par ((x_2 (put x_1 (2)))
                           (x_3 (get x_1 (2))))
-                  (convert (get x_1 (2)))))))
+                  (get x_1 (2))))))
             (term
              (((l 2))
               (2))))
@@ -556,7 +556,7 @@
 ;; `fast-rr`.
 (define (slow-program-test-suite rr)
 
-  ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock + E-Convert
+  ;; let par + E-New + E-PutVal + E-GetVal + E-GetValBlock
   (test-->> rr
             (term
              (() ;; empty store
@@ -575,7 +575,7 @@
                                   ((lambda (x_2)
                                      ((lambda (x_2)
                                         (put x_1 (4))) ())) ())) ())) ())) ())))
-                  (convert x_4)))))
+                  x_4))))
             (term
              (((l 4))
               (4))))

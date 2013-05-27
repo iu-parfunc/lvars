@@ -154,10 +154,6 @@
             (where x_3 (variable-not-in e_3))
             "Desugaring of let handlers")
 
-       (--> (S (in-hole E (convert Q)))
-            (S (in-hole E (conv Q)))
-            "E-Convert")
-
        ;; Propagates errors due to conflicting writes.
        (--> (S (in-hole E (put l (d_2))))
             Error

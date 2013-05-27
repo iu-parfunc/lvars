@@ -39,7 +39,6 @@
          (get e e)
          (put e e)
          new
-         (convert e)
 
          ;; These don't appear in the grammar in the TR, because they
          ;; immediately desugar to application and lambda.
@@ -172,14 +171,6 @@
        (where d_1 (exists-d d_2 Q))
        "E-GetVal"]
 
-      [(small-step-base (S_1 (convert e_1))
-                        (S_2 (convert e_2)))
-       (small-step-base (S_1 e_1) (S_2 e_2))
-       "E-Convert"]
-
-      [(small-step-base (S (convert Q))
-                        (S (delta Q)))
-       "E-ConvertVal"]
 
       [(small-step-base (S (let ((x_1 e_1)) e_2))
                         (S ((lambda (x_1) e_2) e_1)))
@@ -211,12 +202,7 @@
                         Error)
        (where d_1 (store-lookup S l))
        (where #t (top? (lub d_1 d_2)))
-       "E-PutValErr"]
-
-      [(small-step-base (S (convert e))
-                        Error)
-       (small-step-base (S e) Error)
-       "E-ConvertErr"])
+       "E-PutValErr"])
 
     ;; Because we left out the E-Refl and E-ReflErr rules from our
     ;; semantics, we have to add two new rules, E-App-1 and E-App-2, by
@@ -505,11 +491,6 @@
       ;; Otherwise, check the rest.
       [(exists-d d_2 (d_11 d_12 (... ...))) (exists-d d_2 (d_12 (... ...)))
        (where #f (leq d_11 d_2))])
-
-    (define-metafunction name
-      delta : Q -> Q
-      ;; Let's just have it be identity for now ...
-      [(delta Q) Q])
 
     ;; subst and subst-vars: capture-avoiding substitution, due to
     ;; redex.racket-lang.org/lam-v.html.
