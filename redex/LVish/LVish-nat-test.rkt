@@ -400,6 +400,10 @@
             (term
              (((l (3 #f))
                (l1 (4 #f)))
+              (4)))
+            (term
+             (((l (4 #f))
+               (l1 (3 #f)))
               (4))))
   
   ;;let par + E-New + E-Put + E-Get

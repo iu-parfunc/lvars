@@ -83,11 +83,11 @@
       ;; Evaluation contexts.
       (E hole
          (E e)
-         (v E)
+         (e E)
          (get E e)
-         (get v E)
+         (get e E)
          (put E e)
-         (put v E)
+         (put e E)
          (consume E)
          (let handlers x be (bind (δ) e) with E in e)
          (let handlers x be (bind (δ) e) with v in E)))
