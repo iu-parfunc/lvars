@@ -1,10 +1,9 @@
 #lang racket
 
 (module language racket
-  (require redex/reduction-semantics)
-  (require "lambdaLVar.rkt")
+  (require "LVish.rkt")
 
-  (define-lambdaLVar-language lambdaLVar-natpair-ivars
+  (define-LVish-language LVish-natpair-ivars
     my-lub
     (natural natural)
     (natural Bot)
@@ -14,9 +13,9 @@
   ;; form (natural natural), (natural Bot), or (Bot natural)) and
   ;; returns a pair that is their least upper bound.
 
-  ;; Because they're IVars, we can only safely combine two pairs if
-  ;; one of them has only the car filled in, and the other has only
-  ;; the cadr filled in.
+  ;; Because they're IVars, we can only safely combine two pairs if one
+  ;; of them has only the car filled in, and the other has only the cadr
+  ;; filled in.
 
   ;; assumes that a1 and a2 aren't both numbers
   (define lub-helper
@@ -62,34 +61,19 @@
   (require "../test-helpers.rkt")
 
   (provide
-   test-fast
    test-all)
 
-  (define (test-fast)
+  (define (test-all)
     (display "Running metafunction tests...")
     (flush-output)
     (time (meta-test-suite))
 
-    (display "Running test suite with fast-rr...")
+    (display "Running test suite...")
     (flush-output)
-    (time (program-test-suite fast-rr))
-
-    (display "Running test suite with slow-rr...")
-    (flush-output)
-    (time (program-test-suite slow-rr))
-
-    (display "Running slow test suite with fast-rr...")
-    (flush-output)
-    (time (slow-program-test-suite fast-rr)))
-
-  (define (test-all)
-    (test-fast)
-    (display "Running slow test suite with slow-rr...")
-    (flush-output)
-    (time (slow-program-test-suite slow-rr)))
+    (time (program-test-suite rr)))
 
   ;; Test suite
-  
+
   (define (meta-test-suite)
 
     (test-equal
@@ -128,20 +112,8 @@
 
     ;; FIXME: write programs
 
-    (test-results))
-
-  (define (slow-program-test-suite rr)
-
-    ;; FIXME: slow tests go here, if any
-    
     (test-results)))
-
-(module test-fast racket
-  (require (submod ".." test-suite))
-  (test-fast))
 
 (module test-all racket
   (require (submod ".." test-suite))
   (test-all))
-
-
