@@ -16,3 +16,5 @@
 (define stores-equal-modulo-perms?
   (lambda (s1 s2)
     (lset= equal? s1 s2)))
+
+

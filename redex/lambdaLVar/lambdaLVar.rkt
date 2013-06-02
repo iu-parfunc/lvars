@@ -507,7 +507,7 @@
        (lambda (x_new (... ...))
          (subst x_1 any_1 (subst-vars (x_2 x_new) (... ...) any_2)))
        (where (x_new (... ...)) ,(variables-not-in (term (x_1 any_1 any_2))
-                                             (term (x_2 (... ...)))))]
+                                                   (term (x_2 (... ...)))))]
 
       ;; 3. replace x_1 with e_1
       [(subst x_1 any_1 x_1) any_1]
@@ -530,3 +530,5 @@
        (subst-vars (x_1 any_1)
                    (subst-vars (x_2 any_2) (... ...) any_3))]
       [(subst-vars any) any])))
+
+
