@@ -18,8 +18,8 @@ the precise value.
 
 Section 3 of the technical report ["A Lattice-Theoretical Approach to
 Deterministic Parallelism with Shared State"][lambdaLVar-TR] presents
-the syntax and semantics of lambdaLVar.  The code in this directory is
-a PLT Redex model of the semantics given in the TR.
+the syntax and semantics of lambdaLVar.  The code in the `lambdaLVar`
+directory is a PLT Redex model of the semantics given in the TR.
 
 ### Modeling lattice parameterization in Redex
 
@@ -44,9 +44,9 @@ natural numbers with `max` as the least upper bound, one can write:
 (define-lambdaLVar-language lambdaLVar-nat max natural)
 ```
 
-The `nat` directory contains a test suite of programs for
-`lambdaLVar-nat`.  `natpair` and `natpair-ivars` are two more example
-instantiations.
+The file `lambdaLVar/nat.rkt` contains this instantiation and a test
+suite of programs for `lambdaLVar-nat`.  `lambdaLVar/natpair.rkt` and
+`lambdaLVar/natpair-ivars.rk` contain two more example instantiations.
 
 ### Modeling truly simultaneous reductions in Redex
 
@@ -144,12 +144,12 @@ implementations in which parallel evaluation is ``lockstep''.
 
 ### Building and running
 
-Running `make all` in this directory will build all the lambdaLVar
-languages and run all their test suites, using both reduction
-relations.  Be warned: in the test suite for the lambdaLVar-nats
-language, there's one particular that runs so slowly under `slow-rr`
-that we put it in a "slow test suite" by itself. (To avoid the slow
-test, simply run `make`.)
+Running `make all` in the `lambdaLVar` directory will build all the
+lambdaLVar languages and run all their test suites, using both
+reduction relations.  Be warned: in the test suite for the
+`lambdaLVar-nat` language, there's one particular that runs so slowly
+under `slow-rr` that we put it in a "slow test suite" by itself. (To
+avoid the slow test, simply run `make`.)
 
 ```
 Running metafunction tests...All 57 tests passed.
