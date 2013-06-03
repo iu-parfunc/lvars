@@ -448,6 +448,16 @@
                (((l (4 #f)))
                 (4))))
 
+    ;; E-Freeze
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (freeze x_1 after () with (put x_1 (3))))))
+              (term
+               (((l (3 #t)))
+                (3))))
+
     (test-results)))
 
 (module test-all racket

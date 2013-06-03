@@ -109,7 +109,17 @@
 
   (define (program-test-suite rr)
 
-    ;; FIXME: write programs
+    ;; FIXME: write more programs
+    
+    ;; E-Freeze
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (freeze x_1 after () with (put x_1 ((3 4)))))))
+              (term
+               (((l ((3 4) #t)))
+                ((3 4)))))
 
     (test-results)))
 

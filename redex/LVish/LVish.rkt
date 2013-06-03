@@ -33,10 +33,7 @@
          (get e e)
          (put e e)
          new
-
-         ;; New additions in LVish.
-         (consume e)
-         (let handlers x be (bind (δ) e) with e in e)
+         (freeze e after e with e)
 
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
@@ -88,9 +85,9 @@
          (get e E)
          (put E e)
          (put e E)
-         (consume E)
-         (let handlers x be (bind (δ) e) with E in e)
-         (let handlers x be (bind (δ) e) with v in E)))
+         (freeze E after e with e)
+         (freeze v after E with e)
+         (freeze v after v with E)))
 
     (define rr
       (reduction-relation
@@ -147,13 +144,6 @@
             (S (in-hole E (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))
             "Desugaring of let par")
 
-       ;; TODO: This needs more work.
-       (--> (S (in-hole E (S (let handlers x be (bind (δ) e_1) with e_2 in e_3))))
-            ;; Make sure that e_3 happens last.
-            (S (in-hole E (S ((lambda (x_2) e_3) e_2))))
-            (where x_3 (variable-not-in e_3))
-            "Desugaring of let handlers")
-
        ;; Propagates errors due to conflicting writes.
        (--> (S (in-hole E (put l (d_2))))
             Error
@@ -161,15 +151,17 @@
             (where #t (top? (lub d_1 d_2)))
             "E-Put-Err")
 
-       (--> (S_1 (in-hole E (consume l)))
+       ;; Special case of freeze-after, where there are no handlers to
+       ;; run.
+
+       ;; At this point, since v_2 is a value, it's already done its
+       ;; write to the store, S_1.  So, freeze-helper's job is merely
+       ;; to freeze the appropriate location.
+       (--> (S_1 (in-hole E (freeze l after v_1 with v_2)))
             (S_2 (in-hole E (d)))
-            (where d (store-lookup S_1 l))
-            (where S_2 (consume-helper S_1 d))
-            "E-Consume")
-
-       ;; TODO: handle `let handlers`.
-
-       ))
+            (where S_2 (freeze-helper S_1 l))
+            (where d (store-lookup S_2 l))
+            "E-Freeze")))
 
     ;; Some convenience functions: LVar accessors and constructor.
 
@@ -193,8 +185,8 @@
     ;; Returns a store that is the same as the original store S, but
     ;; with S(l) modified to be frozen.
     (define-metafunction name
-      consume-helper : S l -> S
-      [(consume-helper S l)
+      freeze-helper : S l -> S
+      [(freeze-helper S l)
        ,(let ([lv (assq (term l) (term S))]
               [update (lambda (lv)
                         (if (equal? (term (lvloc ,lv)) (term l))
@@ -202,7 +194,7 @@
                             lv))])
           (if lv
               (term ,(map update (term S)))
-              (error "consume-helper: lookup failed")))])
+              (error "freeze-helper: lookup failed")))])
 
     (define-metafunction name
       store-dom : S -> (l (... ...))
