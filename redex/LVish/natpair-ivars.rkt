@@ -2,6 +2,7 @@
 
 (module language racket
   (require "LVish.rkt")
+  (provide LVish-natpair-ivars)
 
   (define-LVish-language LVish-natpair-ivars
     my-lub
