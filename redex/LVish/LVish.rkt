@@ -159,6 +159,8 @@
        ;; to freeze the appropriate location.
        (--> (S_1 (in-hole E (freeze l after v_1 with v_2)))
             (S_2 (in-hole E (d)))
+            ;; N.B.: Redex gotcha: the order of these two `where`
+            ;; clauses matters.  :(
             (where S_2 (freeze-helper S_1 l))
             (where d (store-lookup S_2 l))
             "E-Freeze")))
