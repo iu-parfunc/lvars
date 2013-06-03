@@ -126,3 +126,61 @@
 (module test-all racket
   (require (submod ".." test-suite))
   (test-all))
+
+;; -------------------------------------------------------------------
+
+;; Some tests that *should* work...
+
+(module experimental-tests racket
+  (require redex/reduction-semantics)
+  (require (submod ".." language))
+
+  ;; Should be quasi-deterministic.
+  (test-->> rr
+            (term
+             (() ;; empty store
+              (let ((x_1 new))
+                (let par
+                    ((x_2 (freeze x_1 after () with (put x_1 ((3 Bot)))))
+                     (x_3 (put x_1 ((Bot 6)))))
+                  x_2))))
+            (term
+             (((l ((3 6) #t)))
+              ((3 6))))
+            (term
+             Error))
+
+  ;; Should deterministically raise an error, since it never uses
+  ;; freezing.
+  (test-->> rr
+            (term
+             (() ;; empty store
+              (let ((x_1 new))
+                (let par
+                    ((x_2 (let ((x_4 (put x_1 ((3 4)))))
+                            ;; legal, incompatible 2-element
+                            ;; threshold set
+                            (get x_4 ((3 4) (6 6)))))
+                     (x_3 (put x_1 ((6 6)))))
+                  x_2))))
+            (term
+             Error))
+
+  ;; Should get stuck reducing, since ((3 Bot) (Bot 6)) is an illegal
+  ;; threshold set.
+  (test-->> rr
+            (term
+             (() ;; empty store
+              (let ((x_1 new))
+                (let par
+                    ((x_2 (get x_1 ((3 Bot) (Bot 6))))
+                     (x_3 (put x_1 ((6 6)))))
+                  x_2))))
+            (term
+             (((l ((6 6) #f)))
+              (((lambda (x_2)
+                  (lambda (x_3) x_2))
+                (get l ((3 Bot) (Bot 6))))
+               ())))))
+
+

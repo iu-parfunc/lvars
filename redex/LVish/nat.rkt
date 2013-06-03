@@ -458,6 +458,25 @@
                (((l (3 #t)))
                 (3))))
 
+    ;; Here we have a quasi-deterministic program where a freeze-after
+    ;; and a put are racing with each other.  One of two things will
+    ;; happen: (put x_1 (4)) will complete first, so x_2 will be (4),
+    ;; or the freeze-after will complete first, so the program will
+    ;; raise an error.
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let par
+                      ((x_2 (freeze x_1 after () with (put x_1 (3))))
+                       (x_3 (put x_1 (4))))
+                    x_2))))
+              (term
+               (((l (4 #t)))
+                (4)))
+              (term
+               Error))
+
     (test-results)))
 
 (module test-all racket
