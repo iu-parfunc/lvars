@@ -341,11 +341,6 @@
       [(exists-d d_2 (d_11 d_12 (... ...))) (exists-d d_2 (d_12 (... ...)))
        (where #f (leq d_11 d_2))])
 
-    (define-metafunction name
-      conv : Q -> Q
-      ;; Let's just have it be identity for now ...
-      [(conv Q) Q])
-
     ;; subst and subst-vars: capture-avoiding substitution, due to
     ;; redex.racket-lang.org/lam-v.html.
 
