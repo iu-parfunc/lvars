@@ -58,7 +58,6 @@
 (module test-suite racket
   (require redex/reduction-semantics)
   (require (submod ".." language))
-  (require srfi/1)
   (require "../test-helpers.rkt")
 
   (provide
