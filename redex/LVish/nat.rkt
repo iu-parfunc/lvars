@@ -479,6 +479,37 @@
               (term
                Error))
 
+    ;; Fancier freezing.  This one will actually never raise an error
+    ;; because the racing put is less than 500!
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let par
+                      ((x_2 (freeze x_1 after (lambda (x)
+                                                (put x_1 (500))) with (put x_1 (3))))
+                       (x_3 (put x_1 (4))))
+                    x_2))))
+              (term
+               (((l (500 #t)))
+                (500))))
+    
+    ;; But this one might:
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let par
+                      ((x_2 (freeze x_1 after (lambda (x)
+                                                (put x_1 (500))) with (put x_1 (3))))
+                       (x_3 (put x_1 (501))))
+                    x_2))))
+              (term
+               (((l (501 #t)))
+                (501)))
+              (term
+               Error))
+
     (test-results)))
 
 (module test-all racket

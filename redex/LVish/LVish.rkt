@@ -85,9 +85,12 @@
          (get e E)
          (put E e)
          (put e E)
-         (freeze E after e with e)
-         (freeze v after E with e)
-         (freeze v after v with E)))
+         (freeze E after v with e)
+         (freeze v after v with E)
+         (freeze v after E with v)
+         (freeze l after (v
+                          (e (... ...) E e (... ...)))
+                 with v)))
 
     (define rr
       (reduction-relation
@@ -151,13 +154,94 @@
             (where #t (top? (lub d_1 d_2)))
             "E-Put-Err")
 
+       ;; OK, so what's the deal with freeze-after?  what does it do?
+
+       ;; (freeze e_1 after e_2 with e_3) behaves as follows:
+
+       ;; e_1 evals to a location, so we don't have to worry about it
+       ;; at all.  We can write all our rules with `l` there.
+
+       ;; e_2 is a piece of code that will run every time l is written
+       ;; to.  For instance, if l represents a set of nodes in a
+       ;; graph, then for each node put into the set we might want
+       ;; this code to run:
+
+       ;; foreach neighbor in (neighbors node):
+       ;;   put l { neighbor }
+
+       ;; So, in all, e_2 is:
+
+       ;; foreach node in l:
+       ;;   foreach neighbor in (neighbors node):
+       ;;     put l { neighbor }
+
+       ;; But you can't actually write something like "foreach node in
+       ;; l" directly in LVish because that would involve peeking at
+       ;; the contents of l.  So there has to be something built in to
+       ;; freeze-after that allows you to peek at LVar contents.
+
+       ;; Of course, we won't have a pointer to l; that's what e_1
+       ;; evaluates to.  So we'll need a bound variable to represent
+       ;; it, and actually, e_2 is:
+
+       ;; (lambda (x)
+       ;;   foreach node in x:
+       ;;     foreach neighbor in (neighbors node):
+       ;;       put x { neighbor })
+
+       ;; where x is the exact contents of l.  In fact, e_2 should
+       ;; always be of this form, and running e_2 means applying e_2
+       ;; to l, which means, of course, substituting those exact
+       ;; contents into the body of e_2 in place of x.
+
+       ;; Something like this:
+
+       ;; (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
+       ;;      (S (in-hole E (freeze l after (subst x d e) with v)))
+       ;;      (where d (store-lookup S l))
+       ;;      "E-Freeze-Beta")
+
+       ;; But this isn't right, because it's only triggered once.  We
+       ;; should make the (lambda (x) e) stick around to be triggered
+       ;; again in case of future writes.  How about a couple of
+       ;; lists?
+
+
+       (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
+            (S (in-hole E (freeze l after ((lambda (x) e) ((subst x d e))) with v)))
+            (where d (store-lookup S l))
+            "E-Freeze-Init")
+
+       ;; Eval contexts should take care of reducing that, but how do
+       ;; we make sure more handlers get added every time a write to l
+       ;; occurs?
+
+       ;; It seems like there will have to be some information hanging
+       ;; off of l in the store to make that occur.
+
+       ;; In any case, if only one handler is ever added, we'll
+       ;; eventually get to:
+
+       (--> (S (in-hole E (freeze l after ((lambda (x) e) (v_1)) with v_2)))
+            (S (in-hole E (freeze l after () with v_2)))
+            "E-Freeze-Done")
+
+       ;; Which should trigger E-Freeze, finally.  (v_1 gets thrown
+       ;; away -- we don't care about the return values of handlers.)
+
+       ;; TODO: keep working on this.
+
+
+       ;; -------------------------------------
+
+
        ;; Special case of freeze-after, where there are no handlers to
        ;; run.
 
-       ;; At this point, since v_2 is a value, it's already done its
+       ;; At this point, since v is a value, it's already done its
        ;; write to the store, S_1.  So, freeze-helper's job is merely
        ;; to freeze the appropriate location.
-       (--> (S_1 (in-hole E (freeze l after v_1 with v_2)))
+       (--> (S_1 (in-hole E (freeze l after () with v)))
             (S_2 (in-hole E (d)))
             ;; N.B.: Redex gotcha: the order of these two `where`
             ;; clauses matters.  :(
