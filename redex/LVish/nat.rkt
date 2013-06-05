@@ -2,6 +2,8 @@
 
 (module language racket
   (require "LVish.rkt")
+  (provide LVish-nat)
+  
   (define-LVish-language LVish-nat max natural))
 
 (module test-suite racket
