@@ -113,8 +113,16 @@
      (term (l1 l2 l3)))
     
     (test-equal
-     (term (store-lookup ((l (2 #f))) l))
+     (term (lookup-val ((l (2 #f))) l))
      (term 2))
+
+    (test-equal
+     (term (lookup-frozenness ((l (2 #f))) l))
+     (term #f))
+
+    (test-equal
+     (term (lookup-frozenness ((l (2 #t))) l))
+     (term #t))
     
     (test-equal
      (term (store-update () l 4))
@@ -127,18 +135,6 @@
     (test-equal
      (term (store-update () l Bot))
      (term ((l (Bot #f)))))
-
-    (test-equal
-     (term (valid ()))
-     #f)
-
-    (test-equal
-     (term (valid (3)))
-     #t)
-
-    (test-equal
-     (term (valid (5 6 7)))
-     #t)
 
     (test-equal
      (term (store-dom ()))

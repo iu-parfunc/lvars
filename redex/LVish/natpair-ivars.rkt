@@ -104,6 +104,14 @@
      (term (incomp ((Bot 1) (Bot 2) (Bot 3) (Bot 4) (Bot 5) (1 Bot))))
      (term #f))
 
+    (test-equal
+     (term (lookup-frozenness ((l ((2 3) #f))) l))
+     (term #f))
+
+    (test-equal
+     (term (lookup-frozenness ((l ((2 3) #t))) l))
+     (term #t))
+
     ;; FIXME: write more tests
 
     (test-results))

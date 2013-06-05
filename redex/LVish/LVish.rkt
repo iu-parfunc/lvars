@@ -3,6 +3,12 @@
 
 (provide define-LVish-language)
 
+;; define-LVish-language takes a language name, a lub operation, and
+;; some number of lattice values, not including top and bottom
+;; elements, since we add those automatically.  (Therefore, if one
+;; wanted a lattice consisting only of Top and Bot, they wouldn't pass
+;; any lattice values to define-LVish-language.)
+
 (define-syntax-rule (define-LVish-language name lub-op lattice-values ...)
   (begin
     (require redex/reduction-semantics)
@@ -13,10 +19,10 @@
              lub
              leq
              store-dom
-             store-lookup
+             lookup-val
+             lookup-frozenness
              store-update
              incomp
-             valid
              store-dom-diff
              store-top?
              top?
@@ -55,7 +61,7 @@
       ;; sets. (Bot) makes sense, but (Top) is nonsensical -- a program
       ;; that passed (Top) as a threshold would block forever.
       ;; Nevertheless, the grammar admits it.
-      (Q (d (... ...)))
+      (Q (d d (... ...)))
 
       ;; Stores.  A store is either a set of LVars (that is, a finite
       ;; partial mapping from locations l to pairs of StoreVals and
@@ -66,14 +72,17 @@
 
       ;; Lattice elements, representing the state of an LVar.  We
       ;; assume Top and Bot lattice elements in addition to the
-      ;; user-specified lattice-values.  A StoreVal can be any element
-      ;; of the lattice except Top.
+      ;; user-specified set d of lattice values.  A StoreVal can be
+      ;; any element of the lattice except Top.  That is, here we
+      ;; actually rule out a StoreVal being Top, whereas in the LaTeX
+      ;; grammar we don't.
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
       ;; Ranges of a couple of metafunctions.
       (Bool #t #f)
       (d/Bool d Bool)
+      (Q/null Q ())
 
       (x variable-not-otherwise-mentioned)
       (l variable-not-otherwise-mentioned)
@@ -89,7 +98,7 @@
          (freeze E after v with e)
          (freeze v after v with E)
          (freeze v after E with v)
-         (freeze l after (v
+         (freeze v after (v
                           (e (... ...) E e (... ...)))
                  with v)))
 
@@ -108,8 +117,8 @@
 
        (--> (S (in-hole E (put l d_2)))
             ((store-update S l d_2) (in-hole E ()))
-            (where d_1 (store-lookup S l))
-            (where #f (frozen? S l))
+            (where d_1 (lookup-val S l))
+            (where #f (lookup-frozenness S l))
             (where #f (top? (lub d_1 d_2)))
             "E-Put")
 
@@ -117,8 +126,8 @@
        ;; equal to the current value has no effect...
        (--> (S (in-hole E (put l d_2)))
             (S (in-hole E ()))
-            (where #t (frozen? S l))
-            (where d_1 (store-lookup S l))
+            (where #t (lookup-frozenness S l))
+            (where d_1 (lookup-val S l))
             (where #t (leq d_2 d_1))
             "E-Put-Frozen")
 
@@ -127,16 +136,15 @@
        ;; error.
        (--> (S (in-hole E (put l d_2)))
             Error
-            (where #t (frozen? S l))
-            (where d_1 (store-lookup S l))
+            (where #t (lookup-frozenness S l))
+            (where d_1 (lookup-val S l))
             (where #f (leq d_2 d_1))
             "E-Put-Frozen-Err")
 
        (--> (S (in-hole E (get l Q)))
             (S (in-hole E d_1))
-            (where d_2 (store-lookup S l))
+            (where d_2 (lookup-val S l))
             (where #t (incomp Q))
-            (where #t (valid Q))
             (where d_1 (exists-d d_2 Q))
             "E-Get")
 
@@ -151,7 +159,7 @@
        ;; Propagates errors due to conflicting writes.
        (--> (S (in-hole E (put l d_2)))
             Error
-            (where d_1 (store-lookup S l))
+            (where d_1 (lookup-val S l))
             (where #t (top? (lub d_1 d_2)))
             "E-Put-Err")
 
@@ -199,7 +207,7 @@
 
        ;; (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
        ;;      (S (in-hole E (freeze l after (subst x d e) with v)))
-       ;;      (where d (store-lookup S l))
+       ;;      (where d (lookup-val S l))
        ;;      "E-Freeze-Beta")
 
        ;; But this isn't right, because it's only triggered once.  We
@@ -210,7 +218,7 @@
 
        (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
             (S (in-hole E (freeze l after ((lambda (x) e) ((subst x d e))) with v)))
-            (where d (store-lookup S l))
+            (where d (lookup-val S l))
             "E-Freeze-Init")
 
        ;; Eval contexts should take care of reducing that, but how do
@@ -247,7 +255,7 @@
             ;; N.B.: Redex gotcha: the order of these two `where`
             ;; clauses matters.  :(
             (where S_2 (freeze-helper S_1 l))
-            (where d (store-lookup S_2 l))
+            (where d (lookup-val S_2 l))
             "E-Freeze")))
 
     ;; Some convenience functions: LVar accessors and constructor.
@@ -361,18 +369,18 @@
        ,(variable-not-in (term S) (term l))])
 
     (define-metafunction name
-      store-lookup : S l -> StoreVal
-      [(store-lookup S l) ,(let ([lv (assq (term l) (term S))])
+      lookup-val : S l -> StoreVal
+      [(lookup-val S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
                                  (term (lvstate ,lv))
-                                 (error "store-lookup: lookup failed")))])
+                                 (error "lookup-val: lookup failed")))])
 
     (define-metafunction name
-      frozen? : S l -> Bool
-      [(frozen? S l) ,(let ([lv (assq (term l) (term S))])
+      lookup-frozenness : S l -> frozenness
+      [(lookup-frozenness S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
                                  (term (lvfrozenness ,lv))
-                                 (error "frozen?: lookup failed")))])
+                                 (error "lookup-frozenness: lookup failed")))])
 
     ;; Actually handles both updates and extensions.  Assumes that if
     ;; l is in dom(S), that it is unfrozen.
@@ -406,18 +414,13 @@
              (term (incomp (d_1 d_3 (... ...))))
              (term (incomp (d_2 d_3 (... ...)))))])
 
-    ;; The third condition on the E-Get rule.
-    (define-metafunction name
-      valid : Q -> Bool
-      [(valid Q) ,(not (null? (term Q)))])
-
-    ;; The fourth and fifth premises of the E-Get rule.  If there
+    ;; The third and fourth premises of the E-Get rule.  If there
     ;; exists a d_1 that is a member of Q and is less than or equal to
     ;; d_2, returns that d_1.  Otherwise, returns #f.
     (define-metafunction name
-      exists-d : d Q -> d/Bool
+      exists-d : d Q/null -> d/Bool
 
-      ;; If Q is empty, then there definitely isn't a d_1.
+      ;; If the second argument is null, then there definitely isn't a d_1.
       [(exists-d d_2 ()) #f]
 
       ;; If the first item in Q is less than d_2, return it.
