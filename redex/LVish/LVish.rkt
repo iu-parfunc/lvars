@@ -40,15 +40,16 @@
          (let par ((x e) (x e)) e))
 
       ;; Values.
-      (v l
+      (v () ;; unit value
+         d
+         l
          Q
          (lambda (x) e))
 
       ;; Threshold set literals.  A threshold set is the set we pass to a
       ;; `get` expression that specifies a non-empty, pairwise
       ;; incompatible subset of the state space of the location being
-      ;; queried.  The grammar allows empty threshold sets, as well,
-      ;; because those are the return value of `put`.
+      ;; queried.
 
       ;; Incidentally, under this grammar, (Top) and (Bot) are threshold
       ;; sets. (Bot) makes sense, but (Top) is nonsensical -- a program
@@ -105,7 +106,7 @@
             (where l (variable-not-in-store S))
             "E-New")
 
-       (--> (S (in-hole E (put l (d_2))))
+       (--> (S (in-hole E (put l d_2)))
             ((store-update S l d_2) (in-hole E ()))
             (where d_1 (store-lookup S l))
             (where #f (frozen? S l))
@@ -114,7 +115,7 @@
 
        ;; If an LVar is frozen, putting a value that is less than or
        ;; equal to the current value has no effect...
-       (--> (S (in-hole E (put l (d_2))))
+       (--> (S (in-hole E (put l d_2)))
             (S (in-hole E ()))
             (where #t (frozen? S l))
             (where d_1 (store-lookup S l))
@@ -124,7 +125,7 @@
        ;; ...but putting a value that is greater than the current
        ;; value, or has no order with the current value, raises an
        ;; error.
-       (--> (S (in-hole E (put l (d_2))))
+       (--> (S (in-hole E (put l d_2)))
             Error
             (where #t (frozen? S l))
             (where d_1 (store-lookup S l))
@@ -132,7 +133,7 @@
             "E-Put-Frozen-Err")
 
        (--> (S (in-hole E (get l Q)))
-            (S (in-hole E (d_1)))
+            (S (in-hole E d_1))
             (where d_2 (store-lookup S l))
             (where #t (incomp Q))
             (where #t (valid Q))
@@ -148,7 +149,7 @@
             "Desugaring of let par")
 
        ;; Propagates errors due to conflicting writes.
-       (--> (S (in-hole E (put l (d_2))))
+       (--> (S (in-hole E (put l d_2)))
             Error
             (where d_1 (store-lookup S l))
             (where #t (top? (lub d_1 d_2)))
@@ -242,7 +243,7 @@
        ;; write to the store, S_1.  So, freeze-helper's job is merely
        ;; to freeze the appropriate location.
        (--> (S_1 (in-hole E (freeze l after () with v)))
-            (S_2 (in-hole E (d)))
+            (S_2 (in-hole E d))
             ;; N.B.: Redex gotcha: the order of these two `where`
             ;; clauses matters.  :(
             (where S_2 (freeze-helper S_1 l))

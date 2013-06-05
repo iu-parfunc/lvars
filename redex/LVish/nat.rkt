@@ -24,12 +24,12 @@
     (time (program-test-suite rr)))
 
   ;; Test suite
-
+  
   (define (meta-test-suite)
     (test-equal
      (term (exists-d 6 ()))
      (term #f))
-    
+
     (test-equal
      (term (exists-d 6 (3)))
      (term 3))
@@ -218,9 +218,9 @@
 
     (test-equal
      (term (subst l l1 (((l (Bot #f)))
-                        (put l (3)))))
+                        (put l 3))))
      (term (((l1 (Bot #f)))
-            (put l1 (3)))))
+            (put l1 3))))
 
     (test-results))
 
@@ -294,7 +294,7 @@
     (test-->> rr
               (term
                (((l (Bot #f)))
-                (put l (3))))
+                (put l 3)))
               (term
                (((l (3 #f)))
                 ())))
@@ -302,7 +302,7 @@
     (test-->> rr
               (term
                (((l (2 #f)))
-                (put l (3))))
+                (put l 3)))
               (term
                (((l (3 #f)))
                 ())))
@@ -312,7 +312,7 @@
     (test-->> rr
               (term
                (((l (2 #f)))
-                (put l (1))))
+                (put l 1)))
               (term
                (((l (2 #f)))
                 ())))
@@ -353,45 +353,45 @@
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (let ((x_2 (put x_1 (3))))
+                  (let ((x_2 (put x_1 3)))
                     (let ((x_3 (get x_1 (2))))
                       x_3)))))
               (term
                (((l (3 #f)))
-                (2))))
+                2)))
     
     ;; let par + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (let par ((x_2 (put x_1 (2)))
-                            (x_3 (put x_1 (3))))
+                  (let par ((x_2 (put x_1 2))
+                            (x_3 (put x_1 3)))
                     (get x_1 (2))))))
               (term
                (((l (3 #f)))
-                (2))))
+                2)))
 
     ;; Another aspect of E-Put's behavior
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (let ((x_2 (put x_1 (5))))
+                  (let ((x_2 (put x_1 5)))
                     ;; This should just take the lub of the old and new
                     ;; values, i.e., 5.
-                    (let ((x_3 (put x_1 (4))))
+                    (let ((x_3 (put x_1 4)))
                       (get x_1 (5)))))))
               (term
                (((l (5 #f)))
-                (5))))
+                5)))
 
     ;; E-Put-Err
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (let ((x_2 (put x_1 (Top))))
+                  (let ((x_2 (put x_1 Top)))
                     x_2))))
               (term
                Error))
@@ -402,29 +402,29 @@
                (()
                 (let par ([x_1 new]
                           [x_2 new])
-                  (let par ([x_3 (put x_1 (3))]
-                            [x_4 (put x_2 (4))])
+                  (let par ([x_3 (put x_1 3)]
+                            [x_4 (put x_2 4)])
                     (get x_2 (4))))))
               (term
                (((l (3 #f))
                  (l1 (4 #f)))
-                (4)))
+                4))
               (term
                (((l (4 #f))
                  (l1 (3 #f)))
-                (4))))
+                4)))
     
     ;;let par + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (let par ((x_2 (put x_1 (2)))
+                  (let par ((x_2 (put x_1 2))
                             (x_3 (get x_1 (2))))
                     (get x_1 (2))))))
               (term
                (((l (2 #f)))
-                (2))))
+                2)))
 
     ;; let par + E-New + E-Put + E-Get
     (test-->> rr
@@ -434,8 +434,8 @@
                   (let par
                       ;; Gets stuck trying to get 4 out of x_1, then
                       ;; unstuck after the other subexpression finishes.
-                      ((x_4 (let par ((x_2 (put x_1 (2)))
-                                      (x_3 (put x_1 (3))))
+                      ((x_4 (let par ((x_2 (put x_1 2))
+                                      (x_3 (put x_1 3)))
                               (get x_1 (4))))
                        ;; Eventually puts 4 in x_1 after several dummy
                        ;; beta-reductions.
@@ -444,21 +444,21 @@
                                   ((lambda (x_2)
                                      ((lambda (x_2)
                                         ((lambda (x_2)
-                                           (put x_1 (4))) ())) ())) ())) ())) ())))
+                                           (put x_1 4)) ())) ())) ())) ())) ())))
                     x_4))))
               (term
                (((l (4 #f)))
-                (4))))
+                4)))
 
     ;; E-Freeze
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (freeze x_1 after () with (put x_1 (3))))))
+                  (freeze x_1 after () with (put x_1 3)))))
               (term
                (((l (3 #t)))
-                (3))))
+                3)))
 
     ;; Here we have a quasi-deterministic program where a freeze-after
     ;; and a put are racing with each other.  One of two things will
@@ -470,12 +470,12 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (freeze x_1 after () with (put x_1 (3))))
-                       (x_3 (put x_1 (4))))
+                      ((x_2 (freeze x_1 after () with (put x_1 3)))
+                       (x_3 (put x_1 4)))
                     x_2))))
               (term
                (((l (4 #t)))
-                (4)))
+                4))
               (term
                Error))
 
@@ -487,12 +487,12 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (freeze x_1 after (lambda (x)
-                                                (put x_1 (500))) with (put x_1 (3))))
-                       (x_3 (put x_1 (4))))
+                                                (put x_1 500)) with (put x_1 3)))
+                       (x_3 (put x_1 4)))
                     x_2))))
               (term
                (((l (500 #t)))
-                (500))))
+                500)))
     
     ;; But this one might:
     (test-->> rr
@@ -501,12 +501,12 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (freeze x_1 after (lambda (x)
-                                                (put x_1 (500))) with (put x_1 (3))))
-                       (x_3 (put x_1 (501))))
+                                                (put x_1 500)) with (put x_1 3)))
+                       (x_3 (put x_1 501)))
                     x_2))))
               (term
                (((l (501 #t)))
-                (501)))
+                501))
               (term
                Error))
 
