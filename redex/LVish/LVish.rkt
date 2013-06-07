@@ -21,7 +21,7 @@
              store-dom
              lookup-val
              lookup-frozenness
-             store-update
+             update-val
              incomp
              store-dom-diff
              store-top?
@@ -111,12 +111,12 @@
             "E-Beta")
 
        (--> (S (in-hole E new))
-            ((store-update S l Bot) (in-hole E l))
+            ((update-val S l Bot) (in-hole E l))
             (where l (variable-not-in-store S))
             "E-New")
 
        (--> (S (in-hole E (put l d_2)))
-            ((store-update S l d_2) (in-hole E ()))
+            ((update-val S l d_2) (in-hole E ()))
             (where d_1 (lookup-val S l))
             (where #f (lookup-frozenness S l))
             (where #f (top? (lub d_1 d_2)))
@@ -126,8 +126,8 @@
        ;; equal to the current value has no effect...
        (--> (S (in-hole E (put l d_2)))
             (S (in-hole E ()))
-            (where #t (lookup-frozenness S l))
             (where d_1 (lookup-val S l))
+            (where #t (lookup-frozenness S l))
             (where #t (leq d_2 d_1))
             "E-Put-Frozen")
 
@@ -142,10 +142,10 @@
             "E-Put-Frozen-Err")
 
        (--> (S (in-hole E (get l Q)))
-            (S (in-hole E d_1))
-            (where d_2 (lookup-val S l))
+            (S (in-hole E d_2))
+            (where d_1 (lookup-val S l))
             (where #t (incomp Q))
-            (where d_1 (exists-d d_2 Q))
+            (where d_2 (exists-d d_1 Q))
             "E-Get")
 
        (--> (S (in-hole E (let ((x_1 e_1)) e_2)))
@@ -385,22 +385,22 @@
     ;; Actually handles both updates and extensions.  Assumes that if
     ;; l is in dom(S), that it is unfrozen.
     (define-metafunction name
-      store-update : S l StoreVal -> S
+      update-val : S l StoreVal -> S
 
       ;; If adding a binding that wasn't in the store before (an
       ;; extension), it is unfrozen.
-      [(store-update () l StoreVal) ((l (StoreVal #f)))]
+      [(update-val () l StoreVal) ((l (StoreVal #f)))]
 
-      [(store-update ((l_2 (StoreVal_2 frozenness_2))
+      [(update-val ((l_2 (StoreVal_2 frozenness_2))
                       (l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal)
        ,(if (equal? (term l) (term l_2))
             ;; The side conditions on E-Put should ensure that the
-            ;; call to store-update only happens when the lub of the
+            ;; call to update-val only happens when the lub of the
             ;; old and new values is non-Top.
             (cons (term (l_2 ((lub StoreVal StoreVal_2) frozenness_2)))
                   (term ((l_3 (StoreVal_3 frozenness_3)) (... ...))))
             (cons (term (l_2 (StoreVal_2 frozenness_2)))
-                  (term (store-update ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
+                  (term (update-val ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
 
     ;; The second condition on the E-Get rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.

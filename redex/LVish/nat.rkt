@@ -125,15 +125,15 @@
      (term #t))
     
     (test-equal
-     (term (store-update () l 4))
+     (term (update-val () l 4))
      (term ((l (4 #f)))))
     
     (test-equal
-     (term (store-update ((l (3 #f))) l 4))
+     (term (update-val ((l (3 #f))) l 4))
      (term ((l (4 #f)))))
 
     (test-equal
-     (term (store-update () l Bot))
+     (term (update-val () l Bot))
      (term ((l (Bot #f)))))
 
     (test-equal
