@@ -125,7 +125,8 @@
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (freeze x_1 after () with (put x_1 (3 4))))))
+                  (let ((x_2 (put x_1 (3 4))))
+                    (freeze x_1 after ())))))
               (term
                (((l ((3 4) #t)))
                 (3 4))))
@@ -139,6 +140,8 @@
 ;; -------------------------------------------------------------------
 
 ;; Some tests that *should* work...
+
+;; TODO: don't use `with`.
 
 (module experimental-tests racket
   (require redex/reduction-semantics)

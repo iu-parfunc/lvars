@@ -451,7 +451,8 @@
               (term
                (() ;; empty store
                 (let ((x_1 new))
-                  (freeze x_1 after () with (put x_1 3)))))
+                  (let ((x_2 (put x_1 3)))
+                    (freeze x_1 after ())))))
               (term
                (((l (3 #t)))
                 3)))
@@ -466,7 +467,8 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (freeze x_1 after () with (put x_1 3)))
+                      ((x_2 (let ((x_4 (put x_1 3)))
+                              (freeze x_1 after ())))
                        (x_3 (put x_1 4)))
                     x_2))))
               (term
@@ -482,8 +484,9 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (freeze x_1 after (lambda (x)
-                                                (put x_1 500)) with (put x_1 3)))
+                      ((x_2 (let ((x_4 (put x_1 3)))
+                              (freeze x_1 after (lambda (x)
+                                                  (put x_1 500)))))
                        (x_3 (put x_1 4)))
                     x_2))))
               (term
@@ -496,8 +499,9 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (freeze x_1 after (lambda (x)
-                                                (put x_1 500)) with (put x_1 3)))
+                      ((x_2 (let ((x_4 (put x_1 3)))
+                              (freeze x_1 after (lambda (x)
+                                                  (put x_1 500)))))
                        (x_3 (put x_1 501)))
                     x_2))))
               (term

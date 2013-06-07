@@ -39,7 +39,7 @@
          (get e e)
          (put e e)
          new
-         (freeze e after e with e)
+         (freeze e after e)
 
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
@@ -95,12 +95,8 @@
          (get e E)
          (put E e)
          (put e E)
-         (freeze E after v with e)
-         (freeze v after v with E)
-         (freeze v after E with v)
-         (freeze v after (v
-                          (e (... ...) E e (... ...)))
-                 with v)))
+         (freeze E after e)
+         (freeze v after (v E))))
 
     (define rr
       (reduction-relation
@@ -165,7 +161,7 @@
 
        ;; OK, so what's the deal with freeze-after?  what does it do?
 
-       ;; (freeze e_1 after e_2 with e_3) behaves as follows:
+       ;; (freeze e_1 after e_2) behaves as follows:
 
        ;; e_1 evals to a location, so we don't have to worry about it
        ;; at all.  We can write all our rules with `l` there.
@@ -205,8 +201,8 @@
 
        ;; Something like this:
 
-       ;; (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
-       ;;      (S (in-hole E (freeze l after (subst x d e) with v)))
+       ;; (--> (S (in-hole E (freeze l after (lambda (x) e))))
+       ;;      (S (in-hole E (freeze l after (subst x d e))))
        ;;      (where d (lookup-val S l))
        ;;      "E-Freeze-Beta")
 
@@ -215,42 +211,21 @@
        ;; again in case of future writes.  How about a couple of
        ;; lists?
 
-
-       (--> (S (in-hole E (freeze l after (lambda (x) e) with v)))
-            (S (in-hole E (freeze l after ((lambda (x) e) ((subst x d e))) with v)))
+       (--> (S (in-hole E (freeze l after (lambda (x) e))))
+            (S (in-hole E (freeze l after ((lambda (x) e) (subst x d e)))))
             (where d (lookup-val S l))
             "E-Freeze-Init")
 
-       ;; Eval contexts should take care of reducing that, but how do
-       ;; we make sure more handlers get added every time a write to l
-       ;; occurs?
-
-       ;; It seems like there will have to be some information hanging
-       ;; off of l in the store to make that occur.
-
-       ;; In any case, if only one handler is ever added, we'll
-       ;; eventually get to:
-
-       (--> (S (in-hole E (freeze l after ((lambda (x) e) (v_1)) with v_2)))
-            (S (in-hole E (freeze l after () with v_2)))
+       (--> (S (in-hole E (freeze l after ((lambda (x) e) v))))
+            (S (in-hole E (freeze l after v)))
             "E-Freeze-Done")
-
-       ;; Which should trigger E-Freeze, finally.  (v_1 gets thrown
-       ;; away -- we don't care about the return values of handlers.)
-
-       ;; TODO: keep working on this.
-
 
        ;; -------------------------------------
 
 
        ;; Special case of freeze-after, where there are no handlers to
        ;; run.
-
-       ;; At this point, since v is a value, it's already done its
-       ;; write to the store, S_1.  So, freeze-helper's job is merely
-       ;; to freeze the appropriate location.
-       (--> (S_1 (in-hole E (freeze l after () with v)))
+       (--> (S_1 (in-hole E (freeze l after ())))
             (S_2 (in-hole E d))
             ;; N.B.: Redex gotcha: the order of these two `where`
             ;; clauses matters.  :(
