@@ -41,6 +41,13 @@
          new
          (freeze e after e)
 
+         ;; Intermediate language form -- doesn't show up in user
+         ;; programs.
+         (H (d (... ...)))
+         (freeze e after ((callback (lambda (x) e))
+                          (running (e (... ...)))
+                          (handled H)))
+
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
@@ -96,7 +103,9 @@
          (put E e)
          (put e E)
          (freeze E after e)
-         (freeze v after (v E))))
+         (freeze v after ((callback (lambda (x) e))
+                          (running (e (... ...) E e (... ...)))
+                          (handled H)))))
 
     (define rr
       (reduction-relation
@@ -199,26 +208,27 @@
        ;; to l, which means, of course, substituting those exact
        ;; contents into the body of e_2 in place of x.
 
-       ;; Something like this:
-
-       ;; (--> (S (in-hole E (freeze l after (lambda (x) e))))
-       ;;      (S (in-hole E (freeze l after (subst x d e))))
-       ;;      (where d (lookup-val S l))
-       ;;      "E-Freeze-Beta")
-
-       ;; But this isn't right, because it's only triggered once.  We
-       ;; should make the (lambda (x) e) stick around to be triggered
-       ;; again in case of future writes.  How about a couple of
-       ;; lists?
-
        (--> (S (in-hole E (freeze l after (lambda (x) e))))
-            (S (in-hole E (freeze l after ((lambda (x) e) (subst x d e)))))
-            (where d (lookup-val S l))
-            "E-Freeze-Init")
+            (S (in-hole E (freeze l after ((callback (lambda (x) e))
+                                           (running (e))
+                                           (handled ())))))
+            "E-Freeze-Thread-Init")
 
-       (--> (S (in-hole E (freeze l after ((lambda (x) e) v))))
-            (S (in-hole E (freeze l after v)))
-            "E-Freeze-Done")
+       ;; Move a thread v_1 whose threshold has been reached
+       ;; from "running" to "finished" state.
+       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
+                                           (running (v_1 (... ...)))
+                                           (handled H)))))
+            (S (in-hole E ()))
+
+            ;; side condition we want: for all d . (leq d d_1), they
+            ;; have to be in the "handled" set.
+            ;; write a metafunction for this.
+            (where #t (print-H H))
+            
+            (where d_1 (lookup-val S l))
+            (where #t (leq d d_1))
+            "E-Freeze-Thread-Die")
 
        ;; -------------------------------------
 
@@ -251,6 +261,12 @@
       build-lv : l StoreVal frozenness -> LVar
       [(build-lv l StoreVal frozenness)
        (l (StoreVal frozenness))])
+
+    (define-metafunction name
+      print-H : H -> Bool
+      [(print-H H)
+       ,(begin (display (term H))
+              #t)])
 
     ;; Returns a store that is the same as the original store S, but
     ;; with S(l) modified to be frozen.
