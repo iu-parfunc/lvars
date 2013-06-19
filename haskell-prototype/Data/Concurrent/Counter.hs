@@ -17,4 +17,6 @@ dec c = atomicModifyIORef c $ \n -> (n-1,())
 
 -- | Is the counter (transiently) zero?
 poll :: Counter -> IO Bool
-poll = error "todo"
+poll c = do
+  n <- readIORef c
+  return (n == 0)

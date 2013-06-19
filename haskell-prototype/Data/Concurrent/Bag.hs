@@ -36,7 +36,11 @@ put b x = do
 -- | iter b f will traverse b (concurrently with updates), applying f to each
 -- encountered element.
 foreach :: Bag a -> (a -> Token a -> IO ()) -> IO ()
-foreach = error "todo"
+foreach b f = do
+  m <- readIORef b
+  let invoke (k, a) = f a (b, k)
+  mapM_ invoke $ M.toList m
 
 remove :: Token a -> IO ()
-remove = error "todo"
+remove (b, uid) = atomicModifyIORef b $ \m -> (M.delete uid m, ())
+  
