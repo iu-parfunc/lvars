@@ -43,7 +43,6 @@
 
          ;; Intermediate language form -- doesn't show up in user
          ;; programs.
-         (H (d (... ...)))
          (freeze e after ((callback (lambda (x) e))
                           (running (e (... ...)))
                           (handled H)))
@@ -51,6 +50,9 @@
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
+
+      ;; List of handled states.
+      (H (d (... ...)))
 
       ;; Values.
       (v () ;; unit value
