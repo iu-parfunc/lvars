@@ -222,15 +222,34 @@
                                            (running (v_1 (... ...)))
                                            (handled H)))))
             (S (in-hole E ()))
-
-            ;; side condition we want: for all d . (leq d d_1), they
-            ;; have to be in the "handled" set.
-            ;; write a metafunction for this.
-            (where #t (print-H H))
-            
             (where d_1 (lookup-val S l))
-            (where #t (leq d d_1))
-            "E-Freeze-Thread-Die")
+            (where #t (contains-all-leq d_1 H))
+            "E-Finalize-Freeze")
+
+
+       ;; I'm trying to understand what the E-Finalize-Freeze rule is
+       ;; up to.  It says that , if an LVar's value in the store is
+       ;; d_1 and it is frozen, then for all states d_2 where d_2 <=
+       ;; d_1, then d_2 has to belong to the set D_f, which is the set
+       ;; of "handled" states.
+
+       ;; I'm confused about where all these d_2 states come from in
+       ;; the first place.  Presumably they come from E-Spawn-Handler,
+       ;; but where are they coming from in the E-Spawn-Handler rule?
+       ;; Does E-Spawn-Handler spawn once for each point in the
+       ;; lattice below the d_1 we're trying to reach?  Redex is gonna
+       ;; explode...
+
+       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
+                                           (running (e_2 (... ...)))
+                                           (handled (H (... ...)))))))
+            (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
+                                           (running ((subst x d_2 e_2) (... ...)))
+                                           (handled (d_2 H (... ...)))))))
+            (where d_1 (lookup-val S l))
+            (where #t (leq d_2 d_1))
+            (where #f (member? d_2 (H (... ...))))
+            "E-Spawn-Handler")
 
        ;; -------------------------------------
 
@@ -244,6 +263,32 @@
             (where S_2 (freeze-helper S_1 l))
             (where d (lookup-val S_2 l))
             "E-Freeze")))
+
+
+    ;; Returns the set of all elements in the lattice that are less
+    ;; than or equal to d.
+
+    ;; TODO: test me.
+    (define-metafunction name
+      all-elements-leq : d -> H
+      [(all-elements-leq d) ()
+       ;; It's something like this, but I don't know if this is possible...
+       ;; ,(filter (term ,lattice-values ...)
+       ;;          (lambda (x)
+       ;;            (term (leq ,x ,d))))
+       ])
+
+    ;; Checks to see that, for all lattice elements that are less than
+    ;; or equal to d, they're a member of H.  In other words, the set
+    ;; (all-elements-leq d) is a subset of H.
+
+    ;; TODO: test me.
+    (define-metafunction name
+      contains-all-leq : d H -> Bool
+      [(contains-all-leq d H)
+       ,(lset<= equal?
+                (term (all-elements-leq d))
+                (term H))])
 
     ;; Some convenience functions: LVar accessors and constructor.
 
