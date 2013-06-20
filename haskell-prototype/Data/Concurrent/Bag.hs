@@ -24,23 +24,28 @@ uidCntr = unsafePerformIO (newIORef 0)
 getUID :: IO UID
 getUID =  atomicIncr uidCntr
 
+-- | Create an empty bag
 new :: IO (Bag a)
 new = newIORef (M.empty)
 
+-- | Add an element to a bag, returning a token that can later be used to remove
+-- that element.
 put :: Bag a -> a -> IO (Token a)
 put b x = do
   uid <- getUID
   atomicModifyIORef b $ \m -> (M.insert uid x m, ())  
   return (b, uid)
 
--- | iter b f will traverse b (concurrently with updates), applying f to each
--- encountered element.
+-- | foreach b f will traverse b (concurrently with updates), applying f to each
+-- encountered element, together with a token that can be used to remove the
+-- element.
 foreach :: Bag a -> (a -> Token a -> IO ()) -> IO ()
 foreach b f = do
   m <- readIORef b
   let invoke (k, a) = f a (b, k)
   mapM_ invoke $ M.toList m
 
+-- | Remove the element associated with a given token.  Repeated removals are
+-- permitted.
 remove :: Token a -> IO ()
 remove (b, uid) = atomicModifyIORef b $ \m -> (M.delete uid m, ())
-  

@@ -10,7 +10,7 @@
 -- arbitrary LVars (lattice variables), not just IVars.
 
 module LVarTraceIdempotent 
-  (LVar(), newLV, getLV, putLV, freezeLV, 
+  (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, 
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
   ) where
@@ -33,43 +33,78 @@ import           Common (forkWithExceptions)
 import qualified Sched as Sched
   
 ------------------------------------------------------------------------------
--- LVar and Par monad representation:
+-- LVar and Par monad representation
 ------------------------------------------------------------------------------
 
--- AJT TODO: add commentary
+-- | LVars are parameterized by two types:
+-- 
+--     * The first, @a@, characterizes the "state" of the LVar (i.e. the lattice
+--     value), and should be a concurrently mutable data type.  That means, in
+--     particular, that only a /transient snapshot/ of the lattice value can be
+--     obtained in general.  But the information in such a snapshot is always a
+--     lower bound on the current value of the LVar.
+--
+--     * The second, @d@, characterizes the "delta" associated with a @put@
+--     operation (i.e. the actual change, if any, to the LVar's lattice value).
+--     In many cases such deltas allow far more efficient communication between
+--     @put@s and blocked @get@s or handlers.  It is crucial, however, that the
+--     behavior of a @get@ or handler does not depend on the /particular/ choice
+--     of @put@ operations (and hence deltas) that moved the LVar over the
+--     threshold.  For simple data structures, the delta may just be the entire
+--     LVar state, but for e.g. collection data structures, delta will generally
+--     represent a single insertion.
 data LVar a d = LVar {
-  state  :: a,                 -- the current, "global" state of the LVar
-  status :: IORef (Status d)   -- is the LVar active or frozen?
+  state  :: a,                -- the current, "global" state of the LVar
+  status :: IORef (Status d)  -- is the LVar active or frozen?
 }
 
+-- The frozen bit of an LVar is tied together with the bag of waiting listeners,
+-- which allows the entire bag to become garbage immediately after freezing.
+-- (Note, however, that outstanding @put@s that occurred just before freezing
+-- may still reference the bag, which is necessary to ensure that all listeners
+-- are informed of the @put@ prior to freezing.)
 data Status d 
-  = Frozen                     -- further changes to the state are forbidden
+  = Frozen                       -- further changes to the state are forbidden
   | Active (B.Bag (Listener d))  -- bag of blocked threshold reads and handlers
     
+-- A listener for an LVar is informed of each change to the LVar's lattice value
+-- (represented as a delta) and the event of the LVar freezing.  The listener is
+-- given access to a bag token, allowing it to remove itself from the bag of
+-- listeners, after unblocking a threshold read, for example.  It is also given
+-- access to the scheduler queue for the CPU that generated the event, which it
+-- can use to add threads.
 data Listener d = Listener {
-  onUpdate :: d -> B.Token (Listener d) -> Sched.Queue Trace -> IO (),
-  onFreeze ::      B.Token (Listener d) -> Sched.Queue Trace -> IO ()
+  onUpdate :: d -> B.Token (Listener d) -> Sched.Queue ClosedPar -> IO (),
+  onFreeze ::      B.Token (Listener d) -> Sched.Queue ClosedPar -> IO ()
 }
 
 data HandlerPool = HandlerPool {
-  numHandlers      :: C.Counter, 
-  blockedOnQuiesce :: B.Bag Trace
+  numHandlers      :: C.Counter,   -- How many handler callbacks are currently
+                                   -- running?
+  blockedOnQuiesce :: B.Bag ClosedPar
 }
 
-newtype Trace = Trace {
-  exec :: Sched.Queue Trace -> IO ()
-}
-
+-- | A monadic type constructor for deterministic parallel computations
+-- producing an answer @a@.
 newtype Par a = Par {
-  trace :: (a -> Trace) -> Trace
+  -- the computation is represented in CPS
+  close :: (a -> ClosedPar) -> ClosedPar  
+}
+
+-- A "closed" Par computation is one that has been plugged into a continuation.
+-- It is represented in a "Church encoded" style, i.e., directly in terms of its
+-- interpretation into the IO monad.  Since the continuation has already been
+-- plugged into the computation, there is no answer type here.
+newtype ClosedPar = ClosedPar {
+  exec :: Sched.Queue ClosedPar -> IO ()
 }
 
 instance Functor Par where
-  fmap f m = Par $ \k -> trace m (k . f)
+  fmap f m = Par $ \k -> close m (k . f)
 
 instance Monad Par where
   return a = Par $ \k -> k a
-  m >>= c  = Par $ \k -> trace m $ \a -> trace (c a) k
+  m >>= c  = Par $ \k -> close m $ \a -> close (c a) k
 
 instance Applicative Par where
   (<*>) = ap
@@ -79,8 +114,8 @@ instance Applicative Par where
 -- A few auxiliary functions
 ------------------------------------------------------------------------------  
 
-mkPar :: ((a -> Trace) -> Sched.Queue Trace -> IO ()) -> Par a
-mkPar f = Par $ \k -> Trace $ \q -> f k q
+mkPar :: ((a -> ClosedPar) -> Sched.Queue ClosedPar -> IO ()) -> Par a
+mkPar f = Par $ \k -> ClosedPar $ \q -> f k q
 
 whenJust :: Maybe a -> (a -> IO ()) -> IO ()
 whenJust Nothing  _ = return ()
@@ -94,7 +129,7 @@ isFrozen (LVar _ status) = do
     Frozen   -> return True
     
 ------------------------------------------------------------------------------
--- LVar operations:
+-- LVar operations
 ------------------------------------------------------------------------------
     
 -- | Create an LVar
@@ -184,7 +219,7 @@ freezeLV (LVar _ status) = mkPar $ \k q -> do
   exec (k ()) q
   
 ------------------------------------------------------------------------------
--- Handler pool operations:
+-- Handler pool operations
 ------------------------------------------------------------------------------  
 
 -- | Create a handler pool
@@ -210,10 +245,10 @@ addHandler hp (LVar state status) globalThresh updateThresh =
           
           -- create callback thread, which is responsible for recording its
           -- termination in the handler pool
-          Sched.pushWork q $ trace cb onFinishCB
+          Sched.pushWork q $ close cb onFinishCB
           
       -- what to do when a callback thread completes
-      onFinishCB _ = Trace $ \q -> do
+      onFinishCB _ = ClosedPar $ \q -> do
         C.dec cnt                 -- record callback completion in pool
         quiescent <- C.poll cnt   -- check for (transient) quiescence
         when quiescent $          -- wake any threads waiting on quiescence
@@ -249,15 +284,15 @@ quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
   else sched q
 
 ------------------------------------------------------------------------------
--- Par monad operations:
+-- Par monad operations
 ------------------------------------------------------------------------------
 
 -- | Fork a child thread
 fork :: Par () -> Par ()
 fork child = mkPar $ \k q -> do
   Sched.pushWork q (k ()) -- "Work-first" policy.
-  exec (trace child $ const (Trace sched)) q
-  -- Sched.pushWork q (trace child emptyCont) -- "Help-first" policy.  Generally bad.
+  exec (close child $ const (ClosedPar sched)) q
+  -- Sched.pushWork q (close child emptyCont) -- "Help-first" policy.  Generally bad.
   --   exec (k ()) q
 
 -- | Perform an IO action
@@ -273,7 +308,7 @@ yield = mkPar $ \k q -> do
   sched q
   
 {-# INLINE sched #-}
-sched :: Sched.Queue Trace -> IO ()
+sched :: Sched.Queue ClosedPar -> IO ()
 sched q = do
   n <- Sched.next q
   case n of
@@ -297,10 +332,10 @@ runPar_internal c = do
   forM_ (zip [0..] queues) $ \(cpu, q) ->
     forkWithExceptions (forkOn cpu) "worker thread" $ 
       if cpu == main_cpu 
-        then let k x = Trace $ \q -> do 
+        then let k x = ClosedPar $ \q -> do 
                    sched q      -- ensure any remaining, enabled threads run to 
                    putMVar m x  -- completion prior to returning the result
-             in exec (trace c k) q
+             in exec (close c k) q
         else sched q
   takeMVar m  
 
