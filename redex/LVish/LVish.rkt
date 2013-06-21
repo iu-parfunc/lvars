@@ -9,7 +9,11 @@
 ;; wanted a lattice consisting only of Top and Bot, they wouldn't pass
 ;; any lattice values to define-LVish-language.)
 
-(define-syntax-rule (define-LVish-language name lub-op lattice-values ...)
+;; downset-op is a function that takes a lattice element and returns
+;; the set of all lattice elements that are below that element,
+;; represented as a Redex pattern.
+
+(define-syntax-rule (define-LVish-language name downset-op lub-op lattice-values ...)
   (begin
     (require redex/reduction-semantics)
     (require srfi/1)
@@ -18,6 +22,9 @@
              exists-d
              lub
              leq
+             extend-Df
+             contains-all-leq
+             first-unhandled-d
              store-dom
              lookup-val
              lookup-frozenness
@@ -41,9 +48,18 @@
          new
          (freeze e after e)
 
+         ;; Intermediate language form -- doesn't show up in user
+         ;; programs.
+         (freeze e after ((callback (lambda (x) e))
+                          (running (e (... ...)))
+                          (handled Df)))
+
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
+
+      ;; List of handled states.  Like Q, but potentially empty.
+      (Df (d (... ...)))
 
       ;; Values.
       (v () ;; unit value
@@ -96,7 +112,9 @@
          (put E e)
          (put e E)
          (freeze E after e)
-         (freeze v after (v E))))
+         (freeze v after ((callback (lambda (x) e))
+                          (running (e (... ...) E e (... ...)))
+                          (handled Df)))))
 
     (define rr
       (reduction-relation
@@ -199,26 +217,37 @@
        ;; to l, which means, of course, substituting those exact
        ;; contents into the body of e_2 in place of x.
 
-       ;; Something like this:
-
-       ;; (--> (S (in-hole E (freeze l after (lambda (x) e))))
-       ;;      (S (in-hole E (freeze l after (subst x d e))))
-       ;;      (where d (lookup-val S l))
-       ;;      "E-Freeze-Beta")
-
-       ;; But this isn't right, because it's only triggered once.  We
-       ;; should make the (lambda (x) e) stick around to be triggered
-       ;; again in case of future writes.  How about a couple of
-       ;; lists?
-
        (--> (S (in-hole E (freeze l after (lambda (x) e))))
-            (S (in-hole E (freeze l after ((lambda (x) e) (subst x d e)))))
-            (where d (lookup-val S l))
-            "E-Freeze-Init")
+            (S (in-hole E (freeze l after ((callback (lambda (x) e))
+                                           (running (e))
+                                           (handled ())))))
+            "E-Freeze-Thread-Init")
 
-       (--> (S (in-hole E (freeze l after ((lambda (x) e) v))))
-            (S (in-hole E (freeze l after v)))
-            "E-Freeze-Done")
+       ;; Move a thread v_1 whose threshold has been reached
+       ;; from "running" to "finished" state.
+       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
+                                           (running (v_1 (... ...)))
+                                           (handled Df)))))
+            ((freeze-helper S l) (in-hole E d_1))
+            (where d_1 (lookup-val S l))
+            (where #t (contains-all-leq d_1 Df))
+            "E-Finalize-Freeze")
+
+       ;; E-Spawn-Handler can fire potentially many times for a given
+       ;; freeze-after expression.  It fires once for each lattice
+       ;; element d_2 that is <= the current state d_1 of the lattice,
+       ;; so long as that element is not already member of Df.
+
+       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
+                                           (running (e_2 (... ...)))
+                                           (handled Df)))))
+            (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
+                                           (running ((subst x d_2 e_2) (... ...)))
+                                           (handled Df_2)))))
+            (where d_1 (lookup-val S l))
+            (where d_2 (first-unhandled-d d_1 Df))
+            (where Df_2 (extend-Df Df d_2))
+            "E-Spawn-Handler")
 
        ;; -------------------------------------
 
@@ -232,6 +261,8 @@
             (where S_2 (freeze-helper S_1 l))
             (where d (lookup-val S_2 l))
             "E-Freeze")))
+
+
 
     ;; Some convenience functions: LVar accessors and constructor.
 
@@ -265,6 +296,36 @@
           (if lv
               (term ,(map update (term S)))
               (error "freeze-helper: lookup failed")))])
+
+    ;; Returns a Df set with d added.  Assumes that d is not already a
+    ;; member of Df.
+    (define-metafunction name
+      extend-Df : Df d -> Df
+      [(extend-Df Df d) ,(cons (term d) (term Df))])
+
+    ;; Checks to see that, for all lattice elements that are less than
+    ;; or equal to d, they're a member of Df.  In other words, the set
+    ;; (downset-op d) is a subset of Df.
+    (define-metafunction name
+      contains-all-leq : d Df -> Bool
+      [(contains-all-leq d Df)
+       ,(lset<= equal?
+                (downset-op (term d))
+                (term Df))])
+
+    ;; A helper for E-Spawn-Handler reduction rule.  Takes a lattice
+    ;; element d_1 and a finite set Df of elements, and returns the
+    ;; first element that is <= d_1 in the lattice that is *not* a
+    ;; member of Df, if such an element exists; returns #f otherwise.
+    (define-metafunction name
+      first-unhandled-d : d Df -> d/Bool
+      [(first-unhandled-d d_1 Df)
+       ,(let ([ls (filter (lambda (x)
+                            (not (member x (term Df))))
+                          (downset-op (term d_1)))])
+          (if (null? ls)
+              #f
+              (term ,(first ls))))])
 
     (define-metafunction name
       store-dom : S -> (l (... ...))
@@ -376,6 +437,7 @@
                   (term ((l_3 (StoreVal_3 frozenness_3)) (... ...))))
             (cons (term (l_2 (StoreVal_2 frozenness_2)))
                   (term (update-val ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
+
 
     ;; The second condition on the E-Get rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.
