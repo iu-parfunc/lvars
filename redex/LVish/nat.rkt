@@ -2,9 +2,21 @@
 
 (module language racket
   (require "LVish.rkt")
+  (require srfi/1)
   (provide LVish-nat)
   
-  (define-LVish-language LVish-nat max natural))
+  (define-LVish-language LVish-nat downset-op max natural)
+
+  ;; To figure out at some point: maybe we could actually write
+  ;; downset-op with Redex patterns?
+
+  ;; (define downset-op
+  ;;   (lambda (d)
+  ;;     (term (side-condition natural (<= natural d)))))
+
+  (define downset-op
+    (lambda (d)
+      (append (iota d) `(,d)))))
 
 (module test-suite racket
   (require redex/reduction-semantics)

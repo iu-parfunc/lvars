@@ -9,7 +9,11 @@
 ;; wanted a lattice consisting only of Top and Bot, they wouldn't pass
 ;; any lattice values to define-LVish-language.)
 
-(define-syntax-rule (define-LVish-language name lub-op lattice-values ...)
+;; downset-op is a function that takes a lattice element and returns
+;; the set of all lattice elements that are below that element,
+;; represented as a Redex pattern.
+
+(define-syntax-rule (define-LVish-language name downset-op lub-op lattice-values ...)
   (begin
     (require redex/reduction-semantics)
     (require srfi/1)
@@ -45,14 +49,14 @@
          ;; programs.
          (freeze e after ((callback (lambda (x) e))
                           (running (e (... ...)))
-                          (handled H)))
+                          (handled Df)))
 
          ;; These immediately desugar to application and lambda.
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
 
       ;; List of handled states.
-      (H (d (... ...)))
+      (Df (d (... ...)))
 
       ;; Values.
       (v () ;; unit value
@@ -107,7 +111,7 @@
          (freeze E after e)
          (freeze v after ((callback (lambda (x) e))
                           (running (e (... ...) E e (... ...)))
-                          (handled H)))))
+                          (handled Df)))))
 
     (define rr
       (reduction-relation
@@ -220,35 +224,29 @@
        ;; from "running" to "finished" state.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
                                            (running (v_1 (... ...)))
-                                           (handled H)))))
-            (S (in-hole E ()))
+                                           (handled Df)))))
+            ((freeze-helper S l) (in-hole E ()))
             (where d_1 (lookup-val S l))
-            (where #t (contains-all-leq d_1 H))
+            (where #t (contains-all-leq d_1 Df))
             "E-Finalize-Freeze")
 
+       ;; E-Spawn-Handler can fire potentially many times for a given
+       ;; freeze-after expression.  It fires once for each lattice
+       ;; element d_2 that is <= the current state d_1 of the lattice,
+       ;; so long as that element is not already member of Df.
 
-       ;; I'm trying to understand what the E-Finalize-Freeze rule is
-       ;; up to.  It says that , if an LVar's value in the store is
-       ;; d_1 and it is frozen, then for all states d_2 where d_2 <=
-       ;; d_1, then d_2 has to belong to the set D_f, which is the set
-       ;; of "handled" states.
-
-       ;; I'm confused about where all these d_2 states come from in
-       ;; the first place.  Presumably they come from E-Spawn-Handler,
-       ;; but where are they coming from in the E-Spawn-Handler rule?
-       ;; Does E-Spawn-Handler spawn once for each point in the
-       ;; lattice below the d_1 we're trying to reach?  Redex is gonna
-       ;; explode...
+       ;; TODO: Take the set (downset-op d_1), and filter out all
+       ;; elements that are already members of Df.  For all the rest
+       ;; of the elements, fire E-Spawn-Handler.
 
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
                                            (running (e_2 (... ...)))
-                                           (handled (H (... ...)))))))
+                                           (handled (Df (... ...)))))))
             (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
                                            (running ((subst x d_2 e_2) (... ...)))
-                                           (handled (d_2 H (... ...)))))))
+                                           (handled (d_2 Df (... ...)))))))
             (where d_1 (lookup-val S l))
-            (where #t (leq d_2 d_1))
-            (where #f (member? d_2 (H (... ...))))
+            (where #f (member? d_2 (Df (... ...))))
             "E-Spawn-Handler")
 
        ;; -------------------------------------
@@ -264,31 +262,17 @@
             (where d (lookup-val S_2 l))
             "E-Freeze")))
 
-
-    ;; Returns the set of all elements in the lattice that are less
-    ;; than or equal to d.
-
-    ;; TODO: test me.
-    (define-metafunction name
-      all-elements-leq : d -> H
-      [(all-elements-leq d) ()
-       ;; It's something like this, but I don't know if this is possible...
-       ;; ,(filter (term ,lattice-values ...)
-       ;;          (lambda (x)
-       ;;            (term (leq ,x ,d))))
-       ])
-
     ;; Checks to see that, for all lattice elements that are less than
-    ;; or equal to d, they're a member of H.  In other words, the set
-    ;; (all-elements-leq d) is a subset of H.
+    ;; or equal to d, they're a member of Df.  In other words, the set
+    ;; (all-elements-leq d) is a subset of Df.
 
     ;; TODO: test me.
     (define-metafunction name
-      contains-all-leq : d H -> Bool
-      [(contains-all-leq d H)
+      contains-all-leq : d Df -> Bool
+      [(contains-all-leq d Df)
        ,(lset<= equal?
-                (term (all-elements-leq d))
-                (term H))])
+                (downset-op (term d))
+                (term Df))])
 
     ;; Some convenience functions: LVar accessors and constructor.
 
@@ -308,12 +292,6 @@
       build-lv : l StoreVal frozenness -> LVar
       [(build-lv l StoreVal frozenness)
        (l (StoreVal frozenness))])
-
-    (define-metafunction name
-      print-H : H -> Bool
-      [(print-H H)
-       ,(begin (display (term H))
-              #t)])
 
     ;; Returns a store that is the same as the original store S, but
     ;; with S(l) modified to be frozen.
@@ -439,6 +417,7 @@
                   (term ((l_3 (StoreVal_3 frozenness_3)) (... ...))))
             (cons (term (l_2 (StoreVal_2 frozenness_2)))
                   (term (update-val ((l_3 (StoreVal_3 frozenness_3)) (... ...)) l StoreVal))))])
+
 
     ;; The second condition on the E-Get rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.
