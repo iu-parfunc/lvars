@@ -9,7 +9,7 @@
 -- | This (experimental) module generalizes the Par monad to allow
 -- arbitrary LVars (lattice variables), not just IVars.
 
-module LVarTraceIdempotent 
+module LVarIdempotent 
   (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
@@ -63,7 +63,7 @@ type LVarID = IORef ()
 newLVID = newIORef ()
 
 -- a global ID that is *not* the name of any LVar.  Makes it possible to
--- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation
+-- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation.
 noName :: LVarID
 noName = unsafePerformIO $ newLVID
 
