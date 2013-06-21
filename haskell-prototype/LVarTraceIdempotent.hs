@@ -10,7 +10,7 @@
 -- arbitrary LVars (lattice variables), not just IVars.
 
 module LVarTraceIdempotent 
-  (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, 
+  (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
   ) where
@@ -297,6 +297,17 @@ quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
     B.remove tok
     exec (k ()) q 
   else sched q
+
+-- | Freeze an LVar after a given handler quiesces
+freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
+              -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+              -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
+              -> Par ()
+freezeLVAfter lv globalCB updateCB = do
+  hp <- newPool
+  addHandler hp lv globalCB updateCB
+  quiesce hp
+  freezeLV lv
 
 ------------------------------------------------------------------------------
 -- Par monad operations
