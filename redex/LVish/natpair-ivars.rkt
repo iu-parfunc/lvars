@@ -2,13 +2,45 @@
 
 (module language racket
   (require "LVish.rkt")
+  (require srfi/1)
   (provide LVish-natpair-ivars)
+  (provide downset-op)
+  
 
   (define-LVish-language LVish-natpair-ivars
+    downset-op
     my-lub
     (natural natural)
     (natural Bot)
     (Bot natural))
+
+  ;; downset-op: Takes a pair p and returns a list of everything below
+  ;; or equal to p in the lattice.
+
+  ;; (downset-op (2 . 1)) =>
+  ;; '((Bot . Bot)
+  ;;   (Bot . 0)
+  ;;   (Bot . 1)
+  ;;   (0 . Bot)
+  ;;   (0 . 0)
+  ;;   (0 . 1)
+  ;;   (1 . Bot)
+  ;;   (1 . 0)
+  ;;   (1 . 1)
+  ;;   (2 . Bot)
+  ;;   (2 . 0)
+  ;;   (2 . 1))
+  (define downset-op
+    (lambda (p)
+      (let ([car-iota (append '(Bot) (iota (car p) `(,(car p))))]
+            [cdr-iota (append '(Bot) (iota (cdr p) `(,(cdr p))))])
+        ;; car-iota: '(Bot 0 1 2)
+        ;; cdr-iota: '(Bot 0 1)
+        (map (lambda (x)
+               (map (lambda (y)
+                      (cons x y))
+                    cdr-iota))
+             car-iota))))
 
   ;; my-lub: A function that takes two pairs (they might be of the
   ;; form (natural natural), (natural Bot), or (Bot natural)) and

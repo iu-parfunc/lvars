@@ -228,7 +228,7 @@
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
                                            (running (v_1 (... ...)))
                                            (handled Df)))))
-            ((freeze-helper S l) (in-hole E ()))
+            ((freeze-helper S l) (in-hole E d_1))
             (where d_1 (lookup-val S l))
             (where #t (contains-all-leq d_1 Df))
             "E-Finalize-Freeze")

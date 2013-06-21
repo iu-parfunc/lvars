@@ -4,7 +4,6 @@
   (require "LVish.rkt")
   (require srfi/1)
   (provide LVish-nat)
-  (provide downset-op) ;; temp
   
   (define-LVish-language LVish-nat downset-op max natural)
 
@@ -17,7 +16,7 @@
 
   (define downset-op
     (lambda (d)
-      (append (iota d) `(,d)))))
+      (append '(Bot) (iota d) `(,d)))))
 
 (module test-suite racket
   (require redex/reduction-semantics)
@@ -130,60 +129,64 @@
      (term (6 3 4 5)))
 
     (test-equal
-     (term (contains-all-leq 3 (0 1 2 3)))
+     (term (contains-all-leq 3 (Bot 0 1 2 3)))
      (term #t))
 
     (test-equal
-     (term (contains-all-leq 3 (1 2 3)))
+     (term (contains-all-leq 3 (Bot 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (2 3)))
+     (term (contains-all-leq 3 (Bot 2 3)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (2 3 4 5)))
+     (term (contains-all-leq 3 (Bot 2 3 4 5)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (0 1 2 3 4 5)))
+     (term (contains-all-leq 3 (Bot 0 1 2 3 4 5)))
      (term #t))
 
-    ;; For the next few tests, note that (downset 3) => (0 1 2 3)
-    (test-equal
-     (term (first-unhandled-d 3 (1 2 3 4 5)))
-     (term 0))
-
+    ;; For the next few tests, note that (downset 3) => (Bot 0 1 2 3)
     (test-equal
      (term (first-unhandled-d 3 (0 1 2 3 4 5)))
-     (term #f))
-
+     (term Bot))
+    
     (test-equal
-     (term (first-unhandled-d 3 (0 1 2 3)))
-     (term #f))
-
-    (test-equal
-     (term (first-unhandled-d 3 (2 3)))
+     (term (first-unhandled-d 3 (Bot 1 2 3 4 5)))
      (term 0))
 
     (test-equal
-     (term (first-unhandled-d 3 (0 2 3)))
+     (term (first-unhandled-d 3 (Bot 0 1 2 3 4 5)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d 3 (Bot 0 1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d 3 (Bot 2 3)))
+     (term 0))
+
+    (test-equal
+     (term (first-unhandled-d 3 (Bot 0 2 3)))
      (term 1))
 
     (test-equal
-     (term (first-unhandled-d 3 (0 1 2)))
+     (term (first-unhandled-d 3 (Bot 0 1 2)))
      (term 3))
 
     (test-equal
-     (term (first-unhandled-d 3 (0 1 2 4 5 6 7)))
+     (term (first-unhandled-d 3 (Bot 0 1 2 4 5 6 7)))
      (term 3))
 
     (test-equal
-     (term (first-unhandled-d 3 (7 0 2 6 3 1 5 4)))
+     (term (first-unhandled-d 3 (7 0 2 6 Bot 3 1 5 4)))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d 3 (7 6 5 4 3 0)))
+     (term (first-unhandled-d 3 (7 6 5 4 3 0 Bot)))
      (term 1))
 
     (test-equal
