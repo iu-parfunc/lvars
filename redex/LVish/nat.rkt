@@ -4,6 +4,7 @@
   (require "LVish.rkt")
   (require srfi/1)
   (provide LVish-nat)
+  (provide downset-op) ;; temp
   
   (define-LVish-language LVish-nat downset-op max natural)
 
@@ -119,6 +120,71 @@
     (test-equal
      (term (leq 4 3))
      (term #f))
+
+    (test-equal
+     (term (extend-Df () 3))
+     (term (3)))
+
+    (test-equal
+     (term (extend-Df (3 4 5) 6))
+     (term (6 3 4 5)))
+
+    (test-equal
+     (term (contains-all-leq 3 (0 1 2 3)))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-leq 3 (1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-leq 3 (2 3)))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-leq 3 (2 3 4 5)))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-leq 3 (0 1 2 3 4 5)))
+     (term #t))
+
+    ;; For the next few tests, note that (downset 3) => (0 1 2 3)
+    (test-equal
+     (term (first-unhandled-d 3 (1 2 3 4 5)))
+     (term 0))
+
+    (test-equal
+     (term (first-unhandled-d 3 (0 1 2 3 4 5)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d 3 (0 1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d 3 (2 3)))
+     (term 0))
+
+    (test-equal
+     (term (first-unhandled-d 3 (0 2 3)))
+     (term 1))
+
+    (test-equal
+     (term (first-unhandled-d 3 (0 1 2)))
+     (term 3))
+
+    (test-equal
+     (term (first-unhandled-d 3 (0 1 2 4 5 6 7)))
+     (term 3))
+
+    (test-equal
+     (term (first-unhandled-d 3 (7 0 2 6 3 1 5 4)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d 3 (7 6 5 4 3 0)))
+     (term 1))
 
     (test-equal
      (term (store-dom ((l1 (4 #f)) (l2 (5 #f)) (l3 (Bot #f)))))
@@ -490,7 +556,7 @@
                Error))
 
     ;; Fancier freezing.  This one will actually never raise an error
-    ;; because the racing put is less than 500!
+    ;; because the racing put is less than 5!
     (test-->> rr
               (term
                (() ;; empty store
@@ -498,12 +564,12 @@
                   (let par
                       ((x_2 (let ((x_4 (put x_1 3)))
                               (freeze x_1 after (lambda (x)
-                                                  (put x_1 500)))))
+                                                  (put x_1 5)))))
                        (x_3 (put x_1 4)))
                     x_2))))
               (term
-               (((l (500 #t)))
-                500)))
+               (((l (5 #t)))
+                5)))
     
     ;; But this one might:
     (test-->> rr
@@ -513,12 +579,12 @@
                   (let par
                       ((x_2 (let ((x_4 (put x_1 3)))
                               (freeze x_1 after (lambda (x)
-                                                  (put x_1 500)))))
-                       (x_3 (put x_1 501)))
+                                                  (put x_1 5)))))
+                       (x_3 (put x_1 6)))
                     x_2))))
               (term
-               (((l (501 #t)))
-                501))
+               (((l (6 #t)))
+                6))
               (term
                Error))
 

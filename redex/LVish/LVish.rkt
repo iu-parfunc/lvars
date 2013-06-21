@@ -22,6 +22,9 @@
              exists-d
              lub
              leq
+             extend-Df
+             contains-all-leq
+             first-unhandled-d
              store-dom
              lookup-val
              lookup-frozenness
@@ -55,7 +58,7 @@
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
 
-      ;; List of handled states.
+      ;; List of handled states.  Like Q, but potentially empty.
       (Df (d (... ...)))
 
       ;; Values.
@@ -235,18 +238,15 @@
        ;; element d_2 that is <= the current state d_1 of the lattice,
        ;; so long as that element is not already member of Df.
 
-       ;; TODO: Take the set (downset-op d_1), and filter out all
-       ;; elements that are already members of Df.  For all the rest
-       ;; of the elements, fire E-Spawn-Handler.
-
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
                                            (running (e_2 (... ...)))
-                                           (handled (Df (... ...)))))))
+                                           (handled Df)))))
             (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
                                            (running ((subst x d_2 e_2) (... ...)))
-                                           (handled (d_2 Df (... ...)))))))
+                                           (handled Df_2)))))
             (where d_1 (lookup-val S l))
-            (where #f (member? d_2 (Df (... ...))))
+            (where d_2 (first-unhandled-d d_1 Df))
+            (where Df_2 (extend-Df Df d_2))
             "E-Spawn-Handler")
 
        ;; -------------------------------------
@@ -262,17 +262,7 @@
             (where d (lookup-val S_2 l))
             "E-Freeze")))
 
-    ;; Checks to see that, for all lattice elements that are less than
-    ;; or equal to d, they're a member of Df.  In other words, the set
-    ;; (all-elements-leq d) is a subset of Df.
 
-    ;; TODO: test me.
-    (define-metafunction name
-      contains-all-leq : d Df -> Bool
-      [(contains-all-leq d Df)
-       ,(lset<= equal?
-                (downset-op (term d))
-                (term Df))])
 
     ;; Some convenience functions: LVar accessors and constructor.
 
@@ -306,6 +296,36 @@
           (if lv
               (term ,(map update (term S)))
               (error "freeze-helper: lookup failed")))])
+
+    ;; Returns a Df set with d added.  Assumes that d is not already a
+    ;; member of Df.
+    (define-metafunction name
+      extend-Df : Df d -> Df
+      [(extend-Df Df d) ,(cons (term d) (term Df))])
+
+    ;; Checks to see that, for all lattice elements that are less than
+    ;; or equal to d, they're a member of Df.  In other words, the set
+    ;; (downset-op d) is a subset of Df.
+    (define-metafunction name
+      contains-all-leq : d Df -> Bool
+      [(contains-all-leq d Df)
+       ,(lset<= equal?
+                (downset-op (term d))
+                (term Df))])
+
+    ;; A helper for E-Spawn-Handler reduction rule.  Takes a lattice
+    ;; element d_1 and a finite set Df of elements, and returns the
+    ;; first element that is <= d_1 in the lattice that is *not* a
+    ;; member of Df, if such an element exists; returns #f otherwise.
+    (define-metafunction name
+      first-unhandled-d : d Df -> d/Bool
+      [(first-unhandled-d d_1 Df)
+       ,(let ([ls (filter (lambda (x)
+                            (not (member x (term Df))))
+                          (downset-op (term d_1)))])
+          (if (null? ls)
+              #f
+              (term ,(first ls))))])
 
     (define-metafunction name
       store-dom : S -> (l (... ...))
