@@ -44,19 +44,28 @@ import qualified Sched as Sched
 --     obtained in general.  But the information in such a snapshot is always a
 --     lower bound on the current value of the LVar.
 --
---     * The second, @d@, characterizes the "delta" associated with a @put@
+--     * The second, @d@, characterizes the "delta" associated with a @putLV@
 --     operation (i.e. the actual change, if any, to the LVar's lattice value).
 --     In many cases such deltas allow far more efficient communication between
---     @put@s and blocked @get@s or handlers.  It is crucial, however, that the
---     behavior of a @get@ or handler does not depend on the /particular/ choice
---     of @put@ operations (and hence deltas) that moved the LVar over the
---     threshold.  For simple data structures, the delta may just be the entire
---     LVar state, but for e.g. collection data structures, delta will generally
---     represent a single insertion.
+--     @putLV@s and blocked @getLV@s or handlers.  It is crucial, however, that
+--     the behavior of a @get@ or handler does not depend on the /particular/
+--     choice of @putLV@ operations (and hence deltas) that moved the LVar over
+--     the threshold.  For simple data structures, the delta may just be the
+--     entire LVar state, but for e.g. collection data structures, delta will
+--     generally represent a single insertion.
 data LVar a d = LVar {
   state  :: a,                -- the current, "global" state of the LVar
-  status :: IORef (Status d)  -- is the LVar active or frozen?
+  status :: IORef (Status d), -- is the LVar active or frozen?  
+  name   :: LVarID            -- a unique identifier for this LVar
 }
+
+type LVarID = IORef ()
+newLVID = newIORef ()
+
+-- a global ID that is *not* the name of any LVar.  Makes it possible to
+-- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation
+noName :: LVarID
+noName = unsafePerformIO $ newLVID
 
 -- The frozen bit of an LVar is tied together with the bag of waiting listeners,
 -- which allows the entire bag to become garbage immediately after freezing.
@@ -66,7 +75,7 @@ data LVar a d = LVar {
 data Status d 
   = Frozen                       -- further changes to the state are forbidden
   | Active (B.Bag (Listener d))  -- bag of blocked threshold reads and handlers
-    
+
 -- A listener for an LVar is informed of each change to the LVar's lattice value
 -- (represented as a delta) and the event of the LVar freezing.  The listener is
 -- given access to a bag token, allowing it to remove itself from the bag of
@@ -74,8 +83,8 @@ data Status d
 -- access to the scheduler queue for the CPU that generated the event, which it
 -- can use to add threads.
 data Listener d = Listener {
-  onUpdate :: d -> B.Token (Listener d) -> Sched.Queue ClosedPar -> IO (),
-  onFreeze ::      B.Token (Listener d) -> Sched.Queue ClosedPar -> IO ()
+  onUpdate :: d -> B.Token (Listener d) -> SchedState -> IO (),
+  onFreeze ::      B.Token (Listener d) -> SchedState -> IO ()
 }
 
 data HandlerPool = HandlerPool {
@@ -96,8 +105,10 @@ newtype Par a = Par {
 -- interpretation into the IO monad.  Since the continuation has already been
 -- plugged into the computation, there is no answer type here.
 newtype ClosedPar = ClosedPar {
-  exec :: Sched.Queue ClosedPar -> IO ()
+  exec :: SchedState -> IO ()
 }
+
+type SchedState = Sched.State ClosedPar LVarID
 
 instance Functor Par where
   fmap f m = Par $ \k -> close m (k . f)
@@ -114,7 +125,7 @@ instance Applicative Par where
 -- A few auxiliary functions
 ------------------------------------------------------------------------------  
 
-mkPar :: ((a -> ClosedPar) -> Sched.Queue ClosedPar -> IO ()) -> Par a
+mkPar :: ((a -> ClosedPar) -> SchedState -> IO ()) -> Par a
 mkPar f = Par $ \k -> ClosedPar $ \q -> f k q
 
 whenJust :: Maybe a -> (a -> IO ()) -> IO ()
@@ -122,7 +133,7 @@ whenJust Nothing  _ = return ()
 whenJust (Just a) f = f a
 
 isFrozen :: LVar a d -> IO Bool
-isFrozen (LVar _ status) = do
+isFrozen (LVar {status}) = do
   curStatus <- readIORef status
   case curStatus of
     Active _ -> return False
@@ -138,14 +149,15 @@ newLV init = mkPar $ \k q -> do
   state     <- init
   listeners <- B.new
   status    <- newIORef $ Active listeners
-  exec (k $ LVar state status) q
+  name      <- newLVID
+  exec (k $ LVar {state, status, name}) q
 
 -- | Do a threshold read on an LVar
 getLV :: (LVar a d)                  -- ^ the LVar 
       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
       -> (d ->         IO (Maybe b)) -- ^ does d pass the threshold?
       -> Par b
-getLV lv@(LVar state status) globalThresh deltaThresh = mkPar $ \k q ->
+getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q ->
   let unblockWhen thresh tok q = do
         tripped <- thresh
         whenJust tripped $ \b -> do
@@ -191,31 +203,34 @@ getLV lv@(LVar state status) globalThresh deltaThresh = mkPar $ \k q ->
                               -- redundant, but by idempotence that's OK
               Nothing -> sched q
 
+
 -- | Update an LVar
 putLV :: LVar a d            -- ^ the LVar
       -> (a -> IO (Maybe d)) -- ^ how to do the put, and whether the LVar's
                              -- value changed
       -> Par ()
-putLV (LVar state status) doPut = mkPar $ \k q -> do
-  delta <- doPut state
+putLV LVar {state, status, name} doPut = mkPar $ \k q -> do  
+  Sched.setStatus q name         -- publish our intent to modify the LVar
+  delta <- doPut state           -- possibly modify the LVar
+  curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
+  Sched.setStatus q noName       -- retract our modification intent
   whenJust delta $ \d -> do
-    curStatus <- readIORef status
     case curStatus of
       Frozen -> error "Attempt to change a frozen LVar"
       Active listeners -> 
-        let invoke (Listener onUpdate _) tok = onUpdate d tok q
-        in B.foreach listeners invoke
+        B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
   exec (k ()) q
 
 -- | Freeze an LVar (limited nondeterminism)
 freezeLV :: LVar a d -> Par ()
-freezeLV (LVar _ status) = mkPar $ \k q -> do
+freezeLV LVar {name, status} = mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
   case oldStatus of
     Frozen -> return ()
-    Active listeners -> 
-      let invoke (Listener _ onFreeze) tok = onFreeze tok q
-      in B.foreach listeners invoke
+    Active listeners -> do
+      Sched.await q (name /=)  -- wait until all currently-running puts have
+                               -- snapshotted the active status
+      B.foreach listeners $ \Listener {onFreeze} tok -> onFreeze tok q
   exec (k ()) q
   
 ------------------------------------------------------------------------------
@@ -235,7 +250,7 @@ addHandler :: HandlerPool                 -- ^ pool to enroll in
            -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
-addHandler hp (LVar state status) globalThresh updateThresh = 
+addHandler hp LVar {state, status} globalThresh updateThresh = 
   let cnt = numHandlers hp    
       
       spawnWhen thresh q = do
@@ -308,7 +323,7 @@ yield = mkPar $ \k q -> do
   sched q
   
 {-# INLINE sched #-}
-sched :: Sched.Queue ClosedPar -> IO ()
+sched :: SchedState -> IO ()
 sched q = do
   n <- Sched.next q
   case n of
@@ -322,7 +337,7 @@ instance NFData (LVar a d) where
 {-# INLINE runPar_internal #-}
 runPar_internal :: Par a -> IO a
 runPar_internal c = do
-  queues <- Sched.new numCapabilities 
+  queues <- Sched.new numCapabilities noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the

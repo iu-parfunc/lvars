@@ -1,7 +1,10 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
+{-# LANGUAGE DoRec #-}
 
-module Sched(Queue, new, next, pushWork, yieldWork, currentCPU) where
+module Sched(
+  State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await
+  ) where
 
 import Prelude
 import Control.Monad
@@ -43,21 +46,37 @@ popOther = popMine
 -- A scheduling framework
 ------------------------------------------------------------------------------
 
-data Queue a = Queue
+-- All the state relevant to a single worker thread
+data State a s = State
     { no       :: {-# UNPACK #-} !Int,
-      workpool :: IORef [a],
-      idle     :: IORef [MVar Bool],
-      scheds   :: [Queue a] -- Global list of all per-thread workers.
+      status   :: IORef s,
+      workpool :: IORef [a],         
+      idle     :: IORef [MVar Bool], -- global list of idle workers
+      states   :: [State a s],       -- global list of all worker states.
+      
+      -- pad out to 64 bytes to avoid false sharing (assuming 4 byte words and
+      -- 64 byte cachelines)
+      pad4_1 :: {-# UNPACK #-} !Padding,
+      pad4_2 :: {-# UNPACK #-} !Padding,
+      pad4_3 :: {-# UNPACK #-} !Padding
     }
+    
+data Padding = Padding {    
+  pad1 :: {-# UNPACK #-} !Int,
+  pad2 :: {-# UNPACK #-} !Int,
+  pad3 :: {-# UNPACK #-} !Int,
+  pad4 :: {-# UNPACK #-} !Int  
+}
+padding = Padding { pad1=0, pad2=0, pad3=0, pad4=0 }
 
 -- | Process the next item on the work queue or, failing that, go into
 -- work-stealing mode.
 {-# INLINE next #-}
-next :: Queue a -> IO (Maybe a)
-next queue@Queue{ workpool } = do
+next :: State a s -> IO (Maybe a)
+next state@State{ workpool } = do
   e <- popMine workpool
   case e of
-    Nothing -> steal queue
+    Nothing -> steal state
     Just t  -> return e
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
@@ -65,10 +84,10 @@ next queue@Queue{ workpool } = do
 -- parallel) programs.
 
 -- | Attempt to steal work or, failing that, give up and go idle.
-steal :: Queue a -> IO (Maybe a)
-steal Queue{ idle, scheds, no=my_no } = do
+steal :: State a s -> IO (Maybe a)
+steal State{ idle, states, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no
-  go scheds
+  go states
   where
     go [] = do m <- newEmptyMVar
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
@@ -85,7 +104,7 @@ steal Queue{ idle, scheds, no=my_no } = do
                          return Nothing
                        else do
                          -- printf "cpu %d woken up\n" my_no
-                         go scheds
+                         go states
     go (x:xs)
       | no x == my_no = go xs
       | otherwise     = do
@@ -97,8 +116,8 @@ steal Queue{ idle, scheds, no=my_no } = do
            Nothing -> go xs
 
 -- | If any worker is idle, wake one up and give it work to do.
-pushWork :: Queue a -> a -> IO ()
-pushWork Queue { workpool, idle } t = do
+pushWork :: State a s -> a -> IO ()
+pushWork State { workpool, idle } t = do
   pushMine workpool t
   idles <- readIORef idle
   when (not (null idles)) $ do
@@ -107,17 +126,33 @@ pushWork Queue { workpool, idle } t = do
                                           (i:is) -> (is, putMVar i False))
     r -- wake one up
         
-yieldWork :: Queue a -> a -> IO ()
-yieldWork Queue { workpool } t = 
+yieldWork :: State a s -> a -> IO ()
+yieldWork State { workpool } t = 
   pushYield workpool t -- AJT: should this also wake an idle thread?
 
-new :: Int -> IO [Queue a]
-new n = do
-  workpools <- replicateM n $ newIORef []
+new :: Int -> s -> IO [State a s]
+new n s = do
   idle <- newIORef []
-  let states = [ Queue { no=x, workpool=wp, idle, scheds=states } 
-               | (x,wp) <- zip [0..] workpools ]
+  let mkState states i = do 
+        workpool <- newIORef []
+        status   <- newIORef s
+        return State { no = i, workpool, idle, status, states, 
+                       pad4_1 = padding, pad4_2 = padding, pad4_3 = padding }
+  rec states <- forM [0..(n-1)] $ mkState states
   return states
+
+number :: State a s -> Int
+number State { no } = no
+
+setStatus :: State a s -> s -> IO ()
+setStatus State { status } s = writeIORef status s
+
+await :: State a s -> (s -> Bool) -> IO ()
+await State { states } p = 
+  let awaitOne state@(State { status }) = do
+        cur <- readIORef status
+        unless (p cur) $ awaitOne state
+  in mapM_ awaitOne states
 
 -- | the CPU executing the current thread (0 if not supported)
 currentCPU :: IO Int
