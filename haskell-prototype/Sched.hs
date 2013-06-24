@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
-{-# LANGUAGE DoRec #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Sched(
   State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await
