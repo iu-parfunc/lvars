@@ -175,51 +175,13 @@
             (where #t (top? (lub d_1 d_2)))
             "E-Put-Err")
 
-       ;; OK, so what's the deal with freeze-after?  what does it do?
-
-       ;; (freeze e_1 after e_2) behaves as follows:
-
-       ;; e_1 evals to a location, so we don't have to worry about it
-       ;; at all.  We can write all our rules with `l` there.
-
-       ;; e_2 is a piece of code that will run every time l is written
-       ;; to.  For instance, if l represents a set of nodes in a
-       ;; graph, then for each node put into the set we might want
-       ;; this code to run:
-
-       ;; foreach neighbor in (neighbors node):
-       ;;   put l { neighbor }
-
-       ;; So, in all, e_2 is:
-
-       ;; foreach node in l:
-       ;;   foreach neighbor in (neighbors node):
-       ;;     put l { neighbor }
-
-       ;; But you can't actually write something like "foreach node in
-       ;; l" directly in LVish because that would involve peeking at
-       ;; the contents of l.  So there has to be something built in to
-       ;; freeze-after that allows you to peek at LVar contents.
-
-       ;; Of course, we won't have a pointer to l; that's what e_1
-       ;; evaluates to.  So we'll need a bound variable to represent
-       ;; it, and actually, e_2 is:
-
-       ;; (lambda (x)
-       ;;   foreach node in x:
-       ;;     foreach neighbor in (neighbors node):
-       ;;       put x { neighbor })
-
-       ;; where x is the exact contents of l.  In fact, e_2 should
-       ;; always be of this form, and running e_2 means applying e_2
-       ;; to l, which means, of course, substituting those exact
-       ;; contents into the body of e_2 in place of x.
-
+       ;; Just creates the intermediate language forms that
+       ;; E-Spawn-Handler and E-Finalize-Freeze need to operate on.
        (--> (S (in-hole E (freeze l after (lambda (x) e))))
             (S (in-hole E (freeze l after ((callback (lambda (x) e))
-                                           (running (e))
+                                           (running ())
                                            (handled ())))))
-            "E-Freeze-Thread-Init")
+            "E-Freeze-Init")
 
        ;; Move a thread v_1 whose threshold has been reached
        ;; from "running" to "finished" state.
@@ -234,21 +196,17 @@
        ;; E-Spawn-Handler can fire potentially many times for a given
        ;; freeze-after expression.  It fires once for each lattice
        ;; element d_2 that is <= the current state d_1 of the lattice,
-       ;; so long as that element is not already member of Df.
-
+       ;; so long as that element is not already a member of Df.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
                                            (running (e_2 (... ...)))
                                            (handled Df)))))
             (S (in-hole E (freeze l after ((callback (lambda (x) e_1))
-                                           (running ((subst x d_2 e_2) (... ...)))
+                                           (running ((subst x d_2 e_1) e_2 (... ...)))
                                            (handled Df_2)))))
             (where d_1 (lookup-val S l))
             (where d_2 (first-unhandled-d d_1 Df))
             (where Df_2 (extend-Df Df d_2))
             "E-Spawn-Handler")
-
-       ;; -------------------------------------
-
 
        ;; Special case of freeze-after, where there are no handlers to
        ;; run.
@@ -259,8 +217,6 @@
             (where S_2 (freeze-helper S_1 l))
             (where d (lookup-val S_2 l))
             "E-Freeze")))
-
-
 
     ;; Some convenience functions: LVar accessors and constructor.
 

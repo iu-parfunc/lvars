@@ -558,36 +558,43 @@
               (term
                Error))
 
+    ;; Try with larger numbers at your own risk!  The number of terms
+    ;; Redex has to find grows combinatorially, I think, with the size
+    ;; of the "handled" set.
+
     ;; Fancier freezing.  This one will actually never raise an error
-    ;; because the racing put is less than 5!
+    ;; because the racing put is less than 2!
+
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (let ((x_4 (put x_1 3)))
+                      ((x_2 (let ((x_4 (put x_1 0)))
                               (freeze x_1 after (lambda (x)
-                                                  (put x_1 5)))))
-                       (x_3 (put x_1 4)))
+                                                  (put x_1 2)))))
+                       (x_3 (put x_1 1)))
                     x_2))))
               (term
-               (((l (5 #t)))
-                5)))
+               (((l (2 #t)))
+                2)))
     
-    ;; But this one might:
+    ;; But this one is quasi-deterministic: if the racing put wins,
+    ;; we'll finish with 3 and no error; otherwise we'll get a
+    ;; put-after-freeze error.
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
-                      ((x_2 (let ((x_4 (put x_1 3)))
+                      ((x_2 (let ((x_4 (put x_1 0)))
                               (freeze x_1 after (lambda (x)
-                                                  (put x_1 5)))))
-                       (x_3 (put x_1 6)))
+                                                  (put x_1 2)))))
+                       (x_3 (put x_1 3)))
                     x_2))))
               (term
-               (((l (6 #t)))
-                6))
+               (((l (3 #t)))
+                3))
               (term
                Error))
 
