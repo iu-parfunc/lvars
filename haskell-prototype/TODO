@@ -1,0 +1,13 @@
+Adapt tests to LVarIdempotent.
+
+Examples/benchmarks:
+  - graph traversal
+  - CFA
+  - other PBBS graph algorithms
+
+Scalable data structures:
+  - Counter (use SNZI, http://dl.acm.org/citation.cfm?id=1281106)
+  - Bags
+  - Hashtables (=> sets)
+  
+  - Work-stealing deque (could use bag)
