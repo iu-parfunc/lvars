@@ -1,7 +1,7 @@
 # Benchmarking results
 
 This directory contains raw log files from the benchmarks we ran for
-our ICFP 2013 submission, plus some code for visualizing the data.
+our FHPC 2013 submission, plus some code for visualizing the data.
 
 We compared two programs (Strategies and LVarPure versions of
 bf_traverse), varying the number of cores (1, 2, 3, 4), and the
