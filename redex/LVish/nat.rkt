@@ -10,13 +10,11 @@
   ;; To figure out at some point: maybe we could actually write
   ;; downset-op with Redex patterns?
 
-  ;; (define downset-op
-  ;;   (lambda (d)
-  ;;     (term (side-condition natural (<= natural d)))))
-
   (define downset-op
     (lambda (d)
-      (append '(Bot) (iota d) `(,d)))))
+      (if (number? d)
+          (append '(Bot) (iota d) `(,d))
+          '(Bot)))))
 
 (module test-suite racket
   (require redex/reduction-semantics)
@@ -597,6 +595,66 @@
                 3))
               (term
                Error))
+
+    ;; Suppose we don't do any writes to an LVar, but then we do a
+    ;; freeze-after with a callback.  The callback must still run at
+    ;; least once, in order to add Bot to the `handled` set.
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let ((x_2 new))
+                    (let par
+                        ((x_3 (freeze x_1 after (lambda (x)
+                                                  (put x_2 7))))
+                         (x_4 (put x_2 5)))
+                      x_3)))))
+              (term
+               (((l (Bot #t))
+                 (l1 (7 #f)))
+                Bot)))
+
+    ;; Just trying some weird things.  This program will fault if one
+    ;; of the callback-triggered `put`s completes after the other LVar
+    ;; gets frozen, but it's also possible for the program to complete
+    ;; successfully!
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let ((x_2 new))
+                    (let par
+                        ((x_3 (freeze x_1 after (lambda (x)
+                                                  (put x_2 0))))
+                         (x_4 (freeze x_2 after (lambda (x)
+                                                  (put x_1 1)))))
+                      x_3)))))
+              (term
+               (((l (1 #t))
+                 (l1 (0 #t)))
+                1))
+              (term
+               Error))
+
+    ;; Freezing an LVar twice with different values is
+    ;; quasi-deterministic.  (Commented out because it takes a while
+    ;; to run.)
+
+    ;; (test-->> rr
+    ;;           (term
+    ;;            (() ;; empty store
+    ;;             (let ((x_1 new))
+    ;;               (let par
+    ;;                     ((x_3 (freeze x_1 after (lambda (x)
+    ;;                                               (put x_1 0))))
+    ;;                      (x_4 (freeze x_1 after (lambda (x)
+    ;;                                               (put x_1 1)))))
+    ;;                   x_3))))
+    ;;           (term
+    ;;            (((l (1 #t)))
+    ;;             1))
+    ;;           (term
+    ;;            Error))
 
     (test-results)))
 

@@ -183,6 +183,11 @@
                                            (handled ())))))
             "E-Freeze-Init")
 
+       ;; N.B.: If we haven't done any writes to an LVar yet (i.e.,
+       ;; its state is Bot), then the callback must still run once, to
+       ;; add Bot to the `handled` set.  Only then will the premises
+       ;; of E-Finalize-Freeze be satisfied, allowing it to run.
+
        ;; Move a thread v_1 whose threshold has been reached
        ;; from "running" to "finished" state.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
