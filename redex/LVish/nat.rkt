@@ -37,34 +37,34 @@
   
   (define (meta-test-suite)
     (test-equal
-     (term (exists-d 6 ()))
+     (term (exists-p (6 #f) ()))
      (term #f))
 
     (test-equal
-     (term (exists-d 6 (3)))
-     (term 3))
+     (term (exists-p (6 #f) ((3 #f))))
+     (term (3 #f)))
 
     (test-equal
-     (term (exists-d 6 (9)))
+     (term (exists-p (6 #f) ((9 #f))))
      (term #f))
 
     (test-equal
-     (term (exists-d 3 (3)))
-     (term 3))
+     (term (exists-p (3 #f) ((3 #f))))
+     (term (3 #f)))
 
     ;; These next three are unrealistic for this lattice because Q would
-    ;; be a singleton set, but it's here to exercise exists-d.
+    ;; be a singleton set, but it's here to exercise exists-p.
     (test-equal
-     (term (exists-d 6 (7 8 9)))
+     (term (exists-p (6 #f) ((7 #f) (8 #f) (9 #f))))
      (term #f))
 
     (test-equal
-     (term (exists-d 6 (7 8 9 6)))
-     (term 6))
+     (term (exists-p (6 #f) ((7 #f) (8 #f) (9 #f) (6 #f))))
+     (term (6 #f)))
 
     (test-equal
-     (term (exists-d 6 (7 8 9 5)))
-     (term 5))
+     (term (exists-p (6 #f) ((7 #f) (8 #f) (9 #f) (5 #f))))
+     (term (5 #f)))
 
     (test-equal
      (term (lub Bot Bot))
@@ -81,6 +81,34 @@
     (test-equal
      (term (lub 3 3))
      (term 3))
+
+    (test-equal
+     (term (lub-p (3 #f) (4 #f)))
+     (term ((lub 3 4) #f)))
+
+    (test-equal
+     (term (lub-p (3 #t) (3 #t)))
+     (term (3 #t)))
+
+    (test-equal
+     (term (lub-p (3 #t) (4 #t)))
+     (term TopP))
+
+    (test-equal
+     (term (lub-p (3 #f) (4 #t)))
+     (term (4 #t)))
+
+    (test-equal
+     (term (lub-p (4 #f) (3 #t)))
+     (term TopP))
+
+    (test-equal
+     (term (lub-p (4 #t) (3 #f)))
+     (term (4 #t)))
+
+    (test-equal
+     (term (lub-p (3 #t) (4 #f)))
+     (term TopP))
 
     (test-equal
      (term (leq 3 3))
@@ -196,12 +224,20 @@
      (term 2))
 
     (test-equal
-     (term (lookup-frozenness ((l (2 #f))) l))
+     (term (lookup-status ((l (2 #f))) l))
      (term #f))
 
     (test-equal
-     (term (lookup-frozenness ((l (2 #t))) l))
+     (term (lookup-status ((l (2 #t))) l))
      (term #t))
+
+    (test-equal
+     (term (lookup-p ((l (2 #t))) l))
+     (term (2 #t)))
+
+    (test-equal
+     (term (lookup-p ((l (2 #t)) (l1 (3 #f))) l1))
+     (term (3 #f)))
     
     (test-equal
      (term (update-val () l 4))
@@ -429,11 +465,11 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let ((x_2 (put x_1 3)))
-                    (let ((x_3 (get x_1 (2))))
+                    (let ((x_3 (get x_1 ((2 #f)))))
                       x_3)))))
               (term
                (((l (3 #f)))
-                2)))
+                (2 #f))))
     
     ;; let par + E-New + E-Put + E-Get
     (test-->> rr
@@ -442,10 +478,10 @@
                 (let ((x_1 new))
                   (let par ((x_2 (put x_1 2))
                             (x_3 (put x_1 3)))
-                    (get x_1 (2))))))
+                    (get x_1 ((2 #f)))))))
               (term
                (((l (3 #f)))
-                2)))
+                (2 #f))))
 
     ;; Another aspect of E-Put's behavior
     (test-->> rr
@@ -456,10 +492,10 @@
                     ;; This should just take the lub of the old and new
                     ;; values, i.e., 5.
                     (let ((x_3 (put x_1 4)))
-                      (get x_1 (5)))))))
+                      (get x_1 ((5 #f))))))))
               (term
                (((l (5 #f)))
-                5)))
+                (5 #f))))
 
     ;; E-Put-Err
     (test-->> rr
@@ -479,15 +515,15 @@
                           [x_2 new])
                   (let par ([x_3 (put x_1 3)]
                             [x_4 (put x_2 4)])
-                    (get x_2 (4))))))
+                    (get x_2 ((4 #f)))))))
               (term
                (((l (3 #f))
                  (l1 (4 #f)))
-                4))
+                (4 #f)))
               (term
                (((l (4 #f))
                  (l1 (3 #f)))
-                4)))
+                (4 #f))))
     
     ;;let par + E-New + E-Put + E-Get
     (test-->> rr
@@ -495,11 +531,11 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let par ((x_2 (put x_1 2))
-                            (x_3 (get x_1 (2))))
-                    (get x_1 (2))))))
+                            (x_3 (get x_1 ((2 #f)))))
+                    (get x_1 ((2 #f)))))))
               (term
                (((l (2 #f)))
-                2)))
+                (2 #f))))
 
     ;; let par + E-New + E-Put + E-Get
     (test-->> rr
@@ -511,7 +547,7 @@
                       ;; unstuck after the other subexpression finishes.
                       ((x_4 (let par ((x_2 (put x_1 2))
                                       (x_3 (put x_1 3)))
-                              (get x_1 (4))))
+                              (get x_1 ((4 #f)))))
                        ;; Eventually puts 4 in x_1 after several dummy
                        ;; beta-reductions.
                        (x_5 ((lambda (x_2)
@@ -523,7 +559,7 @@
                     x_4))))
               (term
                (((l (4 #f)))
-                4)))
+                (4 #f))))
 
     ;; E-Freeze
     (test-->> rr
@@ -535,6 +571,20 @@
               (term
                (((l (3 #t)))
                 3)))
+
+    ;; Thresholding on frozenness:
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let par
+                      ((x_2 (get x_1 ((1 #t) (2 #t) (3 #t) (4 #t))))
+                       (x_3 (freeze x_1 after (lambda (x)
+                                                (put x_1 3)))))
+                    x_2))))
+              (term
+               (((l (3 #t)))
+                (3 #t))))
 
     ;; Here we have a quasi-deterministic program where a freeze-after
     ;; and a put are racing with each other.  One of two things will

@@ -113,39 +113,47 @@
   (define (meta-test-suite)
 
     (test-equal
-     (term (incomp ((3 Bot) (Bot 4))))
+     (term (incomp (((3 Bot) #f) ((Bot 4) #f))))
      (term #f))
 
     (test-equal
-     (term (incomp ((2 Bot) (3 Bot) (Bot 4))))
+     (term (incomp (((2 Bot) #f) ((3 Bot) #f) ((Bot 4) #f))))
      (term #f))
 
     (test-equal
-     (term (incomp (Bot (4 Bot))))
+     (term (incomp ((Bot #f) ((4 Bot) #f))))
      (term #f))
 
     (test-equal
-     (term (incomp ((3 Bot) (4 Bot))))
+     (term (incomp (((3 Bot) #f) ((4 Bot) #f))))
      (term #t))
 
     (test-equal
-     (term (incomp ((Bot 3) (Bot 4))))
+     (term (incomp (((Bot 3) #f) ((Bot 4) #f))))
      (term #t))
 
     (test-equal
-     (term (incomp ((Bot 1) (Bot 2) (Bot 3) (Bot 4) (Bot 5))))
+     (term (incomp (((Bot 1) #f) ((Bot 2) #f) ((Bot 3) #f) ((Bot 4) #f) ((Bot 5) #f))))
      (term #t))
 
     (test-equal
-     (term (incomp ((Bot 1) (Bot 2) (Bot 3) (Bot 4) (Bot 5) (1 Bot))))
+     (term (incomp (((Bot 1) #f) ((Bot 2) #f) ((Bot 3) #f) ((Bot 4) #f) ((Bot 5) #f) ((1 Bot) #f))))
      (term #f))
 
     (test-equal
-     (term (lookup-frozenness ((l ((2 3) #f))) l))
+     (term (incomp (((3 Bot) #t) ((Bot 4) #t))))
+     (term #t))
+
+    (test-equal
+     (term (incomp (((Bot 1) #t) ((1 Bot) #t))))
+     (term #t))
+
+    (test-equal
+     (term (lookup-status ((l ((2 3) #f))) l))
      (term #f))
 
     (test-equal
-     (term (lookup-frozenness ((l ((2 3) #t))) l))
+     (term (lookup-status ((l ((2 3) #t))) l))
      (term #t))
 
     (test-equal
