@@ -58,9 +58,6 @@
          (let ((x e)) e)
          (let par ((x e) (x e)) e))
 
-      ;; List of handled states.  Like Q, but potentially empty.
-      (Df (d (... ...)))
-
       ;; Values.
       (v () ;; unit value
          d
@@ -68,7 +65,7 @@
          Q
          (lambda (x) e))
 
-      ;; Threshold set literals.  A threshold set is the set we pass to a
+      ;; Threshold sets.  A threshold set is the set we pass to a
       ;; `get` expression that specifies a non-empty, pairwise
       ;; incompatible subset of the state space of the location being
       ;; queried.
@@ -78,6 +75,9 @@
       ;; that passed (Top) as a threshold would block forever.
       ;; Nevertheless, the grammar admits it.
       (Q (d d (... ...)))
+
+      ;; Like Q, but potentially empty.  Used for some metafunctions.
+      ((Df Q/null) Q ())
 
       ;; Stores.  A store is either a set of LVars (that is, a finite
       ;; partial mapping from locations l to pairs of StoreVals and
@@ -95,10 +95,8 @@
       (d Top StoreVal)
       (StoreVal lattice-values ... Bot)
 
-      ;; Ranges of a couple of metafunctions.
-      (Bool #t #f)
-      (d/Bool d Bool)
-      (Q/null Q ())
+      ;; Codomain for a couple of metafunctions.
+      (Maybe-d d #f)
 
       (x variable-not-otherwise-mentioned)
       (l variable-not-otherwise-mentioned)
@@ -307,7 +305,7 @@
     ;; or equal to d, they're a member of Df.  In other words, the set
     ;; (downset-op d) is a subset of Df.
     (define-metafunction name
-      contains-all-leq : d Df -> Bool
+      contains-all-leq : d Df -> boolean
       [(contains-all-leq d Df)
        ,(lset<= equal?
                 (downset-op (term d))
@@ -318,7 +316,7 @@
     ;; first element that is <= d_1 in the lattice that is *not* a
     ;; member of Df, if such an element exists; returns #f otherwise.
     (define-metafunction name
-      first-unhandled-d : d Df -> d/Bool
+      first-unhandled-d : d Df -> Maybe-d
       [(first-unhandled-d d_1 Df)
        ,(let ([ls (filter (lambda (x)
                             (not (member x (term Df))))
@@ -346,14 +344,14 @@
     ;; The greatest element of the store lattice is any store in which
     ;; some location is bound to Top.
     (define-metafunction name
-      store-top? : S -> Bool
-      [(store-top? TopS) ,#t]
-      [(store-top? S) ,#f])
+      store-top? : S -> boolean
+      [(store-top? TopS) #t]
+      [(store-top? S) #f])
 
     (define-metafunction name
-      top? : d -> Bool
-      [(top? Top) ,#t]
-      [(top? d) ,#f])
+      top? : d -> boolean
+      [(top? Top) #t]
+      [(top? d) #f])
 
     ;; N.B.: The lub of d_1 and d_2 is the element d_3 such that:
     ;; -- (leq d_1 d_3)
@@ -374,29 +372,29 @@
 
     ;; Defined in terms of lub.
     (define-metafunction name
-      leq : d d -> Bool
-      [(leq Bot d_2) ,#t]
-      [(leq d_1 Bot) ,#f]
-      [(leq Top d_2) ,#f]
-      [(leq d_1 Top) ,#t]
+      leq : d d -> boolean
+      [(leq Bot d_2) #t]
+      [(leq d_1 Bot) #f]
+      [(leq Top d_2) #f]
+      [(leq d_1 Top) #t]
 
       ;; If d_1 = d_2, then (leq d_1 d_2).
-      [(leq d_1 d_2) ,#t
+      [(leq d_1 d_2) #t
        (side-condition (equal? (term d_1) (term d_2)))]
 
       ;; If (lub d_1 d_2) = d_2, then (leq d_1 d_2).
-      [(leq d_1 d_2) ,#t
+      [(leq d_1 d_2) #t
        (side-condition (equal? (term (lub d_1 d_2)) (term d_2)))]
 
       ;; If (lub d_1 d_2) = d_1, then (not (leq d_1 d_2)).  (This assumes
       ;; that d_1 != d_2, but we've already covered the case where they're
       ;; equal.)
-      [(leq d_1 d_2) ,#f
+      [(leq d_1 d_2) #f
        (side-condition (equal? (term (lub d_1 d_2)) (term d_1)))]
 
       ;; The only case left: (lub d_1 d_2) = d_3, where d_3 is greater
       ;; than both d_1 and d_2.  In this case, (not (leq d_1 d_2)).
-      [(leq d_1 d_2) ,#f])
+      [(leq d_1 d_2) #f])
 
 
     (define-metafunction name
@@ -442,9 +440,9 @@
     ;; The second condition on the E-Get rule.  For any two distinct
     ;; elements in Q, the lub of them is Top.
     (define-metafunction name
-      incomp : Q -> Bool
-      [(incomp ()) ,#t]
-      [(incomp (d)) ,#t]
+      incomp : Q -> boolean
+      [(incomp ()) #t]
+      [(incomp (d)) #t]
       [(incomp (d_1 d_2)) ,(equal? (term (lub d_1 d_2)) (term Top))]
       [(incomp (d_1 d_2 d_3 (... ...)))
        ,(and (equal? (term (lub d_1 d_2)) (term Top))
@@ -455,7 +453,7 @@
     ;; exists a d_1 that is a member of Q and is less than or equal to
     ;; d_2, returns that d_1.  Otherwise, returns #f.
     (define-metafunction name
-      exists-d : d Q/null -> d/Bool
+      exists-d : d Q/null -> Maybe-d
 
       ;; If the second argument is null, then there definitely isn't a d_1.
       [(exists-d d_2 ()) #f]
