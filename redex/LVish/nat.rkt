@@ -240,15 +240,15 @@
      (term (3 #f)))
     
     (test-equal
-     (term (update-val () l 4))
+     (term (update-p () l (4 #f)))
      (term ((l (4 #f)))))
     
     (test-equal
-     (term (update-val ((l (3 #f))) l 4))
+     (term (update-p ((l (3 #f))) l (4 #f)))
      (term ((l (4 #f)))))
 
     (test-equal
-     (term (update-val () l Bot))
+     (term (update-p () l (Bot #f)))
      (term ((l (Bot #f)))))
 
     (test-equal
@@ -278,18 +278,6 @@
      (term (store-dom-diff ((l (4 #f)))
                            ()))
      (term (l)))
-
-    (test-equal
-     (term (store-top? ()))
-     (term #f))
-
-    (test-equal
-     (term (store-top? ((l (3 #f)) (l1 (4 #f)))))
-     (term #f))
-
-    (test-equal
-     (term (store-top? TopS))
-     (term #t))
 
     (test-equal
      (term (top? Top))

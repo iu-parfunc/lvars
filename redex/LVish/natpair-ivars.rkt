@@ -3,6 +3,7 @@
 (module language racket
   (require "LVish.rkt")
   (require srfi/1)
+  (require racket/match)
   (provide LVish-natpair-ivars)
   (provide downset-op)
   
@@ -50,46 +51,29 @@
   ;; form (natural natural), (natural Bot), or (Bot natural)) and
   ;; returns a pair that is their least upper bound.
 
-  ;; Because they're IVars, we can only safely combine two pairs if one
-  ;; of them has only the car filled in, and the other has only the cadr
-  ;; filled in.
+  ;; Because they're IVars, we can only safely combine two pairs if
+  ;; one of them has only the car filled in, and the other has only
+  ;; the cadr filled in -- or, if they've filled in something
+  ;; overlapping, if it's equal.
 
-  ;; assumes that a1 and a2 aren't both numbers
   (define lub-helper
     (lambda (a1 a2)
-      (cond
-        [(and (number? a1) (number? a2))
-         ;; If we get here, something's wrong
-         (error "oops!")]
-        [(number? a1) a1]
-        [(number? a2) a2]
-        [else 'Bot])))
+      (match `(,a1 ,a2)
+        [`(Bot Bot) 'Bot]
+        [`(Bot ,(? number? n)) n]
+        [`(,(? number? n) Bot) n]
+        [`(,(? number? n) ,(? number? n)) n]
+        [`(,(? number? n) ,(? number? m)) 'Top])))
 
   (define my-lub
     (lambda (p1 p2)
-      (let ([car1 (car p1)]
-            [cadr1 (cadr p1)]
-            [car2 (car p2)]
-            [cadr2 (cadr p2)])
-        (cond
-          ;; nat/Bot, nat/Bot
-          ;; nat/Bot, nat/nat
-          ;; nat/nat, nat/Bot
-          ;; nat/nat, nat/nat
-          [(and (number? car1) (number? car2))
-           'Top]
-
-          ;; Bot/nat, Bot/nat
-          ;; nat/nat, Bot/nat
-          ;; Bot/nat, nat/nat
-          [(and (number? cadr1) (number? cadr2))
-           'Top]
-
-          ;; nat/Bot, Bot/nat
-          ;; Bot/nat, nat/Bot
-          [else (list
-                 (lub-helper car1 car2)
-                 (lub-helper cadr1 cadr2))])))))
+      (let ([p `(,(lub-helper (car p1) (car p2))
+                 ,(lub-helper (cadr p1) (cadr p2)))])
+        (match p
+          [`(Top ,_) 'Top]
+          [`(,_ Top) 'Top]
+          [`(Bot Bot) 'Bot]
+          [_ p])))))
 
 (module test-suite racket
   (require redex/reduction-semantics)
@@ -111,6 +95,10 @@
   ;; Test suite
 
   (define (meta-test-suite)
+
+    (test-equal
+     (term (lub-p ((3 Bot) #f) ((3 6) #f)))
+     (term ((3 6) #f)))
 
     (test-equal
      (term (incomp (((3 Bot) #f) ((Bot 4) #f))))
