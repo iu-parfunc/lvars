@@ -497,7 +497,7 @@
                   (term (update-p ((l_3 p_3) (... ...)) l_1 p_1))))])
 
     ;; Used as a premise of the E-Get rule.  Returns #t if, for any
-    ;; two distinct elements in Q, the lub of them is Top, and #f
+    ;; two distinct elements in Q, the lub of them is TopP, and #f
     ;; otherwise.
     (define-metafunction name
       incomp : Q -> boolean
