@@ -158,6 +158,7 @@
          (put E e)
          (put e E)
          (freeze E after e)
+         (freeze v after E)
          (freeze v after ((callback (lambda (x) e))
                           (running (e (... ...) E e (... ...)))
                           (handled Df)))))

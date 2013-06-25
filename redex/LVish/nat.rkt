@@ -674,6 +674,53 @@
               (term
                Error))
 
+    ;; Trying out more interesting eval contexts.
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let ((x_2 new))
+                    (let par
+                        ((x_3 (freeze x_1 after ((lambda (x)
+                                                  (lambda (x)
+                                                    (put x_2 0)))
+                                                 ())))
+                         (x_4 (freeze x_2 after ((lambda (x)
+                                                   (lambda (x)
+                                                     (put x_1 1)))
+                                                 ()))))
+                      x_3)))))
+              (term
+               (((l (1 #t))
+                 (l1 (0 #t)))
+                1))
+              (term
+               Error))
+
+        (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let ((x_2 new))
+                    (let ((x_3 new))
+                      (let par
+                          ((x_3 (freeze x_1 after ((lambda (x)
+                                                     (lambda (x)
+                                                       (put x_2 0)))
+                                                   (put x_3 4))))
+                           (x_4 (freeze x_2 after ((lambda (x)
+                                                     (lambda (x)
+                                                       (put x_1 1)))
+                                                   (put x_3 3)))))
+                        x_3))))))
+              (term
+               (((l (1 #t))
+                 (l1 (0 #t))
+                 (l2 (4 #f)))
+                1))
+              (term
+               Error))
+
     ;; Freezing an LVar twice with different values is
     ;; quasi-deterministic.  (Commented out because it takes a while
     ;; to run.)

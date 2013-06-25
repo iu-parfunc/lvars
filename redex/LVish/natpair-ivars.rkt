@@ -6,7 +6,6 @@
   (require racket/match)
   (provide LVish-natpair-ivars)
   (provide downset-op)
-  
 
   (define-LVish-language LVish-natpair-ivars
     downset-op
@@ -20,32 +19,51 @@
 
   ;; (downset-op '(2 1)) =>
   ;; '(Bot
-  ;;   (Bot 0)
-  ;;   (Bot 1)
   ;;   (0 Bot)
-  ;;   (0 0)
-  ;;   (0 1)
   ;;   (1 Bot)
-  ;;   (1 0)
-  ;;   (1 1)
   ;;   (2 Bot)
+  ;;   (Bot 0)
+  ;;   (0 0)
+  ;;   (1 0)
   ;;   (2 0)
-  ;;   (2 1))
-  
+  ;;   (Bot 1)
+  ;;   (0 1)
+  ;;   (1 1)
+  ;;   (2 1)) 
+
   (define downset-op
     (lambda (p)
-      (let ([car-iota (append '(Bot) (iota (car p)) `(,(car p)))]
-            [cadr-iota (append '(Bot) (iota (cadr p)) `(,(cadr p)))])
-        ;; car-iota: '(Bot 0 1 2)
-        ;; cadr-iota: '(Bot 0 1)
-        (apply append
-               (map (lambda (x)
-                      (map (lambda (y)
-                             (if (and (equal? x 'Bot) (equal? y 'Bot))
-                                 'Bot
-                                 `(,x ,y)))
-                           cadr-iota))
-                    car-iota)))))
+      (match p
+        ['Bot '(Bot)]
+        [`(,(? number? a) Bot)
+         (let ([a-iota (append '(Bot) (iota a) `(,a))])
+           ;; a-iota: '(Bot 0 1 2)
+           (map (lambda (x)
+                  (if (equal? x 'Bot)
+                      'Bot
+                      `(,x Bot)))
+                a-iota))]
+        [`(Bot ,(? number? d))
+         (let ([d-iota (append '(Bot) (iota d) `(,d))])
+           ;; d-iota: '(Bot 0 1)
+           (map (lambda (x)
+                  (if (equal? x 'Bot)
+                      'Bot
+                      `(Bot ,x)))
+                d-iota))]
+        [`(,(? number? a) ,(? number? d)) 
+         (let ([a-iota (append '(Bot) (iota a) `(,a))]
+               [d-iota (append '(Bot) (iota d) `(,d))])
+           ;; a-iota: '(Bot 0 1 2)
+           ;; d-iota: '(Bot 0 1)
+           (apply append
+                  (map (lambda (x)
+                         (map (lambda (y)
+                                (if (and (equal? x 'Bot) (equal? y 'Bot))
+                                    'Bot
+                                    `(,y ,x)))
+                              a-iota))
+                       d-iota)))])))
 
   ;; my-lub: A function that takes two pairs (they might be of the
   ;; form (natural natural), (natural Bot), or (Bot natural)) and
@@ -95,6 +113,38 @@
   ;; Test suite
 
   (define (meta-test-suite)
+
+    (test-equal
+     (downset-op '(2 1))
+     '(Bot
+       (0 Bot)
+       (1 Bot)
+       (2 Bot)
+       (Bot 0)
+       (0 0)
+       (1 0)
+       (2 0)
+       (Bot 1)
+       (0 1)
+       (1 1)
+       (2 1)))
+
+    (test-equal
+     (downset-op 'Bot)
+     '(Bot))
+
+    (test-equal
+     (downset-op '(2 Bot))
+     '(Bot
+       (0 Bot)
+       (1 Bot)
+       (2 Bot)))
+
+    (test-equal
+     (downset-op '(Bot 1))
+     '(Bot
+       (Bot 0)
+       (Bot 1)))
 
     (test-equal
      (term (lub-p ((3 Bot) #f) ((3 6) #f)))
@@ -185,16 +235,17 @@
      (term #t))
 
     ;; For the next few tests, note that (downset (1 1)) =>
-    ;; (Bot (Bot 0) (Bot 1)
-    ;;  (0 Bot) (0 0) (0 1)
-    ;;  (1 Bot (1 0) (1 1)))
+    ;; '(Bot
+    ;;   (0 Bot) (1 Bot)
+    ;;   (Bot 0) (0 0) (1 0)
+    ;;   (Bot 1) (0 1) (1 1))
 
     (test-equal
      (term (first-unhandled-d (1 1) ((Bot 0) (Bot 1))))
      (term Bot))
     
     (test-equal
-     (term (first-unhandled-d (1 1) (Bot (Bot 1))))
+     (term (first-unhandled-d (1 1) (Bot (0 Bot) (1 Bot))))
      (term (Bot 0)))
 
     (test-equal
@@ -295,6 +346,29 @@
                               (get x_4 ((3 4) (6 6)))))
                        (x_3 (put x_1 (6 6))))
                     x_2))))
+              (term
+               Error))
+
+    ;; Trying out more interesting eval contexts.
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let ((x_2 new))
+                    (let par
+                        ((x_3 (freeze x_1 after ((lambda (x)
+                                                  (lambda (x)
+                                                    (put x_2 (Bot 0))))
+                                                 ())))
+                         (x_4 (freeze x_2 after ((lambda (x)
+                                                   (lambda (x)
+                                                     (put x_1 (0 Bot))))
+                                                 ()))))
+                      x_3)))))
+              (term
+               (((l ((0 Bot) #t))
+                 (l1 ((Bot 0) #t)))
+                (0 Bot)))
               (term
                Error))
 
