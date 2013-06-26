@@ -158,8 +158,8 @@
          (put E e)
          (put e E)
          (freeze E after e)
-         (freeze v after E)
-         (freeze v after ((callback (lambda (x) e))
+         (freeze e after E)
+         (freeze v after ((callback v)
                           (running (e (... ...) E e (... ...)))
                           (handled Df)))))
 
@@ -253,13 +253,10 @@
 
        ;; Special case of freeze-after, where there are no handlers to
        ;; run.
-       (--> (S_1 (in-hole E (freeze l after ())))
-            (S_2 (in-hole E d))
-            ;; N.B.: Redex gotcha: the order of these two `where`
-            ;; clauses matters.  :(
-            (where S_2 (freeze-helper S_1 l))
-            (where d (lookup-val S_2 l))
-            "E-Freeze")
+       (--> (S (in-hole E (freeze l after ())))
+            ((freeze-helper S l) (in-hole E d_1))
+            (where d_1 (lookup-val S l))
+            "E-Freeze-Simple")
        
        ;; Desugaring of `let`.
        (--> (S (in-hole E (let ((x_1 e_1)) e_2)))
