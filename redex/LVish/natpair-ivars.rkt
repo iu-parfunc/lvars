@@ -15,55 +15,28 @@
     (Bot natural))
 
   ;; downset-op: Takes a pair p and returns a list of everything below
-  ;; or equal to p in the lattice.
+  ;; or equal to p in the lattice.  (Note that we're dealing with
+  ;; pairs of IVars, not pairs of counters.)
 
   ;; (downset-op '(2 1)) =>
   ;; '(Bot
-  ;;   (0 Bot)
-  ;;   (1 Bot)
   ;;   (2 Bot)
-  ;;   (Bot 0)
-  ;;   (0 0)
-  ;;   (1 0)
-  ;;   (2 0)
   ;;   (Bot 1)
-  ;;   (0 1)
-  ;;   (1 1)
   ;;   (2 1)) 
 
   (define downset-op
     (lambda (p)
-      (match p
-        ['Bot '(Bot)]
-        [`(,(? number? a) Bot)
-         (let ([a-iota (append '(Bot) (iota a) `(,a))])
-           ;; a-iota: '(Bot 0 1 2)
-           (map (lambda (x)
-                  (if (equal? x 'Bot)
-                      'Bot
-                      `(,x Bot)))
-                a-iota))]
-        [`(Bot ,(? number? d))
-         (let ([d-iota (append '(Bot) (iota d) `(,d))])
-           ;; d-iota: '(Bot 0 1)
-           (map (lambda (x)
-                  (if (equal? x 'Bot)
-                      'Bot
-                      `(Bot ,x)))
-                d-iota))]
-        [`(,(? number? a) ,(? number? d)) 
-         (let ([a-iota (append '(Bot) (iota a) `(,a))]
-               [d-iota (append '(Bot) (iota d) `(,d))])
-           ;; a-iota: '(Bot 0 1 2)
-           ;; d-iota: '(Bot 0 1)
-           (apply append
-                  (map (lambda (x)
-                         (map (lambda (y)
-                                (if (and (equal? x 'Bot) (equal? y 'Bot))
-                                    'Bot
-                                    `(,y ,x)))
-                              a-iota))
-                       d-iota)))])))
+      (append '(Bot)
+              (match p
+                ['Bot '()]
+                [`(,(? number? a) Bot)
+                 `(,p)]
+                [`(Bot ,(? number? d))
+                 `(,p)]
+                [`(,(? number? a) ,(? number? d)) 
+                 `((,a Bot)
+                   (Bot ,d)
+                   ,p)]))))
 
   ;; my-lub: A function that takes two pairs (they might be of the
   ;; form (natural natural), (natural Bot), or (Bot natural)) and
@@ -117,16 +90,8 @@
     (test-equal
      (downset-op '(2 1))
      '(Bot
-       (0 Bot)
-       (1 Bot)
        (2 Bot)
-       (Bot 0)
-       (0 0)
-       (1 0)
-       (2 0)
        (Bot 1)
-       (0 1)
-       (1 1)
        (2 1)))
 
     (test-equal
@@ -136,14 +101,11 @@
     (test-equal
      (downset-op '(2 Bot))
      '(Bot
-       (0 Bot)
-       (1 Bot)
        (2 Bot)))
 
     (test-equal
      (downset-op '(Bot 1))
      '(Bot
-       (Bot 0)
        (Bot 1)))
 
     (test-equal
@@ -203,42 +165,22 @@
      (term ((6 6) (3 3) (4 4) (5 5))))
 
     (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 0) (Bot 1)
-                                    (0 Bot) (0 0) (0 1)
-                                    (1 Bot) (1 0) (1 1))))
+     (term (contains-all-leq (1 1) (Bot (Bot 1) (1 Bot) (1 1))))
      (term #t))
 
     (test-equal
-     (term (contains-all-leq (1 1) ((Bot 0) (Bot 1)
-                                    (0 Bot) (0 0) (0 1)
-                                    (1 Bot) (1 0) (1 1))))
+     (term (contains-all-leq (1 1) ((Bot 1) (1 Bot) (1 1))))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 0) (Bot 1)
-                                    (0 Bot) (0 0) 
-                                    (1 Bot) (1 0) (1 1))))
+     (term (contains-all-leq (1 1) (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))))
      (term #f))
-
-    (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 0) (Bot 1)
-                                    (0 Bot) (0 0) 
-                                    (1 Bot) (1 0) (1 1)
-                                    (2 Bot) (2 0) (2 1))))
-     (term #f))
-
-    (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 0) (Bot 1)
-                                    (0 Bot) (0 0) (0 1)
-                                    (1 Bot) (1 0) (1 1)
-                                    (2 Bot) (2 0) (2 1))))
-     (term #t))
 
     ;; For the next few tests, note that (downset (1 1)) =>
     ;; '(Bot
-    ;;   (0 Bot) (1 Bot)
-    ;;   (Bot 0) (0 0) (1 0)
-    ;;   (Bot 1) (0 1) (1 1))
+    ;;   (1 Bot)
+    ;;   (Bot 1)
+    ;;   (1 1))
 
     (test-equal
      (term (first-unhandled-d (1 1) ((Bot 0) (Bot 1))))
@@ -246,29 +188,22 @@
     
     (test-equal
      (term (first-unhandled-d (1 1) (Bot (0 Bot) (1 Bot))))
-     (term (Bot 0)))
+     (term (Bot 1)))
 
     (test-equal
      (term (first-unhandled-d (1 1)
-                              (Bot (Bot 0) (Bot 1)
-                               (0 Bot) (0 0) (0 1)
-                               (1 Bot) (1 0) (1 1)
-                               (5 5) (6 6) (7 7))))
+                              (Bot (Bot 1) (1 Bot) (1 1) (5 5) (6 6) (7 7))))
      (term #f))
 
     (test-equal
      (term (first-unhandled-d (1 1)
-                              (Bot (Bot 0) (Bot 1)
-                               (0 Bot) (0 0) (0 1)
-                               (1 Bot) (1 0) (1 1))))
+                              (Bot (Bot 1) (1 Bot) (1 0) (1 1))))
      (term #f))
 
     (test-equal
      (term (first-unhandled-d (1 1)
-                              (Bot (Bot 0) (Bot 1)
-                               (0 Bot)
-                               (1 Bot) (1 0) (1 1))))
-     (term (0 0)))
+                              (Bot (1 Bot) (1 0) (1 1))))
+     (term (Bot 1)))
 
     (test-equal
      (term (first-unhandled-d (1 1)
@@ -293,14 +228,6 @@
                                (Bot 0) (1 1) (Bot 1) 
                                (0 Bot) (6 6) (0 1))))
      (term #f))
-
-    (test-equal
-     (term (first-unhandled-d (1 1)
-                              ((1 Bot) (0 0) (7 7)
-                               (5 5) Bot (1 0)
-                               (1 1) (Bot 1) 
-                               (0 Bot) (6 6) (0 1))))
-     (term (Bot 0)))
 
     (test-results))
 
