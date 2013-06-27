@@ -366,6 +366,17 @@ runPar_internal c = do
         else sched q
   takeMVar m  
 
+
+-- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
+-- It would be nice to put freeze in a separate module and be able to choose between
+-- runPar or freeze(+runParIO).  But there's no easy way to get this at the module
+-- level without making a newtype for Par.  (SafeHaskell can't be triggered on
+-- *combinations* of modules, e.g. "you may import the module with freeze, or the
+-- module with runPar, but not both".)
+-- 
+--   Alas, making a newtype is especially painful because of all the additional data
+-- structures that would have to be wrapped/reexported OR generalized by a type class
+-- (a la ParFuture, ParIVar).
 runPar :: Par a -> a
 runPar = unsafePerformIO . runPar_internal
 
