@@ -42,6 +42,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 
+--------------------------------------------------------------------------------
 library
   -- Modules exported by the library.
   exposed-modules:
@@ -64,20 +65,21 @@ library
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                  monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
 
-test-suite test-lvarpure
-    type:       exitcode-stdio-1.0
-    main-is:    test.hs
-    ghc-options: -DLVARPURE -O2 -threaded -rtsopts 
 
+--------------------------------------------------------------------------------
+-- TODO: New tests here:
+-- test-suite test-lvish
+
+
+
+--------------------------------------------------------------------------------
+test-suite test-old-lvarpure
+    type:       exitcode-stdio-1.0
+    main-is:    test-old.hs
+    ghc-options: -O2 -threaded -rtsopts
     build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                    monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
-
-
--- test_io.exe:
--- 	$(GHC) -DLVARIO -O2 -threaded -rtsopts --make test.hs -o $@
--- test_scalable.exe:
--- 	$(GHC) -DLVARSCALABLE -O2 -threaded -rtsopts --make test.hs -o $@
-
+    cpp-options: -DLVARPURE
