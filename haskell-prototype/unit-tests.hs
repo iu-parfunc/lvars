@@ -1,10 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, CPP #-}
 
 module Main where
 
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMainWithArgs, testGroup)
-import Test.Framework.TH (testGroupGenerator)
+import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 
 -- import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
@@ -20,6 +20,16 @@ import TestHelpers as T
 
 --------------------------------------------------------------------------------
 
+
+-- Disabling thread-variation due to below bug:
+#if 0 
+-- EEK!  Just got this [2013.06.27]:
+-- 
+-- unit-tests.exe: internal error: wakeup_gc_threads
+--     (GHC version 7.6.3 for x86_64_unknown_linux)
+--     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
+-- Aborted (core dumped)
+
 main :: IO ()
 main = T.stdTestHarness $ return all_tests
  where 
@@ -29,18 +39,14 @@ main = T.stdTestHarness $ return all_tests
    [
      HU.TestCase case_v0
    ]
-
    -- Ugh, busted test bracketing in test-framework... thus no good way to do
    -- thread-parameterization and no good way to take advantage of test-framework-th:   
    -- $(testGroupGenerator)
+#else
+main :: IO ()
+main = $(defaultMainGenerator)
+#endif
 
-
--- EEK!  Just got this [2013.06.27]:
--- 
--- unit-tests.exe: internal error: wakeup_gc_threads
---     (GHC version 7.6.3 for x86_64_unknown_linux)
---     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
--- Aborted (core dumped)
 
 case_v0 :: HU.Assertion
 case_v0 = do res <- v0
