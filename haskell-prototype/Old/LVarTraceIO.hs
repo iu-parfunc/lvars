@@ -14,7 +14,7 @@
 -- module for purposes other than extending the @Par@ monad with new
 -- functionality.
 
-module LVarTraceScalable
+module Old.LVarTraceIO 
   (
     -- * LVar interface (for library writers):
    runParIO, fork, LVar(..), newLV, getLV, putLV, liftIO,
@@ -42,7 +42,7 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 
 import qualified Control.Monad.Par.Class as PC
 
-import           Common (forkWithExceptions)
+import           Old.Common (forkWithExceptions)
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of LVars:
@@ -62,7 +62,7 @@ new = IVar <$> newLV (newIORef (IVarContents Nothing))
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
 get :: IVar a -> Par a
-get (IVar lv@(LVar ref _)) = getLV lv poll
+get (IVar lv@(LVar ref _ _)) = getLV lv poll
  where
    poll = fmap fromIVarContents $ readIORef ref
 
@@ -97,17 +97,32 @@ instance PC.ParIVar IVar Par where
   fork = fork  
   put_ = put_
   new = new
-
+  
 ------------------------------------------------------------------------------
 -- Underlying LVar representation:
 ------------------------------------------------------------------------------
 
--- | An LVar consists of a piece of mutable state and an optional
--- callback function, triggered after every write to the LVar, that
--- takes the just-written value as its argument.
+-- | An LVar consists of a piece of mutable state, a list of polling
+-- functions that produce continuations when they are successful, and
+-- an optional callback, triggered after every write to the LVar, that
+-- takes the written value as its argument.
+-- 
+-- This implementation cannot provide scalable LVars (e.g., a
+-- concurrent hashmap); rather, accesses to a single LVar will
+-- contend.  But even if operations on an LVar are serialized, they
+-- cannot all be a single "atomicModifyIORef", because atomic
+-- modifications must be pure functions, whereas the LVar polling
+-- functions are in the IO monad.
 data LVar a = LVar {
   lvstate :: a,
+  blocked :: {-# UNPACK #-} !(IORef (M.Map UID Poller)),
   callback :: Maybe (a -> IO Trace)
+}
+
+-- A poller can only be removed from the Map when it is woken.
+data Poller = Poller {
+   poll  :: IO (Maybe Trace),
+   woken :: {-# UNPACK #-}! (IORef Bool)
 }
 
 -- Return the old value.  Could replace with a true atomic op.
@@ -168,29 +183,55 @@ data Trace =
 sched :: Bool -> Sched -> Trace -> IO ()
 sched _doSync queue t = loop t
  where
+
+  -- Try to wake it up and remove from the wait list.  Returns true if
+  -- this was the call that actually removed the entry.
+  tryWake (Poller fn flag) waitmp uid = do
+    b <- atomicModifyIORef flag (\b -> (True,b)) -- CAS would work.
+    case b of
+      True -> return False -- Already woken.
+      False -> do atomicModifyIORef waitmp $ \mp -> (M.delete uid mp, ())
+                  return True 
         
   loop origt = case origt of
     New io fn -> do
       x  <- io
-      loop (fn (LVar x Nothing))
+      ls <- newIORef M.empty
+      loop (fn (LVar x ls Nothing))
 
     NewWithCallBack io cont -> do
       (st0, cb) <- io
-      loop (cont$ LVar st0 (Just cb))
+      wait <- newIORef M.empty
+      loop (cont$ LVar st0 wait (Just cb))
 
-    Get (LVar _ _) poll cont -> do
+    Get (LVar _ waitmp _) poll cont -> do
       e <- poll
       case e of         
          Just a  -> loop (cont a) -- Return straight away.
-         Nothing -> reschedule queue
-    
-    Consume (LVar state _) extractor cont -> do
+         Nothing -> do -- Register on the waitlist:
+           uid <- getUID
+           flag <- newIORef False
+           -- Data-race here: if a putter runs to completion right
+           -- now, it might finish before we get our poller in.  Thus
+           -- we self-poll at the end.
+           let fn = fmap cont <$> poll
+               retry = Poller fn flag
+           atomicModifyIORef waitmp $ \mp -> (M.insert uid retry mp, ())
+           -- We must SELF POLL here to make sure there wasn't a race
+           -- with a putter.  Now we KNOW that our poller is
+           -- "published", so any puts that sneak in here are fine.
+           trc <- fn           
+           case trc of
+             Nothing -> reschedule queue
+             Just tr -> do b <- tryWake retry waitmp uid 
+                           case b of
+                             True  -> loop tr
+                             False -> reschedule queue -- Already woken
+
+    Consume (LVar state waittmp _) extractor cont -> do
       -- HACK!  We know nothing about the type of state.  But we CAN
       -- destroy waittmp to prevent any future access.
---      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
-
-      -- TODO/FIXME: We could do a PUT here with an error thunk.
-      
+      atomicModifyIORef waittmp (\_ -> (error "attempt to touch LVar after Consume operation!", ()))
       -- CAREFUL: Putters only read waittmp AFTER they do the
       -- mutation, so this will be a delayed error.  It is recommended
       -- that higher level interfaces do their own corruption of the
@@ -198,13 +239,28 @@ sched _doSync queue t = loop t
       result <- extractor state
       loop (cont result)
       
-    Peek (LVar state _) extractor cont -> do
+    Peek (LVar state _ _) extractor cont -> do
       result <- extractor state
       loop (cont result)
 
-    Put (LVar state callback) mutator tr -> do
+    Put (LVar state waitmp callback) mutator tr -> do
+      -- Here we follow an unfortunately expensive protocol.
       mutator state
-
+      -- Inefficiency: we must leave the pollers in the wait list,
+      -- where they may be redundantly evaluated:
+      pollers <- readIORef waitmp
+      -- (Ugh, there doesn't seem to be a M.traverseWithKey_, just for
+      -- effect)
+      forM_ (M.toList pollers) $ \ (uid, pl@(Poller poll _)) -> do
+        -- Here we try to wake ready threads.  TRADEOFF: we could wake
+        -- one at a time (currently), or in a batch:
+        e <- poll
+        case e of
+          Nothing -> return ()
+          Just trc -> do b <- tryWake pl waitmp uid
+                         case b of
+                           True  -> pushWork queue trc
+                           False -> return ()
       case callback of
         Nothing -> loop tr
         Just cb -> do tr2 <- cb state

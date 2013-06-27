@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving  #-}
 
-module Data.LVar.SetPure
+module Old.Data.LVar.SetPure
        (
          ISet(), newEmptySet, newEmptySetWithCallBack, putInSet, putInSet_,
          waitForSet, waitForSetSize, consumeSet,
@@ -12,7 +12,7 @@ module Data.LVar.SetPure
          -- For debugging only!
          unsafePeekSet, reallyUnsafePeekSet
          ) where
-import LVarTracePure
+import Old.LVarTracePure
 import           Control.DeepSeq
 import           Data.IORef
 import qualified Data.Set as S

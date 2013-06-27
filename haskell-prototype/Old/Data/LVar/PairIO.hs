@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Data.LVar.PairScalable
+module Old.Data.LVar.PairIO
        (
          IPair,
          newPair,
@@ -9,7 +9,7 @@ module Data.LVar.PairScalable
          getFst,
          getSnd,
         ) where
-import LVarTraceScalable
+import Old.LVarTraceIO
 import Data.IORef
 
 ------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ newPair = newLV $
              return (r1,r2)
 
 putFst :: IPair a b -> a -> Par ()
-putFst lv@(LVar (refFst, _) _) !elt = putLV lv putter
+putFst lv@(LVar (refFst, _) _ _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refFst
@@ -37,7 +37,7 @@ putFst lv@(LVar (refFst, _) _) !elt = putLV lv putter
         Just _  -> error "multiple puts to first element of IPair"
         
 putSnd :: IPair a b -> b -> Par ()
-putSnd lv@(LVar (_, refSnd) _) !elt = putLV lv putter
+putSnd lv@(LVar (_, refSnd) _ _) !elt = putLV lv putter
   where
     -- putter takes the whole pair as an argument, but ignore it and
     -- just deal with refSnd
@@ -48,11 +48,12 @@ putSnd lv@(LVar (_, refSnd) _) !elt = putLV lv putter
         Just _  -> error "multiple puts to second element of IPair"
 
 getFst :: IPair a b -> Par a
-getFst iv@(LVar (ref1,_)  _) = getLV iv poll
+getFst iv@(LVar (ref1,_) _ _) = getLV iv poll
  where
    poll = fmap fromIVarContents $ readIORef ref1
 
 getSnd :: IPair a b -> Par b
-getSnd iv@(LVar (_,ref2) _) = getLV iv poll
+getSnd iv@(LVar (_,ref2) _ _) = getLV iv poll
  where
    poll = fmap fromIVarContents $ readIORef ref2
+

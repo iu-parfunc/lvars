@@ -3,7 +3,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Data.LVar.SetIO
+-- UNFINISHED?
+
+module Old.Data.LVar.SetScalable
        (
          ISet(), newEmptySet, newEmptySetWithCallBack, putInSet,
          waitForSet, waitForSetSize, consumeSet,
@@ -11,7 +13,8 @@ module Data.LVar.SetIO
          -- For debugging only!
          unsafePeekSet, reallyUnsafePeekSet
          ) where
-import LVarTraceIO
+import Old.LVarTraceScalable
+import           Control.DeepSeq
 import           Data.IORef
 import qualified Data.Set as S
 import           System.IO.Unsafe (unsafePerformIO)
@@ -59,7 +62,7 @@ putInSet !elem (ISet lv) = putLV lv putter
 
 -- | Wait for the set to contain a specified element.
 waitForSet :: Ord a => a -> ISet a -> Par ()
-waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSet elem (ISet lv@(LVar ref _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -69,7 +72,7 @@ waitForSet elem (ISet lv@(LVar ref _ _)) = getLV lv getter
 
 -- | Wait on the SIZE of the set, not its contents.
 waitForSetSize :: Int -> ISet a -> Par ()
-waitForSetSize sz (ISet lv@(LVar ref _ _)) = getLV lv getter
+waitForSetSize sz (ISet lv@(LVar ref _)) = getLV lv getter
   where
     getter = do
       set <- readIORef ref
@@ -92,4 +95,3 @@ reallyUnsafePeekSet (ISet (LVar {lvstate})) =
   unsafePerformIO $ do
     current <- readIORef lvstate
     return current
-
