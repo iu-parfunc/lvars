@@ -42,3 +42,4 @@ getSnd lv = getLV lv globalThresh deltaThresh
   where globalThresh (_, r2) _ = readIORef r2
         deltaThresh (Left _)   = return Nothing        
         deltaThresh (Right x)  = return $ Just x
+

@@ -11,7 +11,7 @@
 -- arbitrary LVars (lattice variables), not just IVars.
 
 module Control.LVish.SchedIdempotent
-  (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
+  (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
   ) where
