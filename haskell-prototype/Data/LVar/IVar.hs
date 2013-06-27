@@ -1,6 +1,6 @@
-module Data.LVar.IVarIdem (IVar, new, get, put) where
+module Data.LVar.IVar (IVar, new, get, put) where
 
-import LVarIdempotent
+import Control.LVish
 import Data.IORef
 
 ------------------------------------------------------------------------------

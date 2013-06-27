@@ -10,7 +10,7 @@
 -- | This (experimental) module generalizes the Par monad to allow
 -- arbitrary LVars (lattice variables), not just IVars.
 
-module LVarIdempotent 
+module Control.LVish.SchedIdempotent
   (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
@@ -31,7 +31,7 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
 
-import qualified Sched as Sched
+import qualified Control.LVish.SchedIdempotentInternal as Sched
   
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation

@@ -1,10 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Data.LVar.PairIdem (
+module Data.LVar.Pair (
   IPair, newPair, putFst, putSnd, getFst, getSnd
   ) where
 
-import LVarIdempotent
+import Control.LVish
 import Data.IORef
 
 ------------------------------------------------------------------------------
