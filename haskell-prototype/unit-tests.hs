@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, CPP #-}
+{-# LANGUAGE TemplateHaskell, CPP, ScopedTypeVariables #-}
 
 module Main where
 
@@ -6,8 +6,15 @@ import Test.Framework.Providers.HUnit
 import Test.Framework (Test, defaultMainWithArgs, testGroup)
 import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 
--- import Test.HUnit (Assertion, assertEqual, assertBool)
+import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
+import Control.Applicative
+import Data.List (isInfixOf)
+import qualified Data.Set as S
+import System.Environment (getArgs)
+
+import Control.Exception (catch, evaluate, SomeException)
+
 
 import qualified Data.Set as S
 import qualified Data.LVar.Set as IS
@@ -54,88 +61,23 @@ case_v0 = do res <- v0
 
 v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
--- v0 = runPar $ do i<-new; fork (return ()); put i 4; get i
 
--- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
--- those when it shouldn't:
+case_v1 :: Assertion
+case_v1 = assertEqual "fork put" (4::Int) =<< v1
 
--- main :: IO ()
--- main = do 
---   args <- getArgs
---   -- Set the number of threads on the command line: Here we snatch an
---   -- argument before test-framework gets to it.
---   let (threads,args') = 
---          case concatMap reads args of 
---            (x,_):_ -> (x, tail args)
---            _       -> (4, args)
+v1 = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
 
--- #if __GLASGOW_HASKELL__ >= 761
---   -- GHC 7.6.1 introduced setNumCapabilities
---   putStrLn $ "Setting the number of threads to: " ++ show threads
---   setNumCapabilities threads
--- #else
---   -- Otherwise we have to specify it with -N on the command line
---   do n <- getNumCapabilities
---      putStrLn $ "Number of threads specified with -N: " ++ show n
--- #endif
-
---   -- Template haskell magic to aggregate the tests from this file:
---   let alltests :: Test
---       alltests = $(testGroupGenerator)
---   defaultMainWithArgs [alltests] args'
--- --  defaultMainWithArgs (testGroup "LVar tests"  alltests) args'
-
--- -- | Ensure that executing an action returns an exception
--- -- containing one of the expected messages.
--- assertException  :: [String] -> IO a -> IO ()
--- assertException msgs action = do
---  x <- catch (do action; return Nothing) 
---             (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
---                       return (Just $ show e))
---  case x of 
---   Nothing -> error "Failed to get an exception!"
---   Just s -> 
---    if  any (`isInfixOf` s) msgs
---    then return () 
---    else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
---         ++ "\nInstead got this exception:\n  " ++ show s
-
--- -- | For testing quasi-deterministic programs: programs that always
--- -- either raise a particular exception or produce a particular answer.
--- allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
--- allowSomeExceptions msgs action = do
---  catch (do a <- action; return (Right a))
---        (\e ->
---          let estr = show e in
---          if  any (`isInfixOf` estr) msgs
---           then do putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
---                   return (Left e)
---           else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
---                ++ "\nInstead got this exception:\n  " ++ show estr)
-
--- assertOr :: Assertion -> Assertion -> Assertion
--- assertOr act1 act2 = 
---   catch act1 
---         (\(e::SomeException) -> act2)
-
--- --------------------------------------------------------------------------------
-
-
--- case_v1 :: Assertion
--- case_v1 = assertEqual "fork put" (4::Int) v1
-
--- v1 = runPar $ do i<-new; fork (put i 4); get i
-
--- case_v2 :: Assertion
--- case_v2 = v2 >>= assertEqual "put 10 in & wait"
---           (S.fromList [1..10] :: S.Set Int)
+case_v2 :: Assertion
+case_v2 = v2 >>= assertEqual "put 10 in & wait"
+          (S.fromList [1..10] :: S.Set Int)
           
--- v2 :: IO (S.Set Int)          
--- v2 = runParIO $
---      do s <- newEmptySet
---         mapM_ (\n -> fork $ putInSet n s) [1..10]
---         waitForSetSize 10 s 
---         consumeSet s
+v2 :: IO (S.Set Int)
+v2 = runParIO $
+     do s <- IS.newEmptySet
+        mapM_ (\n -> fork $ IS.putInSet n s) [1..10]
+        IS.waitSize 10 s 
+--        consumeSet s
+        IS.freezeSet s
 
 -- -- | This version uses a fork-join so it doesn't need the waitForSetSize:
 -- case_v2b :: Assertion
@@ -148,6 +90,14 @@ v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 --         ivs <- mapM (\n -> spawn_ $ putInSet n s) [1..10]
 --         mapM_ get ivs -- Join point.
 --         consumeSet s
+
+
+
+--------------------------------------------------------------------------------
+-- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
+-- those when it shouldn't:
+--------------------------------------------------------------------------------
+
 
 -- -- | Simple callback test.
 -- case_v3 :: Assertion
@@ -298,3 +248,37 @@ v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 --                   putSnd p1 x
 --         putFst p1 33
 --         getSnd p1)
+
+
+-- | Ensure that executing an action returns an exception
+-- containing one of the expected messages.
+assertException  :: [String] -> IO a -> IO ()
+assertException msgs action = do
+ x <- catch (do action; return Nothing) 
+            (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
+                      return (Just $ show e))
+ case x of 
+  Nothing -> error "Failed to get an exception!"
+  Just s -> 
+   if  any (`isInfixOf` s) msgs
+   then return () 
+   else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+        ++ "\nInstead got this exception:\n  " ++ show s
+
+-- | For testing quasi-deterministic programs: programs that always
+-- either raise a particular exception or produce a particular answer.
+allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
+allowSomeExceptions msgs action = do
+ catch (do a <- action; return (Right a))
+       (\e ->
+         let estr = show e in
+         if  any (`isInfixOf` estr) msgs
+          then do putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
+                  return (Left e)
+          else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+               ++ "\nInstead got this exception:\n  " ++ show estr)
+
+assertOr :: Assertion -> Assertion -> Assertion
+assertOr act1 act2 = 
+  catch act1 
+        (\(e::SomeException) -> act2)
