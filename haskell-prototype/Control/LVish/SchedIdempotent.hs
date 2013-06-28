@@ -390,11 +390,11 @@ runPar_internal c = do
 ----------------------------------------
 -- (1) There is a BUG in 'loop' presently:
 --    "thread blocked indefinitely in an STM transaction"
---   loop states []
+--  loop (zip [0..] queues) []
 ----------------------------------------
 -- (2) This has the same problem as 'loop':
---   ls <- mapM (\ x -> asyncOn (no x) (runWorker x)) states
---   mapM_ wait ls
+--  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
+--  mapM_ wait ls
 ----------------------------------------
 -- (3) Using this FOR NOW, but it does NOT pin to the right processors:
   mapConcurrently runWorker (zip [0..] queues)
