@@ -356,19 +356,53 @@ runPar_internal c = do
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
-  m0 <- newEmptyMVar  
-  ls <- forM (zip [0..] queues) $ \(cpu, q) ->
+  answerMV <- newEmptyMVar
+
+#if 0
+  forM_ (zip [0..] queues) $ \(cpu, q) ->
     forkWithExceptions (forkOn cpu) "worker thread" $
-    -- Async.asyncOn cpu $ 
       if cpu == main_cpu 
         then let k x = ClosedPar $ \q -> do 
                    sched q      -- ensure any remaining, enabled threads run to 
-                   putMVar m0 x  -- completion prior to returning the result
+                   putMVar answerMV x  -- completion prior to returning the result
              in exec (close c k) q
+        -- Note: The above is important: it is sketchy to leave any workers running after
+        -- the main thread exits.  Subsequent exceptions on child threads, even if
+        -- forwarded asynchronously, can arrive much later at the main thread
+        -- (e.g. after it has exited, or set up a new handler, etc).
         else sched q
-  -- forM_ ls Async.wait
-  takeMVar m0
+#else
+  let runWorker (cpu, q) = do 
+        if (cpu /= main_cpu)
+           then sched q
+           else let k x = ClosedPar $ \q -> do 
+                      sched q      -- ensure any remaining, enabled threads run to 
+                      putMVar answerMV x  -- completion prior to returning the result
+                in exec (close c k) q
 
+  -- Here we want a traditional, fork-join parallel loop with proper exception handling:
+  let loop [] asyncs = mapM_ wait asyncs
+      loop ((cpu,q):tl) asyncs = 
+--         withAsync (runWorker state)
+        withAsyncOn cpu (runWorker (cpu,q))
+                    (\a -> loop tl (a:asyncs))
+
+----------------------------------------
+-- (1) There is a BUG in 'loop' presently:
+--    "thread blocked indefinitely in an STM transaction"
+--   loop states []
+----------------------------------------
+-- (2) This has the same problem as 'loop':
+--   ls <- mapM (\ x -> asyncOn (no x) (runWorker x)) states
+--   mapM_ wait ls
+----------------------------------------
+-- (3) Using this FOR NOW, but it does NOT pin to the right processors:
+  mapConcurrently runWorker (zip [0..] queues)
+----------------------------------------
+   -- Now that child threads are done, it's safe for the main thread
+   -- to call it quits.
+#endif
+  takeMVar answerMV  
 
 -- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
 -- It would be nice to put freeze in a separate module and be able to choose between
