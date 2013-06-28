@@ -71,7 +71,8 @@ v1 = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
 case_v2a :: Assertion
 case_v2a = v2a >>= assertEqual "put 10 in & wait"
           (S.fromList [1..10] :: S.Set Int)
-          
+
+-- [2013.06.27] getting thread-blocked-indefinitely errors:
 v2a :: IO (S.Set Int)
 v2a = runParIO $
      do s <- IS.newEmptySet
