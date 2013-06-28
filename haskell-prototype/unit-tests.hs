@@ -131,33 +131,42 @@ v3b = runParIO $
         IS.freezeSet s2
 
 
--- -- | An under-synchronized test.  This should always return the same
--- -- result OR throw an exception.  In this case it should always return
--- -- a list of 10 elements, or throw an exception.
--- case_v3b :: Assertion
--- case_v3b = do 
---   allowSomeExceptions ["attempt to touch LVar after Consume operation"] $ 
---     do x <- v3b
---        assertEqual "under-synchronized passed through"
---       	           (S.fromList [10,20..100] :: S.Set Int) x
---   return ()
+-- | An under-synchronized test.  This should always return the same
+-- result OR throw an exception.  In this case it should always return
+-- a list of 10 elements, or throw an exception.
+case_v3c :: Assertion
+case_v3c = do 
+  allowSomeExceptions ["Attempt to change a frozen LVar"] $ 
+    do x <- v3c
+       assertEqual "under-synchronized passed through"
+      	           (S.fromList [10,20..100] :: S.Set Int) x
+  return ()
     
--- v3b :: IO (S.Set Int)
--- v3b = runParIO $
---      do s1 <- newEmptySet
---         let fn e = putInSet (e*10) s1 
-        
---         s2 <- newEmptySetWithCallBack fn
---         mapM_ (\n -> fork$ putInSet n s2) [1..10]
-        
---         waitForSetSize 1 s1
-        
---         -- If this consume occurs before all the puts have happened,
---         -- the a put happening after it will throw an exception.  If,
---         -- on the other hand, it occurs after they've all happened,
---         -- then we won't notice that anything is wrong and we'll get
---         -- the same result we would have in case_v3.
---         consumeSet s1
+v3c :: IO (S.Set Int)
+v3c = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
+        IS.withCallbacksThenFreeze s1 fn $ do
+          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]          
+          IS.waitSize 1 s2 -- Not ENOUGH synchronization!
+          IS.freezeSet s2
+          -- If this ^ freeze occurs *before* all the puts have happened,
+          -- the a put happening after it will throw an exception.  If,
+          -- on the other hand, it occurs after they've all happened,
+          -- then we won't notice that anything is wrong and we'll get
+          -- the same result we would have in case_v3.
+
+
+-- FIXME: currently if run enough times, v3c can get the following failure:
+-- I think we need to use full Async's so the cancellation goes both ways:
+
+   -- Main:
+   -- Exception inside child thread "worker thread", ThreadId 12: Attempt to change a frozen LVar
+   -- Exception inside child thread "worker thread", ThreadId 9: Attempt to change a frozen LVar
+   -- Exception inside child thread "worker thread", ThreadId 11: Attempt to change a frozen LVar
+   -- test-lvish: Attempt to change a frozen LVar
+   -- Exception inside child thread "worker thread", ThreadId 10: thread blocked indefinitely in an MVar operation
 
 
 --------------------------------------------------------------------------------
