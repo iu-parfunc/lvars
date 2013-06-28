@@ -65,6 +65,7 @@ v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 case_v1 :: Assertion
 case_v1 = assertEqual "fork put" (4::Int) =<< v1
 
+v1 :: IO Int
 v1 = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
 
 case_v2a :: Assertion
@@ -78,7 +79,7 @@ v2a = runParIO $
         IS.waitSize 10 s 
         IS.freezeSet s
 
--- | This version uses a fork-join so it doesn't need the waitForSetSize:
+-- | This version uses a fork-join so it doesn't need the waitSize:
 case_v2b :: Assertion
 case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
            (S.fromList [1..10] :: S.Set Int)
@@ -101,7 +102,7 @@ v3a = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.putInSet (e*10) s2
-        IS.freezeAfterCallbacks s1 fn $ do
+        IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
           mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]        
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
@@ -120,10 +121,11 @@ v3b = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.putInSet (e*10) s2
-        IS.freezeAfterCallbacks s1 fn $ do
+        IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
           mapM_ (\n -> IS.putInSet n s1) [1..10]
           -- Because we filled s1 sequentially, we know it is full at this point.
+          -- (If the above were forked we would need a finish/asnyc style construct)
           
         -- After all of s1's callbacks are finished executing, s2 is full:
         IS.freezeSet s2

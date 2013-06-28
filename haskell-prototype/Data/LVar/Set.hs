@@ -5,7 +5,7 @@
 
 module Data.LVar.Set
        (
-         ISet, newEmptySet, putInSet, freezeAfterCallbacks,
+         ISet, newEmptySet, putInSet, withCallbacksThenFreeze,
          waitElem, waitSize, freezeSet
        ) where
 
@@ -29,8 +29,8 @@ newEmptySet = newLV$ newIORef S.empty
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Set variable.
-freezeAfterCallbacks :: ISet a -> (a -> Par ()) -> Par b -> Par b
-freezeAfterCallbacks lv callback action =
+withCallbacksThenFreeze :: ISet a -> (a -> Par ()) -> Par b -> Par b
+withCallbacksThenFreeze lv callback action =
     do
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
        freezeLVAfter lv (initCB res) (\x -> return$ Just$ callback x)
@@ -77,7 +77,7 @@ waitSize !sz lv = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref
-      case S.size set > sz of
+      case S.size set >= sz of
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
