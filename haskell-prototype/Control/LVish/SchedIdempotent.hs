@@ -18,6 +18,7 @@ module Control.LVish.SchedIdempotent
 
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
+import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.Concurrent.Async as Async
@@ -358,19 +359,32 @@ runPar_internal c = do
   main_cpu <- Sched.currentCPU
   answerMV <- newEmptyMVar
 
-#if 0
-  forM_ (zip [0..] queues) $ \(cpu, q) ->
-    forkWithExceptions (forkOn cpu) "worker thread" $
-      if cpu == main_cpu 
-        then let k x = ClosedPar $ \q -> do 
-                   sched q      -- ensure any remaining, enabled threads run to 
-                   putMVar answerMV x  -- completion prior to returning the result
-             in exec (close c k) q
-        -- Note: The above is important: it is sketchy to leave any workers running after
-        -- the main thread exits.  Subsequent exceptions on child threads, even if
-        -- forwarded asynchronously, can arrive much later at the main thread
-        -- (e.g. after it has exited, or set up a new handler, etc).
-        else sched q
+#if 1
+  wrkrtids <- newIORef []
+  let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
+        tid <- forkWithExceptions (forkOn cpu) "worker thread" $
+                 if cpu == main_cpu 
+                   then let k x = ClosedPar $ \q -> do 
+                              sched q      -- ensure any remaining, enabled threads run to 
+                              putMVar answerMV x  -- completion prior to returning the result
+                        in exec (close c k) q
+                   -- Note: The above is important: it is sketchy to leave any workers running after
+                   -- the main thread exits.  Subsequent exceptions on child threads, even if
+                   -- forwarded asynchronously, can arrive much later at the main thread
+                   -- (e.g. after it has exited, or set up a new handler, etc).
+                   else sched q
+        atomicModifyIORef_ wrkrtids (tid:)
+  putStrLn "About to fork..."      
+  ans <- E.catch (forkit >> takeMVar answerMV)
+    (\ (e :: E.SomeException) -> do 
+        tids <- readIORef wrkrtids
+        putStrLn$ "Killing off workers.. "++show tids
+        mapM_ killThread tids
+        -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
+        error ("EXCEPTION in runPar: "++show e)
+    )
+  putStrLn "parent thread escaped unscathed"
+  return ans
 #else
   let runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
@@ -401,8 +415,8 @@ runPar_internal c = do
 ----------------------------------------
    -- Now that child threads are done, it's safe for the main thread
    -- to call it quits.
-#endif
   takeMVar answerMV  
+#endif
 
 -- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
 -- It would be nice to put freeze in a separate module and be able to choose between
@@ -421,3 +435,7 @@ runPar = unsafePerformIO . runPar_internal
 -- contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
 runParIO = runPar_internal
+
+{-# INLINE atomicModifyIORef_ #-}
+atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
+atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))

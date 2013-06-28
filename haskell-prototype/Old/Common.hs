@@ -15,10 +15,10 @@ forkWithExceptions forkit descr action = do
       E.catch action
 	 (\ e -> 
            case E.fromException e of 
-             Just E.ThreadKilled -> printf -- hPrintf stderr 
-                                    "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
-	     _  -> do printf -- hPrintf stderr
-                        "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
+             Just E.ThreadKilled ->
+               printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
+	     _  -> do
+                      printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
                       E.throwTo parent (e :: E.SomeException)
 	 )
 
