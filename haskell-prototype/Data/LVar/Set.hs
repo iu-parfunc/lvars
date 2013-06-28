@@ -29,7 +29,7 @@ newEmptySet = newLV$ newIORef S.empty
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Set variable.
-withCallbacksThenFreeze :: ISet a -> (a -> Par ()) -> Par b -> Par b
+withCallbacksThenFreeze :: Eq b => ISet a -> (a -> Par ()) -> Par b -> Par b
 withCallbacksThenFreeze lv callback action =
     do
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()

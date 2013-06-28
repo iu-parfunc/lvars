@@ -96,7 +96,8 @@ v2b = runParIO $
 case_v3a :: Assertion
 case_v3a = v3a >>= assertEqual "simple callback test"
           (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
-          
+
+-- [2013.06.27] This is failing just occasionally with a multiple-put:
 v3a :: IO (S.Set Int)          
 v3a = runParIO $
      do s1 <- IS.newEmptySet

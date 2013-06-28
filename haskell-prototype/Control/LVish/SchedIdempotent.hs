@@ -20,6 +20,7 @@ import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
 import           Control.DeepSeq
 import           Control.Applicative
+import           Control.Concurrent.Async as Async
 import           Data.IORef
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -355,16 +356,18 @@ runPar_internal c = do
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
-  m <- newEmptyMVar  
-  forM_ (zip [0..] queues) $ \(cpu, q) ->
-    forkWithExceptions (forkOn cpu) "worker thread" $ 
+  m0 <- newEmptyMVar  
+  ls <- forM (zip [0..] queues) $ \(cpu, q) ->
+    forkWithExceptions (forkOn cpu) "worker thread" $
+    -- Async.asyncOn cpu $ 
       if cpu == main_cpu 
         then let k x = ClosedPar $ \q -> do 
                    sched q      -- ensure any remaining, enabled threads run to 
-                   putMVar m x  -- completion prior to returning the result
+                   putMVar m0 x  -- completion prior to returning the result
              in exec (close c k) q
         else sched q
-  takeMVar m  
+  -- forM_ ls Async.wait
+  takeMVar m0
 
 
 -- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
