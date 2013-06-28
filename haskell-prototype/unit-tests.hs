@@ -67,57 +67,67 @@ case_v1 = assertEqual "fork put" (4::Int) =<< v1
 
 v1 = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
 
-case_v2 :: Assertion
-case_v2 = v2 >>= assertEqual "put 10 in & wait"
+case_v2a :: Assertion
+case_v2a = v2a >>= assertEqual "put 10 in & wait"
           (S.fromList [1..10] :: S.Set Int)
           
-v2 :: IO (S.Set Int)
-v2 = runParIO $
+v2a :: IO (S.Set Int)
+v2a = runParIO $
      do s <- IS.newEmptySet
         mapM_ (\n -> fork $ IS.putInSet n s) [1..10]
         IS.waitSize 10 s 
---        consumeSet s
         IS.freezeSet s
 
--- -- | This version uses a fork-join so it doesn't need the waitForSetSize:
--- case_v2b :: Assertion
--- case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
---            (S.fromList [1..10] :: S.Set Int)
+-- | This version uses a fork-join so it doesn't need the waitForSetSize:
+case_v2b :: Assertion
+case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
+           (S.fromList [1..10] :: S.Set Int)
            
--- v2b :: IO (S.Set Int)
--- v2b = runParIO $
---      do s <- newEmptySet
---         ivs <- mapM (\n -> spawn_ $ putInSet n s) [1..10]
---         mapM_ get ivs -- Join point.
---         consumeSet s
+v2b :: IO (S.Set Int)
+v2b = runParIO $
+     do s <- IS.newEmptySet
+        ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10]
+        mapM_ IV.get ivs -- Join point.
+        IS.freezeSet s
 
 
-
---------------------------------------------------------------------------------
--- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
--- those when it shouldn't:
---------------------------------------------------------------------------------
-
-
--- -- | Simple callback test.
--- case_v3 :: Assertion
--- case_v3 = v3 >>= assertEqual "simple callback test"
---           (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
+-- | Simple callback test.
+case_v3a :: Assertion
+case_v3a = v3a >>= assertEqual "simple callback test"
+          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
           
--- v3 :: IO (S.Set Int)          
--- v3 = runParIO $
---      do s1 <- newEmptySet
---         let fn e = putInSet (e*10) s1 
-            
---         s2 <- newEmptySetWithCallBack fn
---         mapM_ (\n -> fork $ putInSet n s2) [1..10]
-        
---         -- We never read out of s2 directly.  Instead, writes to s2
---         -- trigger the callback 'fn' to run, with the element written
---         -- to s2 as their argument.  So eventually, ten elements are
---         -- written to s1.
---         waitForSetSize 10 s1
---         consumeSet s1
+v3a :: IO (S.Set Int)          
+v3a = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
+        IS.freezeAfterCallbacks s1 fn $ do
+          -- Populate the first set:
+          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]        
+          -- We never read out of s1 directly.  Instead, writes to s1 trigger the
+          -- callback 'fn' to run, with the element written to s2.  So eventually,
+          -- ten elements are written to s2.
+          IS.waitSize 10 s2
+          IS.freezeSet s2
+
+
+case_v3b :: Assertion
+case_v3b = v3b >>= assertEqual "simple callback test"
+          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
+          
+v3b :: IO (S.Set Int)          
+v3b = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
+        IS.freezeAfterCallbacks s1 fn $ do
+          -- Populate the first set:
+          mapM_ (\n -> IS.putInSet n s1) [1..10]
+          -- Because we filled s1 sequentially, we know it is full at this point.
+          
+        -- After all of s1's callbacks are finished executing, s2 is full:
+        IS.freezeSet s2
+
 
 -- -- | An under-synchronized test.  This should always return the same
 -- -- result OR throw an exception.  In this case it should always return
@@ -146,6 +156,12 @@ v2 = runParIO $
 --         -- then we won't notice that anything is wrong and we'll get
 --         -- the same result we would have in case_v3.
 --         consumeSet s1
+
+
+--------------------------------------------------------------------------------
+-- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
+-- those when it shouldn't:
+--------------------------------------------------------------------------------
 
 -- -- | Simple test of pairs.
 -- case_v4 :: Assertion
