@@ -25,7 +25,7 @@ error and exited the handler.
 
 
 [2013.06.28] {New 1/500 failure on v3c}
-
+---------------------------------------
 
     Main:
     Exception inside child thread "worker thread", ThreadId 12: Attempt to change a frozen LVar
@@ -40,3 +40,30 @@ error and exited the handler.
      Passed  0           0          
      Failed  1           1          
      Total   1           1          
+
+[2013.06.28] {v2a failing as well}
+----------------------------------
+
+Context: I'm trying to add extra "catch"s to get all the exceptions
+that might leak from child worker threads (using forkWithExceptions
+rather than Control.Async).
+
+Yesterday I saw thread-blocked-indefinitely errors from v2a, but today
+I was having trouble reproducing that.  Yet if I pump the number of
+threads up enough, I see the following:
+
+    Exception inside child thread "worker thread", ThreadId 16: Attempt to change a frozen LVar
+    Killing off workers.. [ThreadId 20,ThreadId 19,ThreadId 18,ThreadId 17,ThreadId 16,ThreadId 15,ThreadId 14,ThreadId 13]
+
+    ThreadKilled exception inside child thread, ThreadId 20 (not propagating!): "worker thread"
+    ThreadKilled exception inside child thread, ThreadId 19 (not propagating!): "worker thread"
+
+    ThreadKilled exception inside child thread, ThreadId 18 (not propagating!): "worker thread"
+    ThreadKilled exception inside child thread, ThreadId 17 (not propagating!): "worker thread"
+    ThreadKilled exception inside child thread, ThreadId 14 (not propagating!): "worker thread"
+    ThreadKilled exception inside child thread, ThreadId 13 (not propagating!): "worker thread"
+      v2a: [Failed]ception inside child thread, ThreadId 15 (not propagating!): "worker thread"
+    ERROR: EXCEPTION in runPar: Attempt to change a frozen LVar
+
+(Yet, even then, I can only reproduce on a linux desktop, not on this macbook air.)
+
