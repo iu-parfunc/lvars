@@ -233,7 +233,6 @@
 
   (define (program-test-suite rr)
 
-    ;; E-Freeze
     (test-->> rr
               (term
                (() ;; empty store
