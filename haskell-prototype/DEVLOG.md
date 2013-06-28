@@ -24,3 +24,19 @@ additional child thread throws an error after we've taken the first
 error and exited the handler.
 
 
+[2013.06.28] {New 1/500 failure on v3c}
+
+
+    Main:
+    Exception inside child thread "worker thread", ThreadId 12: Attempt to change a frozen LVar
+
+    Exception inside child thread "worker thread", ThreadId 10: Attempt to change a frozen LVar
+    Exception inside child thread "worker thread", ThreadId 11: Attempt to change a frozen LVar
+    Caught allowed exception: Attempt to change a frozen LVar
+      v3c: [Failed]
+    ERROR: Attempt to change a frozen LVar
+
+	     Test Cases  Total      
+     Passed  0           0          
+     Failed  1           1          
+     Total   1           1          

@@ -2,7 +2,7 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Sched(
+module Control.LVish.SchedIdempotentInternal (
   State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await
   ) where
 
