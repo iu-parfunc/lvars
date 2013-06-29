@@ -232,23 +232,23 @@
      (term #t))
 
     (test-equal
-     (term (lookup-p ((l (2 #t))) l))
+     (term (lookup-state ((l (2 #t))) l))
      (term (2 #t)))
 
     (test-equal
-     (term (lookup-p ((l (2 #t)) (l1 (3 #f))) l1))
+     (term (lookup-state ((l (2 #t)) (l1 (3 #f))) l1))
      (term (3 #f)))
     
     (test-equal
-     (term (update-p () l (4 #f)))
+     (term (update-state () l (4 #f)))
      (term ((l (4 #f)))))
     
     (test-equal
-     (term (update-p ((l (3 #f))) l (4 #f)))
+     (term (update-state ((l (3 #f))) l (4 #f)))
      (term ((l (4 #f)))))
 
     (test-equal
-     (term (update-p () l (Bot #f)))
+     (term (update-state () l (Bot #f)))
      (term ((l (Bot #f)))))
 
     (test-equal
@@ -484,16 +484,6 @@
               (term
                (((l (5 #f)))
                 (5 #f))))
-
-    ;; E-Put-Err
-    (test-->> rr
-              (term
-               (() ;; empty store
-                (let ((x_1 new))
-                  (let ((x_2 (put x_1 Top)))
-                    x_2))))
-              (term
-               Error))
 
     (test-->> rr
               #:equiv cfgs-equal-modulo-perms?

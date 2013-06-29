@@ -43,8 +43,8 @@
              store-dom
              lookup-val
              lookup-status
-             lookup-p
-             update-p
+             lookup-state
+             update-state
              incomp
              store-dom-diff
              top?
@@ -85,21 +85,23 @@
 
       ;; Values.
       (v () ;; unit value
-         d  ;; return value of `freeze ... after`.  (We could actually
-            ;; use StoreVal here, because it will never be Top.)
+         StoreVal  ;; return value of `freeze ... after` (we use
+                   ;;  StoreVal instead of d here because it will
+                   ;;  never be Top)
 
-         p  ;; pair of d and status; return value of `get`.  (We could
-            ;; actually use (StoreVal status), because it will never
-            ;; be TopP.)
+         (StoreVal status) ;; return value of `get` (we use (StoreVal
+                           ;; status) instead of p here because it
+                           ;; will never be TopP)
 
          l  ;; locations (pointers to LVars in the store)
-         Q                 ;; threshold sets
+         Q  ;; threshold sets
          (lambda (x) e))
 
-      ;; Lattice elements, representing the state of an LVar.  We
-      ;; assume Top and Bot lattice elements in addition to the
-      ;; user-specified set of lattice elements.  A StoreVal can be
-      ;; any element of the lattice except Top.
+      ;; Lattice elements, representing the "value" part of the state
+      ;; of an LVar (the other part being "status").  We assume Top
+      ;; and Bot lattice elements in addition to the user-specified
+      ;; set of lattice elements.  A StoreVal can be any element of
+      ;; the lattice except Top.
       
       ;; N.B. In the LaTeX grammar, we leave out these next two rules.
       ;; That's because in that grammar, the user-provided lattice
@@ -125,21 +127,16 @@
 
       ;; Threshold sets.  A threshold set is the set we pass to a
       ;; `get` expression that specifies a non-empty, pairwise
-      ;; incompatible subset of the state space of the location being
-      ;; queried.
-
-      ;; Incidentally, under this grammar, ((Top status)) and ((Bot
-      ;; status)) are threshold sets. The latter might make sense, but
-      ;; the former is nonsensical -- a program that had Top as a
-      ;; threshold would block forever.  Nevertheless, the grammar
-      ;; admits it.
+      ;; incompatible subset of the states of the LVar being queried.
 
       ;; N.B. Threshold sets are potentially infinite, but we don't
       ;; have a good way to express infinite threshold sets in Redex.
       ;; In the paper, we sometimes define infinite threshold sets
       ;; using predicates.
       (Q (p p (... ...)))
-      (p (d status) TopP)
+
+      ;; States.
+      (p (StoreVal status) TopP)
 
       ;; Like Q, but potentially empty.  Used in the type of the
       ;; exists-p metafunction.
@@ -177,7 +174,7 @@
 
        ;; Allocation of new LVars.
        (--> (S (in-hole E new))
-            ((update-p S l (Bot #f)) (in-hole E l))
+            ((update-state S l (Bot #f)) (in-hole E l))
             (where l (variable-not-in-store S))
             "E-New")
 
@@ -186,8 +183,8 @@
        ;; If an LVar is frozen, putting a value that is less than or
        ;; equal to the current value has no effect...
        (--> (S (in-hole E (put l d_2)))
-            ((update-p S l p_2) (in-hole E ()))
-            (where p_1 (lookup-p S l))
+            ((update-state S l p_2) (in-hole E ()))
+            (where p_1 (lookup-state S l))
             (where p_2 (lub-p p_1 (d_2 #f)))
             (where (StoreVal status) p_2)
             "E-Put")
@@ -197,14 +194,14 @@
        ;; error.
        (--> (S (in-hole E (put l d_2)))
             Error
-            (where p_1 (lookup-p S l))
+            (where p_1 (lookup-state S l))
             (where TopP (lub-p p_1 (d_2 #f)))
             "E-Put-Err")
 
        ;; Threshold reads from LVars.
        (--> (S (in-hole E (get l Q)))
             (S (in-hole E p_2))
-            (where p_1 (lookup-p S l))
+            (where p_1 (lookup-state S l))
             (where #t (incomp Q))
             (where p_2 (exists-p p_1 Q))
             "E-Get")
@@ -220,7 +217,7 @@
        ;; Launching of handlers.  This rule can fire potentially many
        ;; times for a given `freeze ... after` expression.  It fires
        ;; once for each lattice element d_2 that is <= the current
-       ;; state d_1 of l, so long as that element is not already a
+       ;; value d_1 of l, so long as that element is not already a
        ;; member of Df.  For each such d_2, it launches a handler in
        ;; the `running` set and adds d_2 to the `handled` set.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_0))
@@ -236,11 +233,11 @@
 
        ;; Last step in the evaluation of `freeze ... after`.  When all
        ;; expressions in the `running` set have reached values and all
-       ;; lattice elements at or below l's current state have been
-       ;; handled, this rule freezes and returns that state.
+       ;; lattice elements at or below l's current value have been
+       ;; handled, this rule freezes and returns that value.
 
        ;; N.B.: If we haven't done any writes to an LVar yet (i.e.,
-       ;; its state is Bot), then the callback must still run once, to
+       ;; its value is Bot), then the callback must still run once, to
        ;; add Bot to the `handled` set.  Only then will the premises
        ;; of E-Finalize-Freeze be satisfied, allowing it to run.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
@@ -278,12 +275,12 @@
       [(lvloc LVar) ,(first (term LVar))])
 
     (define-metafunction name
-      lvp : LVar -> p
-      [(lvp LVar) ,(second (term LVar))])
+      lvstate : LVar -> p
+      [(lvstate LVar) ,(second (term LVar))])
     
     (define-metafunction name
-      lvstate : LVar -> StoreVal
-      [(lvstate LVar) ,(first (second (term LVar)))])
+      lvvalue : LVar -> StoreVal
+      [(lvvalue LVar) ,(first (second (term LVar)))])
 
     (define-metafunction name
       lvstatus : LVar -> status
@@ -302,7 +299,7 @@
        ,(let ([lv (assq (term l) (term S))]
               [update (lambda (lv)
                         (if (equal? (term (lvloc ,lv)) (term l))
-                            (term (build-lv (lvloc ,lv) (lvstate ,lv) #t)) 
+                            (term (build-lv (lvloc ,lv) (lvvalue ,lv) #t)) 
                             lv))])
           (if lv
               (term ,(map update (term S)))
@@ -461,7 +458,7 @@
       lookup-val : S l -> StoreVal
       [(lookup-val S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
-                                 (term (lvstate ,lv))
+                                 (term (lvvalue ,lv))
                                  (error "lookup-val: lookup failed")))])
 
     (define-metafunction name
@@ -472,27 +469,27 @@
                                  (error "lookup-status: lookup failed")))])
 
     (define-metafunction name
-      lookup-p : S l -> p
-      [(lookup-p S l) ,(let ([lv (assq (term l) (term S))])
+      lookup-state : S l -> p
+      [(lookup-state S l) ,(let ([lv (assq (term l) (term S))])
                              (if lv
-                                 (term (lvp ,lv))
-                                 (error "lookup-p lookup failed")))])
+                                 (term (lvstate ,lv))
+                                 (error "lookup-state: lookup failed")))])
 
     ;; Actually handles both updates and extensions.
     (define-metafunction name
-      update-p : S l p -> S
-      [(update-p () l p) ((l p))]
+      update-state : S l p -> S
+      [(update-state () l p) ((l p))]
 
-      [(update-p ((l_2 p_2)
+      [(update-state ((l_2 p_2)
                   (l_3 p_3) (... ...)) l_1 p_1 )
        ,(if (equal? (term l_1) (term l_2))
             ;; The side conditions on E-Put should ensure that the
-            ;; call to update-p only happens when the lub of the
+            ;; call to update-state only happens when the lub of the
             ;; old and new values is non-TopP.
             (cons (term (l_2 (lub-p p_1 p_2)))
                   (term ((l_3 p_3) (... ...))))
             (cons (term (l_2 p_2))
-                  (term (update-p ((l_3 p_3) (... ...)) l_1 p_1))))])
+                  (term (update-state ((l_3 p_3) (... ...)) l_1 p_1))))])
 
     ;; Used as a premise of the E-Get rule.  Returns #t if, for any
     ;; two distinct elements in Q, the lub of them is TopP, and #f
