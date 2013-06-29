@@ -325,7 +325,6 @@
 
   (define (program-test-suite rr)
 
-    ;; E-App-1
     (test-->> rr
               (term
                (() ;; empty store
@@ -335,7 +334,6 @@
                (()
                 (lambda (x_2) x_2))))
 
-    ;; E-App-2
     (test-->> rr
               (term
                (() ;; empty store
@@ -345,7 +343,6 @@
                (()
                 (lambda (x_1) x_1))))
 
-    ;; E-ParApp
     (test-->> rr
               (term
                (() ;; empty store
@@ -355,7 +352,6 @@
                (()
                 (lambda (x_2) x_2))))
 
-    ;; E-Beta
     (test-->> rr
               (term
                (() ;; empty store
@@ -372,7 +368,6 @@
                (()
                 (lambda (x_2) x_2))))
 
-    ;; E-New
     (test-->> rr
               (term
                (((l (3 #f)))
@@ -389,7 +384,6 @@
                (((l (3 #f)) (l1 (4 #f)) (l2 (Bot #f)))
                 l2)))
 
-    ;; E-Put
     (test-->> rr
               (term
                (((l (Bot #f)))
@@ -438,7 +432,6 @@
                (()
                 (lambda (x_1) x_1))))
 
-    ;; E-Beta + E-New
     (test-->> rr
               (term
                (() ;; empty store
@@ -447,7 +440,6 @@
                (((l (Bot #f)))
                 l)))
 
-    ;; let + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
@@ -459,7 +451,6 @@
                (((l (3 #f)))
                 (2 #f))))
     
-    ;; let par + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
@@ -503,7 +494,6 @@
                  (l1 (3 #f)))
                 (4 #f))))
     
-    ;;let par + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
@@ -515,7 +505,6 @@
                (((l (2 #f)))
                 (2 #f))))
 
-    ;; let par + E-New + E-Put + E-Get
     (test-->> rr
               (term
                (() ;; empty store
@@ -539,7 +528,6 @@
                (((l (4 #f)))
                 (4 #f))))
 
-    ;; E-Freeze
     (test-->> rr
               (term
                (() ;; empty store

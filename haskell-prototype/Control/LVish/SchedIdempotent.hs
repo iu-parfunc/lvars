@@ -4,21 +4,24 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
 -- arbitrary LVars (lattice variables), not just IVars.
 
-module LVarIdempotent 
-  (LVar(), HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
+module Control.LVish.SchedIdempotent
+  (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
    runParIO
   ) where
 
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
+import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
+import           Control.Concurrent.Async as Async
 import           Data.IORef
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -28,9 +31,9 @@ import           GHC.Conc hiding (yield)
 import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
-import           Common (forkWithExceptions)
+import           Old.Common (forkWithExceptions)
 
-import qualified Sched as Sched
+import qualified Control.LVish.SchedIdempotentInternal as Sched
   
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
@@ -354,17 +357,77 @@ runPar_internal c = do
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
-  m <- newEmptyMVar  
-  forM_ (zip [0..] queues) $ \(cpu, q) ->
-    forkWithExceptions (forkOn cpu) "worker thread" $ 
-      if cpu == main_cpu 
-        then let k x = ClosedPar $ \q -> do 
-                   sched q      -- ensure any remaining, enabled threads run to 
-                   putMVar m x  -- completion prior to returning the result
-             in exec (close c k) q
-        else sched q
-  takeMVar m  
+  answerMV <- newEmptyMVar
 
+#if 1
+  wrkrtids <- newIORef []
+  let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
+        tid <- forkWithExceptions (forkOn cpu) "worker thread" $
+                 if cpu == main_cpu 
+                   then let k x = ClosedPar $ \q -> do 
+                              sched q      -- ensure any remaining, enabled threads run to 
+                              putMVar answerMV x  -- completion prior to returning the result
+                        in exec (close c k) q
+                   -- Note: The above is important: it is sketchy to leave any workers running after
+                   -- the main thread exits.  Subsequent exceptions on child threads, even if
+                   -- forwarded asynchronously, can arrive much later at the main thread
+                   -- (e.g. after it has exited, or set up a new handler, etc).
+                   else sched q
+        atomicModifyIORef_ wrkrtids (tid:)
+  putStrLn "About to fork..."      
+  ans <- E.catch (forkit >> takeMVar answerMV)
+    (\ (e :: E.SomeException) -> do 
+        tids <- readIORef wrkrtids
+        putStrLn$ "Killing off workers.. "++show tids
+        mapM_ killThread tids
+        -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
+        error ("EXCEPTION in runPar: "++show e)
+    )
+  putStrLn "parent thread escaped unscathed"
+  return ans
+#else
+  let runWorker (cpu, q) = do 
+        if (cpu /= main_cpu)
+           then sched q
+           else let k x = ClosedPar $ \q -> do 
+                      sched q      -- ensure any remaining, enabled threads run to 
+                      putMVar answerMV x  -- completion prior to returning the result
+                in exec (close c k) q
+
+  -- Here we want a traditional, fork-join parallel loop with proper exception handling:
+  let loop [] asyncs = mapM_ wait asyncs
+      loop ((cpu,q):tl) asyncs = 
+--         withAsync (runWorker state)
+        withAsyncOn cpu (runWorker (cpu,q))
+                    (\a -> loop tl (a:asyncs))
+
+----------------------------------------
+-- (1) There is a BUG in 'loop' presently:
+--    "thread blocked indefinitely in an STM transaction"
+--  loop (zip [0..] queues) []
+----------------------------------------
+-- (2) This has the same problem as 'loop':
+--  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
+--  mapM_ wait ls
+----------------------------------------
+-- (3) Using this FOR NOW, but it does NOT pin to the right processors:
+  mapConcurrently runWorker (zip [0..] queues)
+----------------------------------------
+   -- Now that child threads are done, it's safe for the main thread
+   -- to call it quits.
+  takeMVar answerMV  
+#endif
+
+-- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
+-- It would be nice to put freeze in a separate module and be able to choose between
+-- runPar or freeze(+runParIO).  But there's no easy way to get this at the module
+-- level without making a newtype for Par.  (SafeHaskell can't be triggered on
+-- *combinations* of modules, e.g. "you may import the module with freeze, or the
+-- module with runPar, but not both".)
+-- 
+--   Alas, making a newtype is especially painful because of all the additional data
+-- structures that would have to be wrapped/reexported OR generalized by a type class
+-- (a la ParFuture, ParIVar).
 runPar :: Par a -> a
 runPar = unsafePerformIO . runPar_internal
 
@@ -372,3 +435,7 @@ runPar = unsafePerformIO . runPar_internal
 -- contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
 runParIO = runPar_internal
+
+{-# INLINE atomicModifyIORef_ #-}
+atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
+atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))

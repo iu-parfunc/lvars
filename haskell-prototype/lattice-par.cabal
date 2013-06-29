@@ -25,7 +25,7 @@ license:             BSD3
 license-file:        LICENSE
 
 -- The package author(s).
-author:              Lindsey Kuper, Ryan Newton
+author:              Aaron Turon, Lindsey Kuper, Ryan Newton
 
 -- An email address to which users can send suggestions, bug reports, and 
 -- patches.
@@ -42,33 +42,51 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 
+--------------------------------------------------------------------------------
 library
   -- Modules exported by the library.
-  exposed-modules:  LVarTracePure, LVarTraceIO, LVarTraceScalable, 
-                    Data.LVar.SetScalable, Data.LVar.SetIO, Data.LVar.SetPure, 
-                    Data.LVar.PairScalable, Data.LVar.PairPure, Data.LVar.PairIO
-  -- Modules included in this library but not exported.
-  other-modules:    Common
+  exposed-modules:
+                    Control.LVish
+                    Control.LVish.SchedIdempotent
+                    Data.LVar.IVar
+                    Data.LVar.Pair
+                    Data.LVar.Set
   
+                    -- These versions are out of date:
+                    Old.LVarTracePure, Old.LVarTraceIO, Old.LVarTraceScalable, 
+                    Old.Data.LVar.SetScalable, Old.Data.LVar.SetIO, Old.Data.LVar.SetPure, 
+                    Old.Data.LVar.PairScalable, Old.Data.LVar.PairPure, Old.Data.LVar.PairIO
+  -- Modules included in this library but not exported.
+  other-modules:    Old.Common
+                    Data.Concurrent.Bag
+                    Data.Concurrent.Counter
+                    Control.LVish.SchedIdempotentInternal 
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                  monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
 
-test-suite test-lvarpure
-    type:       exitcode-stdio-1.0
-    main-is:    test.hs
-    ghc-options: -DLVARPURE -O2 -threaded -rtsopts 
 
+--------------------------------------------------------------------------------
+-- TODO: New tests here:
+test-suite test-lvish
+    type:       exitcode-stdio-1.0
+    main-is:    unit-tests.hs
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                    monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
 
-
--- test_io.exe:
--- 	$(GHC) -DLVARIO -O2 -threaded -rtsopts --make test.hs -o $@
--- test_scalable.exe:
--- 	$(GHC) -DLVARSCALABLE -O2 -threaded -rtsopts --make test.hs -o $@
-
+--------------------------------------------------------------------------------
+test-suite test-old-lvarpure
+    type:       exitcode-stdio-1.0
+    main-is:    test-old.hs
+    ghc-options: -O2 -threaded -rtsopts
+    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
+    -- DUPLICATED:
+    build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
+                   split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
+                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
+    cpp-options: -DLVARPURE

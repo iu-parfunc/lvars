@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Data.LVar.PairPure
+module Old.Data.LVar.PairPure
        (
          IPair,
          newPair,
@@ -9,7 +9,7 @@ module Data.LVar.PairPure
          getFst,
          getSnd, 
          ) where
-import LVarTracePure
+import Old.LVarTracePure
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of LVars:
