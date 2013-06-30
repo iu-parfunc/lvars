@@ -54,8 +54,8 @@ import qualified Data.Vector.Mutable as MV
 #warning "Using the LVar Pure version"
 import qualified Control.Monad.Par as Par
 import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           LVarTracePure
-import           Data.LVar.SetPure 
+import           Old.LVarTracePure
+import           Old.Data.LVar.SetPure 
 import           Debug.Trace (trace)
 
 prnt :: String -> Par ()
@@ -66,8 +66,8 @@ prnt str = trace str $ return ()
 #warning "Using the LVar IO version"
 import qualified Control.Monad.Par as Par
 import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           LVarTraceIO
-import           Data.LVar.SetIO
+import           Old.LVarTraceIO
+import           Old.Data.LVar.SetIO
 import           Debug.Trace (trace)
 
 prnt :: String -> Par ()
@@ -184,30 +184,30 @@ main = do
   
   -- LK: this way of writing the type annotations is the only way I
   -- can get emacs to not think this is a parse error! :(
-  let (graphFile,k,w) = 
+  let (graphFile,depthK,wrk) = 
         case args of
           []                   -> (graphFile_, k_, w_)
           [graphFiles]         -> (graphFiles, k_, w_)
           [graphFiles, ks]     -> (graphFiles, read ks, w_)
           [graphFiles, ks, ws] -> (graphFiles, read ks, read ws :: Word64)
   
-  g <- mkGraphFromFile graphFile
+  gr <- mkGraphFromFile graphFile
 
   let startNode = 0
-      g2 = V.map IS.fromList g
-  evaluate (g2 V.! 0)
+      gr2 = V.map IS.fromList gr
+  evaluate (gr2 V.! 0)
   
   let graphThunk :: WorkFn -> IO ()
       graphThunk fn = do
-        start_traverse k g2 0 fn
+        start_traverse depthK gr2 0 fn
         putStrLn "All done."
   
   -- Takes a node ID (which is just an int) and returns it paired with
   -- a floating-point number that's the value of iterating the sin
-  -- function w times on that node ID.
+  -- function wrk times on that node ID.
   let sin_iter_count :: WorkFn
       sin_iter_count x = let f = fromIntegral x in
-                         (sin_iter w f, x)
+                         (sin_iter wrk f, x)
 
   -- Reeeealllllly want to audit this code. -- LK
   freq <- measureFreq
@@ -216,12 +216,12 @@ main = do
       clocks_per_micro = (fromIntegral freq) / (1000 * 1000)
       kilosins_per_micro = clocks_per_micro / (fromIntegral clocks_per_kilosin)
       numSins :: Rational       
-      numSins = (fromIntegral w) * kilosins_per_micro * 1000
+      numSins = (fromIntegral wrk) * kilosins_per_micro * 1000
       numSins' = round numSins
 
       busy_waiter :: WorkFn
       busy_waiter n = unsafePerformIO $
---        wait_microsecs (w * clocks_per_micro) n
+--        wait_microsecs (wrk * clocks_per_micro) n
         wait_sins numSins' n
 
   printf "CPU Frequency: %s, clocks per microsecond %s\n"
@@ -232,7 +232,7 @@ main = do
          (show (fromRational kilosins_per_micro ::Double))
          (show numSins) (show numSins')
 
-  printf "* Beginning benchmark with k=%d and w=%d\n" k w
+  printf "* Beginning benchmark with depthK=%d and wrk=%d\n" depthK wrk
   
   performGC
   t0 <- getCurrentTime
