@@ -67,3 +67,30 @@ threads up enough, I see the following:
 
 (Yet, even then, I can only reproduce on a linux desktop, not on this macbook air.)
 
+
+
+[2013.06.30] {Notes on PBBS and file IO}
+----------------------------------------
+
+PBBS has some very nice parallel parsing of large text files.
+
+A quick test shows that on my laptop (with SSD), loading the following
+adjacency list file....
+
+    graphData/data/3Dgrid_J_10000000
+    
+Takes 6.34 seconds (built with gcc).  On a 3.1GHz Westmere
+(marble.soic) it takes 4.97 seconds to read the file from /tmp/ one
+one core after warming up.
+
+But then with four threads (ICC/Cilk), it gets it done in 1.94
+seconds.  
+
+That's a file with 69,568,628 lines each containing a number that
+needs to be parsed.  They use atol.
+
+
+
+
+
+

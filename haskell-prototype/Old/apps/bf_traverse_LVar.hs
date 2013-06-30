@@ -1,6 +1,52 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, BangPatterns #-}
 
-#include "Runner.hs"
+-- module Main where
+
+import           Control.Exception (evaluate)
+import           Control.Monad (forM_, when)
+import           Control.DeepSeq (NFData)
+import           Data.Int
+import           Data.Word
+import           Data.IORef
+import           Data.List as L
+import           Data.List.Split (chunksOf)
+import qualified Data.Set as Set
+import qualified Data.IntSet as IS
+import qualified Data.ByteString.Lazy.Char8 as B
+import           Data.Traversable (Traversable)
+import           Data.Map as Map (toList, fromListWith)
+import           Data.Time.Clock (getCurrentTime, diffUTCTime)
+import           GHC.Conc (numCapabilities)
+import           Text.Printf (printf)
+import           System.Mem (performGC)
+import           System.IO.Unsafe (unsafePerformIO)
+import           System.Environment (getEnvironment,getArgs)
+import           System.CPUTime.Rdtsc (rdtsc)
+-- import           Data.Time.Clock (getCurrentTime)
+import           System.CPUTime  (getCPUTime)
+
+-- For parsing the file produced by pbbs
+import Data.List.Split (splitOn)
+import System.IO (openFile, hGetContents, IOMode(ReadMode))
+
+-- For representing graphs
+import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as MV
+
+--------------------------------------------------------------------------------
+
+import qualified Control.Monad.Par as Par
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           Old.LVarTracePure
+import           Old.Data.LVar.SetPure 
+import           Debug.Trace (trace)
+
+import Runner
+
+--------------------------------------------------------------------------------
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
 
 -- An LVar-based version of bf_traverse.  As we traverse the graph,
 -- the results of applying f to each node accumulate in an LVar, where
@@ -85,3 +131,7 @@ start_traverse k !g startNode f = do
 parMapM_ f l =
   do parMapM f l
      return ()
+
+
+main = makeMain start_traverse
+

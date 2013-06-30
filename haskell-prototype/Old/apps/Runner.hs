@@ -1,34 +1,27 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 
--- | This file is #included into the benchmark variants.
+module Runner where 
 
--- Compile-time options:
+-- This is used with three different benchmark implementations:
 --   PURE        -- use LVarTracePure
---   IMPURE      -- use LVarTraceIO
 --   STRATEGIES  -- use Strategies, no LVars
 --   PAR         -- use Par, no LVars
 --
 -- Run-time options:
---   W = work to do per vertex
---   K = max hops of the connected component to explore
+--   Wrk = work to do per vertex
+--   depthK = max hops of the connected component to explore
 --   (OR N = target vertices to visit (will overshoot))
 
 import           Control.Exception (evaluate)
 import           Control.Monad (forM_, when)
-import           Control.DeepSeq (NFData)
-import           Data.Int
 import           Data.Word
 import           Data.IORef
 import           Data.List as L
 import           Data.List.Split (chunksOf)
-import qualified Data.Set as Set
 import qualified Data.IntSet as IS
 import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Traversable (Traversable)
-import           Data.Map as Map (toList, fromListWith)
 import           Data.Time.Clock (getCurrentTime, diffUTCTime)
-import           GHC.Conc (numCapabilities)
 import           Text.Printf (printf)
 import           System.Mem (performGC)
 import           System.IO.Unsafe (unsafePerformIO)
@@ -36,10 +29,6 @@ import           System.Environment (getEnvironment,getArgs)
 import           System.CPUTime.Rdtsc (rdtsc)
 -- import           Data.Time.Clock (getCurrentTime)
 import           System.CPUTime  (getCPUTime)
-
--- For parsing the file produced by pbbs
-import Data.List.Split (splitOn)
-import System.IO (openFile, hGetContents, IOMode(ReadMode))
 
 -- For representing graphs
 import qualified Data.Vector as V
@@ -50,28 +39,11 @@ import qualified Data.Vector.Mutable as MV
 -- but we want to make it very obvious that, for instance, the
 -- Strategies version doesn't use Par, and vice versa.
 
+
+{-
 #ifdef LVARPURE
 #warning "Using the LVar Pure version"
-import qualified Control.Monad.Par as Par
-import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           Old.LVarTracePure
-import           Old.Data.LVar.SetPure 
-import           Debug.Trace (trace)
 
-prnt :: String -> Par ()
-prnt str = trace str $ return ()
-#endif
-
-#ifdef LVARIO
-#warning "Using the LVar IO version"
-import qualified Control.Monad.Par as Par
-import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           Old.LVarTraceIO
-import           Old.Data.LVar.SetIO
-import           Debug.Trace (trace)
-
-prnt :: String -> Par ()
-prnt str = trace str $ return ()
 #endif
 
 #ifdef STRATEGIES
@@ -89,6 +61,7 @@ import           Debug.Trace (trace)
 prnt :: String -> Par ()
 prnt str = trace str $ return ()
 #endif
+-}
 
 --------------------------------------------------------------------------------
 
@@ -167,8 +140,16 @@ dbg :: Bool
 -- dbg = checkEnv "DEBUG" False
 dbg = False -- Let it inline, DCE.
 
-main :: IO ()
-main = do
+
+type Starter = Int       -- iteration counter
+               -> Graph2 -- graph
+               -> Int    -- start node
+               -> WorkFn -- function to be applied to each node
+               -> IO ()
+
+{-# INLINE makeMain #-}
+makeMain :: Starter -> IO ()
+makeMain start_traverse = do
   -- Fetch runtime parameters:
   -- First, defaults:
   let graphFile_ :: String
