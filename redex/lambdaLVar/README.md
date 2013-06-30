@@ -141,6 +141,11 @@ interleavings will be explored.  The speed boost we get from that
 comes at the price of modeling only a less realistic class of
 implementations in which parallel evaluation is ``lockstep''.
 
+### Version requirements
+
+The code has been tested under **Racket v5.3.5** (released June 2013).
+Other versions may also work.
+
 ### Building and running
 
 Running `make all` in this directory will build all the lambdaLVar
