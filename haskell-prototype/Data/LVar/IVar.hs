@@ -1,6 +1,8 @@
 {-# LANGUAGE BangPatterns, MultiParamTypeClasses #-}
 
-module Data.LVar.IVar (IVar, new, get, put, put_, spawn, spawn_, spawnP) where
+module Data.LVar.IVar
+       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
+       where
 
 import           Data.IORef
 import           Control.DeepSeq
@@ -44,6 +46,15 @@ put_ (IVar iv) !x = putLV iv putter
                                error$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")"
         update Nothing  = (Just x, Just x)
 
+
+freezeIVar :: IVar a -> Par (Maybe a)
+freezeIVar (IVar lv) =
+  do freezeLV lv
+     getLV lv globalThresh deltaThresh
+  where
+    globalThresh _  False = return Nothing
+    globalThresh ref True = fmap Just $ readIORef ref
+    deltaThresh _ = return Nothing
 
 --------------------------------------------------------------------------------
 

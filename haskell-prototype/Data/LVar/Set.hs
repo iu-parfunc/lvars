@@ -21,16 +21,16 @@ import           Control.LVish
 
 -- | We only have one mutable location here, so this is not a scalable implementation.
 -- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
-type ISet a = LVar (IORef (S.Set a)) a
+newtype ISet a = ISet (LVar (IORef (S.Set a)) a)
 
 newEmptySet :: Par (ISet a)
-newEmptySet = newLV$ newIORef S.empty
+newEmptySet = fmap ISet $ newLV$ newIORef S.empty
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Set variable.
 withCallbacksThenFreeze :: Eq b => ISet a -> (a -> Par ()) -> Par b -> Par b
-withCallbacksThenFreeze lv callback action =
+withCallbacksThenFreeze (ISet lv) callback action =
     do
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
        freezeLVAfter lv (initCB res) (\x -> return$ Just$ callback x)
@@ -49,10 +49,12 @@ withCallbacksThenFreeze lv callback action =
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
 putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet !elm lv = putLV lv putter
+putInSet !elm (ISet lv) = putLV lv putter
   where putter ref  = atomicModifyIORef ref update
         update set =
           let set' = S.insert elm set in
+          -- Here we do a constant time check to see if we actually changed anything:
+          -- For idempotency it is important that we return Nothing if not.
           if S.size set' > S.size set
           then (set',Just elm)
           else (set,Nothing)
@@ -60,7 +62,7 @@ putInSet !elm lv = putLV lv putter
 
 -- | Wait for the set to contain a specified element.
 waitElem :: Ord a => a -> ISet a -> Par ()
-waitElem !elm lv = getLV lv globalThresh deltaThresh
+waitElem !elm (ISet lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref
@@ -73,7 +75,7 @@ waitElem !elm lv = getLV lv globalThresh deltaThresh
 
 -- | Wait on the SIZE of the set, not its contents.
 waitSize :: Int -> ISet a -> Par ()
-waitSize !sz lv = getLV lv globalThresh deltaThresh
+waitSize !sz (ISet lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref
@@ -89,8 +91,9 @@ waitSize !sz lv = getLV lv globalThresh deltaThresh
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 freezeSet :: ISet a -> Par (S.Set a)
-freezeSet lv = do freezeLV lv
-                  getLV lv globalThresh deltaThresh
+freezeSet (ISet lv) =
+   do freezeLV lv
+      getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
