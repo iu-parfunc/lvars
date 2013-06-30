@@ -1,6 +1,6 @@
 # lambdaLVar in Redex
 
-A PLT Redex model of a variant of the lambdaLVar language.
+A PLT Redex model of the lambdaLVar family of languages.
 
 ### lambdaLVar in a nutshell
 
@@ -143,12 +143,12 @@ implementations in which parallel evaluation is ``lockstep''.
 
 ### Building and running
 
-Running `make all` in the `lambdaLVar` directory will build all the
-lambdaLVar languages and run all their test suites, using both
-reduction relations.  Be warned: in the test suite for the
-`lambdaLVar-nat` language, there's one particular that runs so slowly
-under `slow-rr` that we put it in a "slow test suite" by itself. (To
-avoid the slow test, simply run `make`.)
+Running `make all` in this directory will build all the lambdaLVar
+languages and run their test suites, using both reduction relations.
+Be warned: in the test suite for the `lambdaLVar-nat` language,
+there's one particular that runs so slowly under `slow-rr` that we put
+it in a "slow test suite" by itself. (To avoid the slow test, simply
+run `make`.)
 
 ```
 Running metafunction tests...All 57 tests passed.
@@ -170,8 +170,8 @@ fast version.
 
 ### Automated testing
 
-Some lambdaLVar tests are running on [a Jenkins continuous integration
-server][jenkins].
+The lambdaLVar tests run regularly on [a Jenkins continuous
+integration server][jenkins].
 
 [lambdaLVar-TR]: http://www.cs.indiana.edu/cgi-bin/techreports/TRNNN.cgi?trnum=TR702
 

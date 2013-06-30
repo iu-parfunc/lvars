@@ -1,15 +1,15 @@
 # LVish in Redex
 
-A PLT Redex model of the LVish language.
+A PLT Redex model of the LVish family of languages.
 
 ### Building and running
 
-Running `make all` in the `LVish` directory will build all the
-LVish languages and run all their test suites.
+Running `make all` in this directory will build all the LVish
+languages and run their test suites.
 
 ### Automated testing
 
-Some LVish tests are running on [a Jenkins continuous integration
+The LVish tests run regularly on [a Jenkins continuous integration
 server][jenkins].
 
 [jenkins]: http://tester-lin.soic.indiana.edu:8080/job/LVish-redex/

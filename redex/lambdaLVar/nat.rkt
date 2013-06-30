@@ -8,7 +8,7 @@
   (require redex/reduction-semantics)
   (require (submod ".." language))
   (require srfi/1)
-  (require "../test-helpers.rkt")
+  (require "test-helpers.rkt")
   
   (provide
    test-fast
