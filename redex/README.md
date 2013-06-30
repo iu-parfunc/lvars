@@ -3,12 +3,13 @@ PLT Redex models of LVar calculi
 
 Subdirectories include:
 
-  * [lambdaLVar]: a PLT Redex model of a variant of the lambdaLVar
-    language ([see
-    README](https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar#readme)).
-
-  * [LVish]: a PLT Redex model of the LVish language ([see
+  * [LVish]: a PLT Redex model of the LVish family of languages ([see
     README](https://github.com/iu-parfunc/lvars/tree/master/redex/LVish#readme)).
 
-[lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar
+  * [lambdaLVar]: a PLT Redex model of the lambdaLVar family of
+    languages ([see
+    README](https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar#readme)).
+
 [LVish]: https://github.com/iu-parfunc/lvars/tree/master/redex/LVish
+[lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar
+
