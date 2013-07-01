@@ -5,6 +5,7 @@
 module Util.PBBS where 
 
 import Control.DeepSeq
+import Control.Exception (evaluate)
 import Control.Monad.Par.Class
 import Control.Monad.Par.IO
 import Control.Monad.Par.Combinator
@@ -16,6 +17,9 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.ByteString as S
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
+
+import Data.Time.Clock
+import Control.Concurrent.Async
 
 -- import qualified Data.ByteString.Word8      as S
 -- import qualified Data.ByteString.Lazy.Word8 as L
@@ -51,37 +55,59 @@ parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
 --               S.ByteString -> IO [U.Vector nty]
                S.ByteString -> IO [PartialNums nty]
 parReadNats bs = do
+#ifdef ACTIVATE_BUG  
   ncap <- getNumCapabilities
-  runParIO (par ncap)
---  return (error "FINISHME")
+#endif
+  -- par ncap
+  par 1
  where
-   par :: Int -> ParIO [PartialNums nty]
    par ncap = do 
-        let chunks = ncap * overPartition
+        let chunks = 1 -- ncap * overPartition
             (each,left) = S.length bs `quotRem` chunks
 
-#if 0        
+#if 0
             mapper ind = do
               let howmany = each + if ind==chunks-1 then left else 0
                   mychunk = S.take howmany $ S.drop (ind * each) bs
               partial <- liftIO (readNatsPartial mychunk)
               return [partial]
             reducer a b = return (a++b)
-        parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
-                                   mapper reducer []
-#else
-        -- let sizes   = replicate (chunks-1) each ++ [each + left]
-        --     offsets = 
-        -- forM_  $ 
-        --    error ""
+        runParIO $                   
+          parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
+                                     mapper reducer []
+#elif 0
         let loop bs [] acc = mapM get (reverse acc)
             loop bs (sz:rst) acc = do 
                let (bs1,bs2) = S.splitAt sz bs
-               liftIO $ putStrLn$ "Launching chunk of "++show sz
+               liftIO $ putStrLn$ "(monad-par) Launching chunk of "++show sz
                fut <- spawn_ (liftIO$ readNatsPartial bs1)
                loop bs2 rst (fut:acc)
             sizes = replicate (chunks-1) each ++ [each + left]
+        runParIO (loop bs sizes [])
+#elif 0
+        let loop bs [] acc = mapM wait (reverse acc)
+            loop bs (sz:rst) acc = do 
+               let (bs1,bs2) = S.splitAt sz bs
+               putStrLn$ "(async) Launching chunk of "++show sz
+               fut <- async (readNatsPartial bs1)
+               loop bs2 rst (fut:acc)
+            sizes = replicate (chunks-1) each ++ [each + left]
         loop bs sizes []
+#elif 0 
+#warning "Ok, how about serial..."
+        let loop bs [] acc = return (reverse acc)
+            loop bs (sz:rst) acc = do 
+               let (bs1,bs2) = S.splitAt sz bs
+               putStrLn$ "(SEQUENTIAL) Launching chunk of "++show sz
+               res <- readNatsPartial bs1
+               loop bs2 rst (res:acc)
+            sizes = replicate (chunks-1) each ++ [each + left]
+        putStrLn$ "Sequential debug version running on sizes: "++ show sizes
+        loop bs sizes []
+#else
+        putStrLn "Now this is getting ridiculous..."
+        res <- readNatsPartial bs
+        return [res]
 #endif
                           
 -- Partially parsed number fragments
@@ -89,7 +115,7 @@ parReadNats bs = do
 
 -- | A sequence of parsed numbers with ragged edges.
 data PartialNums n = Compound !(Maybe (RightFrag n)) !(U.Vector n) !(Maybe (LeftFrag n))
-                   | Single (MiddleFrag n)
+                   | Single !(MiddleFrag n)
   deriving (Show,Eq,Ord,Read)
 
 -- | This represents the rightmost portion of a decimal number that was interrupted
@@ -211,10 +237,50 @@ t1 = readNumFile "/tmp/grid_125000"
 t2 :: IO [PartialNums Word]
 t2 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
 
+-- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO (PartialNums Word)
 t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-        readNatsPartial bs
+        pn <- readNatsPartial bs
+        consume [pn]
+        return pn
 
+-- | Try it with readFile...
+t3B :: IO (PartialNums Word)
+t3B = do putStrLn "Sequential version + readFile"
+         t0 <- getCurrentTime
+         bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+         t1 <- getCurrentTime
+         putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
+         pn <- readNatsPartial bs
+         consume [pn]
+         return pn
+
+
+t4 :: IO [PartialNums Word]
+t4 = do putStrLn$ "Using parReadNats + readFile"
+        t0 <- getCurrentTime
+        bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+        t1 <- getCurrentTime
+        putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
+        pns <- parReadNats bs
+        consume pns
+        return pns
+        
+-- Make sure everything is forced
+consume :: (Show n, M.Unbox n) => [PartialNums n] -> IO ()
+consume x = do
+    evaluate (rnf x)
+    putStrLn$ "Result: "++show (length x)++" segments of output"
+    mapM_ fn x
+  where
+  fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
+  fn (Compound _ uv _) = putStrLn$ " <segment, length "++show (U.length uv)++">"
+
+main = t4
+
+--------------------------------------------------------------------------------
+-- DEVELOPMENT NOTES
+--------------------------------------------------------------------------------
 {-
 
 [2013.07.01] {First Performance Notes}
@@ -231,45 +297,65 @@ C++, I believe.
 
 NFData may be the culprit...
 
+
+[2013.07.01] {Mysterious}
+-------------------------
+
+I'm trying to lock down where this huge perf difference comes from, but it's getting
+stranger and stranger.  Even when I launch ONE parallel chunk it is still slow.  Even
+when I dispense with the parallel libraries and SEQUENTIALLY launch a single
+chunk... t2 is still very slow (and yet it should be doing the SAME thing as t3).
+
+I rebuilt t3 to check again... still fast.  Compiling with -threaded ... still
+fast. Ok, what about the obvious thing.  Maybe readNatsPartial is not as strict as I
+think it is (though that should apply to BOTH the parallel and sequential tests, as
+long as NFData isn't used...).  Ok, so I did the heavy handed thing and added a
+deepseq to t3... it's STILL FAST.  What gives?
+
+Ok, I'm worried that there are some weird effects with the mmap-based file reading.
+I'm trying with simple, strict, readFile instead.  Here's the thing... It only takes
+0.303837s to read the 500M file on my laptop.  The rest of the time is all parsing
+and should be scalable.
+  I introduced t3B to use the sequential routine + readFile and, yep, it's STILL FAST.
+(and t4 is still slow).
+
+Ok, let's take a look at the actual output sizes:
+
+    $ time ./t3B_use_readFile.exe +RTS -N1 -s
+    Sequential version + readFile
+    Time to read file sequentially: 0.330334s
+    Result: 1 segments of output
+     <segment, length 69,568,627>
+
+vs. 
+
+    $ time ./t4_use_readFile.exe +RTS -N1 -s
+    Using parReadNats + readFile
+    Time to read file sequentially: 0.312601s
+    Sequential debug version running on sizes: [557968893]
+    (SEQUENTIAL) Launching chunk of 557968893
+    Result: 1 segments of output
+     <segment, length 69,568,627>
+
+But the first takes 4.5 seconds and the second takes 25.4 seconds!!
+
+Ok, well let's make them IDENTICAL... and then back down from there.  Eek, I added a
+fourth case to the #if above, getting rid of "loop" and "splitAt" so that the
+"parallel" version *literally* just calls getNumCapabilities and then the sequential.
+It STILL takes 25 seconds.
+
+Well, let's take away the last thing distinguishing them... getNumCapabilities.  THAT
+WAS IT!  Taking that away makes them both drop to 4.5 seconds.  If I call
+getNumCapabilities, even if I don't use the resulting value it criples the program to
+take >5X longer.
+
+This is on Mac OS GHC 7.6.2.  Let's try on linux and see if the same bug exists.
+
+Whoa, wait, when I try to package this for reproduction, changing the module name and
+not using -main-is .... that seems to make the bug vanish!!
+
+
 -}
 
 --------------------------------------------------------------------------------
 
-{-
-test :: Int -> Int -> Int -> S.ByteString -> Int
-test k i !n t
-    | y == '\n' = -- done reading the line, process it:
-        if n `divisibleBy` k then add k (i+1) ys
-                             else add k i     ys
-    | otherwise = test k i n' ys
-  where (y,ys) = uncons t
-        n'     = parse y + 10 * n
--}
-
-
-{-
-readInt :: ByteString -> Maybe (Int, ByteString)
-readInt as
-    | null as   = Nothing
-    | otherwise =
-        case unsafeHead as of
-            '-' -> loop True  0 0 (B.unsafeTail as)
-            '+' -> loop False 0 0 (B.unsafeTail as)
-            _   -> loop False 0 0 as
-
-    where loop :: Bool -> Int -> Int -> ByteString -> Maybe (Int, ByteString)
-          STRICT4(loop)
-          loop neg i n ps
-              | null ps   = end neg i n ps
-              | otherwise =
-                  case B.unsafeHead ps of
-                    w | w >= 0x30
-                     && w <= 0x39 -> loop neg (i+1)
-                                          (n * 10 + (fromIntegral w - 0x30))
-                                          (B.unsafeTail ps)
-                      | otherwise -> end neg i n ps
-
-          end _    0 _ _  = Nothing
-          end True _ n ps = Just (negate n, ps)
-          end _    _ n ps = Just (n, ps)
--}
