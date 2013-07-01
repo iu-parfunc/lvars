@@ -58,15 +58,13 @@ data MiddleFrag = MiddleFrag {-# UNPACK #-} !Int
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
-readWord64s :: Int -> S.ByteString -> IO PartialNums
--- readWords :: Int -> S.ByteString -> IO (M.IOVector Word, Word)
-readWord64s charLimit bs | charLimit > S.length bs =
-  error $ "readWords: asked for more characters ("++show charLimit++
-          ") than are present in bytestring ("++ show (S.length bs)++")"
-readWord64s 0 bs = return$ Single (MiddleFrag 0 0)
-readWord64s charLimit bs = do
-  initV <- M.new chunkSize
-  let hd = S.head bs      
+readWord64s :: S.ByteString -> IO PartialNums
+readWord64s bs
+ | bs == S.empty = return$ Single (MiddleFrag 0 0)
+ | otherwise = do   
+  let hd        = S.head bs
+      charLimit = S.length bs
+  initV <- M.new chunkSize      
   (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
   v'        <- U.unsafeFreeze v
   let pref  = U.take ind v'
@@ -110,19 +108,19 @@ readWord64s charLimit bs = do
 
 case_t1 :: IO ()
 case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 123)) (U.fromList []) Nothing) =<<
-          readWord64s 4 ("123 4")
+          readWord64s (S.take 4 "123 4")
 case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 123)) (U.fromList []) (Just (LeftFrag 4))) =<<
-          readWord64s 5 ("123 4")
+          readWord64s (S.take 5 "123 4")
 case_t3 = assertEqual "t3" (Single (MiddleFrag 3 123)) =<<
-          readWord64s 3 ("123")
+          readWord64s (S.take 3 "123")
 case_t4 = assertEqual "t4" (Single (MiddleFrag 2 12)) =<<
-          readWord64s 2 ("123")
+          readWord64s (S.take 2 "123")
 case_t5 = assertEqual "t5" (Compound Nothing U.empty (Just (LeftFrag 12))) =<<
-          readWord64s 3 (" 123")
+          readWord64s (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
           (Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag 78))) =<<
-          readWord64s 10 ("023 456 789")
+          readWord64s (S.take 10 "023 456 789")
 
 
 main = $(defaultMainGenerator)
