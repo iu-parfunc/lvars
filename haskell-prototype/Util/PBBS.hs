@@ -59,16 +59,16 @@ parReadNats bs = do
   ncap <- getNumCapabilities
 #endif
   -- par ncap
-  par 1
+  par 4
  where
    par ncap = do 
-        let chunks = 1 -- ncap * overPartition
+        let chunks = ncap * overPartition
             (each,left) = S.length bs `quotRem` chunks
-
-#if 0
+#if 1
             mapper ind = do
               let howmany = each + if ind==chunks-1 then left else 0
                   mychunk = S.take howmany $ S.drop (ind * each) bs
+              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
               partial <- liftIO (readNatsPartial mychunk)
               return [partial]
             reducer a b = return (a++b)
@@ -79,7 +79,7 @@ parReadNats bs = do
         let loop bs [] acc = mapM get (reverse acc)
             loop bs (sz:rst) acc = do 
                let (bs1,bs2) = S.splitAt sz bs
-               liftIO $ putStrLn$ "(monad-par) Launching chunk of "++show sz
+               liftIO $ putStrLn$ "(monad-par/flat) Launching chunk of "++show sz
                fut <- spawn_ (liftIO$ readNatsPartial bs1)
                loop bs2 rst (fut:acc)
             sizes = replicate (chunks-1) each ++ [each + left]
