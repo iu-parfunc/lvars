@@ -1,10 +1,11 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables, CPP #-}
 
 -- | Utilities for reading PBBS data files, etc.
 
 module Util.PBBS where 
 
 import Control.DeepSeq
+import Control.Monad.Par.Class
 import Control.Monad.Par.IO
 import Control.Monad.Par.Combinator
 import Control.Monad.IO.Class (liftIO)
@@ -55,20 +56,34 @@ parReadNats bs = do
 --  return (error "FINISHME")
  where
    par :: Int -> ParIO [PartialNums nty]
-   par ncap = 
+   par ncap = do 
         let chunks = ncap * overPartition
             (each,left) = S.length bs `quotRem` chunks
 
+#if 0        
             mapper ind = do
               let howmany = each + if ind==chunks-1 then left else 0
                   mychunk = S.take howmany $ S.drop (ind * each) bs
               partial <- liftIO (readNatsPartial mychunk)
               return [partial]
             reducer a b = return (a++b)
-        in
         parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
                                    mapper reducer []
-
+#else
+        -- let sizes   = replicate (chunks-1) each ++ [each + left]
+        --     offsets = 
+        -- forM_  $ 
+        --    error ""
+        let loop bs [] acc = mapM get (reverse acc)
+            loop bs (sz:rst) acc = do 
+               let (bs1,bs2) = S.splitAt sz bs
+               liftIO $ putStrLn$ "Launching chunk of "++show sz
+               fut <- spawn_ (liftIO$ readNatsPartial bs1)
+               loop bs2 rst (fut:acc)
+            sizes = replicate (chunks-1) each ++ [each + left]
+        loop bs sizes []
+#endif
+                          
 -- Partially parsed number fragments
 --------------------------------------------------------------------------------
 
