@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables #-}
 
 -- | Utilities for reading PBBS data files, etc.
 
@@ -29,37 +29,41 @@ chunkSize = 2 * 32768
 --------------------------------------------------------------------------------
 
 -- | A sequence of parsed numbers with ragged edges.
-data PartialNums = Compound !(Maybe RightFrag) !(U.Vector Word) !(Maybe LeftFrag)
-                 | Single MiddleFrag
+data PartialNums n = Compound !(Maybe (RightFrag n)) !(U.Vector n) !(Maybe (LeftFrag n))
+                   | Single (MiddleFrag n)
   deriving (Show,Eq,Ord,Read)
 
 -- | This represents the rightmost portion of a decimal number that was interrupted
 -- in the middle.
-data RightFrag = RightFrag {
+data RightFrag n = RightFrag {
                 numDigits    :: {-# UNPACK #-} !Int,
-                partialParse :: {-# UNPACK #-} !Word
+                partialParse :: !n
                 -- ^ The partialParse will need to be combined with the other half
                 -- through addition (shifting first if it represents a left-half).
                 }
   deriving (Show,Eq,Ord,Read)
            
-data LeftFrag = LeftFrag {-# UNPACK #-} !Word
+data LeftFrag n = LeftFrag !n
   deriving (Show,Eq,Ord,Read)
            
 -- | A fragment from the middle of a number, (potentially) missing pieces on both ends.
-data MiddleFrag = MiddleFrag {-# UNPACK #-} !Int
-                             {-# UNPACK #-} !Word
+data MiddleFrag n = MiddleFrag {-# UNPACK #-} !Int !n
   deriving (Show,Eq,Ord,Read)
 
 --------------------------------------------------------------------------------
 -- Efficient sequential parsing
 --------------------------------------------------------------------------------
 
+{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word) #-}
+{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word32) #-}
+{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word64) #-}
+
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
-readWord64s :: S.ByteString -> IO PartialNums
-readWord64s bs
+readNatNums :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
+               S.ByteString -> IO (PartialNums nty)
+readNatNums bs
  | bs == S.empty = return$ Single (MiddleFrag 0 0)
  | otherwise = do   
   let hd        = S.head bs
@@ -78,8 +82,8 @@ readWord64s bs
    else
     return$ Compound Nothing pref w
  where
-   loop :: Int -> Int -> Word -> M.IOVector Word -> Word8 -> S.ByteString ->
-           IO (M.IOVector Word, Maybe LeftFrag, Int)
+   loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
+           IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
    loop !lmt !ind !acc !vec !nxt !rst
      -- Extend the currently accumulating number in 'acc':
      | digit nxt =
@@ -107,20 +111,20 @@ readWord64s bs
 --------------------------------------------------------------------------------
 
 case_t1 :: IO ()
-case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 123)) (U.fromList []) Nothing) =<<
-          readWord64s (S.take 4 "123 4")
-case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 123)) (U.fromList []) (Just (LeftFrag 4))) =<<
-          readWord64s (S.take 5 "123 4")
-case_t3 = assertEqual "t3" (Single (MiddleFrag 3 123)) =<<
-          readWord64s (S.take 3 "123")
-case_t4 = assertEqual "t4" (Single (MiddleFrag 2 12)) =<<
-          readWord64s (S.take 2 "123")
-case_t5 = assertEqual "t5" (Compound Nothing U.empty (Just (LeftFrag 12))) =<<
-          readWord64s (S.take 3 " 123")
+case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) Nothing) =<<
+          readNatNums (S.take 4 "123 4")
+case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) (Just (LeftFrag 4))) =<<
+          readNatNums (S.take 5 "123 4")
+case_t3 = assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
+          readNatNums (S.take 3 "123")
+case_t4 = assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
+          readNatNums (S.take 2 "123")
+case_t5 = assertEqual "t5" (Compound Nothing U.empty (Just (LeftFrag (12::Word64)))) =<<
+          readNatNums (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
-          (Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag 78))) =<<
-          readWord64s (S.take 10 "023 456 789")
+          (Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word32)))) =<<
+          readNatNums (S.take 10 "023 456 789")
 
 
 main = $(defaultMainGenerator)
