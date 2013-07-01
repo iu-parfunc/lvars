@@ -70,13 +70,13 @@ parReadNats bs = do
                   mychunk = S.take howmany $ S.drop (ind * each) bs
               liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
               partial <- liftIO (readNatsPartial mychunk)
-              return [partial]
+              return partial
             reducer a b = return (a++b)
         runParIO $                   
           parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
                                      mapper reducer []
 #elif 0
-        let loop bs [] acc = mapM get (reverse acc)
+        let loop bs [] acc = concatMapM get (reverse acc)
             loop bs (sz:rst) acc = do 
                let (bs1,bs2) = S.splitAt sz bs
                liftIO $ putStrLn$ "(monad-par/flat) Launching chunk of "++show sz
@@ -85,7 +85,7 @@ parReadNats bs = do
             sizes = replicate (chunks-1) each ++ [each + left]
         runParIO (loop bs sizes [])
 #elif 0
-        let loop bs [] acc = mapM wait (reverse acc)
+        let loop bs [] acc = concatMapM wait (reverse acc)
             loop bs (sz:rst) acc = do 
                let (bs1,bs2) = S.splitAt sz bs
                putStrLn$ "(async) Launching chunk of "++show sz
@@ -100,7 +100,7 @@ parReadNats bs = do
                let (bs1,bs2) = S.splitAt sz bs
                putStrLn$ "(SEQUENTIAL) Launching chunk of "++show sz
                res <- readNatsPartial bs1
-               loop bs2 rst (res:acc)
+               loop bs2 rst (res ++ acc)
             sizes = replicate (chunks-1) each ++ [each + left]
         putStrLn$ "Sequential debug version running on sizes: "++ show sizes
         loop bs sizes []
@@ -150,18 +150,18 @@ instance NFData (PartialNums n) where
 -- Efficient sequential parsing
 --------------------------------------------------------------------------------
 
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word) #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word32) #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word64) #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
 
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
 readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
-               S.ByteString -> IO (PartialNums nty)
+               S.ByteString -> IO [PartialNums nty]
 readNatsPartial bs
- | bs == S.empty = return$ Single (MiddleFrag 0 0)
- | otherwise = do   
+ | bs == S.empty = return [Single (MiddleFrag 0 0)]
+ | otherwise = fmap (\x -> [x]) $ do   
   let hd        = S.head bs
       charLimit = S.length bs
 --  initV <- M.new (min chunkSize ((charLimit `quot` 2) + 1))
@@ -210,19 +210,19 @@ readNatsPartial bs
 --------------------------------------------------------------------------------
 
 case_t1 :: IO ()
-case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) Nothing) =<<
+case_t1 = assertEqual "t1" [Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) Nothing] =<<
           readNatsPartial (S.take 4 "123 4")
-case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) (Just (LeftFrag 4))) =<<
+case_t2 = assertEqual "t1" [Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) (Just (LeftFrag 4))] =<<
           readNatsPartial (S.take 5 "123 4")
-case_t3 = assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
+case_t3 = assertEqual "t3" [Single (MiddleFrag 3 (123::Word))] =<<
           readNatsPartial (S.take 3 "123")
-case_t4 = assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
+case_t4 = assertEqual "t4" [Single (MiddleFrag 2 (12::Word))] =<<
           readNatsPartial (S.take 2 "123")
-case_t5 = assertEqual "t5" (Compound Nothing U.empty (Just (LeftFrag (12::Word64)))) =<<
+case_t5 = assertEqual "t5" [Compound Nothing U.empty (Just (LeftFrag (12::Word64)))] =<<
           readNatsPartial (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
-          (Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word32)))) =<<
+          [Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word32)))] =<<
           readNatsPartial (S.take 10 "023 456 789")
 
 runTests = $(defaultMainGenerator)
@@ -238,21 +238,21 @@ t2 :: IO [PartialNums Word]
 t2 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
 
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
-t3 :: IO (PartialNums Word)
+t3 :: IO [PartialNums Word]
 t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
         pn <- readNatsPartial bs
-        consume [pn]
+        consume pn
         return pn
 
 -- | Try it with readFile...
-t3B :: IO (PartialNums Word)
+t3B :: IO [PartialNums Word]
 t3B = do putStrLn "Sequential version + readFile"
          t0 <- getCurrentTime
          bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
          t1 <- getCurrentTime
          putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
          pn <- readNatsPartial bs
-         consume [pn]
+         consume pn
          return pn
 
 
