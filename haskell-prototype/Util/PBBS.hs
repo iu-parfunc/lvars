@@ -13,6 +13,8 @@ import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 -- import qualified Data.ByteString.Word8      as S
 -- import qualified Data.ByteString.Lazy.Word8 as L
 
+import Test.HUnit
+
 
 -- How many words shoud go in each continuously allocated vector?
 chunkSize :: Int
@@ -35,7 +37,7 @@ data Fragment = None
 -- a count of how many digits were present in the first number (e.g. including
 -- leading zeros) if a number began on the very first character.  (Which makes it
 -- also possibly a fragment.)
-readWord64s :: Int -> S.ByteString -> IO (Maybe Int, U.Vector Word, Maybe Word)
+readWord64s :: Int -> S.ByteString -> IO (Maybe Word, U.Vector Word, Maybe Word)
 -- readWords :: Int -> S.ByteString -> IO (M.IOVector Word, Word)
 readWord64s charLimit bs | charLimit > S.length bs =
   error $ "readWords: asked for more characters ("++show charLimit++
@@ -43,31 +45,34 @@ readWord64s charLimit bs | charLimit > S.length bs =
 readWord64s 0 bs = return (Nothing, U.empty, Nothing)
 readWord64s charLimit bs = do
   initV <- M.new chunkSize
-  -- let bs' = S.dropWhile (not . digit) bs 
-  -- (v,w,ind) <- loop charLimit 0 0 initV (S.head bs') (S.tail bs')
-  (v,w,ind) <- scanfwd charLimit 0 initV (S.head bs) (S.tail bs)
+  let hd = S.head bs      
+  (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
   v'        <- U.unsafeFreeze v
-  return (Just 999, U.take ind v', Just w)
+  let pref = U.take ind v'
+  if digit hd then
+    return (Just (U.head v'), U.drop 1 pref, w)
+   else
+    return (Nothing, pref, w)
  where
    loop :: Int -> Int -> Word -> M.IOVector Word -> Word8 -> S.ByteString ->
-           IO (M.IOVector Word, Word, Int)
+           IO (M.IOVector Word, Maybe Word, Int)
    loop !lmt !ind !acc !vec !nxt !rst
      -- Extend the currently accumulating number in 'acc':
      | digit nxt =
        let acc' = (10*acc + (fromIntegral nxt-48)) in 
        if lmt == 1
-       then return (vec, acc', ind)
+       then return (vec, Just acc', ind)
        else loop (lmt-1) ind acc' vec (unsafeHead rst) (unsafeTail rst)
      | otherwise =
        do M.write vec ind acc
           if lmt == 1
-            then return (vec, 0, ind+1)
+            then return (vec, Nothing, ind+1)
             else scanfwd (lmt-1) (ind+1) vec (unsafeHead rst) (unsafeTail rst)
 
    scanfwd !lmt !ind !vec !nxt !rst
      | digit nxt = loop lmt ind 0 vec nxt rst
      | otherwise = if lmt == 1
-                   then return (vec, 0, ind)
+                   then return (vec, Nothing, ind)
                    else scanfwd (lmt-1) ind vec (unsafeHead rst) (unsafeTail rst)
 
    digit nxt = nxt >= 48 && nxt <= 57
@@ -81,9 +86,13 @@ example =
   
 --  loop 
 
-case_t1 = readWord64s 4 ("123 4")
-case_t2 = readWord64s 5 ("123 4")
+case_t1 = assertEqual "t1" (Just 123, U.fromList [], Nothing) =<<
+          readWord64s 4 ("123 4")
+case_t2 = assertEqual "t1" (Just 123, U.fromList [], Just 4) =<<
+          readWord64s 5 ("123 4")
 case_t3 = readWord64s 3 ("123")
+case_t4 = readWord64s 2 ("123")
+case_t5 = readWord64s 3 (" 123")
 
 {-
 test :: Int -> Int -> Int -> S.ByteString -> Int
