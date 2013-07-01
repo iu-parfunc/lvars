@@ -18,32 +18,57 @@ import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 chunkSize :: Int
 chunkSize = 2 * 32768
 
-readWords :: Int -> S.ByteString -> IO (U.Vector Word, Word)
+-- | A number that was interrupted in the middle.  The same datatype is used for left
+-- and right halves.
+data Fragment = None                
+              | Fragment {
+                numDigits :: {-# UNPACK #-} !Int,
+                partialParse :: {-# UNPACK #-} !Word
+                -- ^ The partialParse will need to be combined with the other half
+                -- through addition (shifting first if it represents a left-half).
+                }
+
+
+-- | Sequentially reads all the unsigned 64bit decimal (ASCII) numbers within a
+-- region of a bytestring.  As well as returning the main payload of numbers, this
+-- also returns a possible fragment that was interrupted on the right end, as well as
+-- a count of how many digits were present in the first number (e.g. including
+-- leading zeros) if a number began on the very first character.  (Which makes it
+-- also possibly a fragment.)
+readWord64s :: Int -> S.ByteString -> IO (Maybe Int, U.Vector Word, Maybe Word)
 -- readWords :: Int -> S.ByteString -> IO (M.IOVector Word, Word)
-readWords charLimit bs = do
+readWord64s charLimit bs | charLimit > S.length bs =
+  error $ "readWords: asked for more characters ("++show charLimit++
+          ") than are present in bytestring ("++ show (S.length bs)++")"
+readWord64s 0 bs = return (Nothing, U.empty, Nothing)
+readWord64s charLimit bs = do
   initV <- M.new chunkSize
   -- let bs' = S.dropWhile (not . digit) bs 
   -- (v,w,ind) <- loop charLimit 0 0 initV (S.head bs') (S.tail bs')
   (v,w,ind) <- scanfwd charLimit 0 initV (S.head bs) (S.tail bs)
-  v'    <- U.unsafeFreeze v
-  return (U.take ind v', w)
+  v'        <- U.unsafeFreeze v
+  return (Just 999, U.take ind v', Just w)
  where
    loop :: Int -> Int -> Word -> M.IOVector Word -> Word8 -> S.ByteString ->
            IO (M.IOVector Word, Word, Int)
    loop !lmt !ind !acc !vec !nxt !rst
-     | lmt == 0       = return (vec, acc, ind)
---     | rst == S.empty = error "readWords: ran out of characters before hitting the limit."
-     | digit nxt = loop (lmt-1) ind (10*acc + (fromIntegral nxt-48))
-                                     vec (unsafeHead rst) (unsafeTail rst)
+     -- Extend the currently accumulating number in 'acc':
+     | digit nxt =
+       let acc' = (10*acc + (fromIntegral nxt-48)) in 
+       if lmt == 1
+       then return (vec, acc', ind)
+       else loop (lmt-1) ind acc' vec (unsafeHead rst) (unsafeTail rst)
      | otherwise =
        do M.write vec ind acc
-          scanfwd (lmt-1) (ind+1) vec (unsafeHead rst) (unsafeTail rst)
+          if lmt == 1
+            then return (vec, 0, ind+1)
+            else scanfwd (lmt-1) (ind+1) vec (unsafeHead rst) (unsafeTail rst)
 
    scanfwd !lmt !ind !vec !nxt !rst
-     | lmt == 0  = return (vec, 0, ind)
-     | rst == S.empty = error "readWords: ran out of characters before hitting the limit."
      | digit nxt = loop lmt ind 0 vec nxt rst
-     | otherwise = scanfwd (lmt-1) ind vec (unsafeHead rst) (unsafeTail rst)
+     | otherwise = if lmt == 1
+                   then return (vec, 0, ind)
+                   else scanfwd (lmt-1) ind vec (unsafeHead rst) (unsafeTail rst)
 
    digit nxt = nxt >= 48 && nxt <= 57
 
@@ -52,9 +77,13 @@ readWords charLimit bs = do
 --     error "implement scanfwd"                                
 
 example =
-  readWords 10 ("123 456 789")
+  readWord64s 10 ("123 456 789")
   
 --  loop 
+
+case_t1 = readWord64s 4 ("123 4")
+case_t2 = readWord64s 5 ("123 4")
+case_t3 = readWord64s 3 ("123")
 
 {-
 test :: Int -> Int -> Int -> S.ByteString -> Int
