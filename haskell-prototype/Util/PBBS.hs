@@ -354,6 +354,14 @@ This is on Mac OS GHC 7.6.2.  Let's try on linux and see if the same bug exists.
 Whoa, wait, when I try to package this for reproduction, changing the module name and
 not using -main-is .... that seems to make the bug vanish!!
 
+With proper parallelism:
+------------------------
+
+If I simply avoid that call to the offending getNumCapabilities, hardcoding the
+number of threads, I actually see quite nice parallel performance.
+
+  * 1.7 seconds with readFile / monad-par, 4x overpartition (16 chunks)
+  * 1.4 seconds with mmap / monad-par, 4x overpartition
 
 -}
 

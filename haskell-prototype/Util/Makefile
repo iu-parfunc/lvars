@@ -1,8 +1,11 @@
 
 
-OPTS= -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint \
+DBGOPTS= -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint \
  -dcmm-lint -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings \
- -rtsopts -fforce-recomp -O2 -threaded
+
+BASICOPTS= -rtsopts -fforce-recomp -O2 -threaded
+
+OPTS= $(DBGOPTS) $(BASICOPTS)
 
 all:
 	rm -f *.o *.hi bugged.exe unbugged.exe
@@ -17,4 +20,5 @@ all:
 	time ./bugged.exe
 
 unbugged:
-	ghc                $(OPTS) PBBS.hs -main-is Util.PBBS.t4 -o unbugged.exe
+	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t4 -o unbugged_readFile.exe
+	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t2 -o unbugged_mmap.exe
