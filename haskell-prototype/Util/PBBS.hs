@@ -161,13 +161,10 @@ readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
                S.ByteString -> IO [PartialNums nty]
 readNatsPartial bs
  | bs == S.empty = return [Single (MiddleFrag 0 0)]
- | otherwise = fmap (\x -> [x]) $ do   
+ | otherwise = do   
   let hd        = S.head bs
       charLimit = S.length bs
---  initV <- M.new (min chunkSize ((charLimit `quot` 2) + 1))
-  -- FIXME: NEED TO GROW IF ESTIMATE FAILS:
---  initV <- M.new ((charLimit `quot` 4) + 3)
-  initV <- M.new ((charLimit `quot` 2) + 1)
+  initV <- M.new (vecSize charLimit)
   (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
   v'        <- U.unsafeFreeze v
   let pref  = U.take ind v'
@@ -175,12 +172,16 @@ readNatsPartial bs
   if digit hd then
     (if pref == U.empty
      then case w of
-           Nothing  -> return$ Compound rfrag (U.tail pref) Nothing
-           Just (LeftFrag w) -> return$ Single$ MiddleFrag charLimit w
-     else return$ Compound rfrag (U.tail pref) w)
+           Nothing  -> return [Compound rfrag (U.tail pref) Nothing]
+           Just (LeftFrag w) -> return [Single$ MiddleFrag charLimit w]
+     else return [Compound rfrag (U.tail pref) w])
    else
-    return$ Compound Nothing pref w
+    return [Compound Nothing pref w]
  where
+   -- Given the number of characters left, how big of a vector chunk shall we allocate?
+   -- vecSize n = min chunkSize ((n `quot` 2) + 1)
+   vecSize n = ((n `quot` 2) + 1)
+   
    loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
            IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
    loop !lmt !ind !acc !vec !nxt !rst
@@ -190,6 +191,12 @@ readNatsPartial bs
        if lmt == 1
        then return (vec, Just (LeftFrag acc'), ind)
        else loop (lmt-1) ind acc' vec (unsafeHead rst) (unsafeTail rst)
+#if 0            
+     | ind >= M.length vec = do
+         fresh <- M.new (vecSize$ S.length rst) :: IO (M.IOVector nty)
+         vec'  <- U.unsafeFreeze vec
+         loop lmt 0 acc fresh nxt rst
+#endif         
      | otherwise =
        do M.write vec ind acc
           if lmt == 1
