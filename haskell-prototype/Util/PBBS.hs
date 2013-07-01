@@ -68,7 +68,7 @@ readNatNums bs
  | otherwise = do   
   let hd        = S.head bs
       charLimit = S.length bs
-  initV <- M.new chunkSize      
+  initV <- M.new (min chunkSize ((charLimit `quot` 2) + 1))
   (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
   v'        <- U.unsafeFreeze v
   let pref  = U.take ind v'
