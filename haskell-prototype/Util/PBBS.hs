@@ -24,23 +24,14 @@ import Test.Framework.TH (defaultMainGenerator)
 chunkSize :: Int
 chunkSize = 2 * 32768
 
--- | A number that was interrupted in the middle.  The same datatype is used for left
--- and right halves.
--- data Fragment = None                
---               | RightFrag {
---                 numDigits    :: {-# UNPACK #-} !Int,
---                 partialParse :: {-# UNPACK #-} !Word
---                 -- ^ The partialParse will need to be combined with the other half
---                 -- through addition (shifting first if it represents a left-half).
---                 }
---               | MiddleFrag {
---                 numDigits    :: {-# UNPACK #-} !Int,
---                 partialParse :: {-# UNPACK #-} !Word
---                 }
---               | LeftFrag {
---                 partialParse :: {-# UNPACK #-} !Word
---                 }
+--------------------------------------------------------------------------------
+-- Partially parsed number fragments
+--------------------------------------------------------------------------------
 
+-- | A sequence of parsed numbers with ragged edges.
+data PartialNums = Compound !(Maybe RightFrag) !(U.Vector Word) !(Maybe LeftFrag)
+                 | Single MiddleFrag
+  deriving (Show,Eq,Ord,Read)
 
 -- | This represents the rightmost portion of a decimal number that was interrupted
 -- in the middle.
@@ -60,19 +51,13 @@ data MiddleFrag = MiddleFrag {-# UNPACK #-} !Int
                              {-# UNPACK #-} !Word
   deriving (Show,Eq,Ord,Read)
 
+--------------------------------------------------------------------------------
+-- Efficient sequential parsing
+--------------------------------------------------------------------------------
 
--- | A sequence of parsed numbers with ragged edges.
-data PartialNums = Compound !(Maybe RightFrag) !(U.Vector Word) !(Maybe LeftFrag)
-                 | Single MiddleFrag
-  deriving (Show,Eq,Ord,Read)
-
-
--- | Sequentially reads all the unsigned 64bit decimal (ASCII) numbers within a
--- region of a bytestring.  As well as returning the main payload of numbers, this
--- also returns a possible fragment that was interrupted on the right end, as well as
--- a count of how many digits were present in the first number (e.g. including
--- leading zeros) if a number began on the very first character.  (Which makes it
--- also possibly a fragment.)
+-- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
+-- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
+-- is needed to deal with the cases where numbers are cut off at the boundaries.
 readWord64s :: Int -> S.ByteString -> IO PartialNums
 -- readWords :: Int -> S.ByteString -> IO (M.IOVector Word, Word)
 readWord64s charLimit bs | charLimit > S.length bs =
@@ -117,6 +102,11 @@ readWord64s charLimit bs = do
                    else scanfwd (lmt-1) ind vec (unsafeHead rst) (unsafeTail rst)
 
    digit nxt = nxt >= 48 && nxt <= 57
+
+
+--------------------------------------------------------------------------------
+-- Unit Tests
+--------------------------------------------------------------------------------
 
 case_t1 :: IO ()
 case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 123)) (U.fromList []) Nothing) =<<
