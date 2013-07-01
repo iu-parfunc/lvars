@@ -4,7 +4,11 @@
 
 module Util.PBBS where 
 
+import Control.DeepSeq
 import Control.Monad.Par.IO
+import Control.Monad.Par.Combinator
+import Control.Monad.IO.Class (liftIO)
+import Control.Concurrent (getNumCapabilities)
 import Data.Word
 import Data.Maybe (fromJust)
 import qualified Data.Vector.Unboxed as U
@@ -15,16 +19,56 @@ import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 -- import qualified Data.ByteString.Word8      as S
 -- import qualified Data.ByteString.Lazy.Word8 as L
 
+import System.IO.Posix.MMap (unsafeMMapFile)
+
 import Test.HUnit
 import Test.Framework.Providers.HUnit
 import Test.Framework.TH (defaultMainGenerator)
 
+--------------------------------------------------------------------------------
 
 -- How many words shoud go in each continuously allocated vector?
 chunkSize :: Int
-chunkSize = 2 * 32768
+chunkSize = 32768
+
+-- | How much should we partition a loop beyond what is necessary to have one task
+-- per processor core.
+overPartition = 4
 
 --------------------------------------------------------------------------------
+
+
+readNumFile :: (U.Unbox nty, Num nty, Eq nty) =>
+               FilePath -> IO [PartialNums nty]
+readNumFile path = do
+  bs <- unsafeMMapFile path
+  parReadNats bs
+
+-- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
+-- non-digit characters are treated as separators.
+parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
+--               S.ByteString -> IO [U.Vector nty]
+               S.ByteString -> IO [PartialNums nty]
+parReadNats bs = do
+  ncap <- getNumCapabilities
+  runParIO (par ncap)
+--  return (error "FINISHME")
+ where
+   par :: Int -> ParIO [PartialNums nty]
+   par ncap = 
+        let chunks = ncap * overPartition
+            (each,left) = S.length bs `quotRem` chunks
+
+            mapper ind = do
+              let howmany = each + if ind==chunks-1 then left else 0
+                  mychunk = S.take howmany $ S.drop (ind * each) bs
+              partial <- liftIO (readNatsPartial mychunk)
+              return [partial]
+            reducer a b = return (a++b)
+        in
+        parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
+                                   mapper reducer []
+
 -- Partially parsed number fragments
 --------------------------------------------------------------------------------
 
@@ -50,25 +94,39 @@ data LeftFrag n = LeftFrag !n
 data MiddleFrag n = MiddleFrag {-# UNPACK #-} !Int !n
   deriving (Show,Eq,Ord,Read)
 
+instance NFData (RightFrag n) where
+  rnf (RightFrag _ _) = ()
+instance NFData (LeftFrag n) where
+  rnf (LeftFrag _) = ()
+instance NFData (MiddleFrag n) where
+  rnf (MiddleFrag _ _) = ()
+
+instance NFData (PartialNums n) where
+  rnf (Compound a b c) = a `seq` b `seq` c `seq` ()
+  rnf (Single a)       = rnf a
+
 --------------------------------------------------------------------------------
 -- Efficient sequential parsing
 --------------------------------------------------------------------------------
 
-{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word) #-}
-{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word32) #-}
-{-# SPECIALIZE readNatNums :: S.ByteString -> IO (PartialNums Word64) #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word) #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word32) #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO (PartialNums Word64) #-}
 
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
-readNatNums :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
+readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
                S.ByteString -> IO (PartialNums nty)
-readNatNums bs
+readNatsPartial bs
  | bs == S.empty = return$ Single (MiddleFrag 0 0)
  | otherwise = do   
   let hd        = S.head bs
       charLimit = S.length bs
-  initV <- M.new (min chunkSize ((charLimit `quot` 2) + 1))
+--  initV <- M.new (min chunkSize ((charLimit `quot` 2) + 1))
+  -- FIXME: NEED TO GROW IF ESTIMATE FAILS:
+--  initV <- M.new ((charLimit `quot` 4) + 3)
+  initV <- M.new ((charLimit `quot` 2) + 1)
   (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
   v'        <- U.unsafeFreeze v
   let pref  = U.take ind v'
@@ -112,22 +170,55 @@ readNatNums bs
 
 case_t1 :: IO ()
 case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) Nothing) =<<
-          readNatNums (S.take 4 "123 4")
+          readNatsPartial (S.take 4 "123 4")
 case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) (Just (LeftFrag 4))) =<<
-          readNatNums (S.take 5 "123 4")
+          readNatsPartial (S.take 5 "123 4")
 case_t3 = assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
-          readNatNums (S.take 3 "123")
+          readNatsPartial (S.take 3 "123")
 case_t4 = assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
-          readNatNums (S.take 2 "123")
+          readNatsPartial (S.take 2 "123")
 case_t5 = assertEqual "t5" (Compound Nothing U.empty (Just (LeftFrag (12::Word64)))) =<<
-          readNatNums (S.take 3 " 123")
+          readNatsPartial (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
           (Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word32)))) =<<
-          readNatNums (S.take 10 "023 456 789")
+          readNatsPartial (S.take 10 "023 456 789")
+
+runTests = $(defaultMainGenerator)
 
 
-main = $(defaultMainGenerator)
+t0 :: IO [PartialNums Word]
+t0 = readNumFile "/tmp/grid_1000"
+
+t1 :: IO [PartialNums Word]
+t1 = readNumFile "/tmp/grid_125000"
+
+t2 :: IO [PartialNums Word]
+t2 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+
+t3 :: IO (PartialNums Word)
+t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+        readNatsPartial bs
+
+{-
+
+[2013.07.01] {First Performance Notes}
+--------------------------------------
+
+Ran for the first time on the 557Mb file 3Dgrid_J_10000000.
+On my laptop it took 26.4 seconds sequential and 9.6 seconds on four cores.
+Productivity was 62% in the latter case.  CPU usage stayed pegged at 400%.
+
+Aha, there is some screwup in the parallel stage, the sequential routine itself
+(readNatsPartial, t3) only takes 4.5 seconds of realtime to read the whole file
+(97.6% productivity).  Actually... that's better than the sequential time of the PBBS
+C++, I believe.
+
+NFData may be the culprit...
+
+-}
+
+--------------------------------------------------------------------------------
 
 {-
 test :: Int -> Int -> Int -> S.ByteString -> Int
