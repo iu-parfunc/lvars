@@ -50,8 +50,8 @@ test2 = runParIO $ do
 
 test3 :: IO (Snapshot IVar (Snapshot ISet String))
 test3 = runParIO $ do
-  iv1 <- newBottom :: Par (IVar (ISet String))
-  iv2 <- newBottom :: Par (ISet String)
+  iv1 <- newBottom 
+  iv2 <- newBottom 
   put_ iv1 iv2
   putInSet "hello" iv2 
   deepFreeze iv1
@@ -71,6 +71,7 @@ instance DeepFreeze (IVar a) (Maybe a) where
   deepFreeze iv = do IVarSnap m <- freeze iv
                      return m
 
+
 #if 0
 -- This much works:
 instance (Traversable f) =>                     
@@ -85,7 +86,8 @@ instance (LVarData1 f) =>
     x <- freeze lvd                :: Par (Snapshot f (IVar a))
     y <- traverseSnap freezeIVar x :: Par (Snapshot f (Maybe a))
     return y
-#else
+
+#elif 1
 instance (LVarData1 f, LVarData1 g) =>
          DeepFreeze (f (g a)) (Snapshot f (Snapshot g a)) where
   deepFreeze lvd = do
@@ -93,6 +95,19 @@ instance (LVarData1 f, LVarData1 g) =>
     x <- freeze lvd            :: Par (Snapshot f (g a))
     y <- traverseSnap freeze x :: Par (Snapshot f (Snapshot g a))
     return y    
+
+#else
+-- This version could retain a bit more flexibility....
+instance (LVarData1 f, DeepFreeze a b) =>
+         DeepFreeze (f a) (Snapshot f b) where
+  deepFreeze lvd = do
+    x <- freeze lvd                :: Par (Snapshot f a)
+    y <- traverseSnap deepFreeze x :: Par (Snapshot f (Snapshot g a))
+    return y
+instance DeepFreeze a a where
+   deepFreeze = return
+-- instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
+--    deepFreeze = freeze
 #endif
 
 
