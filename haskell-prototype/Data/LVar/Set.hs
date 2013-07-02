@@ -12,6 +12,7 @@ module Data.LVar.Set
 import           Data.IORef
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
+import qualified Data.Foldable as F
 
 import           Control.LVish
 
@@ -22,6 +23,10 @@ import           Control.LVish
 -- | We only have one mutable location here, so this is not a scalable implementation.
 -- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
 newtype ISet a = ISet (LVar (IORef (S.Set a)) a)
+
+-- | Physical identity, just as with IORefs.
+instance Eq (ISet v) where
+  ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 newEmptySet :: Par (ISet a)
 newEmptySet = fmap ISet $ newLV$ newIORef S.empty
@@ -41,8 +46,8 @@ withCallbacksThenFreeze (ISet lv) callback action =
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       set <- readIORef ref -- Snapshot
-      return $ Just $ do 
-        mapM_ (fork . callback) (S.toList set) -- Alas, no non-allocating iterator over Data.Set
+      return $ Just $ do
+        F.foldlM (\() v -> fork$ callback v) () set -- Non-allocating traversal.
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 

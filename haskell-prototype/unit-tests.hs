@@ -9,15 +9,19 @@ import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
+import Control.Concurrent
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import System.Environment (getArgs)
 
 import Control.Exception (catch, evaluate, SomeException)
 
-
+import Data.Traversable (traverse)
 import qualified Data.Set as S
+import qualified Data.Map as M
+
 import qualified Data.LVar.Set as IS
+import qualified Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
@@ -159,7 +163,6 @@ v3c = runParIO $
           -- then we won't notice that anything is wrong and we'll get
           -- the same result we would have in case_v3.
 
-
 -- FIXME: currently if run enough times, v3c can get the following failure:
 -- I think we need to use full Async's so the cancellation goes both ways:
 
@@ -169,6 +172,85 @@ v3c = runParIO $
    -- Exception inside child thread "worker thread", ThreadId 11: Attempt to change a frozen LVar
    -- test-lvish: Attempt to change a frozen LVar
    -- Exception inside child thread "worker thread", ThreadId 10: thread blocked indefinitely in an MVar operation
+
+case_v7a :: Assertion
+case_v7a = assertEqual "basic imap test"
+           (M.fromList [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)]) =<<
+           v7a
+
+v7a :: IO (M.Map Int Float)
+v7a = runParIO $
+  do mp <- IM.newEmptyMap
+     fork $ do IM.waitSize 3 mp
+               IM.insert 100 100.1 mp
+     fork $ do IM.waitValue 100.1 mp
+               v <- IM.getKey 1 mp
+               IM.insert 200 (200.1 + v) mp
+     IM.insert 1 1 mp
+     IM.insert 2 2 mp
+     liftIO$ putStrLn "[v7a] Did the first two puts.."
+     liftIO$ threadDelay 1000
+     IM.insert 3 3 mp
+     liftIO$ putStrLn "[v7a] Did the first third put."
+     IM.waitSize 5 mp
+     IM.freezeMap mp
+
+
+case_i7b :: Assertion
+case_i7b = do 
+  allowSomeExceptions ["Multiple puts"] $ 
+    assertEqual "racing insert and modify"
+                 (M.fromList [(1,S.fromList [3.33]),
+                              (2,S.fromList [0.11,4.44])]) =<<
+                i7b
+  return ()
+
+-- | A quasi-deterministic example.
+i7b :: IO (M.Map Int (S.Set Float))
+-- Do we need a "deep freeze" that freezes nested structures?
+i7b = runParIO $ do
+  mp <- IM.newEmptyMap
+  s1 <- IS.newEmptySet
+  s2 <- IS.newEmptySet
+  IS.putInSet 0.11 s2
+  f1 <- IV.spawn_ $ do IM.insert 1 s1 mp 
+                       IM.insert 2 s2 mp
+  f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
+                       IS.putInSet 3.33 s
+  -- RACE: this modify is racing with the insert of s2:
+  IM.modify 2 mp (IS.putInSet 4.44)
+
+  IV.get f1; IV.get f2
+  mp2 <- IM.freezeMap mp
+  traverse IS.freezeSet mp2
+
+case_v7c :: Assertion
+case_v7c = assertEqual "imap test - racing modifies"
+           (M.fromList [(1,S.fromList [3.33]),
+                        (2,S.fromList [4.44]),
+                        (3,S.fromList [5.55,6.6])]) =<<
+           v7c
+
+-- | This example is valid because two modifies may race.
+v7c :: IO (M.Map Int (S.Set Float))
+-- Do we need a "deep freeze" that freezes nested structures?
+v7c = runParIO $ do
+  mp <- IM.newEmptyMap
+  s1 <- IS.newEmptySet
+  f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
+  f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
+                       IS.putInSet 3.33 s
+  IM.modify 2 mp (IS.putInSet 4.44)
+  f3 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 5.55)
+  f4 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 6.6)
+  -- No easy way to wait on the total size of all contained sets...
+  -- 
+  -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
+  -- Global quiesce is convenient too..
+  IV.get f1; IV.get f2; IV.get f3; IV.get f4
+  mp2 <- IM.freezeMap mp
+  traverse IS.freezeSet mp2
+
 
 
 --------------------------------------------------------------------------------

@@ -11,3 +11,11 @@ Scalable data structures:
   - Hashtables (=> sets)
   
   - Work-stealing deque (could use bag)
+
+
+Fill out data structure interfaces:
+
+  * in addition to "newEmpty*" we should have a few ways to provide
+    elements at the outset, before it is exposed for concurrent
+    modification.
+
