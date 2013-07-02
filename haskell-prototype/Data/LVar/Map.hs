@@ -66,8 +66,20 @@ insert !key !elm (IMap lv) = putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, the "modify" function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
-modify :: LVarData1 f => key -> IMap key (f a) -> (f a -> Par b) -> Par b
-modify = error "finishme"
+modify :: forall f a b key . (Ord key, LVarData1 f) =>
+          key -> IMap key (f a) -> (f a -> Par b) -> Par b
+modify key (IMap lv) fn = do 
+  let ref = state lv 
+  mp  <- liftIO$ readIORef ref
+  case M.lookup key mp of
+    Just lv2 -> fn lv2
+    Nothing -> do 
+      bot <- newBottom :: Par (f a)
+      act <- liftIO$ atomicModifyIORef ref $ \ mp2 ->
+               case M.lookup key mp2 of
+                 Just lv2 -> (mp2, fn lv2)
+                 Nothing  -> (M.insert key bot mp2, fn bot)
+      act
 
 {-
 
