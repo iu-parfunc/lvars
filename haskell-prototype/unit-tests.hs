@@ -140,16 +140,16 @@ v3b = runParIO $
 -- | An under-synchronized test.  This should always return the same
 -- result OR throw an exception.  In this case it should always return
 -- a list of 10 elements, or throw an exception.
-case_v3c :: Assertion
-case_v3c = do 
+case_i3c :: Assertion
+case_i3c = do 
   allowSomeExceptions ["Attempt to change a frozen LVar"] $ 
-    do x <- v3c
+    do x <- i3c
        assertEqual "under-synchronized passed through"
       	           (S.fromList [10,20..100] :: S.Set Int) x
   return ()
     
-v3c :: IO (S.Set Int)
-v3c = runParIO $
+i3c :: IO (S.Set Int)
+i3c = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.putInSet (e*10) s2
@@ -163,7 +163,7 @@ v3c = runParIO $
           -- then we won't notice that anything is wrong and we'll get
           -- the same result we would have in case_v3.
 
--- FIXME: currently if run enough times, v3c can get the following failure:
+-- FIXME: currently if run enough times, i3c can get the following failure:
 -- I think we need to use full Async's so the cancellation goes both ways:
 
    -- Main:
@@ -380,7 +380,7 @@ assertException msgs action = do
 -- either raise a particular exception or produce a particular answer.
 allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
 allowSomeExceptions msgs action = do
- catch (do a <- action; return (Right a))
+ catch (do a <- action; evaluate a; return (Right a))
        (\e ->
          let estr = show e in
          if  any (`isInfixOf` estr) msgs
