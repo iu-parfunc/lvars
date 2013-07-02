@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies #-}
 
 module Data.LVar.IVar
-       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
+--       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
        where
 
 import           Data.IORef
@@ -20,10 +20,21 @@ import           Control.LVish
 -- simply values of type a (taking the IVar from Nothing to Just):
 newtype IVar a = IVar (LVar (IORef (Maybe a)) a)
 
+instance Eq (IVar a) where
+  (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
+
 instance LVarData1 IVar where
   type Snapshot IVar a = Maybe a
   freeze    = freezeIVar
   newBottom = new
+
+test = do
+  iv1 <- newBottom :: Par (IVar (IVar String))
+  iv2 <- newBottom
+  put_ iv1 iv2
+  put_ iv2 "hello"
+  IVarSnap m <- freeze iv1
+  return m
 
 new :: Par (IVar a)
 new = fmap IVar $ newLV $ newIORef Nothing
