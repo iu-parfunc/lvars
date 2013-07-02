@@ -43,12 +43,11 @@ test2 = runParIO $ do
   iv2 <- newBottom
   put_ iv1 iv2
   put_ iv2 "hello"
---  m <- freeze iv1  
---  return m
   deepFreeze iv1
 
 
 test3 :: IO (Snapshot IVar (Snapshot ISet String))
+-- test3 :: IO (Maybe (Snapshot ISet String)) -- Won't work atm.
 test3 = runParIO $ do
   iv1 <- newBottom 
   iv2 <- newBottom 
@@ -56,6 +55,19 @@ test3 = runParIO $ do
   putInSet "hello" iv2 
   deepFreeze iv1
 
+test4 :: DeepFreeze (IVar Int) b => IO b
+test4 = runParIO $ do
+  iv1 <- newBottom 
+  put_ iv1 (3::Int)
+  deepFreeze iv1
+
+-- More flexible than regular freeze, can pick either type:
+test4a :: IO (Snapshot IVar Int)
+test4a = test4
+
+-- uh... how is this one actually working?
+test4b :: IO (Maybe Int)
+test4b = test4
 
 --------------------------
 -- EXPERIMENTING  
@@ -66,11 +78,6 @@ test3 = runParIO $ do
 -- potentially freeze a nested structure in various ways of their choosing.
 class DeepFreeze (from :: *) (to :: *) where
   deepFreeze :: from -> Par to 
-
-instance DeepFreeze (IVar a) (Maybe a) where
-  deepFreeze iv = do IVarSnap m <- freeze iv
-                     return m
-
 
 #if 0
 -- This much works:
@@ -94,7 +101,11 @@ instance (LVarData1 f, LVarData1 g) =>
     -- let fn = (fmap (\ (IVarSnap m) -> m)) . freezeIVar
     x <- freeze lvd            :: Par (Snapshot f (g a))
     y <- traverseSnap freeze x :: Par (Snapshot f (Snapshot g a))
-    return y    
+    return y
+
+-- Inherit everything that regular freeze can do:
+instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
+  deepFreeze = freeze
 
 #else
 -- This version could retain a bit more flexibility....
@@ -111,6 +122,20 @@ instance DeepFreeze a a where
 #endif
 
 
+--------------------------------------------------------------------------------
+-- IVar specific instances:
+--------------------------------------------------------------------------------
+
+-- Teach it how to freeze WITHOUT the annoying snapshot constructor:
+instance DeepFreeze (IVar a) (Maybe a) where
+  deepFreeze iv = do IVarSnap m <- freeze iv
+                     return m
+
+-- instance DeepFreeze a b =>
+--          DeepFreeze (IVar a) (Maybe b) where
+--   deepFreeze iv = do IVarSnap m <- freeze iv
+--                      fmap deepFreeze m
+                     
 #if 1
 instance DeepFreeze (IVar a) b =>
          DeepFreeze (IVar (IVar a)) (Maybe b)
@@ -121,7 +146,6 @@ instance DeepFreeze (IVar a) b =>
       return y
 #else
 -- But how do we generalize to arbitrary combinations of DIFFERENT LVar types?
-
 instance (LVarData1 f, DeepFreeze (f a) (g a)) =>
          DeepFreeze (f (IVar a)) (g (Maybe a))
   where
@@ -135,21 +159,3 @@ instance (LVarData1 f, DeepFreeze (f a) (g a)) =>
 #endif
 
 --------------------------------------------------------------------------------
-
--- class DeepFreeze a b =>
---       DeepFreeze1 (t1 :: * -> *) (t2 :: * -> *) where
---   deepFreeze1 :: t1 a -> Par (t2 b)
-
--- class DeepFreeze a b =>
---       DeepFreeze1 (t1 a) (t2 b) where
---   deepFreeze1 :: t1 a -> Par (t2 b)
-
--- class (LVarData1 t1, DeepFreeze (t1 a) (t2 b)) =>
---       DeepFreeze1 (t1 :: * -> *) (t2 :: * -> *) where
-
--- instance (LVarData1 t1, DeepFreeze (t1 a) (t2 b)) =>
---          DeepFreeze t1 t2 where
-
-
-
-
