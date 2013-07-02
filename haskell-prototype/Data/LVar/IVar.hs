@@ -10,6 +10,8 @@ import qualified Control.Monad.Par.Class as PC
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO)
 
+import           Data.Traversable (traverse)
+
 import           Control.LVish
 
 ------------------------------------------------------------------------------
@@ -28,13 +30,7 @@ instance LVarData1 IVar where
   freeze    = freezeIVar
   newBottom = new
 
-test = do
-  iv1 <- newBottom :: Par (IVar (IVar String))
-  iv2 <- newBottom
-  put_ iv1 iv2
-  put_ iv2 "hello"
-  IVarSnap m <- freeze iv1
-  return m
+--------------------------------------
 
 new :: Par (IVar a)
 new = fmap IVar $ newLV $ newIORef Nothing

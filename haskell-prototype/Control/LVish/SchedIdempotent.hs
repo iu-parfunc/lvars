@@ -52,8 +52,20 @@ class LVarData1 f where
   freeze :: f a -> Par (Snapshot f a)
   newBottom :: Par (f a)
 
+  traverseSnap :: (a -> Par b) -> Snapshot f a -> Par (Snapshot f b)
+
   -- What else?
   -- Merge op?
+
+-- This gets messy if we try to handle several Kinds:
+class LVarData0 (t :: *) where
+  -- | This associated type models a picture of the "complete" contents of the data:
+  -- e.g. a whole set instead of one element, or the full/empty information for an
+  -- IVar, instead of just the payload.
+  type Snapshot0 t
+  freeze0 :: t -> Par (Snapshot0 t)
+  newBottom0 :: Par t
+
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
