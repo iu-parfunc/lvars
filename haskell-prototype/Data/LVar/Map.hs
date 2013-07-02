@@ -64,7 +64,7 @@ insert !key !elm (IMap lv) = putLV lv putter
 
 -- | IMap's containing other LVars have some additional capabilities compared to
 -- those containing regular Haskell data.  In particular, it is possible to modify
--- existing entries (monotonically).  Further, the "modify" function implicitly
+-- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
 modify :: forall f a b key . (Ord key, LVarData1 f) =>
           key -> IMap key (f a) -> (f a -> Par b) -> Par b
@@ -81,40 +81,35 @@ modify key (IMap lv) fn = do
                  Nothing  -> (M.insert key bot mp2, fn bot)
       act
 
-{-
-
--- | Wait for the set to contain a specified element.
-waitElem :: Ord a => a -> IMap a -> Par ()
-waitElem !elm (IMap lv) = getLV lv globalThresh deltaThresh
+-- | Wait for the set to contain a specified key, and return the associated value.
+getKey :: Ord k => k -> IMap k v -> Par v
+getKey !key (IMap lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
-      set <- readIORef ref
-      case M.member elm set of
-        True  -> return (Just ())
-        False -> return (Nothing)
-    deltaThresh e2 | e2 == elm = return $ Just ()
-                   | otherwise  = return Nothing 
+      mp <- readIORef ref
+      return (M.lookup key mp)
+    deltaThresh (k,v) | k == key  = return$ Just v
+                      | otherwise = return Nothing 
 
-
--- | Wait on the SIZE of the set, not its contents.
-waitSize :: Int -> IMap a -> Par ()
+-- | Wait on the SIZE of the map, not its contents.
+waitSize :: Int -> IMap k v -> Par ()
 waitSize !sz (IMap lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
-      set <- readIORef ref
-      case M.size set >= sz of
+      mp <- readIORef ref
+      case M.size mp >= sz of
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
     -- the threshold.a
     deltaThresh _ = globalThresh (state lv) False
 
--- | Get the exact contents of the set.  Using this may cause your
+-- | Get the exact contents of the map  Using this may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeSet :: IMap a -> Par (M.Set a)
-freezeSet (IMap lv) =
+freezeMap :: IMap k v -> Par (M.Map k v)
+freezeMap (IMap lv) =
    do freezeLV lv
       getLV lv globalThresh deltaThresh
   where
@@ -122,5 +117,5 @@ freezeSet (IMap lv) =
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
--}
+
 
