@@ -3,34 +3,35 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Data.LVar.Set
+module Data.LVar.Map
        (
-         ISet, newEmptySet, putInSet, withCallbacksThenFreeze,
-         waitElem, waitSize, freezeSet
+--         IMap, newEmptySet, putInSet, withCallbacksThenFreeze,
+--         waitElem, waitSize, freezeSet
        ) where
 
 import           Data.IORef
-import qualified Data.Set as S
+import qualified Data.Map as M
 import qualified Data.LVar.IVar as IV
 
 import           Control.LVish
+import           Data.LVar.Classes
 
 ------------------------------------------------------------------------------
--- ISets and setmap implemented on top of LVars:
+-- IMaps and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
 
 -- | We only have one mutable location here, so this is not a scalable implementation.
--- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
-newtype ISet a = ISet (LVar (IORef (S.Set a)) a)
+newtype IMap k v = IMap (LVar (IORef (M.Map k v)) (k,v))
 
-newEmptySet :: Par (ISet a)
-newEmptySet = fmap ISet $ newLV$ newIORef S.empty
+newEmptyMap :: Par (IMap k v)
+newEmptyMap = fmap IMap $ newLV$ newIORef M.empty
 
+{-
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Set variable.
-withCallbacksThenFreeze :: Eq b => ISet a -> (a -> Par ()) -> Par b -> Par b
-withCallbacksThenFreeze (ISet lv) callback action =
+withCallbacksThenFreeze :: Eq b => IMap a -> (a -> Par ()) -> Par b -> Par b
+withCallbacksThenFreeze (IMap lv) callback action =
     do
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
        freezeLVAfter lv (initCB res) (\x -> return$ Just$ callback x)
@@ -42,31 +43,41 @@ withCallbacksThenFreeze (ISet lv) callback action =
       -- or by the delta-callback:
       set <- readIORef ref -- Snapshot
       return $ Just $ do 
-        mapM_ (fork . callback) (S.toList set) -- Alas, no non-allocating iterator over Data.Set
+        mapM_ (fork . callback) (M.toList set) -- Alas, no non-allocating iterator over Data.Set
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
+-}
+
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
-putInSet :: Ord a => a -> ISet a -> Par () 
-putInSet !elm (ISet lv) = putLV lv putter
+insert :: Ord k => k -> v -> IMap k v -> Par () 
+insert !key !elm (IMap lv) = putLV lv putter
   where putter ref  = atomicModifyIORef ref update
         update set =
-          let set' = S.insert elm set in
+          let set' = M.insert key elm set in
           -- Here we do a constant time check to see if we actually changed anything:
           -- For idempotency it is important that we return Nothing if not.
-          if S.size set' > S.size set
-          then (set',Just elm)
-          else (set,Nothing)
+          if M.size set' > M.size set
+          then (set',Just (key,elm))
+          else (set, Nothing)
 
+-- | IMap's containing other LVars have some additional capabilities compared to
+-- those containing regular Haskell data.  In particular, it is possible to modify
+-- existing entries (monotonically).  Further, the "modify" function implicitly
+-- inserts a "bottom" element if there is no existing entry for the key.
+modify :: LVarData1 f => key -> IMap key (f a) -> (f a -> Par b) -> Par b
+modify = error "finishme"
+
+{-
 
 -- | Wait for the set to contain a specified element.
-waitElem :: Ord a => a -> ISet a -> Par ()
-waitElem !elm (ISet lv) = getLV lv globalThresh deltaThresh
+waitElem :: Ord a => a -> IMap a -> Par ()
+waitElem !elm (IMap lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref
-      case S.member elm set of
+      case M.member elm set of
         True  -> return (Just ())
         False -> return (Nothing)
     deltaThresh e2 | e2 == elm = return $ Just ()
@@ -74,12 +85,12 @@ waitElem !elm (ISet lv) = getLV lv globalThresh deltaThresh
 
 
 -- | Wait on the SIZE of the set, not its contents.
-waitSize :: Int -> ISet a -> Par ()
-waitSize !sz (ISet lv) = getLV lv globalThresh deltaThresh
+waitSize :: Int -> IMap a -> Par ()
+waitSize !sz (IMap lv) = getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref
-      case S.size set >= sz of
+      case M.size set >= sz of
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
@@ -90,11 +101,14 @@ waitSize !sz (ISet lv) = getLV lv globalThresh deltaThresh
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeSet :: ISet a -> Par (S.Set a)
-freezeSet (ISet lv) =
+freezeSet :: IMap a -> Par (M.Set a)
+freezeSet (IMap lv) =
    do freezeLV lv
       getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
+
+-}
+

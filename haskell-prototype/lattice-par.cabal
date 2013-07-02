@@ -51,6 +51,8 @@ library
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set
+                    Data.LVar.Map
+                    Data.LVar.Classes
 
                     Util.PBBS
   
