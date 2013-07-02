@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.LVar.Map
@@ -14,7 +15,6 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
 import           Control.LVish
-import           Data.LVar.Classes
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -25,6 +25,15 @@ newtype IMap k v = IMap (LVar (IORef (M.Map k v)) (k,v))
 
 instance Eq (IMap k v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
+
+
+-- Need LVarData2:
+
+instance LVarData1 (IMap k) where
+  type Snapshot (IMap k) a = M.Map k a
+  freeze    = freezeMap
+  newBottom = newEmptyMap
+
 
 newEmptyMap :: Par (IMap k v)
 newEmptyMap = fmap IMap $ newLV$ newIORef M.empty

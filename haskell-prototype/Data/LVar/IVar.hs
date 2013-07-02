@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, MultiParamTypeClasses #-}
+{-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies #-}
 
 module Data.LVar.IVar
        (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
@@ -19,6 +19,11 @@ import           Control.LVish
 -- the global data for an IVar a is a reference to Maybe a, while deltas are
 -- simply values of type a (taking the IVar from Nothing to Just):
 newtype IVar a = IVar (LVar (IORef (Maybe a)) a)
+
+instance LVarData1 IVar where
+  type Snapshot IVar a = Maybe a
+  freeze    = freezeIVar
+  newBottom = new
 
 new :: Par (IVar a)
 new = fmap IVar $ newLV $ newIORef Nothing

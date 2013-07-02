@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE TypeFamilies #-} 
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
@@ -13,7 +14,10 @@
 module Control.LVish.SchedIdempotent
   (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
    newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
-   runParIO
+   runParIO,
+
+   -- * Interfaces for generic operations
+   LVarData1(..)   
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -34,7 +38,23 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 import           Old.Common (forkWithExceptions)
 
 import qualified Control.LVish.SchedIdempotentInternal as Sched
-  
+
+------------------------------------------------------------------------------
+-- Interface for generic LVar handling
+------------------------------------------------------------------------------
+
+-- | TODO: if there is a Par class, it needs to be a superclass of this.
+class LVarData1 f where
+  -- | This associated type models a picture of the "complete" contents of the data:
+  -- e.g. a whole set instead of one element, or the full/empty information for an
+  -- IVar, instead of just the payload.
+  type Snapshot f a 
+  freeze :: f a -> Par (Snapshot f a)
+  newBottom :: Par (f a)
+
+  -- What else?
+  -- Merge op?
+
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
 ------------------------------------------------------------------------------
@@ -311,6 +331,15 @@ freezeLVAfter lv globalCB updateCB = do
   addHandler hp lv globalCB updateCB
   quiesce hp
   freezeLV lv
+
+-- TODO!
+
+-- | This function has an advantage vs. doing your own freeze at the end of your
+-- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
+-- barrier before the final freeze.
+runParThenFreeze :: LVarData1 f =>
+                    Par (f a) -> IO (Snapshot f a)
+runParThenFreeze = error "Finishme: runParThenFreeze"
 
 ------------------------------------------------------------------------------
 -- Par monad operations

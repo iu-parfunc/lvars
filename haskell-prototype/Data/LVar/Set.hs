@@ -2,6 +2,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Data.LVar.Set
        (
@@ -27,6 +28,11 @@ newtype ISet a = ISet (LVar (IORef (S.Set a)) a)
 -- | Physical identity, just as with IORefs.
 instance Eq (ISet v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
+
+instance LVarData1 ISet where
+  type Snapshot ISet a = S.Set a
+  freeze    = freezeSet
+  newBottom = newEmptySet
 
 newEmptySet :: Par (ISet a)
 newEmptySet = fmap ISet $ newLV$ newIORef S.empty
