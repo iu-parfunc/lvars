@@ -30,8 +30,8 @@ instance Eq (ISet v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 instance LVarData1 ISet where
-  type Snapshot ISet a = S.Set a
-  freeze    = freezeSet
+  newtype Snapshot ISet a = ISetSnap (S.Set a)
+  freeze    = fmap ISetSnap . freezeSet
   newBottom = newEmptySet
 
 newEmptySet :: Par (ISet a)

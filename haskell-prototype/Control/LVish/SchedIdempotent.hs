@@ -5,7 +5,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DoAndIfThenElse #-}
-{-# LANGUAGE TypeFamilies #-} 
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-} 
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
@@ -37,23 +39,55 @@ import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
 
+import Control.Compose ((:.), unO)
+import Data.Traversable 
+
 import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling
 ------------------------------------------------------------------------------
 
+-- class Traversable f => LVarData1 (f :: * -> *) where
+
 -- | TODO: if there is a Par class, it needs to be a superclass of this.
-class LVarData1 f where
+class LVarData1 (f :: * -> *) where
   -- | This associated type models a picture of the "complete" contents of the data:
   -- e.g. a whole set instead of one element, or the full/empty information for an
   -- IVar, instead of just the payload.
-  type Snapshot f a 
+  -- type Snapshot f a :: *
+  data Snapshot f :: * -> *
+  
   freeze :: f a -> Par (Snapshot f a)
   newBottom :: Par (f a)
 
+  -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
+  -- I don't know of a good way, so instead we expose this:
+  traverseSnap :: (a -> Par b) -> Snapshot f a -> Par (Snapshot f b)
+
   -- What else?
   -- Merge op?
+
+
+-- | This relies on type-level composition of unary type constructors, for which we
+-- depend on "Control.Compose".
+instance (LVarData1 f, LVarData1 g, Traversable g) => LVarData1 (g :. f) where  
+  -- type Snapshot (g :. f) a = Snapshot g (Snapshot f a)
+  data Snapshot (g :. f) a = ComposedSnap !(Snapshot g (Snapshot f a))
+  freeze (inp :: (g :. f) a) =
+    do let inp' :: g (f a)
+           inp' = unO inp
+       a <- freeze inp' :: Par (Snapshot g (f a))
+       b <- traverseSnap freeze (a :: Snapshot g (f a))
+       return $ ComposedSnap (b :: Snapshot g (Snapshot f a))
+  -- Because newBottom creates an empty structure, there should be no extra work to
+  -- do here.
+  newBottom = newBottom
+    -- let new :: Par (g a)
+    --     new = newBottom
+    -- in new 
+
+
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation

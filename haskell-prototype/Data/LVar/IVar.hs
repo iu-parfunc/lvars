@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
 
 module Data.LVar.IVar
 --       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
@@ -11,6 +11,7 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO)
 
 import           Control.LVish
+import           Control.Compose
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -24,8 +25,9 @@ instance Eq (IVar a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
 instance LVarData1 IVar where
-  type Snapshot IVar a = Maybe a
-  freeze    = freezeIVar
+  -- type Snapshot IVar a = Maybe a
+  newtype Snapshot IVar a = IVarSnap (Maybe a)
+  freeze    = fmap IVarSnap . freezeIVar
   newBottom = new
 
 test = do

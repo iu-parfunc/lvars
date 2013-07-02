@@ -30,8 +30,8 @@ instance Eq (IMap k v) where
 -- Need LVarData2:
 
 instance LVarData1 (IMap k) where
-  type Snapshot (IMap k) a = M.Map k a
-  freeze    = freezeMap
+  newtype Snapshot (IMap k) a = IMapSnap (M.Map k a)
+  freeze    = fmap IMapSnap . freezeMap
   newBottom = newEmptyMap
 
 
