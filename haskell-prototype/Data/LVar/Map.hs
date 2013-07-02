@@ -31,6 +31,7 @@ instance Eq (IMap k v) where
 
 instance LVarData1 (IMap k) where
   newtype Snapshot (IMap k) a = IMapSnap (M.Map k a)
+      deriving (Show,Ord,Read,Eq)
   freeze    = fmap IMapSnap . freezeMap
   newBottom = newEmptyMap
 

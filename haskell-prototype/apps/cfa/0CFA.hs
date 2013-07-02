@@ -35,8 +35,8 @@ type BEnv = M.Map Var Time
 type Store = IM.IMap Addr Denotable
 
 -- | An abstact denotable value is a set of possible values
-type Denotable = S.Set Value
--- type Denotable = IS.ISet Value
+-- type Denotable = S.Set Value
+type Denotable = IS.ISet Value
 
 -- For pure CPS, closures are the only kind of value
 type Value = Clo

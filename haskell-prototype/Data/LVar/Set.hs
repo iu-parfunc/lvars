@@ -31,6 +31,7 @@ instance Eq (ISet v) where
 
 instance LVarData1 ISet where
   newtype Snapshot ISet a = ISetSnap (S.Set a)
+      deriving (Show,Ord,Read,Eq)
   freeze    = fmap ISetSnap . freezeSet
   newBottom = newEmptySet
 

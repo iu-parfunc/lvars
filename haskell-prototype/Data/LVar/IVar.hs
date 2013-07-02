@@ -12,6 +12,7 @@ import           System.IO.Unsafe      (unsafePerformIO)
 
 import           Control.LVish
 import           Control.Compose
+import           Data.Traversable (traverse)
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -27,16 +28,13 @@ instance Eq (IVar a) where
 instance LVarData1 IVar where
   -- type Snapshot IVar a = Maybe a
   newtype Snapshot IVar a = IVarSnap (Maybe a)
+    deriving (Show,Ord,Read,Eq)
   freeze    = fmap IVarSnap . freezeIVar
   newBottom = new
+  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
 
-test = do
-  iv1 <- newBottom :: Par (IVar (IVar String))
-  iv2 <- newBottom
-  put_ iv1 iv2
-  put_ iv2 "hello"
-  IVarSnap m <- freeze iv1
-  return m
+unSnap :: Snapshot IVar a -> Maybe a 
+unSnap (IVarSnap m) = m
 
 new :: Par (IVar a)
 new = fmap IVar $ newLV $ newIORef Nothing
