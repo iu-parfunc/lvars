@@ -77,8 +77,8 @@
 
          ;; Derived forms; these immediately desugar to application
          ;; and lambda.
-         (let ((x e)) e)
-         (let par ((x e) (x e)) e))
+         (let ((x e) (x e) (... ...)) e)
+         (let par ((x e) (x e) (x e) (... ...)) e))
 
       ;; Variables.
       (x variable-not-otherwise-mentioned)
@@ -158,7 +158,10 @@
          (freeze e after E)
          (freeze v after ((callback v)
                           (running (e (... ...) E e (... ...)))
-                          (handled Df)))))
+                          (handled Df)))
+
+         ;; Special context for desugaring only.
+         (let par ((x e) (... ...) (x E) (x e) (... ...)) e)))
 
     ;; =============================================================
     ;; LVish reduction relation
@@ -254,7 +257,9 @@
             ((freeze-helper S l) (in-hole E d_1))
             (where d_1 (lookup-val S l))
             "E-Freeze-Simple")
-       
+
+       ;; ============================================================
+
        ;; Desugaring of `let`.
        (--> (S (in-hole E (let ((x_1 e_1)) e_2)))
             (S (in-hole E ((lambda (x_1) e_2) e_1)))
@@ -263,7 +268,33 @@
        ;; Desugaring of `let par`.
        (--> (S (in-hole E (let par ((x_1 e_1) (x_2 e_2)) e_3)))
             (S (in-hole E (((lambda (x_1) (lambda (x_2) e_3)) e_1) e_2)))
-            "Desugaring of let par")))
+            "Desugaring of let par")
+
+       ;; Desugaring of multi-binding `let`
+       (--> (S (in-hole E (let ((x_1 e_1)
+                                (x_2 e_2)
+                                (x_3 e_3) (... ...))
+                            e_4)))
+            (S (in-hole E (let ((x_1 e_1))
+                            (let ((x_2 e_2))
+                              (let ((x_3 e_3) (... ...))
+                                e_4)))))
+            "Desugaring of multi-binding `let`")
+
+       ;; Desugaring of multi-binding `let par`
+       (--> (S (in-hole E (let par ((x_1 e_1)
+                                    (x_2 e_2)
+                                    (x_3 e_3)
+                                    (x_4 x_4) (... ...))
+                            e_5)))
+            (S (in-hole E (let par ((x_1 e_1)
+                                    (x (let par ((x_2 e_2)
+                                                 (x_3 e_3)
+                                                 (x_4 x_4) (... ...))
+                                         e_5)))
+                            x)))
+            (fresh x)
+            "Desugaring of multi-binding `let par`")))
 
     ;; =============================================================
     ;; LVish metafunctions
