@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
 
 module Data.LVar.Set
        (
@@ -14,9 +15,11 @@ module Data.LVar.Set
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         cartesianProds, cartesianProd, copy
+         copy, traverseSet, union, intersection,
+         cartesianProds, cartesianProd
        ) where
 
+import           Control.Monad (void)
 import           Data.IORef
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
@@ -32,6 +35,8 @@ import qualified Control.LVish as L
 -- | We only have one mutable location here, so this is not a scalable implementation.
 -- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
 newtype ISet a = ISet (LVar (IORef (S.Set a)) a)
+
+unISet (ISet lv) = lv
 
 -- | Physical identity, just as with IORefs.
 instance Eq (ISet v) where
@@ -142,30 +147,103 @@ freezeSet (ISet lv) =
 --------------------------------------------------------------------------------
 -- Higher level routines that could be defined using the above interface.--------------------------------------------------------------------------------
 
+-- | Return a fresh set which will contain strictly more elements than the input set.
+-- That is, things put in the former go in the latter, but not vice versa.
+copy :: Ord a => ISet a -> Par (ISet a)
+copy = traverseSet return 
+
+-- | Establish monotonic map between the input and output sets.
+traverseSet :: Ord b => (a -> Par b) -> ISet a -> Par (ISet b)
+traverseSet fn set = do
+  os <- newEmptySet
+  traverseSet_ fn set os  
+  return os
+
+-- | An imperative-style, inplace version of 'traverseSet' that takes the output set
+-- as an argument.
+traverseSet_ :: Ord b => (a -> Par b) -> ISet a -> ISet b -> Par ()
+traverseSet_ fn set os = do
+  void$ forEach set $ \ x -> do 
+    x' <- fn x
+    putInSet x' os
+
+-- | Return a new set which will (ultimately) contain everything in either input set.
+union :: Ord a => ISet a -> ISet a -> Par (ISet a)
+union s1 s2 = do
+  hp <- newPool
+  os <- newEmptySet
+  addHandler hp s1 (`putInSet` os)
+  addHandler hp s2 (`putInSet` os)
+  return os
+-- TODO: should routines like this return the handler pools they create?    
+
+-- | Build a new set which will contain the intersection of the two input sets.
+intersection :: Ord a => ISet a -> ISet a -> Par (ISet a)
+-- Can we do intersection with only the public interface?  It should be monotonic.
+-- Well, for now we cheat and use liftIO:
+intersection s1 s2 = do
+  hp <- newPool
+  os <- newEmptySet
+  addHandler hp s1 (fn os s2)
+  addHandler hp s2 (fn os s1)
+  return os
+ where  
+  fn outSet other@(ISet lv) elm = do
+    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
+    peek <- liftIO$ readIORef (state lv)
+    if S.member elm peek 
+      then putInSet elm outSet
+      else return ()
+
 
 -- | Takes the cartesian product of several sets.
 cartesianProds :: Ord a => [ISet a] -> Par (ISet [a])
-cartesianProds = error "finish cartesianProds"
+cartesianProds [] = newEmptySet
+cartesianProds ls = do
+#if 1
+  -- Case 1: recursive definition in terms of pairwise products:
+  -- It would be best to create a balanced tree of these, I believe:
+  let loop [lst]     = traverseSet (\x -> return [x]) lst -- Inefficient!
+      loop (nxt:rst) = do
+        partial <- loop rst
+        p1 <- cartesianProd nxt partial
+        traverseSet (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
+  loop ls
+#else
+  hp <- newPool
+  os <- newEmptySet
+  let loop done [] acc = acc
+      loop done (nxt:rest) acc =
+        addHandler hp nxt (fn os done rest)
+        
+--  forM_ ls $ \ inSet -> do 
+--    addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
+
+  return os
+ where
+  fn outSet left right newElm = do
+    peeksL <- liftIO$ mapM (readIORef . state . unISet) left
+    peeksR <- liftIO$ mapM (readIORef . state . unISet) right
+
+--    F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
+    return undefined
+#endif
+  
 
 cartesianProd :: (Ord a, Ord b) => ISet a -> ISet b -> Par (ISet (a,b))
-cartesianProd = error "finish cartesianProd"
+cartesianProd s1 s2 = do
+-- This is implemented much like intersection:
+  hp <- newPool
+  os <- newEmptySet
+  addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
+  addHandler hp s2 (fn os s1 (\ x y -> (y,x)))
+  return os
+ where
+  -- This is expensive, but we've got to do it from both sides to counteract races:
+  fn outSet other@(ISet lv) cmbn elm1 = do
+    peek <- liftIO$ readIORef (state lv)
+    F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
 
--- | Return a fresh set which will contain strictly more elements than the input set.
--- That is, things put in the former go in the latter, but not vice versa.
-copy :: ISet a -> Par (ISet a)
-copy =
-  error "finish Set / copy"
-
--- Union is easy.
--- union :: ISet a -> ISet a -> Par (ISet a)
-
-
--- Can we do intersection with only the public interface?  It should be monotonic.
-
-intersection :: ISet a -> ISet a -> Par (ISet a)
-intersection (ISet lv1) (ISet lv2) = do
-  let ref1 = state lv1
-      ref2 = state lv2
-  return undefined
-
-
+-- cartesian :: S.Set t -> S.Set (t, t)
+-- cartesian x = S.fromDistinctAscList [(i,j) | i <- xs, j <- xs]
+--     where xs = S.toAscList x
