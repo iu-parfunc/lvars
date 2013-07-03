@@ -6,8 +6,15 @@
 
 module Data.LVar.Set
        (
-         ISet, newEmptySet, putInSet, withCallbacksThenFreeze,
-         waitElem, waitSize, freezeSet
+         ISet, newEmptySet, putInSet, 
+         waitElem, waitSize, freezeSet,
+
+         -- * Iteration and callbacks
+         forEach, addHandler, 
+         withCallbacksThenFreeze,
+
+         -- * Higher-level derived operations
+         cartesianProds, cartesianProd, copy
        ) where
 
 import           Data.IORef
@@ -15,7 +22,8 @@ import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
 
-import           Control.LVish
+import           Control.LVish hiding (addHandler)
+import qualified Control.LVish as L
 
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
@@ -57,6 +65,26 @@ withCallbacksThenFreeze (ISet lv) callback action =
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
+addHandler :: HandlerPool                 -- ^ pool to enroll in 
+           -> ISet a                      -- ^ Set to listen to
+           -> (a -> Par ())               -- ^ callback
+           -> Par ()
+addHandler hp (ISet lv) callb = do
+    L.addHandler hp lv globalCB (\x -> return$ Just$ callb x)
+    return ()
+  where
+    globalCB ref = do
+      set <- readIORef ref -- Snapshot
+      return $ Just $ 
+        F.foldlM (\() v -> fork$ callb v) () set -- Non-allocating traversal.
+
+-- | Shorthandfor creating a new handler pool and adding a single handler to it.
+forEach :: ISet a -> (a -> Par ()) -> Par HandlerPool
+forEach is cb = do 
+   hp <- newPool
+   addHandler hp is cb
+   return hp
+  
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
 putInSet :: Ord a => a -> ISet a -> Par () 
@@ -109,3 +137,21 @@ freezeSet (ISet lv) =
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
+
+
+--------------------------------------------------------------------------------
+-- Higher level routines that could be defined using the above interface.--------------------------------------------------------------------------------
+
+
+-- | Takes the cartesian product of several sets.
+cartesianProds :: Ord a => [ISet a] -> Par (ISet [a])
+cartesianProds = error "finish cartesianProds"
+
+cartesianProd :: (Ord a, Ord b) => ISet a -> ISet b -> Par (ISet (a,b))
+cartesianProd = error "finish cartesianProd"
+
+-- | Return a fresh set which will contain strictly more elements than the input set.
+-- That is, things put in the former go in the latter, but not vice versa.
+copy :: ISet a -> Par (ISet a)
+copy =
+  error "finish Set / copy"

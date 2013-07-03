@@ -7,7 +7,10 @@
 module Data.LVar.Map
        (
          IMap, newEmptyMap, insert, withCallbacksThenFreeze,
-         getKey, waitValue, waitSize, modify, freezeMap
+         getKey, waitValue, waitSize, modify, freezeMap,
+
+         -- * Higher-level derived operations
+         copy
        ) where
 
 import           Data.IORef
@@ -33,6 +36,14 @@ instance LVarData1 (IMap k) where
   type Snapshot (IMap k) a = M.Map k a
   freeze    = freezeMap
   newBottom = newEmptyMap
+
+-- | Return a fresh map which will contain strictly more elements than the input.
+-- That is, things put in the former go in the latter, but not vice versa.
+copy :: IMap k v -> Par (IMap k a)
+copy =
+  error "finish Set / copy"
+
+--------------------------------------------------------------------------------
 
 
 newEmptyMap :: Par (IMap k v)

@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
@@ -12,8 +14,8 @@ import Data.List ((\\))
 import Debug.Trace
 
 import Control.LVish
-import qualified Data.LVar.Set as IS
-import qualified Data.LVar.Map as IM
+import  Data.LVar.Set as IS
+import  Data.LVar.Map as IM
 
 --------------------------------------------------------------------------------
 
@@ -25,6 +27,7 @@ data Call = Call Label Exp [Exp] deriving (Eq, Ord, Show)
 -- Abstract state space
 data State = State Call BEnv Store Time
 --           deriving (Eq, Ord, Show)
+  deriving (Show, Eq)
 
 -- A binding environment maps variables to addresses
 -- (In Matt's example, this mapped to Addr, but I found this a bit redundant
@@ -35,8 +38,7 @@ type BEnv = M.Map Var Time
 type Store = IM.IMap Addr Denotable
 
 -- | An abstact denotable value is a set of possible values
-type Denotable = S.Set Value
--- type Denotable = IS.ISet Value
+type Denotable = IS.ISet Value
 
 -- For pure CPS, closures are the only kind of value
 type Value = Clo
@@ -44,8 +46,7 @@ type Value = Clo
 -- Closures pair a lambda-term with a binding environment that determines
 -- the values of its free variables
 data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary
-
---         deriving (Eq, Ord, Show)
+         deriving (Eq, Ord, Show)
 -- Addresses can point to values in the store. In pure CPS, the only kind of addresses are bindings
 type Addr = Bind
 
@@ -57,13 +58,32 @@ data Bind = Binding Var Time
 -- the program has traversed.
 type Time = [Label]
 
-{-
+instance Show Store where
+  show _ = "<Store>"
 
-storeInsert :: Addr -> Value -> Store -> Store
-storeInsert a v s = M.insertWith S.union a (S.singleton v) s
+-- State Call BEnv Store Time
+instance Ord State where
+  compare (State c1 be1 s1 t1)
+          (State c2 be2 s2 t2)
+    = compare c1 c2    `andthen`
+      compare be1 be2  `andthen`
+      compare t1 t2    `andthen`
+      if s1 == s2
+      then EQ
+      else error "Ord State: states are equivalent except for Store... FINISHME"
 
-storeJoin :: Store -> Store -> Store
-storeJoin = M.unionWith S.union
+
+andthen :: Ordering -> Ordering -> Ordering 
+andthen EQ b = b
+andthen a _  = a
+
+--------------------------------------------------------------------------------
+
+storeInsert :: Addr -> Value -> Store -> Par ()
+storeInsert a v s = IM.modify a s (IS.putInSet v)
+  
+-- storeJoin :: Store -> Store -> Store
+-- storeJoin = M.unionWith S.union
 
 -- k-CFA parameters
 
@@ -75,38 +95,66 @@ tick l t = take k (l:t)
 
 -- k-CFA abstract interpreter
 
-atomEval :: BEnv -> Store -> Exp -> Denotable
-atomEval benv store Halt    = S.singleton HaltClosure
+atomEval :: BEnv -> Store -> Exp -> Par Denotable
+atomEval benv store Halt    = single HaltClosure
 atomEval benv store (Ref x) = case M.lookup x benv of
-    Nothing   -> error $ "Variable unbound in BEnv: " ++ show x
-    Just t -> case M.lookup (Binding x t) store of
-        Nothing -> error $ "Address unbound in Store: " ++ show (Binding x t)
-        Just d  -> d
-atomEval benv _     (Lam l v c) = S.singleton (Closure (l, v, c) benv)
+    Nothing -> error $ "Variable unbound in BEnv: " ++ show x
+    Just t  -> IM.getKey (Binding x t) store 
+--      case m of
+--        Nothing -> error $ "Address unbound in Store: " -- ++ show (Binding x t)
+--        Just d  -> return d
+        
+atomEval benv _  (Lam l v c) = single (Closure (l, v, c) benv)
 
-next :: State -> S.Set State -- Next states
-next s@(State (Call l fun args) benv store time)
-  = trace ("next" ++ show s) $
-    S.fromList [ state'
-               | clo <- S.toList procs
-               , state' <- case clo of
-                    HaltClosure -> []
-                    Closure (_, formals, call') benv'
-                      | let benv'' = foldr (\formal benv' -> M.insert formal time benv') benv' formals
-                      -> [ State call' benv'' store' time'
-                         | params <- S.toList (transpose paramss)
-                         , let store' = foldr (\(formal, params) store  -> storeInsert (Binding formal time) params store) store (formals `zip` params)
-                         ]
-                    Arbitrary
-                      -> [ state'
-                         | params <- S.toList (transpose paramss)
-                         , param <- params
-                         , Just state' <- [escape param store]
-                         ]
-               ]
-  where time' = tick l time
-        procs  = atomEval benv store fun
-        paramss = map (atomEval benv store) args
+single :: Ord a => a -> Par (ISet a)
+single x = do 
+  s <- newEmptySet  
+  IS.putInSet x s
+  return s
+
+
+next :: State -> Par (S.Set State) -- Next states
+next st0@(State (Call l fun args) benv store time)
+  = trace ("next" ++ show st0) $ do
+    procs   <- atomEval benv store fun
+    paramss <- mapM (atomEval benv store) args
+
+    -- Construct a graph of the state space as an adjacency map:
+    graph <- newEmptyMap
+    let time' = tick l time
+
+    -- This applies to all elements evr added to the set object:
+    IS.forEach procs $ \ clo -> do
+      case clo of
+        HaltClosure -> return ()
+        
+        Closure (_, formals, call') benv' -> do 
+          let benv'' = foldr (\formal benv' -> M.insert formal time benv') benv' formals
+          allParamConfs <- IS.cartesianProds paramss
+          IS.forEach allParamConfs $ \ params -> do
+
+            -- Hmm... we need to create a new store for the extended bindings
+            store' <- IM.copy store
+            let newST = State call' benv'' store' time'                
+            forM_ (formals `zip` params) $ \(formal, params) ->
+              storeInsert (Binding formal time) params store'
+            
+            IM.modify st0 graph (putInSet newST)
+            return ()
+          return ()
+
+-- TODO: arbitrary:          
+                     -- Arbitrary
+                     --   -> [ state'
+                     --      | params <- S.toList (transpose paramss)
+                     --      , param <- params
+                     --      , Just state' <- [escape param store]
+                     --      ]
+
+      return ()
+    return undefined
+
+storeJoin = undefined
 
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
@@ -118,12 +166,17 @@ escape (Closure (_l, formals, call) benv) store = Just (State call (benv `M.unio
   where (benv', store') = fvStuff formals
 
 fvStuff :: [Var] -> (BEnv, Store)
-fvStuff xs = (M.fromList [(x, []) | x <- xs], M.fromList [(Binding x [], S.singleton Arbitrary) | x <- xs])
+fvStuff xs = (M.fromList [(x, []) | x <- xs],
+--              M.fromList [(Binding x [], S.singleton Arbitrary) | x <- xs])
+              error "FINISHME")
 
-transpose :: Ord a => [S.Set a] -> S.Set [a]
-transpose []         = S.singleton []
-transpose (arg:args) = S.fromList [arg:args | args <- S.toList (transpose args), arg <- S.toList arg]
+-- | Takes the cartesian product of several sets.
+transpose :: Ord a => [IS.ISet a] -> Par (IS.ISet [a])
+transpose = error "finish transpose"
+-- transpose []         = S.singleton []
+-- transpose (arg:args) = S.fromList [arg:args | args <- S.toList (transpose args), arg <- S.toList arg]
 
+{-
 -- State-space exploration
 
 explore :: S.Set State -> [State] -> S.Set State
@@ -220,3 +273,6 @@ main = forM_ [fvExample, standardExample] $ \example -> do
            putStrLn (x ++ ":")
            mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 -}
+
+main = putStrLn "hi"
+
