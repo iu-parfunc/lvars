@@ -6,8 +6,12 @@
 
 module Data.LVar.Map
        (
-         IMap, newEmptyMap, insert, withCallbacksThenFreeze,
+         IMap, newEmptyMap, insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
+
+         -- * Iteration and callbacks
+         forEach, addHandler, 
+         withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
          copy
@@ -17,7 +21,8 @@ import           Data.IORef
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
-import           Control.LVish
+import           Control.LVish hiding (addHandler)
+import qualified Control.LVish as L
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -42,6 +47,7 @@ instance LVarData1 (IMap k) where
 copy :: IMap k v -> Par (IMap k a)
 copy =
   error "finish Set / copy"
+
 
 --------------------------------------------------------------------------------
 
@@ -74,6 +80,29 @@ withCallbacksThenFreeze (IMap lv) callback action =
         
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
+
+
+addHandler :: HandlerPool                 -- ^ pool to enroll in 
+           -> IMap k v                    -- ^ Map to listen to
+           -> (k -> v -> Par ())          -- ^ callback
+           -> Par ()
+addHandler hp (IMap lv) callb = do
+    L.addHandler hp lv globalCB (\(k,v) -> return$ Just$ callb k v)
+    return ()
+  where
+    globalCB ref = do
+      mp <- readIORef ref -- Snapshot
+      return $ Just $
+        -- Fixme: need traverseWithKey_ :
+        mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
+
+
+-- | Shorthandfor creating a new handler pool and adding a single handler to it.
+forEach :: IMap k v -> (k -> v -> Par ()) -> Par HandlerPool
+forEach is cb = do 
+   hp <- newPool
+   addHandler hp is cb
+   return hp
 
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.

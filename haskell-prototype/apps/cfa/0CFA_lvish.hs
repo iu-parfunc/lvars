@@ -114,8 +114,8 @@ single x = do
   return s
 
 
-next :: State -> Par (S.Set State) -- Next states
-next st0@(State (Call l fun args) benv store time)
+next :: IS.ISet State -> State -> Par () -- Next states
+next seen st0@(State (Call l fun args) benv store time)
   = trace ("next" ++ show st0) $ do
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
@@ -143,7 +143,8 @@ next st0@(State (Call l fun args) benv store time)
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
             let newST = State call' benv'' store' time'
-            IM.modify graph st0 (putInSet newST)
+            -- IM.modify graph st0 (putInSet newST)
+            putInSet newST seen -- Extending the seen set should spawn more work.
             return ()
           return ()
 
@@ -192,17 +193,21 @@ fvStuff xs = do
 --     explore (S.insert todo seen) (S.toList nbrs ++ todos)
 
 -- | Kick off the state space exploration by setting up a handler.
-explore :: State -> Par ()
+explore :: State -> Par (IS.ISet State)
 explore initial = do
-  s0 <- newEmptySet
-  forEach s0 $ \ oneST -> do
-    expanded <- next oneST
-    -- Recursively trigger more callbacks:
-    forM_ (S.toList expanded) (`putInSet` s0)
+  allSeen <- newEmptySet
   liftIO$ putStrLn$ "Kicking off with an initial state: "++show initial
-  putInSet initial s0 
-  return ()
+  putInSet initial allSeen 
   
+  -- Feedback: recursively feed back new states into allSeen in parallel:
+  forEach allSeen (next allSeen)
+    -- $ \ oneST -> do
+    -- expanded <- next oneST
+    -- -- Recursively trigger more callbacks:
+    -- forM_ (S.toList expanded) (`putInSet` allSeen)
+  return allSeen
+
+-- explore :: S.Set State -> [State] -> S.Set State
 -- explore seen (todo:todos)
 --   | todo `S.member` seen = explore seen todos
 --   | otherwise            = do
@@ -216,12 +221,19 @@ explore initial = do
  -- of the seen ones then we can just loop. Otherwise, union the new store onto a global
  -- "widening" store, update the global store with this one, and do abstract evalution on the state with the new sotre.
 
-{-
-
 -- User interface
 
-summarize :: S.Set State -> Store
-summarize states = S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
+summarize :: S.Set State -> Par Store
+summarize states = do
+  store <- newEmptyMap
+  IS.forEach states $ \ State _ _ store _ -> do
+    IM.forEach store $ \ (k,v) -> do
+      undefined
+  return $ 
+    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
+  
+
+{-
 
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
 monovariantStore :: Store -> M.Map Var (S.Set Exp)

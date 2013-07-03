@@ -155,3 +155,17 @@ cartesianProd = error "finish cartesianProd"
 copy :: ISet a -> Par (ISet a)
 copy =
   error "finish Set / copy"
+
+-- Union is easy.
+-- union :: ISet a -> ISet a -> Par (ISet a)
+
+
+-- Can we do intersection with only the public interface?  It should be monotonic.
+
+intersection :: ISet a -> ISet a -> Par (ISet a)
+intersection (ISet lv1) (ISet lv2) = do
+  let ref1 = state lv1
+      ref2 = state lv2
+  return undefined
+
+
