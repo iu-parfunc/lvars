@@ -7,8 +7,9 @@
 
 module Data.LVar.Set
        (
-         ISet, newEmptySet, putInSet, 
-         waitElem, waitSize, freezeSet,
+         -- * Basic operations
+         ISet, newEmptySet, newSet, newFromList,
+         putInSet, waitElem, waitSize, freezeSet,
 
          -- * Iteration and callbacks
          forEach, addHandler, 
@@ -47,8 +48,19 @@ instance LVarData1 ISet where
   freeze    = freezeSet
   newBottom = newEmptySet
 
+-- | Create a new, empty, monotonically growing 'ISet'.
 newEmptySet :: Par (ISet a)
-newEmptySet = fmap ISet $ newLV$ newIORef S.empty
+newEmptySet = newSet S.empty
+
+-- | Create a new set populated with initial elements.
+newSet :: S.Set a -> Par (ISet a)
+newSet s = fmap ISet $ newLV$ newIORef s
+
+-- | Create a new 'ISet' drawing initial elements from an existing list.
+newFromList :: Ord a => [a] -> Par (ISet a)
+newFromList ls = newSet (S.fromList ls)
+
+-- (Todo: in production you might want even more ... like going from a Vector)
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
@@ -206,7 +218,7 @@ cartesianProds ls = do
   let loop [lst]     = traverseSet (\x -> return [x]) lst -- Inefficient!
       loop (nxt:rst) = do
         partial <- loop rst
-        p1 <- cartesianProd nxt partial
+        (_,p1) <- cartesianProd Nothing nxt partial
         traverseSet (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
   loop ls
 #else
@@ -230,20 +242,32 @@ cartesianProds ls = do
 #endif
   
 
-cartesianProd :: (Ord a, Ord b) => ISet a -> ISet b -> Par (ISet (a,b))
-cartesianProd s1 s2 = do
--- This is implemented much like intersection:
-  hp <- newPool
+cartesianProd :: (Ord a, Ord b) => Maybe HandlerPool -> ISet a -> ISet b -> Par (HandlerPool, ISet (a,b))
+cartesianProd mh s1 s2 = do
+-- This is implemented much like intersection:  
+  hp <- case mh of
+          Nothing -> newPool
+          Just hp -> return hp 
   os <- newEmptySet
   addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
   addHandler hp s2 (fn os s1 (\ x y -> (y,x)))
-  return os
+  return (hp,os)
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
   fn outSet other@(ISet lv) cmbn elm1 = do
     peek <- liftIO$ readIORef (state lv)
+--    liftIO $ putStrLn " ! Cartesian prod handler running..."
     F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
 
 -- cartesian :: S.Set t -> S.Set (t, t)
 -- cartesian x = S.fromDistinctAscList [(i,j) | i <- xs, j <- xs]
 --     where xs = S.toAscList x
+
+
+--------------------------------------------------------------------------------
+-- Alternate versions of functions that EXPOSE the HandlerPools
+--------------------------------------------------------------------------------
+
+-- TODO: suffix these with "HP".
+
+-- cartesianProdHP     

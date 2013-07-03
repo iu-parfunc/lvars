@@ -20,8 +20,8 @@ import Data.Traversable (traverse)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-import qualified Data.LVar.Set as IS
-import qualified Data.LVar.Map as IM
+import Data.LVar.Set as IS
+import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
@@ -251,6 +251,40 @@ v7c = runParIO $ do
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
 
+--------------------------------------------------------------------------------
+-- Higher level derived ops
+--------------------------------------------------------------------------------  
+
+case_v8a :: Assertion
+case_v8a = assertEqual "simple cartesian product test"
+           (S.fromList
+            [(1,'a'),(1,'b'),(1,'c'),
+             (2,'a'),(2,'b'),(2,'c'),
+             (3,'a'),(3,'b'),(3,'c')])
+           =<< v8a
+
+-- v8a :: IO (S.Set (Integer, Char))
+v8a :: IO (S.Set (Integer, Char))
+v8a = runParIO $ do
+  s1 <- IS.newFromList [1,2,3]
+  s2 <- IS.newFromList ['a','b','c']
+  liftIO $ putStrLn " [v8a] now to construct cartesian product..."
+  (h,s3) <- IS.cartesianProd Nothing s1 s2
+  liftIO $ putStrLn " [v8a] cartesianProd call finished... next quiesce"
+  IS.forEach s3 $ \ elm ->
+    liftIO$ putStrLn$ "[v8a]   Got element: "++show elm
+  quiesce h
+  liftIO $ putStrLn " [v8a] quiesce finished, next freeze::"
+  freezeSet s3
+
+
+-- v8b :: IO (S.Set Int)
+-- v8b = runParIO $ do
+--   s1 <- IS.newFromList [1,2,3]
+--   s2 <- IS.newFromList [2,3,4]
+--   s3 <- IS.intersection s1 s2
+--   quiesce h
+--   freezeSet s3
 
 
 --------------------------------------------------------------------------------
