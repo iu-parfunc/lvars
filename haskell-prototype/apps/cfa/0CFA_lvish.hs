@@ -200,7 +200,7 @@ explore initial = do
   putInSet initial allSeen 
   
   -- Feedback: recursively feed back new states into allSeen in parallel:
-  forEach allSeen (next allSeen)
+  IS.forEach allSeen (next allSeen)
     -- $ \ oneST -> do
     -- expanded <- next oneST
     -- -- Recursively trigger more callbacks:
@@ -223,14 +223,17 @@ explore initial = do
 
 -- User interface
 
-summarize :: S.Set State -> Par Store
+-- summarize :: S.Set State -> Par Store
+summarize :: IS.ISet State -> Par Store  
 summarize states = do
-  store <- newEmptyMap
-  IS.forEach states $ \ State _ _ store _ -> do
-    IM.forEach store $ \ (k,v) -> do
-      undefined
-  return $ 
-    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
+  storeFin <- newEmptyMap
+  -- Note: a generic union operation could also handle this:
+  void$ IS.forEach states $ \ (State _ _ store_n _) -> 
+    void$ IM.forEach store_n $ \ key val -> 
+      void$ IS.forEach val $ \ elem  -> 
+        IM.modify storeFin key $ putInSet elem
+  return storeFin
+--    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
 
 {-
