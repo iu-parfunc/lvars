@@ -81,7 +81,7 @@ andthen a _  = a
 --------------------------------------------------------------------------------
 
 storeInsert :: Addr -> Value -> Store -> Par ()
-storeInsert a v s = IM.modify a s (IS.putInSet v)
+storeInsert a v s = IM.modify s a (IS.putInSet v)
   
 -- storeJoin :: Store -> Store -> Store
 -- storeJoin = M.unionWith S.union
@@ -135,16 +135,15 @@ next st0@(State (Call l fun args) benv store time)
           IS.forEach allParamConfs $ \ params -> do
 
             -- Hmm... we need to create a new store for the extended bindings
-#if 0            
+#if 1
             store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
 #else
             let store' = store
 #endif                      
-            let newST = State call' benv'' store' time'                
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
-            
-            IM.modify st0 graph (putInSet newST)
+            let newST = State call' benv'' store' time'
+            IM.modify graph st0 (putInSet newST)
             return ()
           return ()
 

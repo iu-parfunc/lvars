@@ -218,7 +218,7 @@ i7b = runParIO $ do
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.putInSet 3.33 s
   -- RACE: this modify is racing with the insert of s2:
-  IM.modify 2 mp (IS.putInSet 4.44)
+  IM.modify mp 2 (IS.putInSet 4.44)
 
   IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
@@ -240,9 +240,9 @@ v7c = runParIO $ do
   f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.putInSet 3.33 s
-  IM.modify 2 mp (IS.putInSet 4.44)
-  f3 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 5.55)
-  f4 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 6.6)
+  IM.modify mp 2 (IS.putInSet 4.44)
+  f3 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 5.55)
+  f4 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 6.6)
   -- No easy way to wait on the total size of all contained sets...
   -- 
   -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"

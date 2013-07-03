@@ -98,8 +98,8 @@ insert !key !elm (IMap lv) = putLV lv putter
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
 modify :: forall f a b key . (Ord key, LVarData1 f) =>
-          key -> IMap key (f a) -> (f a -> Par b) -> Par b
-modify key (IMap lv) fn = do 
+          IMap key (f a) -> key -> (f a -> Par b) -> Par b
+modify (IMap lv) key fn = do 
   let ref = state lv 
   mp  <- liftIO$ readIORef ref
   case M.lookup key mp of
