@@ -267,15 +267,42 @@ case_v8a = assertEqual "simple cartesian product test"
 v8a :: IO (S.Set (Integer, Char))
 v8a = runParIO $ do
   s1 <- IS.newFromList [1,2,3]
-  s2 <- IS.newFromList ['a','b','c']
+  s2 <- IS.newFromList ['a','b']
   liftIO $ putStrLn " [v8a] now to construct cartesian product..."
-  (h,s3) <- IS.cartesianProd Nothing s1 s2
+  (h,s3) <- IS.cartesianProdHP Nothing s1 s2
   liftIO $ putStrLn " [v8a] cartesianProd call finished... next quiesce"
   IS.forEach s3 $ \ elm ->
     liftIO$ putStrLn$ "[v8a]   Got element: "++show elm
+  putInSet 'c' s2
   quiesce h
   liftIO $ putStrLn " [v8a] quiesce finished, next freeze::"
   freezeSet s3
+
+
+case_v8b :: Assertion
+case_v8b = assertEqual "3-way cartesian product"
+           (S.fromList
+            [[1,40,101],[1,40,102],  [1,50,101],[1,50,102],
+             [2,40,101],[2,40,102],  [2,50,101],[2,50,102]]
+            )
+           =<< v8b
+
+-- [2013.07.03] Seeing nondeterministic failures here... hmm...
+-- Ah, possibly divergence too... jeez.
+v8b :: IO (S.Set [Int])
+v8b = runParIO $ do
+  hp <- newPool
+  s1 <- IS.newFromList [1,2]
+  s2 <- IS.newFromList [40,50]
+    -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
+  (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
+  (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
+  IS.forEachHP (Just hp) s4 $ \ elm ->
+    liftIO$ putStrLn$ "[v8b]   Got element: "++show elm
+  quiesce hp
+  liftIO $ putStrLn " [v8b] quiesce finished, next freeze::"
+  freezeSet s4
+
 
 
 -- v8b :: IO (S.Set Int)

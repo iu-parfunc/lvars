@@ -415,7 +415,7 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
-  putStrLn "About to fork..."      
+  putStrLn " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
@@ -424,7 +424,7 @@ runPar_internal c = do
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         error ("EXCEPTION in runPar: "++show e)
     )
-  putStrLn "parent thread escaped unscathed"
+  putStrLn " [dbg-lvish] parent thread escaped unscathed"
   return ans
 #else
   let runWorker (cpu, q) = do 
