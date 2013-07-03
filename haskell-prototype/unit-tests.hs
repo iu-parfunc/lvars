@@ -299,6 +299,8 @@ v8b = runParIO $ do
   (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
   IS.forEachHP (Just hp) s4 $ \ elm ->
     liftIO$ putStrLn$ "[v8b]   Got element: "++show elm
+  -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
+  -- liftIO$ threadDelay$ 100*1000
   quiesce hp
   liftIO $ putStrLn " [v8b] quiesce finished, next freeze::"
   freezeSet s4
