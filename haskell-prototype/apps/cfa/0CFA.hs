@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
@@ -134,7 +135,11 @@ next st0@(State (Call l fun args) benv store time)
           IS.forEach allParamConfs $ \ params -> do
 
             -- Hmm... we need to create a new store for the extended bindings
-            store' <- IM.copy store
+#if 0            
+            store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
+#else
+            let store' = store
+#endif                      
             let newST = State call' benv'' store' time'                
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
@@ -170,26 +175,41 @@ fvStuff xs = (M.fromList [(x, []) | x <- xs],
 --              M.fromList [(Binding x [], S.singleton Arbitrary) | x <- xs])
               error "FINISHME")
 
--- | Takes the cartesian product of several sets.
-transpose :: Ord a => [IS.ISet a] -> Par (IS.ISet [a])
-transpose = error "finish transpose"
--- transpose []         = S.singleton []
--- transpose (arg:args) = S.fromList [arg:args | args <- S.toList (transpose args), arg <- S.toList arg]
-
-{-
 -- State-space exploration
 
-explore :: S.Set State -> [State] -> S.Set State
-explore seen [] = seen
-explore seen (todo:todos)
-  | todo `S.member` seen = explore seen todos
-  | otherwise            = explore (S.insert todo seen) (S.toList (next todo) ++ todos)
+-- RRN: This can be subsumed by the graph lvar.  It becomes a handler.
+-- explore :: S.Set State -> [State] -> Par (S.Set State)
+-- explore seen [] = return seen
+-- explore seen (todo:todos)
+--   | todo `S.member` seen = explore seen todos
+--   | otherwise            = do
+--     nbrs <- next todo
+--     explore (S.insert todo seen) (S.toList nbrs ++ todos)
+
+explore :: State -> Par ()
+explore initial = do
+  s0 <- newEmptySet
+  forEach s0 $ \ oneST -> do
+    expanded <- next oneST
+    -- Recursively trigger more callbacks:
+    forM_ (S.toList expanded) (`putInSet` s0)
+  putInSet initial s0 
+  return ()
+  
+-- explore seen (todo:todos)
+--   | todo `S.member` seen = explore seen todos
+--   | otherwise            = do
+--     nbrs <- next todo
+--     explore (S.insert todo seen) (S.toList nbrs ++ todos)
+
  -- NB: Might's dissertation (Section 5.3.5) explains how we can apply widening here to
  -- improve the worst case runtime from exponential to cubic: for an new state from the
  -- work list, we must extract all seen states which match in every element *except* the
  -- store. Then, join those seen stores together. If the potential store is a subset
  -- of the seen ones then we can just loop. Otherwise, union the new store onto a global
  -- "widening" store, update the global store with this one, and do abstract evalution on the state with the new sotre.
+
+{-
 
 -- User interface
 
