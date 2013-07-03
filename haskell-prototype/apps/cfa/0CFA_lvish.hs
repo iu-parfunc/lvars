@@ -161,6 +161,7 @@ next st0@(State (Call l fun args) benv store time)
 
 storeJoin = undefined
 
+{-
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
 -- lambda flow to them, no lambdas, or all lambdas
@@ -169,11 +170,16 @@ escape Arbitrary                          _     = Nothing -- If an arbitrary val
 escape HaltClosure                        _     = Nothing
 escape (Closure (_l, formals, call) benv) store = Just (State call (benv `M.union` benv') (store `storeJoin` store') [])
   where (benv', store') = fvStuff formals
+-}
 
-fvStuff :: [Var] -> (BEnv, Store)
-fvStuff xs = (M.fromList [(x, []) | x <- xs],
---              M.fromList [(Binding x [], S.singleton Arbitrary) | x <- xs])
-              error "FINISHME")
+-- | Create an environment and store with empty/Arbitrary bindings.
+fvStuff :: [Var] -> Par (BEnv, Store)
+fvStuff xs = do
+  store <- newEmptyMap
+  forM_ xs $ \x -> do
+    set <- single Arbitrary
+    IM.insert (Binding x []) set store
+  return (M.fromList [(x, []) | x <- xs], store)
 
 -- State-space exploration
 
@@ -186,6 +192,7 @@ fvStuff xs = (M.fromList [(x, []) | x <- xs],
 --     nbrs <- next todo
 --     explore (S.insert todo seen) (S.toList nbrs ++ todos)
 
+-- | Kick off the state space exploration by setting up a handler.
 explore :: State -> Par ()
 explore initial = do
   s0 <- newEmptySet
@@ -193,6 +200,7 @@ explore initial = do
     expanded <- next oneST
     -- Recursively trigger more callbacks:
     forM_ (S.toList expanded) (`putInSet` s0)
+  liftIO$ putStrLn$ "Kicking off with an initial state: "++show initial
   putInSet initial s0 
   return ()
   
