@@ -17,7 +17,10 @@ module Control.LVish.SchedIdempotent
    runParIO,
 
    -- * Interfaces for generic operations
-   LVarData1(..)   
+   LVarData1(..),
+   
+   -- * Debug facilities
+   logStrLn
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -32,12 +35,32 @@ import qualified Data.Set as S
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
+import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
 
 import qualified Control.LVish.SchedIdempotentInternal as Sched
+
+----------------------------------------------------------------------------------------------------
+-- THREAD-SAFE LOGGING
+----------------------------------------------------------------------------------------------------
+
+-- This should probably be moved into its own module...
+
+globalLog :: IORef [String]
+globalLog = unsafePerformIO $ newIORef []
+
+-- | Atomically add a line to the given log.
+logStrLn :: String -> Par ()
+logStrLn = liftIO . logStrLn_
+logStrLn_ s = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+
+-- | Print all accumulated log lines
+printLog = do
+  lines <- readIORef globalLog
+  mapM_ putStrLn $ reverse lines
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling
@@ -415,16 +438,18 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
-  putStrLn " [dbg-lvish] About to fork workers..."      
+  logStrLn_ " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        putStrLn$ "Killing off workers.. "++show tids
+        logStrLn_$ "Killing off workers.. "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         error ("EXCEPTION in runPar: "++show e)
     )
-  putStrLn " [dbg-lvish] parent thread escaped unscathed"
+  logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
+  printLog
+  hFlush stdout
   return ans
 #else
   let runWorker (cpu, q) = do 

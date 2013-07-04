@@ -98,7 +98,7 @@ addHandler hp (ISet lv) callb = do
     globalCB ref = do
       set <- readIORef ref -- Snapshot
       return $ Just $ 
-        F.foldlM (\() v -> fork$ callb v) () set -- Non-allocating traversal.
+        F.foldlM (\() v -> callb v) () set -- Non-allocating traversal.
 
 -- | Shorthandfor creating a new handler pool and adding a single handler to it.
 forEach :: ISet a -> (a -> Par ()) -> Par HandlerPool
@@ -273,12 +273,12 @@ cartesianProdsHP mh ls = do
 #if 1
   -- Case 1: recursive definition in terms of pairwise products:
   -- It would be best to create a balanced tree of these, I believe:
-  let loop [lst]     = traverseSet (\x -> return [x]) lst -- Inefficient!
+  let loop [lst]     = traverseSetHP (Just hp) (\x -> return [x]) lst -- Inefficient!
       loop (nxt:rst) = do
-        partial <- loop rst
+        (_, partial) <- loop rst
         (_,p1) <- cartesianProdHP (Just hp) nxt partial
-        traverseSet (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
-  x <- loop ls
+        traverseSetHP (Just hp) (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
+  (_, x) <- loop ls
   return (hp, x)
 #else
   os <- newEmptySet

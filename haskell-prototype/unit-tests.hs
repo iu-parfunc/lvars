@@ -13,6 +13,7 @@ import Control.Concurrent
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import System.Environment (getArgs)
+import System.IO
 
 import Control.Exception (catch, evaluate, SomeException)
 
@@ -57,7 +58,6 @@ main = T.stdTestHarness $ return all_tests
 main :: IO ()
 main = $(defaultMainGenerator)
 #endif
-
 
 case_v0 :: HU.Assertion
 case_v0 = do res <- v0
@@ -188,10 +188,10 @@ v7a = runParIO $
                IM.insert 200 (200.1 + v) mp
      IM.insert 1 1 mp
      IM.insert 2 2 mp
-     liftIO$ putStrLn "[v7a] Did the first two puts.."
+     logStrLn "[v7a] Did the first two puts.."
      liftIO$ threadDelay 1000
      IM.insert 3 3 mp
-     liftIO$ putStrLn "[v7a] Did the first third put."
+     logStrLn "[v7a] Did the first third put."
      IM.waitSize 5 mp
      IM.freezeMap mp
 
@@ -268,14 +268,14 @@ v8a :: IO (S.Set (Integer, Char))
 v8a = runParIO $ do
   s1 <- IS.newFromList [1,2,3]
   s2 <- IS.newFromList ['a','b']
-  liftIO $ putStrLn " [v8a] now to construct cartesian product..."
+  logStrLn " [v8a] now to construct cartesian product..."
   (h,s3) <- IS.cartesianProdHP Nothing s1 s2
-  liftIO $ putStrLn " [v8a] cartesianProd call finished... next quiesce"
+  logStrLn " [v8a] cartesianProd call finished... next quiesce"
   IS.forEach s3 $ \ elm ->
-    liftIO$ putStrLn$ "[v8a]   Got element: "++show elm
+    logStrLn$ " [v8a]   Got element: "++show elm
   putInSet 'c' s2
   quiesce h
-  liftIO $ putStrLn " [v8a] quiesce finished, next freeze::"
+  logStrLn " [v8a] quiesce finished, next freeze::"
   freezeSet s3
 
 
@@ -298,11 +298,11 @@ v8b = runParIO $ do
   (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
   (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
   IS.forEachHP (Just hp) s4 $ \ elm ->
-    liftIO$ putStrLn$ "[v8b]   Got element: "++show elm
+    logStrLn $ " [v8b]   Got element: "++show elm
   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
   -- liftIO$ threadDelay$ 100*1000
   quiesce hp
-  liftIO $ putStrLn " [v8b] quiesce finished, next freeze::"
+  logStrLn " [v8b] quiesce finished, next freeze::"
   freezeSet s4
 
 
