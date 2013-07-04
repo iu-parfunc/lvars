@@ -13,11 +13,14 @@
 
 module Control.LVish.SchedIdempotent
   (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
-   newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
+   newPool, addHandler, quiesce, fork, forkInPool, liftIO, yield, Par(),
    runParIO,
 
    -- * Interfaces for generic operations
-   LVarData1(..)   
+   LVarData1(..),
+   
+   -- * Debug facilities
+   logStrLn
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -32,12 +35,32 @@ import qualified Data.Set as S
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
+import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
 
 import qualified Control.LVish.SchedIdempotentInternal as Sched
+
+----------------------------------------------------------------------------------------------------
+-- THREAD-SAFE LOGGING
+----------------------------------------------------------------------------------------------------
+
+-- This should probably be moved into its own module...
+
+globalLog :: IORef [String]
+globalLog = unsafePerformIO $ newIORef []
+
+-- | Atomically add a line to the given log.
+logStrLn :: String -> Par ()
+logStrLn = liftIO . logStrLn_
+logStrLn_ s = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+
+-- | Print all accumulated log lines
+printLog = do
+  lines <- readIORef globalLog
+  mapM_ putStrLn $ reverse lines
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling
@@ -278,6 +301,19 @@ newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
   exec (k $ HandlerPool cnt bag) q
+  
+-- | Special "done" continuation for handler threads
+onFinishHandler :: HandlerPool -> a -> ClosedPar  
+onFinishHandler hp _ = ClosedPar $ \q -> do
+  let cnt = numHandlers hp
+  C.dec cnt                 -- record handler completion in pool
+  quiescent <- C.poll cnt   -- check for (transient) quiescence
+  when quiescent $          -- wake any threads waiting on quiescence
+    let invoke t tok = do
+          B.remove tok
+          Sched.pushWork q t                
+    in B.foreach (blockedOnQuiesce hp) invoke
+  sched q
 
 -- | Add a handler to an existing pool
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
@@ -286,27 +322,14 @@ addHandler :: HandlerPool                 -- ^ pool to enroll in
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
 addHandler hp LVar {state, status} globalThresh updateThresh = 
-  let cnt = numHandlers hp    
-      
-      spawnWhen thresh q = do
+  let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          C.inc cnt   -- record callback invocation in pool        
+          C.inc $ numHandlers hp  -- record handler invocation in pool        
           
           -- create callback thread, which is responsible for recording its
           -- termination in the handler pool
-          Sched.pushWork q $ close cb onFinishCB
-          
-      -- what to do when a callback thread completes
-      onFinishCB _ = ClosedPar $ \q -> do
-        C.dec cnt                 -- record callback completion in pool
-        quiescent <- C.poll cnt   -- check for (transient) quiescence
-        when quiescent $          -- wake any threads waiting on quiescence
-          let invoke t tok = do
-                B.remove tok
-                Sched.pushWork q t                
-          in B.foreach (blockedOnQuiesce hp) invoke
-        sched q
+          Sched.pushWork q $ close cb $ onFinishHandler hp          
         
       onUpdate d _ q = spawnWhen (updateThresh d) q
       onFreeze   _ _ = return ()
@@ -364,6 +387,13 @@ fork child = mkPar $ \k q -> do
   exec (close child $ const (ClosedPar sched)) q
   -- Sched.pushWork q (close child emptyCont) -- "Help-first" policy.  Generally bad.
   --   exec (k ()) q
+  
+-- | Fork a child thread in the context of a handler pool
+forkInPool :: HandlerPool -> Par () -> Par ()
+forkInPool hp child = mkPar $ \k q -> do
+  Sched.pushWork q (k ()) -- "Work-first" policy.
+  C.inc $ numHandlers hp
+  exec (close child $ onFinishHandler hp) q  
 
 -- | Perform an IO action
 liftIO :: IO a -> Par a
@@ -415,16 +445,18 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
-  putStrLn " [dbg-lvish] About to fork workers..."      
+  logStrLn_ " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        putStrLn$ "Killing off workers.. "++show tids
+        logStrLn_$ "Killing off workers.. "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         error ("EXCEPTION in runPar: "++show e)
     )
-  putStrLn " [dbg-lvish] parent thread escaped unscathed"
+  logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
+  printLog
+  hFlush stdout
   return ans
 #else
   let runWorker (cpu, q) = do 

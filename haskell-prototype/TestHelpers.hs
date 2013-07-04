@@ -15,6 +15,7 @@ module TestHelpers
  )
  where 
 
+import Data.IORef
 import Control.Monad
 import qualified Data.Set as S
 import Text.Printf
