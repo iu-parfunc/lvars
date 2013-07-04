@@ -98,7 +98,7 @@ addHandler hp (ISet lv) callb = do
     globalCB ref = do
       set <- readIORef ref -- Snapshot
       return $ Just $ 
-        F.foldlM (\() v -> callb v) () set -- Non-allocating traversal.
+        F.foldlM (\() v -> forkInPool hp $ callb v) () set -- Non-allocating traversal.
 
 -- | Shorthandfor creating a new handler pool and adding a single handler to it.
 forEach :: ISet a -> (a -> Par ()) -> Par HandlerPool

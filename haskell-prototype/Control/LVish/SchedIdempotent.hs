@@ -13,7 +13,7 @@
 
 module Control.LVish.SchedIdempotent
   (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
-   newPool, addHandler, quiesce, fork, liftIO, yield, Par(),
+   newPool, addHandler, quiesce, fork, forkInPool, liftIO, yield, Par(),
    runParIO,
 
    -- * Interfaces for generic operations
@@ -301,6 +301,19 @@ newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
   exec (k $ HandlerPool cnt bag) q
+  
+-- | Special "done" continuation for handler threads
+onFinishHandler :: HandlerPool -> a -> ClosedPar  
+onFinishHandler hp _ = ClosedPar $ \q -> do
+  let cnt = numHandlers hp
+  C.dec cnt                 -- record handler completion in pool
+  quiescent <- C.poll cnt   -- check for (transient) quiescence
+  when quiescent $          -- wake any threads waiting on quiescence
+    let invoke t tok = do
+          B.remove tok
+          Sched.pushWork q t                
+    in B.foreach (blockedOnQuiesce hp) invoke
+  sched q
 
 -- | Add a handler to an existing pool
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
@@ -309,27 +322,14 @@ addHandler :: HandlerPool                 -- ^ pool to enroll in
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
 addHandler hp LVar {state, status} globalThresh updateThresh = 
-  let cnt = numHandlers hp    
-      
-      spawnWhen thresh q = do
+  let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          C.inc cnt   -- record callback invocation in pool        
+          C.inc $ numHandlers hp  -- record handler invocation in pool        
           
           -- create callback thread, which is responsible for recording its
           -- termination in the handler pool
-          Sched.pushWork q $ close cb onFinishCB
-          
-      -- what to do when a callback thread completes
-      onFinishCB _ = ClosedPar $ \q -> do
-        C.dec cnt                 -- record callback completion in pool
-        quiescent <- C.poll cnt   -- check for (transient) quiescence
-        when quiescent $          -- wake any threads waiting on quiescence
-          let invoke t tok = do
-                B.remove tok
-                Sched.pushWork q t                
-          in B.foreach (blockedOnQuiesce hp) invoke
-        sched q
+          Sched.pushWork q $ close cb $ onFinishHandler hp          
         
       onUpdate d _ q = spawnWhen (updateThresh d) q
       onFreeze   _ _ = return ()
@@ -387,6 +387,13 @@ fork child = mkPar $ \k q -> do
   exec (close child $ const (ClosedPar sched)) q
   -- Sched.pushWork q (close child emptyCont) -- "Help-first" policy.  Generally bad.
   --   exec (k ()) q
+  
+-- | Fork a child thread in the context of a handler pool
+forkInPool :: HandlerPool -> Par () -> Par ()
+forkInPool hp child = mkPar $ \k q -> do
+  Sched.pushWork q (k ()) -- "Work-first" policy.
+  C.inc $ numHandlers hp
+  exec (close child $ onFinishHandler hp) q  
 
 -- | Perform an IO action
 liftIO :: IO a -> Par a
