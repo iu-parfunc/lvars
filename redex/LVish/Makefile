@@ -7,3 +7,6 @@ nat-lang-all:
 
 natpair-ivars-lang-all:
 	raco test -s test-all natpair-ivars.rkt
+
+clean:
+	rm -rf compiled/
