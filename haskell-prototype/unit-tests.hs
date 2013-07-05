@@ -9,7 +9,9 @@ import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
+import Control.Monad
 import Control.Concurrent
+import Control.Concurrent.MVar
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import System.Environment (getArgs)
@@ -27,6 +29,8 @@ import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
+
+import Data.Concurrent.SNZI as SNZI
 
 import TestHelpers as T
 
@@ -314,7 +318,100 @@ v8b = runParIO $ do
 --   s3 <- IS.intersection s1 s2
 --   quiesce h
 --   freezeSet s3
+  
+--------------------------------------------------------------------------------
+-- TESTS FOR SNZI  
+--------------------------------------------------------------------------------
+  
+-- | Test snzi in a sequential setting
+snzi1 :: IO (Bool)
+snzi1 = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  forM_ cs SNZI.arrive
+  forM_ cs SNZI.depart  
+  forM_ cs SNZI.depart
+  poll
+  
+case_snzi1 :: Assertion  
+case_snzi1 = snzi1 >>= assertEqual "sequential use of SNZI" True
 
+-- | Very simple sequential snzi test
+snzi2a :: IO (Bool)
+snzi2a = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  poll
+  
+case_snzi2a :: Assertion  
+case_snzi2a = snzi2a >>= assertEqual "sequential use of SNZI" False
+
+-- | Test snzi in a sequential setting
+snzi2 :: IO (Bool)
+snzi2 = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  forM_ cs SNZI.arrive
+  forM_ cs SNZI.depart  
+  forM_ cs SNZI.depart
+  forM_ cs SNZI.arrive
+  poll
+  
+case_snzi2 :: Assertion  
+case_snzi2 = snzi2 >>= assertEqual "sequential use of SNZI" False
+
+nTimes :: Int -> IO () -> IO ()
+nTimes 0 _ = return ()
+nTimes n c = c >> nTimes (n-1) c
+
+-- | Test snzi in a concurrent setting
+snzi3 :: IO (Bool)
+snzi3 = do
+  (cs, poll) <- SNZI.newSNZI
+  mvars <- forM cs $ \c -> do
+    mv <- newEmptyMVar
+    forkIO $ do 
+      nTimes 1000000 $ do
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.arrive c
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.depart c
+      putMVar mv ()
+    return mv
+  forM_ mvars takeMVar
+  poll
+  
+case_snzi3 :: Assertion  
+case_snzi3 = snzi3 >>= assertEqual "concurrent use of SNZI" True
+
+-- | Test snzi in a concurrent setting
+snzi4 :: IO (Bool)
+snzi4 = do
+  (cs, poll) <- SNZI.newSNZI
+  mvars <- forM cs $ \c -> do
+    mv <- newEmptyMVar
+    internalMV <- newEmptyMVar
+    forkIO $ do
+      SNZI.arrive c
+      putMVar internalMV ()
+    forkIO $ do 
+      nTimes 1000000 $ do
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.arrive c
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.depart c
+      takeMVar internalMV
+      putMVar mv ()
+    return mv
+  forM_ mvars takeMVar
+  poll
+  
+case_snzi4 :: Assertion  
+case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
 
 --------------------------------------------------------------------------------
 -- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
