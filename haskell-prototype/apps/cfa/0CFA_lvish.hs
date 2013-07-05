@@ -235,18 +235,26 @@ summarize states = do
   return storeFin
 --    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
-
-{-
-
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
-monovariantStore :: Store -> M.Map Var (S.Set Exp)
-monovariantStore store = M.foldrWithKey (\(Binding x _) d res -> M.alter (\mb_exp -> Just $ maybe id S.union mb_exp (S.map monovariantValue d)) x res) M.empty store
-
+-- monovariantStore :: Store -> M.Map Var (S.Set Exp)
+monovariantStore :: Store -> Par (M.Map Var (S.Set Exp))
+monovariantStore store = do 
+  -- M.foldrWithKey (\(Binding x _) d res ->
+  --                  M.alter (\mb_exp -> Just $ maybe id S.union mb_exp (S.map monovariantValue d)) x res)
+  --       M.empty store
+  IM.forEach store $ \ (Binding x _) d -> do
+    d' <- IS.traverseSet (return . monovariantValue) d
+    IS.forEach d' $ \ elm -> do
+      return ()
+    return ()
+  return undefined
+  
 monovariantValue :: Value -> Exp
 monovariantValue (Closure (l, v, c) _) = Lam l v c
 monovariantValue HaltClosure           = Halt
 monovariantValue Arbitrary             = Ref "unknown"
 
+{-
 analyse :: Call -> M.Map Var (S.Set Exp)
 analyse e = monovariantStore (summarize (explore S.empty [State e benv store []]))
   where (benv, store) = fvStuff (S.toList (fvsCall e))
