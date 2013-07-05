@@ -63,11 +63,13 @@ library
   other-modules:    Old.Common
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter
+                    Data.Concurrent.SNZI
                     Control.LVish.SchedIdempotentInternal 
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                 monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
+                 monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                 atomic-primops
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap, transformers >= 0.3
@@ -82,7 +84,8 @@ test-suite test-lvish
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
+                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                   atomic-primops
 
 --------------------------------------------------------------------------------
 test-suite test-old-lvarpure
