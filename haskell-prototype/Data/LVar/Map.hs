@@ -62,15 +62,15 @@ newEmptyMap = fmap IMap $ newLV$ newIORef M.empty
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Map variable.
 withCallbacksThenFreeze :: forall k v b . Eq b =>
-                           IMap k v -> (k -> v -> Par ()) -> Par b -> Par b
+                           IMap k v -> (k -> v -> QPar ()) -> QPar b -> QPar b
 withCallbacksThenFreeze (IMap lv) callback action =
     do
-       res <- IV.new -- TODO, specialize to skip this when the init action returns ()
+       res <- liftQ IV.new -- TODO, specialize to skip this when the init action returns ()
        freezeLVAfter lv (initCB res) (\(k,v) -> return$ Just$ callback k v)
        -- freezeSet lv -- This does nothing, but it gives us the value.
-       IV.get res
+       liftQ$ IV.get res
   where
-    initCB :: IV.IVar b -> (IORef (M.Map k v)) -> IO (Maybe (Par ()))    
+    initCB :: IV.IVar b -> (IORef (M.Map k v)) -> IO (Maybe (QPar ()))
     initCB resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
@@ -79,10 +79,11 @@ withCallbacksThenFreeze (IMap lv) callback action =
         -- Data.Foldable should give us a non-copying way to iterate:
         -- But it's actually insufficient because it only exposes the values:
         -- F.foldlM (\() v -> fork$ callback undefined v) () mp
-        mapM_ (\(k,v) -> fork$ callback k v) (M.toList mp)
+        liftQ$ mapM_ (\(k,v) -> fork$ L.unsafeUnQPar$ callback k v) (M.toList mp)
+-- FIXME: forkInPool
         
         res <- action -- Any additional puts here trigger the callback.
-        IV.put_ resIV res
+        liftQ$ IV.put_ resIV res
 
 
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
@@ -187,10 +188,10 @@ waitSize !sz (IMap lv) = getLV lv globalThresh deltaThresh
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeMap :: IMap k v -> Par (M.Map k v)
+freezeMap :: IMap k v -> QPar (M.Map k v)
 freezeMap (IMap lv) =
    do freezeLV lv
-      getLV lv globalThresh deltaThresh
+      liftQ$ getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref

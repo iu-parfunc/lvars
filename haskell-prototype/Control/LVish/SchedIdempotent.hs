@@ -7,22 +7,35 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-} 
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-} 
+{-# LANGUAGE GeneralizedNewtypeDeriving #-} 
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
 -- arbitrary LVars (lattice variables), not just IVars.
 
 module Control.LVish.SchedIdempotent
-  (LVar(), state, HandlerPool(), newLV, getLV, putLV, freezeLV, freezeLVAfter,
-   newPool, addHandler, quiesce, fork, forkInPool, liftIO, yield, Par(),
-   runParIO,
+  (
+    -- * Basic types and accessors:
+    LVar(), state, HandlerPool(), Par(), QPar(), liftQ, unsafeUnQPar,
+    
+    -- * Safe, deterministic operations:
+    yield, newPool, fork, forkInPool,
+    runPar, runParIO,
+        
+    -- * Quasi-deterministic operations:
+    quiesce, runQParIO,
 
-   -- * Interfaces for generic operations
-   LVarData1(..),
-   
-   -- * Debug facilities
-   logStrLn
+    -- * Interfaces for generic operations
+    LVarData1(..),
+
+    -- * Debug facilities
+    logStrLn,
+       
+    -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
+    newLV, getLV, putLV, freezeLV, freezeLVAfter,
+    addHandler, liftIO,    
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -32,6 +45,7 @@ import           Control.DeepSeq
 import           Control.Applicative
 import           Control.Concurrent.Async as Async
 import           Data.IORef
+import           Data.Typeable
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Concurrent.Counter as C
@@ -46,6 +60,7 @@ import           Old.Common (forkWithExceptions)
 -- import Control.Compose ((:.), unO)
 import Data.Traversable 
 
+-- import qualified Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 ----------------------------------------------------------------------------------------------------
@@ -90,7 +105,7 @@ class LVarData1 (f :: * -> *) where
   -- type Snapshot f a :: *
   data Snapshot f :: * -> *
   
-  freeze :: f a -> Par (Snapshot f a)
+  freeze :: f a -> QPar (Snapshot f a)
   newBottom :: Par (f a)
 
   -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
@@ -216,7 +231,18 @@ instance Monad Par where
 instance Applicative Par where
   (<*>) = ap
   pure  = return
-  
+
+newtype QPar a = QPar (Par a)
+  deriving (Functor, Monad, Applicative)
+
+-- | It is always safe to lift a deterministic computation to a quasi-determinism one.
+liftQ :: Par a -> QPar a
+liftQ = QPar
+
+-- | UNSAFE
+unsafeUnQPar :: QPar a -> Par a
+unsafeUnQPar (QPar p) = p
+
 ------------------------------------------------------------------------------
 -- A few auxiliary functions
 ------------------------------------------------------------------------------  
@@ -318,8 +344,9 @@ putLV LVar {state, status, name} doPut = mkPar $ \k q -> do
   exec (k ()) q
 
 -- | Freeze an LVar (limited nondeterminism)
-freezeLV :: LVar a d -> Par ()
-freezeLV LVar {name, status} = mkPar $ \k q -> do
+--   It is the data-structure implementors responsibility to expose this as QPar.
+freezeLV :: LVar a d -> QPar ()
+freezeLV LVar {name, status} = QPar$ mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
   case oldStatus of
     Frozen -> return ()
@@ -395,18 +422,20 @@ quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
   else sched q
 
 -- | Freeze an LVar after a given handler quiesces
+--   This is quasideterministic, but it 
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
-              -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
-              -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
-              -> Par ()
+              -> (a -> IO (Maybe (QPar ())))  -- ^ initial callback
+              -> (d -> IO (Maybe (QPar ())))  -- ^ subsequent callbacks: updates
+              -> QPar ()
 freezeLVAfter lv globalCB updateCB = do
-  hp <- newPool
-  addHandler hp lv globalCB updateCB
-  quiesce hp
+  let globalCB' = (fmap (fmap unsafeUnQPar)) . globalCB
+      updateCB' = (fmap (fmap unsafeUnQPar)) . updateCB
+  hp <- liftQ newPool
+  liftQ$ addHandler hp lv globalCB' updateCB'
+  liftQ$ quiesce hp
   freezeLV lv
 
 -- TODO!
-
 -- | This function has an advantage vs. doing your own freeze at the end of your
 -- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
 -- barrier before the final freeze.
@@ -529,16 +558,8 @@ runPar_internal c = do
   takeMVar answerMV  
 #endif
 
--- RRN: Alas, with quasi-determinism we won't be able to get away with this anymore.
--- It would be nice to put freeze in a separate module and be able to choose between
--- runPar or freeze(+runParIO).  But there's no easy way to get this at the module
--- level without making a newtype for Par.  (SafeHaskell can't be triggered on
--- *combinations* of modules, e.g. "you may import the module with freeze, or the
--- module with runPar, but not both".)
--- 
---   Alas, making a newtype is especially painful because of all the additional data
--- structures that would have to be wrapped/reexported OR generalized by a type class
--- (a la ParFuture, ParIVar).
+
+-- | Run a deterministic parallel computation as pure.
 runPar :: Par a -> a
 runPar = unsafePerformIO . runPar_internal
 
@@ -546,6 +567,16 @@ runPar = unsafePerformIO . runPar_internal
 -- contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
 runParIO = runPar_internal
+
+-- | A trapped instance of non-determinism at runtime.
+data NonDeterminismExn = NonDeterminismExn String
+  deriving (Eq, Ord, Show, Read, Typeable)
+
+instance E.Exception NonDeterminismExn where
+
+-- | Quasi-deterministic.  May throw 'NonDeterminismExn' on the thread that calls it.
+runQParIO :: QPar a -> IO a
+runQParIO (QPar p) = runParIO p
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()

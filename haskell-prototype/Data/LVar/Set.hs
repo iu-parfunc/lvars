@@ -9,11 +9,13 @@ module Data.LVar.Set
        (
          -- * Basic operations
          ISet, newEmptySet, newSet, newFromList,
-         putInSet, waitElem, waitSize, freezeSet,
+         putInSet, waitElem, waitSize, 
 
          -- * Iteration and callbacks
-         forEach, addHandler, freezeSetAfter, 
-         withCallbacksThenFreeze,
+         forEach, addHandler,
+
+         -- * Quasi-deterministic operations
+         freezeSetAfter, withCallbacksThenFreeze, freezeSet,
 
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
@@ -70,36 +72,55 @@ newFromList ls = newSet (S.fromList ls)
 
 -- (Todo: in production you might want even more ... like going from a Vector)
 
+--------------------------------------------------------------------------------
+-- Quasi-deterministic ops:
+--------------------------------------------------------------------------------
+
 -- | Freeze an 'ISet' after a specified callback/handler is done running.  This
 -- differs from withCallbacksThenFreeze by not taking an additional action to run in
 -- the context of the handlers.
 --
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: ISet a -> (a -> Par ()) -> Par ()
+freezeSetAfter :: ISet a -> (a -> QPar ()) -> QPar ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
   
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: Eq b => ISet a -> (a -> Par ()) -> Par b -> Par b
+withCallbacksThenFreeze :: Eq b => ISet a -> (a -> QPar ()) -> QPar b -> QPar b
 withCallbacksThenFreeze (ISet lv) callback action =
     do
-       hp <- newPool 
-       res <- IV.new -- TODO, specialize to skip this when the init action returns ()
+       hp  <- liftQ$ newPool 
+       res <- liftQ$ IV.new -- TODO, specialize to skip this when the init action returns ()
        freezeLVAfter lv (initCB hp res) (\x -> return$ Just$ callback x)
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
-       quiesce hp
-       IV.get res
+       liftQ$ quiesce hp
+       liftQ$ IV.get res
   where 
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       set <- readIORef ref -- Snapshot
       return $ Just $ do
-        F.foldlM (\() v -> forkInPool hp$ callback v) () set -- Non-allocating traversal.
+        liftQ$ F.foldlM (\() v -> forkInPool hp$ L.unsafeUnQPar$ callback v) () set -- Non-allocating traversal.
         res <- action -- Any additional puts here trigger the callback.
-        IV.put_ resIV res
+        liftQ$ IV.put_ resIV res
+
+-- | Get the exact contents of the set.  Using this may cause your
+-- program to exhibit a limited form of nondeterminism: it will never
+-- return the wrong answer, but it may include synchronization bugs
+-- that can (nondeterministically) cause exceptions.
+freezeSet :: ISet a -> QPar (S.Set a)
+freezeSet (ISet lv) =
+   do freezeLV lv
+      liftQ$ getLV lv globalThresh deltaThresh
+  where
+    globalThresh _  False = return Nothing
+    globalThresh ref True = fmap Just $ readIORef ref
+    deltaThresh _ = return Nothing
+
+--------------------------------------------------------------------------------
 
 -- | Add an (asynchronous) callback that listens for all new elements added to the set.
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
@@ -159,18 +180,6 @@ waitSize !sz (ISet lv) = getLV lv globalThresh deltaThresh
     -- the threshold.a
     deltaThresh _ = globalThresh (state lv) False
 
--- | Get the exact contents of the set.  Using this may cause your
--- program to exhibit a limited form of nondeterminism: it will never
--- return the wrong answer, but it may include synchronization bugs
--- that can (nondeterministically) cause exceptions.
-freezeSet :: ISet a -> Par (S.Set a)
-freezeSet (ISet lv) =
-   do freezeLV lv
-      getLV lv globalThresh deltaThresh
-  where
-    globalThresh _  False = return Nothing
-    globalThresh ref True = fmap Just $ readIORef ref
-    deltaThresh _ = return Nothing
 
 
 --------------------------------------------------------------------------------

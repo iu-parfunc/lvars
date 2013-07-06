@@ -67,10 +67,10 @@ put_ (IVar iv) !x = putLV iv putter
         update Nothing  = (Just x, Just x)
 
 
-freezeIVar :: IVar a -> Par (Maybe a)
+freezeIVar :: IVar a -> QPar (Maybe a)
 freezeIVar (IVar lv) =
   do freezeLV lv
-     getLV lv globalThresh deltaThresh
+     liftQ$ getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
