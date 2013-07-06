@@ -8,8 +8,8 @@ module Control.LVish
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO,
-
+    runPar, runParIO, runParThenFreeze,
+    
     -- newLV, getLV, putLV, freezeLV, freezeLVAfter,
     -- addHandler, liftIO, 
     

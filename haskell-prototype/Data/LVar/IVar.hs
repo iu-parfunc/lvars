@@ -109,7 +109,6 @@ instance PC.ParIVar IVar Par where
 -- IVar specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
-
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IVar a) (Maybe a) where
   deepFreeze iv = do IVarSnap m <- unsafeUnQPar$ freeze iv

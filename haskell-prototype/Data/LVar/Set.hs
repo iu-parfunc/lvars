@@ -4,6 +4,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 
 module Data.LVar.Set
        (
@@ -32,10 +36,11 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
+import qualified Data.Traversable as T
 
 import           Control.LVish hiding (addHandler)
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO)
+                                                freezeLVAfter, liftIO, unsafeUnQPar)
 import qualified Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
@@ -324,4 +329,22 @@ cartesianProdsHP mh ls = do
 #endif
 
 
+--------------------------------------------------------------------------------
+-- Set specific DeepFreeze instances:
+--------------------------------------------------------------------------------
+-- Teach it how to freeze WITHOUT the annoying snapshot constructor:
+instance DeepFreeze (ISet a) (S.Set a) where
+  deepFreeze iv = do ISetSnap m <- unsafeUnQPar$ freeze iv
+                     return m
 
+instance (DeepFreeze (ISet a) b, Ord b) =>
+         DeepFreeze (ISet (ISet a)) (S.Set b)
+  where
+    deepFreeze (from :: (ISet (ISet a))) = do
+      x <- unsafeUnQPar$ freezeSet from  :: Par (S.Set (ISet a))
+--      y <- T.traverse deepFreeze x        :: Par (S.Set b)
+      let fn :: ISet a -> S.Set b -> Par (S.Set b)
+          fn elm acc = do elm' <- deepFreeze elm
+                          return (S.insert elm' acc)
+      y <- F.foldrM fn S.empty x :: Par (S.Set b)
+      return y

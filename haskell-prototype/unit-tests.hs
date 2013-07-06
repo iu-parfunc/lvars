@@ -103,6 +103,17 @@ v2b = runQParIO $
         liftQ$ mapM_ IV.get ivs -- Join point.
         IS.freezeSet s
 
+-- | This version uses deep freeze.
+case_v2c :: Assertion
+case_v2c = assertEqual "t2 with spawn instead of fork"
+             (S.fromList [1..10] :: S.Set Int) v2c
+v2c :: S.Set Int
+v2c = runParThenFreeze $
+     do s   <- IS.newEmptySet 
+        ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10::Int]
+        mapM_ IV.get ivs -- Join point.
+        return s
+
 
 -- | Simple callback test.
 case_v3a :: Assertion

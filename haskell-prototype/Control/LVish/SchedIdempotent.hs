@@ -23,7 +23,7 @@ module Control.LVish.SchedIdempotent
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO,
+    runPar, runParIO, runParThenFreeze, 
         
     -- * Quasi-deterministic operations:
     quiesce, runQParIO,
@@ -441,14 +441,14 @@ freezeLVAfter lv globalCB updateCB = do
   liftQ$ quiesce hp
   freezeLV lv
 
--- TODO!
 -- | This function has an advantage vs. doing your own freeze at the end of your
 -- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
 -- barrier before the final freeze.
-runParThenFreeze :: LVarData1 f =>
-                    Par (f a) -> IO (Snapshot f a)
-runParThenFreeze =
-  error "Finishme: runParThenFreeze"
+runParThenFreeze :: (LVarData1 f, DeepFreeze (f a) b) =>
+                    Par (f a) -> b
+runParThenFreeze par = unsafePerformIO $ do 
+  res <- runPar_internal par
+  runPar_internal (deepFreeze res)
 
 ------------------------------------------------------------------------------
 -- Par monad operations
