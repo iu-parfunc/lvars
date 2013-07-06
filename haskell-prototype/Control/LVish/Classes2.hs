@@ -46,4 +46,4 @@ newEmptySet :: Par d (S.ISet a)
 newEmptySet = WrapPar S.newEmptySet
 
 freezeSet :: S.ISet a -> Par QuasiDet (Set.Set a)
-freezeSet s = WrapPar$ S.freezeSet s
+freezeSet s = WrapPar$ L.unsafeUnQPar $ S.freezeSet s
