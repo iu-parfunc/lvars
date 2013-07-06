@@ -41,3 +41,9 @@ t0 = undefined
 --     In the first argument of `myRun', namely `t0'
 --     In the expression: myRun t0
 --     In an equation for `it': it = myRun t0
+
+newEmptySet :: Par d (S.ISet a)
+newEmptySet = WrapPar S.newEmptySet
+
+freezeSet :: S.ISet a -> Par QuasiDet (Set.Set a)
+freezeSet s = WrapPar$ S.freezeSet s
