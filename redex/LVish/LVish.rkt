@@ -37,7 +37,7 @@
              lub
              lub-p
              leq
-             extend-Df
+             extend-H
              contains-all-leq
              first-unhandled-d
              store-dom
@@ -73,7 +73,7 @@
          ;; user programs.
          (freeze e after ((callback (lambda (x) e))
                           (running (e (... ...)))
-                          (handled Df)))
+                          (handled H)))
 
          ;; Derived forms; these immediately desugar to application
          ;; and lambda.
@@ -115,7 +115,7 @@
       ;; potentially empty set of lattice elements excluding Top.
       ;; Used to keep track of handled lattice elements in `freeze
       ;; ... after`.
-      (Df (d (... ...)))
+      (H (d (... ...)))
 
       ;; Stores.  A store is either a finite set of LVars (that is, a
       ;; finite partial mapping from locations l to pairs of StoreVals
@@ -158,7 +158,7 @@
          (freeze e after E)
          (freeze v after ((callback v)
                           (running (e (... ...) E e (... ...)))
-                          (handled Df)))
+                          (handled H)))
 
          ;; Special context for desugaring only.
          (let par ((x e) (... ...) (x E) (x e) (... ...)) e)))
@@ -221,17 +221,17 @@
        ;; times for a given `freeze ... after` expression.  It fires
        ;; once for each lattice element d_2 that is <= the current
        ;; value d_1 of l, so long as that element is not already a
-       ;; member of Df.  For each such d_2, it launches a handler in
+       ;; member of H.  For each such d_2, it launches a handler in
        ;; the `running` set and adds d_2 to the `handled` set.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_0))
                                            (running (e (... ...)))
-                                           (handled Df)))))
+                                           (handled H)))))
             (S (in-hole E (freeze l after ((callback (lambda (x) e_0))
                                            (running ((subst x d_2 e_0) e (... ...)))
-                                           (handled Df_2)))))
+                                           (handled H_2)))))
             (where d_1 (lookup-val S l))
-            (where d_2 (first-unhandled-d d_1 Df))
-            (where Df_2 (extend-Df Df d_2))
+            (where d_2 (first-unhandled-d d_1 H))
+            (where H_2 (extend-H H d_2))
             "E-Spawn-Handler")
 
        ;; Last step in the evaluation of `freeze ... after`.  When all
@@ -245,10 +245,10 @@
        ;; of E-Finalize-Freeze be satisfied, allowing it to run.
        (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
                                            (running (v (... ...)))
-                                           (handled Df)))))
+                                           (handled H)))))
             ((freeze-helper S l) (in-hole E d_1))
             (where d_1 (lookup-val S l))
-            (where #t (contains-all-leq d_1 Df))
+            (where #t (contains-all-leq d_1 H))
             "E-Freeze-Final")
 
        ;; Special case of freeze-after, where there are no handlers to
@@ -336,32 +336,32 @@
               (term ,(map update (term S)))
               (error "freeze-helper: lookup failed")))])
 
-    ;; Returns a Df set with d added.  Assumes that d is not already a
-    ;; member of Df.
+    ;; Takes a handled set H and returns a new one with d added.
+    ;; Assumes that d is not already a member of H.
     (define-metafunction name
-      extend-Df : Df d -> Df
-      [(extend-Df Df d) ,(cons (term d) (term Df))])
+      extend-H : H d -> H
+      [(extend-H H d) ,(cons (term d) (term H))])
 
     ;; Checks to see that, for all lattice elements that are less than
-    ;; or equal to d, they're a member of Df.  In other words, the set
-    ;; (downset-op d) is a subset of Df.
+    ;; or equal to d, they're a member of H.  In other words, the set
+    ;; (downset-op d) is a subset of H.
     (define-metafunction name
-      contains-all-leq : d Df -> boolean
-      [(contains-all-leq d Df)
+      contains-all-leq : d H -> boolean
+      [(contains-all-leq d H)
        ,(lset<= equal?
                 (downset-op (term d))
-                (term Df))])
+                (term H))])
 
     ;; A helper for the E-Spawn-Handler reduction rule.  Takes a
-    ;; lattice element d_1 and a finite set Df of elements, and
+    ;; lattice element d_1 and a finite set H of elements, and
     ;; returns the first element that is <= d_1 in the lattice that is
-    ;; *not* a member of Df, if such an element exists; returns #f
+    ;; *not* a member of H, if such an element exists; returns #f
     ;; otherwise.
     (define-metafunction name
-      first-unhandled-d : d Df -> Maybe-d
-      [(first-unhandled-d d_1 Df)
+      first-unhandled-d : d H -> Maybe-d
+      [(first-unhandled-d d_1 H)
        ,(let ([ls (filter (lambda (x)
-                            (not (member x (term Df))))
+                            (not (member x (term H))))
                           (downset-op (term d_1)))])
           (if (null? ls)
               #f

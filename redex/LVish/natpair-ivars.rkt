@@ -157,11 +157,11 @@
      (term #t))
 
     (test-equal
-     (term (extend-Df () (3 3)))
+     (term (extend-H () (3 3)))
      (term ((3 3))))
 
     (test-equal
-     (term (extend-Df ((3 3) (4 4) (5 5)) (6 6)))
+     (term (extend-H ((3 3) (4 4) (5 5)) (6 6)))
      (term ((6 6) (3 3) (4 4) (5 5))))
 
     (test-equal

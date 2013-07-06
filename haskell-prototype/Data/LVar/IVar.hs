@@ -10,6 +10,8 @@ import qualified Control.Monad.Par.Class as PC
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO)
 
+import           Data.Traversable (traverse)
+
 import           Control.LVish
 import           Control.Compose
 import           Data.Traversable (traverse)
@@ -35,6 +37,7 @@ instance LVarData1 IVar where
 
 unSnap :: Snapshot IVar a -> Maybe a 
 unSnap (IVarSnap m) = m
+--------------------------------------
 
 new :: Par (IVar a)
 new = fmap IVar $ newLV $ newIORef Nothing

@@ -11,11 +11,6 @@ import Data.List ((\\))
 
 import Debug.Trace
 
-import Control.LVish
-import qualified Data.LVar.Set as IS
-import qualified Data.LVar.Map as IM
-
---------------------------------------------------------------------------------
 
 type Var = String
 type Label = Int
@@ -23,41 +18,28 @@ data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show)
 data Call = Call Label Exp [Exp] deriving (Eq, Ord, Show)
 
 -- Abstract state space
-data State = State Call BEnv Store Time
---           deriving (Eq, Ord, Show)
-
+data State = State Call BEnv Store Time deriving (Eq, Ord, Show)
 -- A binding environment maps variables to addresses
 -- (In Matt's example, this mapped to Addr, but I found this a bit redundant
 -- since the Var in the Addr can be inferred, so I map straight to Time)
 type BEnv = M.Map Var Time
-
 -- A store maps addresses to denotable values
-type Store = IM.IMap Addr Denotable
-
+type Store = M.Map Addr Denotable
 -- | An abstact denotable value is a set of possible values
--- type Denotable = S.Set Value
-type Denotable = IS.ISet Value
-
+type Denotable = S.Set Value
 -- For pure CPS, closures are the only kind of value
 type Value = Clo
-
 -- Closures pair a lambda-term with a binding environment that determines
 -- the values of its free variables
-data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary
-
---         deriving (Eq, Ord, Show)
+data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary deriving (Eq, Ord, Show)
 -- Addresses can point to values in the store. In pure CPS, the only kind of addresses are bindings
 type Addr = Bind
-
 -- A binding is minted each time a variable gets bound to a value
-data Bind = Binding Var Time
-          deriving (Eq, Ord, Show)
+data Bind = Binding Var Time deriving (Eq, Ord, Show)
 -- In k-CFA, time is a bounded memory of program history.
 -- In particular, it is the last k call sites through which
 -- the program has traversed.
 type Time = [Label]
-
-{-
 
 storeInsert :: Addr -> Value -> Store -> Store
 storeInsert a v s = M.insertWith S.union a (S.singleton v) s
@@ -219,4 +201,3 @@ main = forM_ [fvExample, standardExample] $ \example -> do
          forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
            putStrLn (x ++ ":")
            mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
--}

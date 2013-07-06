@@ -1,4 +1,4 @@
-
+{-# LANGUAGE CPP #-}
 
 module Old.Common (forkWithExceptions) where
 
@@ -15,10 +15,16 @@ forkWithExceptions forkit descr action = do
       E.catch action
 	 (\ e -> 
            case E.fromException e of 
-             Just E.ThreadKilled ->
+             Just E.ThreadKilled -> do
+-- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
+#ifdef DEBUG_LVAR               
                printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
+#endif
+               return ()
 	     _  -> do
+#ifdef DEBUG_LVAR               
                       printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
+#endif
                       E.throwTo parent (e :: E.SomeException)
 	 )
 

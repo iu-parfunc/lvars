@@ -6,15 +6,23 @@
 
 module Data.LVar.Map
        (
-         IMap, newEmptyMap, insert, withCallbacksThenFreeze,
-         getKey, waitValue, waitSize, modify, freezeMap
+         IMap, newEmptyMap, insert, 
+         getKey, waitValue, waitSize, modify, freezeMap,
+
+         -- * Iteration and callbacks
+         forEach, addHandler, 
+         withCallbacksThenFreeze,
+
+         -- * Higher-level derived operations
+         copy
        ) where
 
 import           Data.IORef
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
-import           Control.LVish
+import           Control.LVish hiding (addHandler)
+import qualified Control.LVish as L
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -34,6 +42,15 @@ instance LVarData1 (IMap k) where
       deriving (Show,Ord,Read,Eq)
   freeze    = fmap IMapSnap . freezeMap
   newBottom = newEmptyMap
+
+-- | Return a fresh map which will contain strictly more elements than the input.
+-- That is, things put in the former go in the latter, but not vice versa.
+copy :: IMap k v -> Par (IMap k a)
+copy =
+  error "finish Set / copy"
+
+
+--------------------------------------------------------------------------------
 
 
 newEmptyMap :: Par (IMap k v)
@@ -66,6 +83,29 @@ withCallbacksThenFreeze (IMap lv) callback action =
         IV.put_ resIV res
 
 
+addHandler :: HandlerPool                 -- ^ pool to enroll in 
+           -> IMap k v                    -- ^ Map to listen to
+           -> (k -> v -> Par ())          -- ^ callback
+           -> Par ()
+addHandler hp (IMap lv) callb = do
+    L.addHandler hp lv globalCB (\(k,v) -> return$ Just$ callb k v)
+    return ()
+  where
+    globalCB ref = do
+      mp <- readIORef ref -- Snapshot
+      return $ Just $
+        -- Fixme: need traverseWithKey_ :
+        mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
+
+
+-- | Shorthandfor creating a new handler pool and adding a single handler to it.
+forEach :: IMap k v -> (k -> v -> Par ()) -> Par HandlerPool
+forEach is cb = do 
+   hp <- newPool
+   addHandler hp is cb
+   return hp
+
+
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
 -- 
 insert :: (Ord k, Eq v) =>
@@ -88,8 +128,8 @@ insert !key !elm (IMap lv) = putLV lv putter
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
 modify :: forall f a b key . (Ord key, LVarData1 f) =>
-          key -> IMap key (f a) -> (f a -> Par b) -> Par b
-modify key (IMap lv) fn = do 
+          IMap key (f a) -> key -> (f a -> Par b) -> Par b
+modify (IMap lv) key fn = do 
   let ref = state lv 
   mp  <- liftIO$ readIORef ref
   case M.lookup key mp of

@@ -11,6 +11,7 @@ module Experimental.DeepFreeze where
 import           Control.LVish
 import           Data.Traversable (traverse)
 import           Data.LVar.IVar
+
 import           Data.LVar.Set
 import           Data.Traversable
 
@@ -78,6 +79,7 @@ test4b = test4
 -- potentially freeze a nested structure in various ways of their choosing.
 class DeepFreeze (from :: *) (to :: *) where
   deepFreeze :: from -> Par to 
+
 
 #if 0
 -- This much works:

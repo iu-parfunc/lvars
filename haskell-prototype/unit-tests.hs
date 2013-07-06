@@ -9,10 +9,13 @@ import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
 import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
+import Control.Monad
 import Control.Concurrent
+import Control.Concurrent.MVar
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import System.Environment (getArgs)
+import System.IO
 
 import Control.Exception (catch, evaluate, SomeException)
 
@@ -20,12 +23,14 @@ import Data.Traversable (traverse)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-import qualified Data.LVar.Set as IS
-import qualified Data.LVar.Map as IM
+import Data.LVar.Set as IS
+import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
+
+import Data.Concurrent.SNZI as SNZI
 
 import TestHelpers as T
 
@@ -57,7 +62,6 @@ main = T.stdTestHarness $ return all_tests
 main :: IO ()
 main = $(defaultMainGenerator)
 #endif
-
 
 case_v0 :: HU.Assertion
 case_v0 = do res <- v0
@@ -173,6 +177,62 @@ i3c = runParIO $
    -- test-lvish: Attempt to change a frozen LVar
    -- Exception inside child thread "worker thread", ThreadId 10: thread blocked indefinitely in an MVar operation
 
+
+case_v3d :: Assertion
+case_v3d = assertEqual "test of parallelism in freezeSetAfter"
+              (S.fromList [1..5]) =<<  v3d
+
+-- | This test has interdependencies between callbacks (that are launched on
+-- already-present data), which forces these to be handled in parallel.
+v3d :: IO (S.Set Int)
+v3d = runParIO $ 
+     do s1 <- IS.newFromList [1..5]
+        s2 <- IS.newEmptySet
+        IS.freezeSetAfter s1 $ \ elm -> do
+          let dep = case elm of
+                      1 -> Just 2
+                      2 -> Just 3
+                      3 -> Nothing -- Foil either left-to-right or right-to-left
+                      4 -> Just 3
+                      5 -> Just 4
+          case dep of
+            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+                         IS.waitElem d s2
+                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+          putInSet elm s2 
+        logStrLn " [freezeSetAfter completed] "
+        freezeSet s2
+
+
+case_v3e :: Assertion
+case_v3e = assertEqual "test of parallelism in addHandler"
+              (S.fromList [1..5]) =<<  v3e
+
+-- | Same as v3d but for addHandler
+v3e :: IO (S.Set Int)
+v3e = runParIO $ 
+     do s1 <- IS.newFromList [1..5]
+        s2 <- IS.newEmptySet
+        hp <- newPool
+        IS.addHandler hp s1 $ \ elm -> do
+          let dep = case elm of
+                      1 -> Just 2
+                      2 -> Just 3
+                      3 -> Nothing -- Foil either left-to-right or right-to-left
+                      4 -> Just 3
+                      5 -> Just 4
+          case dep of
+            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+                         IS.waitElem d s2
+                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+          putInSet elm s2
+        quiesce hp
+        logStrLn " [quiesce completed] "
+        freezeSet s2
+
+
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
            (M.fromList [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)]) =<<
@@ -188,10 +248,10 @@ v7a = runParIO $
                IM.insert 200 (200.1 + v) mp
      IM.insert 1 1 mp
      IM.insert 2 2 mp
-     liftIO$ putStrLn "[v7a] Did the first two puts.."
+     logStrLn "[v7a] Did the first two puts.."
      liftIO$ threadDelay 1000
      IM.insert 3 3 mp
-     liftIO$ putStrLn "[v7a] Did the first third put."
+     logStrLn "[v7a] Did the first third put."
      IM.waitSize 5 mp
      IM.freezeMap mp
 
@@ -218,7 +278,7 @@ i7b = runParIO $ do
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.putInSet 3.33 s
   -- RACE: this modify is racing with the insert of s2:
-  IM.modify 2 mp (IS.putInSet 4.44)
+  IM.modify mp 2 (IS.putInSet 4.44)
 
   IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
@@ -240,9 +300,9 @@ v7c = runParIO $ do
   f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
                        IS.putInSet 3.33 s
-  IM.modify 2 mp (IS.putInSet 4.44)
-  f3 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 5.55)
-  f4 <- IV.spawn_ $ IM.modify 3 mp (IS.putInSet 6.6)
+  IM.modify mp 2 (IS.putInSet 4.44)
+  f3 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 5.55)
+  f4 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 6.6)
   -- No easy way to wait on the total size of all contained sets...
   -- 
   -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
@@ -251,7 +311,163 @@ v7c = runParIO $ do
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
 
+--------------------------------------------------------------------------------
+-- Higher level derived ops
+--------------------------------------------------------------------------------  
 
+case_v8a :: Assertion
+case_v8a = assertEqual "simple cartesian product test"
+           (S.fromList
+            [(1,'a'),(1,'b'),(1,'c'),
+             (2,'a'),(2,'b'),(2,'c'),
+             (3,'a'),(3,'b'),(3,'c')])
+           =<< v8a
+
+-- v8a :: IO (S.Set (Integer, Char))
+v8a :: IO (S.Set (Integer, Char))
+v8a = runParIO $ do
+  s1 <- IS.newFromList [1,2,3]
+  s2 <- IS.newFromList ['a','b']
+  logStrLn " [v8a] now to construct cartesian product..."
+  (h,s3) <- IS.cartesianProdHP Nothing s1 s2
+  logStrLn " [v8a] cartesianProd call finished... next quiesce"
+  IS.forEach s3 $ \ elm ->
+    logStrLn$ " [v8a]   Got element: "++show elm
+  putInSet 'c' s2
+  quiesce h
+  logStrLn " [v8a] quiesce finished, next freeze::"
+  freezeSet s3
+
+
+case_v8b :: Assertion
+case_v8b = assertEqual "3-way cartesian product"
+           (S.fromList
+            [[1,40,101],[1,40,102],  [1,50,101],[1,50,102],
+             [2,40,101],[2,40,102],  [2,50,101],[2,50,102]]
+            )
+           =<< v8b
+
+-- [2013.07.03] Seeing nondeterministic failures here... hmm...
+-- Ah, possibly divergence too... jeez.
+v8b :: IO (S.Set [Int])
+v8b = runParIO $ do
+  hp <- newPool
+  s1 <- IS.newFromList [1,2]
+  s2 <- IS.newFromList [40,50]
+    -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
+  (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
+  (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
+  IS.forEachHP (Just hp) s4 $ \ elm ->
+    logStrLn $ " [v8b]   Got element: "++show elm
+  -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
+  -- liftIO$ threadDelay$ 100*1000
+  quiesce hp
+  logStrLn " [v8b] quiesce finished, next freeze::"
+  freezeSet s4
+
+
+
+-- v8b :: IO (S.Set Int)
+-- v8b = runParIO $ do
+--   s1 <- IS.newFromList [1,2,3]
+--   s2 <- IS.newFromList [2,3,4]
+--   s3 <- IS.intersection s1 s2
+--   quiesce h
+--   freezeSet s3
+  
+--------------------------------------------------------------------------------
+-- TESTS FOR SNZI  
+--------------------------------------------------------------------------------
+  
+-- | Test snzi in a sequential setting
+snzi1 :: IO (Bool)
+snzi1 = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  forM_ cs SNZI.arrive
+  forM_ cs SNZI.depart  
+  forM_ cs SNZI.depart
+  poll
+  
+case_snzi1 :: Assertion  
+case_snzi1 = snzi1 >>= assertEqual "sequential use of SNZI" True
+
+-- | Very simple sequential snzi test
+snzi2a :: IO (Bool)
+snzi2a = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  poll
+  
+case_snzi2a :: Assertion  
+case_snzi2a = snzi2a >>= assertEqual "sequential use of SNZI" False
+
+-- | Test snzi in a sequential setting
+snzi2 :: IO (Bool)
+snzi2 = do
+  (cs, poll) <- SNZI.newSNZI
+  forM_ cs SNZI.arrive  
+  forM_ cs SNZI.arrive
+  forM_ cs SNZI.depart  
+  forM_ cs SNZI.depart
+  forM_ cs SNZI.arrive
+  poll
+  
+case_snzi2 :: Assertion  
+case_snzi2 = snzi2 >>= assertEqual "sequential use of SNZI" False
+
+nTimes :: Int -> IO () -> IO ()
+nTimes 0 _ = return ()
+nTimes n c = c >> nTimes (n-1) c
+
+-- | Test snzi in a concurrent setting
+snzi3 :: IO (Bool)
+snzi3 = do
+  (cs, poll) <- SNZI.newSNZI
+  mvars <- forM cs $ \c -> do
+    mv <- newEmptyMVar
+    forkIO $ do 
+      nTimes 1000000 $ do
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.arrive c
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.depart c
+      putMVar mv ()
+    return mv
+  forM_ mvars takeMVar
+  poll
+  
+case_snzi3 :: Assertion  
+case_snzi3 = snzi3 >>= assertEqual "concurrent use of SNZI" True
+
+-- | Test snzi in a concurrent setting
+snzi4 :: IO (Bool)
+snzi4 = do
+  (cs, poll) <- SNZI.newSNZI
+  mvars <- forM cs $ \c -> do
+    mv <- newEmptyMVar
+    internalMV <- newEmptyMVar
+    forkIO $ do
+      SNZI.arrive c
+      putMVar internalMV ()
+    forkIO $ do 
+      nTimes 1000000 $ do
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.arrive c
+        SNZI.arrive c
+        SNZI.depart c
+        SNZI.depart c
+      takeMVar internalMV
+      putMVar mv ()
+    return mv
+  forM_ mvars takeMVar
+  poll
+  
+case_snzi4 :: Assertion  
+case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
 
 --------------------------------------------------------------------------------
 -- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
