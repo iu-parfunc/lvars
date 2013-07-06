@@ -192,16 +192,44 @@ v3d = runParIO $
           let dep = case elm of
                       1 -> Just 2
                       2 -> Just 3
-                      3 -> Nothing
+                      3 -> Nothing -- Foil either left-to-right or right-to-left
                       4 -> Just 3
                       5 -> Just 4
           case dep of
-            Nothing -> logStrLn $ " [Invocation "++show elm++"] has no dependencies, running... "
-            Just d -> do logStrLn $ " [Invocation "++show elm++"] waiting on "++show dep
+            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
-                         logStrLn $ " [Invocation "++show elm++"] dependency satisfied! "
+                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
           putInSet elm s2 
         logStrLn " [freezeSetAfter completed] "
+        freezeSet s2
+
+
+case_v3e :: Assertion
+case_v3e = assertEqual "test of parallelism in addHandler"
+              (S.fromList [1..5]) =<<  v3e
+
+-- | Same as v3d but for addHandler
+v3e :: IO (S.Set Int)
+v3e = runParIO $ 
+     do s1 <- IS.newFromList [1..5]
+        s2 <- IS.newEmptySet
+        hp <- newPool
+        IS.addHandler hp s1 $ \ elm -> do
+          let dep = case elm of
+                      1 -> Just 2
+                      2 -> Just 3
+                      3 -> Nothing -- Foil either left-to-right or right-to-left
+                      4 -> Just 3
+                      5 -> Just 4
+          case dep of
+            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+                         IS.waitElem d s2
+                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+          putInSet elm s2
+        quiesce hp
+        logStrLn " [quiesce completed] "
         freezeSet s2
 
 
