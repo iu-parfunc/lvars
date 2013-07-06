@@ -24,32 +24,3 @@ module Control.LVish
   ) where
 
 import Control.LVish.SchedIdempotent
-
-
-class Monad p => LParMonad p where
-  -- type HandlerPool p
-  -- type LVar
-  -- state 
-  -- yield, newPool, fork, forkInPool,
-  
-  -- addHandler
-  
--- class QParMonad q where
-  
-instance LParMonad Par where
-
-instance LParMonad QPar where
-
-  
-{-
-class Monad m => ParFuture m where
-  type Future m a
-  
-class ParFuture m => ParIVar m where
-  type IVar m a
-
-class LParSet m where
-  type ISet m a
-  
-
--}
