@@ -589,58 +589,60 @@ case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
 -- Unit Tests
 --------------------------------------------------------------------------------
 
-test0 = do
+case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
+
+dftest0 :: IO String
+dftest0 = runParIO $ do
   iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
   IV.IVarSnap m <- L.unsafeUnQPar $ freeze iv1
-  return m
+  case m of
+    Just i -> IV.get i
 
+case_dftest1 = assertEqual "deefreeze double ivar" (Just (Just "hello")) =<< dftest1
 
 -- | Should return (Just (Just "hello"))
-test1 :: IO(Maybe (Maybe String))
-test1 = runParIO $ do
+dftest1 :: IO(Maybe (Maybe String))
+dftest1 = runParIO $ do
   iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
---  m <- freeze iv1  
---  return m
   deepFreeze iv1
+
+case_dftest2 = assertEqual "deefreeze double ivar"
+                 (IV.IVarSnap (Just (IV.IVarSnap (Just "hello")))) =<< dftest2
 
 -- | This uses the more generic lifting... but it's more annoying to unpack:
-test2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
-test2 = runParIO $ do
+dftest2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
+dftest2 = runParIO $ do
   iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
   deepFreeze iv1
 
-
-test3 :: IO (Snapshot IV.IVar (Snapshot ISet String))
--- test3 :: IO (Maybe (Snapshot ISet String)) -- Won't work atm.
-test3 = runParIO $ do
-  iv1 <- newBottom 
-  iv2 <- newBottom 
-  IV.put_ iv1 iv2
-  IS.putInSet "hello" iv2 
-  deepFreeze iv1
-
-test4 :: DeepFreeze (IV.IVar Int) b => IO b
-test4 = runParIO $ do
+dftest4 :: DeepFreeze (IV.IVar Int) b => IO b
+dftest4 = runParIO $ do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
   deepFreeze iv1
 
+case_dftest4a = assertEqual "freeze polymorphic 1"
+                  (IV.IVarSnap (Just 3)) =<< dftest4a
+
 -- More flexible than regular freeze, can pick either type:
-test4a :: IO (Snapshot IV.IVar Int)
-test4a = test4
+dftest4a :: IO (Snapshot IV.IVar Int)
+dftest4a = dftest4
+
+case_dftest4b = assertEqual "freeze polymorphic 2"
+                  (Just 3) =<< dftest4b
 
 -- uh... how is this one actually working?
-test4b :: IO (Maybe Int)
-test4b = test4
+dftest4b :: IO (Maybe Int)
+dftest4b = dftest4
 
 ------------------------------------------------------------------------------------------
 
