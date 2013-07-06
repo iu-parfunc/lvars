@@ -49,6 +49,8 @@ readNumFile path = do
   bs <- unsafeMMapFile path
   parReadNats bs
 
+
+{-# INLINE parReadNats #-}
 -- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
 -- non-digit characters are treated as separators.
 parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
@@ -151,9 +153,12 @@ instance NFData (PartialNums n) where
 --------------------------------------------------------------------------------
 
 {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}  
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word16] #-}
 {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
 {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
-
+{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Int] #-}
+{-# INLINE readNatsPartial #-}
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.

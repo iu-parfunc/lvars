@@ -177,6 +177,34 @@ i3c = runParIO $
    -- test-lvish: Attempt to change a frozen LVar
    -- Exception inside child thread "worker thread", ThreadId 10: thread blocked indefinitely in an MVar operation
 
+
+case_v3d :: Assertion
+case_v3d = assertEqual "test of parallelism in freezeSetAfter"
+              (S.fromList [1..5]) =<<  v3d
+
+-- | This test has interdependencies between callbacks (that are launched on
+-- already-present data), which forces these to be handled in parallel.
+v3d :: IO (S.Set Int)
+v3d = runParIO $ 
+     do s1 <- IS.newFromList [1..5]
+        s2 <- IS.newEmptySet
+        IS.freezeSetAfter s1 $ \ elm -> do
+          let dep = case elm of
+                      1 -> Just 2
+                      2 -> Just 3
+                      3 -> Nothing
+                      4 -> Just 3
+                      5 -> Just 4
+          case dep of
+            Nothing -> logStrLn $ " [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ " [Invocation "++show elm++"] waiting on "++show dep
+                         IS.waitElem d s2
+                         logStrLn $ " [Invocation "++show elm++"] dependency satisfied! "
+          putInSet elm s2 
+        logStrLn " [freezeSetAfter completed] "
+        freezeSet s2
+
+
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
            (M.fromList [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)]) =<<

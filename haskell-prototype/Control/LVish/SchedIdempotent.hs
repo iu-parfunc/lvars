@@ -53,11 +53,20 @@ globalLog :: IORef [String]
 globalLog = unsafePerformIO $ newIORef []
 
 -- | Atomically add a line to the given log.
-logStrLn :: String -> Par ()
+logStrLn  :: String -> Par ()
+logStrLn_ :: String -> IO ()
+#ifdef DEBUG_LVAR
 logStrLn = liftIO . logStrLn_
 logStrLn_ s = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+#else 
+logStrLn _  = return ()
+logStrLn_ _ = return ()
+{-# INLINE logStrLn #-}
+{-# INLINE logStrLn_ #-}
+#endif
 
 -- | Print all accumulated log lines
+printLog :: IO ()
 printLog = do
   lines <- readIORef globalLog
   mapM_ putStrLn $ reverse lines

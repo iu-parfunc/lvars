@@ -90,7 +90,18 @@ That's a file with 69,568,628 lines each containing a number that
 needs to be parsed.  They use atol.
 
 
+[2013.07.05] {Just observed an snzi4 failure}
+
+Maybe this is known, but just in case it hasn't been seen before, here:
+
+     snzi4: [Failed]
+     ERROR: thread blocked indefinitely in an MVar operation
+
+	      Test Cases   Total
+      Passed  16           16
+      Failed  1            1
 
 
-
+It seems like I have to run it on the order of 75 times to reproduce
+it, but it is reproducable.
 

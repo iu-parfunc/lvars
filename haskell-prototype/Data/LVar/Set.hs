@@ -12,7 +12,7 @@ module Data.LVar.Set
          putInSet, waitElem, waitSize, freezeSet,
 
          -- * Iteration and callbacks
-         forEach, addHandler, 
+         forEach, addHandler, freezeSetAfter, 
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
@@ -67,26 +67,38 @@ newFromList ls = newSet (S.fromList ls)
 
 -- (Todo: in production you might want even more ... like going from a Vector)
 
+-- | Freeze an 'ISet' after a specified callback/handler is done running.  This
+-- differs from withCallbacksThenFreeze by not taking an additional action to run in
+-- the context of the handlers.
+--
+--    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
+freezeSetAfter :: ISet a -> (a -> Par ()) -> Par ()
+freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
+  
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
--- valueof the Set variable.
+-- value of the provided action.
 withCallbacksThenFreeze :: Eq b => ISet a -> (a -> Par ()) -> Par b -> Par b
 withCallbacksThenFreeze (ISet lv) callback action =
     do
+       hp <- newPool 
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
-       freezeLVAfter lv (initCB res) (\x -> return$ Just$ callback x)
-       -- freezeSet lv -- This does nothing, but it gives us the value.
+       freezeLVAfter lv (initCB hp res) (\x -> return$ Just$ callback x)
+       -- We additionally have to quiesce here because we fork the inital set of
+       -- callbacks on their own threads:
+       quiesce hp
        IV.get res
   where 
-    initCB resIV ref = do
+    initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       set <- readIORef ref -- Snapshot
       return $ Just $ do
-        F.foldlM (\() v -> fork$ callback v) () set -- Non-allocating traversal.
+        F.foldlM (\() v -> forkInPool hp$ callback v) () set -- Non-allocating traversal.
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
+-- | Add an (asynchronous) callback that listens for all new elements added to the set.
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
            -> ISet a                      -- ^ Set to listen to
            -> (a -> Par ())               -- ^ callback
