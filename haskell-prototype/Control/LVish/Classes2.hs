@@ -5,12 +5,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+
+module Control.LVish.Classes2 where
+
 import Control.Monad
 
 import           Data.Hashable
 import qualified Data.Set as Set
 
-import qualified Control.LVish as L
+import qualified Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.Set as S
 
 

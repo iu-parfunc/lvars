@@ -6,9 +6,10 @@
 -- be useful for allowing a "runParThenFreeze" that can atomically do a nested freeze
 -- as the implicit last action (after the global qiesce).
 
-module Experimental.DeepFreeze where
+module Control.LVish.DeepFreeze where
 
 import           Control.LVish
+import qualified Control.LVish.SchedIdempotent as L
 import           Data.Traversable (traverse)
 import           Data.LVar.IVar
 
@@ -22,7 +23,7 @@ test0 = do
   iv2 <- newBottom
   put_ iv1 iv2
   put_ iv2 "hello"
-  IVarSnap m <- freeze iv1
+  IVarSnap m <- L.unsafeUnQPar $ freeze iv1
   return m
 
 
@@ -101,13 +102,13 @@ instance (LVarData1 f, LVarData1 g) =>
          DeepFreeze (f (g a)) (Snapshot f (Snapshot g a)) where
   deepFreeze lvd = do
     -- let fn = (fmap (\ (IVarSnap m) -> m)) . freezeIVar
-    x <- freeze lvd            :: Par (Snapshot f (g a))
-    y <- traverseSnap freeze x :: Par (Snapshot f (Snapshot g a))
+    x <- L.unsafeUnQPar$ freeze lvd               :: Par (Snapshot f (g a))
+    y <- traverseSnap (L.unsafeUnQPar . freeze) x :: Par (Snapshot f (Snapshot g a))
     return y
 
 -- Inherit everything that regular freeze can do:
 instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
-  deepFreeze = freeze
+  deepFreeze = L.unsafeUnQPar . freeze
 
 #else
 -- This version could retain a bit more flexibility....
@@ -130,7 +131,7 @@ instance DeepFreeze a a where
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IVar a) (Maybe a) where
-  deepFreeze iv = do IVarSnap m <- freeze iv
+  deepFreeze iv = do IVarSnap m <- L.unsafeUnQPar$ freeze iv
                      return m
 
 -- instance DeepFreeze a b =>
@@ -143,7 +144,7 @@ instance DeepFreeze (IVar a) b =>
          DeepFreeze (IVar (IVar a)) (Maybe b)
   where
     deepFreeze (from :: (IVar (IVar a))) = do
-      x <- freezeIVar from       :: Par (Maybe (IVar a))
+      x <- L.unsafeUnQPar$ freezeIVar from       :: Par (Maybe (IVar a))
       y <- traverse deepFreeze x :: Par (Maybe b)
       return y
 #else

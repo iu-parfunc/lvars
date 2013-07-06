@@ -441,7 +441,8 @@ freezeLVAfter lv globalCB updateCB = do
 -- barrier before the final freeze.
 runParThenFreeze :: LVarData1 f =>
                     Par (f a) -> IO (Snapshot f a)
-runParThenFreeze = error "Finishme: runParThenFreeze"
+runParThenFreeze =
+  error "Finishme: runParThenFreeze"
 
 ------------------------------------------------------------------------------
 -- Par monad operations

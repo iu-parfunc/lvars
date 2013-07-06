@@ -4,6 +4,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
+module Control.LVish.Classes where
+
 import Control.Monad
 
 import           Data.Hashable
