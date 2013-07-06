@@ -32,7 +32,9 @@ import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
 
 import           Control.LVish hiding (addHandler)
-import qualified Control.LVish as L
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+                                                freezeLVAfter, liftIO)
+import qualified Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:

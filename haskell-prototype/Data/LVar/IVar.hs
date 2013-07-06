@@ -13,7 +13,8 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish
-import           Control.Compose
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
+-- import           Control.Compose
 import           Data.Traversable (traverse)
 
 ------------------------------------------------------------------------------

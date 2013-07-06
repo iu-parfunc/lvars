@@ -22,7 +22,9 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
 import           Control.LVish hiding (addHandler)
-import qualified Control.LVish as L
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+                                                freezeLVAfter, liftIO)
+import qualified Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:

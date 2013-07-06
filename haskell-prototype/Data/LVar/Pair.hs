@@ -5,6 +5,7 @@ module Data.LVar.Pair (
   ) where
 
 import Control.LVish
+import Control.LVish.SchedIdempotent (newLV, putLV, getLV)
 import Data.IORef
 
 ------------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
+import Control.LVish.SchedIdempotent (liftIO)
 
 import Data.Concurrent.SNZI as SNZI
 
