@@ -616,11 +616,11 @@ case_dftest1 = assertEqual "deefreeze double ivar" (Just (Just "hello")) =<< dft
 
 -- | Should return (Just (Just "hello"))
 dftest1 :: IO(Maybe (Maybe String))
-dftest1 = runParIO $ do
-  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
-  iv2 <- newBottom
-  IV.put_ iv1 iv2
-  IV.put_ iv2 "hello"
+dftest1 = runQParIO $ do
+  iv1 <- liftQ newBottom :: QPar (IV.IVar (IV.IVar String))
+  iv2 <- liftQ newBottom
+  liftQ$ IV.put_ iv1 iv2
+  liftQ$ IV.put_ iv2 "hello"
   deepFreeze iv1
 
 case_dftest2 = assertEqual "deefreeze double ivar"
@@ -633,13 +633,13 @@ dftest2 = runParIO $ do
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  deepFreeze iv1
+  L.unsafeUnQPar$ deepFreeze iv1
 
 dftest4 :: DeepFreeze (IV.IVar Int) b => IO b
 dftest4 = runParIO $ do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
-  deepFreeze iv1
+  L.unsafeUnQPar$ deepFreeze iv1
 
 case_dftest4a = assertEqual "freeze polymorphic 1"
                   (IV.IVarSnap (Just 3)) =<< dftest4a

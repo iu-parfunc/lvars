@@ -334,17 +334,16 @@ cartesianProdsHP mh ls = do
 --------------------------------------------------------------------------------
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (ISet a) (S.Set a) where
-  deepFreeze iv = do ISetSnap m <- unsafeUnQPar$ freeze iv
+  deepFreeze iv = do ISetSnap m <- freeze iv
                      return m
 
 instance (DeepFreeze (ISet a) b, Ord b) =>
          DeepFreeze (ISet (ISet a)) (S.Set b)
   where
     deepFreeze (from :: (ISet (ISet a))) = do
-      x <- unsafeUnQPar$ freezeSet from  :: Par (S.Set (ISet a))
---      y <- T.traverse deepFreeze x        :: Par (S.Set b)
-      let fn :: ISet a -> S.Set b -> Par (S.Set b)
+      x <- freezeSet from  :: QPar (S.Set (ISet a))
+      let fn :: ISet a -> S.Set b -> QPar (S.Set b)
           fn elm acc = do elm' <- deepFreeze elm
                           return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x :: Par (S.Set b)
+      y <- F.foldrM fn S.empty x :: QPar (S.Set b)
       return y

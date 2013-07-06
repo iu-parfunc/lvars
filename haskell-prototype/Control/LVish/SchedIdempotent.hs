@@ -134,19 +134,18 @@ class LVarData0 (t :: *) where
 -- deepFreeze must be fully constrained at every call site.  This allows the user to
 -- potentially freeze a nested structure in various ways of their choosing.
 class DeepFreeze (from :: *) (to :: *) where
-  deepFreeze :: from -> Par to 
+  deepFreeze :: from -> QPar to 
 
 instance (LVarData1 f, LVarData1 g) =>
          DeepFreeze (f (g a)) (Snapshot f (Snapshot g a)) where
   deepFreeze lvd = do
-    -- let fn = (fmap (\ (IVarSnap m) -> m)) . freezeIVar
-    x <- unsafeUnQPar$ freeze lvd               :: Par (Snapshot f (g a))
-    y <- traverseSnap (unsafeUnQPar . freeze) x :: Par (Snapshot f (Snapshot g a))
+    x <- freeze lvd                                     :: QPar (Snapshot f (g a))
+    y <- liftQ $ traverseSnap (unsafeUnQPar . freeze) x :: QPar (Snapshot f (Snapshot g a))
     return y
 
 -- Inherit everything that regular freeze can do:
 instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
-  deepFreeze = unsafeUnQPar . freeze
+  deepFreeze = freeze
 
 
 ------------------------------------------------------------------------------
@@ -448,7 +447,7 @@ runParThenFreeze :: (LVarData1 f, DeepFreeze (f a) b) =>
                     Par (f a) -> b
 runParThenFreeze par = unsafePerformIO $ do 
   res <- runPar_internal par
-  runPar_internal (deepFreeze res)
+  runPar_internal (unsafeUnQPar $ deepFreeze res)
 
 ------------------------------------------------------------------------------
 -- Par monad operations
