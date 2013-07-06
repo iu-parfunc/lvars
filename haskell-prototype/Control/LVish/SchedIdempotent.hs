@@ -351,8 +351,8 @@ putLV LVar {state, status, name} doPut = mkPar $ \k q -> do
 
 -- | Freeze an LVar (limited nondeterminism)
 --   It is the data-structure implementors responsibility to expose this as QPar.
-freezeLV :: LVar a d -> QPar ()
-freezeLV LVar {name, status} = QPar$ mkPar $ \k q -> do
+freezeLV :: LVar a d -> Par ()
+freezeLV LVar {name, status} = mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
   case oldStatus of
     Frozen -> return ()
@@ -430,15 +430,15 @@ quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
 -- | Freeze an LVar after a given handler quiesces
 --   This is quasideterministic, but it 
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
-              -> (a -> IO (Maybe (QPar ())))  -- ^ initial callback
-              -> (d -> IO (Maybe (QPar ())))  -- ^ subsequent callbacks: updates
-              -> QPar ()
+              -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+              -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
+              -> Par ()
 freezeLVAfter lv globalCB updateCB = do
-  let globalCB' = (fmap (fmap unsafeUnQPar)) . globalCB
-      updateCB' = (fmap (fmap unsafeUnQPar)) . updateCB
-  hp <- liftQ newPool
-  liftQ$ addHandler hp lv globalCB' updateCB'
-  liftQ$ quiesce hp
+  let globalCB' = globalCB
+      updateCB' = updateCB
+  hp <- newPool
+  addHandler hp lv globalCB' updateCB'
+  quiesce hp
   freezeLV lv
 
 -- | This function has an advantage vs. doing your own freeze at the end of your

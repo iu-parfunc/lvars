@@ -1,7 +1,8 @@
 {-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-} 
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-} 
 module Data.LVar.IVar
 --       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
        where
@@ -14,10 +15,10 @@ import           System.IO.Unsafe      (unsafePerformIO)
 
 import           Data.Traversable (traverse)
 
-import           Control.LVish
+import           Control.LVish as LV
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 DeepFreeze(..), unsafeUnQPar)
--- import           Control.Compose
+import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.Traversable (traverse)
 
 ------------------------------------------------------------------------------
@@ -26,31 +27,34 @@ import           Data.Traversable (traverse)
        
 -- the global data for an IVar a is a reference to Maybe a, while deltas are
 -- simply values of type a (taking the IVar from Nothing to Just):
-newtype IVar a = IVar (LVar (IORef (Maybe a)) a)
+newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 
-instance Eq (IVar a) where
+instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
-instance LVarData1 IVar where
+{-
+instance LVarData1 (IVar s) where
   -- type Snapshot IVar a = Maybe a
-  newtype Snapshot IVar a = IVarSnap (Maybe a)
+  newtype Snapshot (IVar s) a = IVarSnap (Maybe a)
     deriving (Show,Ord,Read,Eq)
   freeze    = fmap IVarSnap . freezeIVar
   newBottom = new
   traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
 
-unSnap :: Snapshot IVar a -> Maybe a 
+unSnap :: Snapshot (IVar s) a -> Maybe a
 unSnap (IVarSnap m) = m
+-}
 --------------------------------------
 
-new :: Par (IVar a)
-new = fmap IVar $ newLV $ newIORef Nothing
-
+new :: Par d s (IVar s a)
+new = WrapPar$ fmap (IVar . WrapLVar) $
+      newLV $ newIORef Nothing
+      
 -- | read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- @IVar@.
-get :: IVar a -> Par a
-get (IVar iv) = getLV iv globalThresh deltaThresh
+get :: IVar s a -> Par d s a
+get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
   where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
         deltaThresh  x     = return $ Just x  -- always past threshold
         
@@ -58,8 +62,8 @@ get (IVar iv) = getLV iv globalThresh deltaThresh
 -- are not allowed, and result in a runtime error.
 --         
 -- Strict up to WHNF in the element put.
-put_ :: Eq a => IVar a -> a -> Par ()
-put_ (IVar iv) !x = putLV iv putter
+put_ :: Eq a => IVar s a -> a -> Par d s ()
+put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef ref update
 
         update (Just y) | x == y = (Just y, Just y)
@@ -70,10 +74,10 @@ put_ (IVar iv) !x = putLV iv putter
         update Nothing  = (Just x, Just x)
 
 
-freezeIVar :: IVar a -> QPar (Maybe a)
-freezeIVar (IVar lv) =
+freezeIVar :: IVar s a -> LV.Par QuasiDet s (Maybe a)
+freezeIVar (IVar (WrapLVar lv)) = WrapPar$ 
   do freezeLV lv
-     liftQ$ getLV lv globalThresh deltaThresh
+     getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
@@ -81,16 +85,16 @@ freezeIVar (IVar lv) =
 
 --------------------------------------------------------------------------------
 
-spawn :: (Eq a, NFData a) => Par a -> Par (IVar a)
+spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
               
-spawn_ :: Eq a => Par a -> Par (IVar a)
+spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
-spawnP :: (Eq a, NFData a) => a -> Par (IVar a)
+spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
 spawnP a = spawn (return a)
 
-put :: (Eq a, NFData a) => IVar a -> a -> Par ()
+put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 
 {-
@@ -109,16 +113,18 @@ instance PC.ParIVar IVar Par where
 -- IVar specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
+{-
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-instance DeepFreeze (IVar a) (Maybe a) where
+instance DeepFreeze (IVar s a) (Maybe a) where
   deepFreeze iv = do IVarSnap m <- freeze iv
                      return m
 
-instance DeepFreeze (IVar a) b =>
-         DeepFreeze (IVar (IVar a)) (Maybe b)
+instance DeepFreeze (IVar s a) b =>
+         DeepFreeze (IVar s (IVar s a)) (Maybe b)
   where
     deepFreeze (from :: (IVar (IVar a))) = do
-      x <- freezeIVar from              :: QPar (Maybe (IVar a))
-      y <- traverse deepFreeze x :: QPar (Maybe b)
+      x <- freezeIVar from       :: Par QuasiDet s (Maybe (IVar a))
+      y <- traverse deepFreeze x :: Par QuasiDet s (Maybe b)
       return y
 
+-}

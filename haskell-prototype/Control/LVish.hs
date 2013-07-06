@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | A module that reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
@@ -9,7 +10,8 @@
 module Control.LVish
   (
     -- * Basic types and accessors:
-    LVar(), state, L.HandlerPool(), Par(WrapPar), liftQ,
+    LVar(WrapLVar), state, L.HandlerPool(), Par(WrapPar), 
+    Determinism(..), liftQ,
     -- NOTE: It is safe to export WrapPar, because without importing the Internal
     -- SchedIdempotent module, a client cannot do anything with it.
     
@@ -25,6 +27,7 @@ module Control.LVish
     logStrLn
   ) where
 
+import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -38,8 +41,10 @@ data Determinism = Det | QuasiDet
 -- Use DataKinds promotion to constrain the phantom type argument to be what we want.
 newtype Par :: Determinism -> * -> * -> * where
   WrapPar :: L.Par a -> Par d s a
+  deriving (Monad, Functor, Applicative)
 -- type Foo = Par Det -- This is fine.
 -- type Bar = Par Int -- Nice type error for this.
+
 
 newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 
