@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveDataTypeable #-} 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-} -- For DeepFreeze
+
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
@@ -23,7 +24,7 @@ module Control.LVish.SchedIdempotent
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO, runParThenFreeze, 
+    runPar, runParIO, runParThenFreezeIO, 
         
     -- * Quasi-deterministic operations:
     quiesce, runQParIO,
@@ -209,8 +210,8 @@ data HandlerPool = HandlerPool {
   blockedOnQuiesce :: B.Bag ClosedPar
 }
 
--- | A monadic type constructor for deterministic parallel computations
--- producing an answer @a@.
+-- | A monadic type constructor for parallel computations producing an answer @a@.
+-- This is the internal, unsafe type.
 newtype Par a = Par {
   -- the computation is represented in CPS
   close :: (a -> ClosedPar) -> ClosedPar  
@@ -443,9 +444,9 @@ freezeLVAfter lv globalCB updateCB = do
 -- | This function has an advantage vs. doing your own freeze at the end of your
 -- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
 -- barrier before the final freeze.
-runParThenFreeze :: (LVarData1 f, DeepFreeze (f a) b) =>
-                    Par (f a) -> b
-runParThenFreeze par = unsafePerformIO $ do 
+runParThenFreezeIO :: (LVarData1 f, DeepFreeze (f a) b) =>
+                    Par (f a) -> IO b
+runParThenFreezeIO par = do 
   res <- runPar_internal par
   runPar_internal (unsafeUnQPar $ deepFreeze res)
 
