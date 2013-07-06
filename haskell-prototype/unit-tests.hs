@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Main where
 
@@ -28,8 +29,9 @@ import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
-import Control.LVish
+import Control.LVish 
 import Control.LVish.SchedIdempotent (liftIO)
+import qualified Control.LVish.SchedIdempotent as L
 
 import Data.Concurrent.SNZI as SNZI
 
@@ -582,6 +584,65 @@ case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
 --         putFst p1 33
 --         getSnd p1)
 
+
+--------------------------------------------------------------------------------
+-- Unit Tests
+--------------------------------------------------------------------------------
+
+test0 = do
+  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
+  iv2 <- newBottom
+  IV.put_ iv1 iv2
+  IV.put_ iv2 "hello"
+  IV.IVarSnap m <- L.unsafeUnQPar $ freeze iv1
+  return m
+
+
+-- | Should return (Just (Just "hello"))
+test1 :: IO(Maybe (Maybe String))
+test1 = runParIO $ do
+  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
+  iv2 <- newBottom
+  IV.put_ iv1 iv2
+  IV.put_ iv2 "hello"
+--  m <- freeze iv1  
+--  return m
+  deepFreeze iv1
+
+-- | This uses the more generic lifting... but it's more annoying to unpack:
+test2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
+test2 = runParIO $ do
+  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
+  iv2 <- newBottom
+  IV.put_ iv1 iv2
+  IV.put_ iv2 "hello"
+  deepFreeze iv1
+
+
+test3 :: IO (Snapshot IV.IVar (Snapshot ISet String))
+-- test3 :: IO (Maybe (Snapshot ISet String)) -- Won't work atm.
+test3 = runParIO $ do
+  iv1 <- newBottom 
+  iv2 <- newBottom 
+  IV.put_ iv1 iv2
+  IS.putInSet "hello" iv2 
+  deepFreeze iv1
+
+test4 :: DeepFreeze (IV.IVar Int) b => IO b
+test4 = runParIO $ do
+  iv1 <- newBottom 
+  IV.put_ iv1 (3::Int)
+  deepFreeze iv1
+
+-- More flexible than regular freeze, can pick either type:
+test4a :: IO (Snapshot IV.IVar Int)
+test4a = test4
+
+-- uh... how is this one actually working?
+test4b :: IO (Maybe Int)
+test4b = test4
+
+------------------------------------------------------------------------------------------
 
 -- | Ensure that executing an action returns an exception
 -- containing one of the expected messages.

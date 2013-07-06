@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-} 
 module Data.LVar.IVar
 --       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
        where
@@ -13,7 +15,8 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+                                                DeepFreeze(..), unsafeUnQPar)
 -- import           Control.Compose
 import           Data.Traversable (traverse)
 
@@ -100,3 +103,23 @@ instance PC.ParIVar IVar Par where
   put_ = put_
   new = new
 -}
+
+
+--------------------------------------------------------------------------------
+-- IVar specific DeepFreeze instances:
+--------------------------------------------------------------------------------
+
+
+-- Teach it how to freeze WITHOUT the annoying snapshot constructor:
+instance DeepFreeze (IVar a) (Maybe a) where
+  deepFreeze iv = do IVarSnap m <- unsafeUnQPar$ freeze iv
+                     return m
+
+instance DeepFreeze (IVar a) b =>
+         DeepFreeze (IVar (IVar a)) (Maybe b)
+  where
+    deepFreeze (from :: (IVar (IVar a))) = do
+      x <- unsafeUnQPar$ freezeIVar from       :: Par (Maybe (IVar a))
+      y <- traverse deepFreeze x :: Par (Maybe b)
+      return y
+

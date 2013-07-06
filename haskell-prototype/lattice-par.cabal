@@ -53,7 +53,6 @@ library
   exposed-modules:
                     Control.LVish
                     Control.LVish.SchedIdempotent
-                    Control.LVish.DeepFreeze
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set

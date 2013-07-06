@@ -9,7 +9,7 @@ module Control.LVish
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
     runPar, runParIO,
-    
+
     -- newLV, getLV, putLV, freezeLV, freezeLVAfter,
     -- addHandler, liftIO, 
     
@@ -17,7 +17,7 @@ module Control.LVish
     quiesce, runQParIO,
 
     -- * Interfaces for generic operations
-    LVarData1(..),
+    LVarData1(..), DeepFreeze(..),
 
     -- * Debug facilities
     logStrLn
