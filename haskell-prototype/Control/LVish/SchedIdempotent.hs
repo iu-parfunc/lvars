@@ -106,7 +106,7 @@ dbgLvl = case lookup "DEBUG" theEnv of
        Just ""  -> defaultDbg
        Just "0" -> defaultDbg
        Just s   ->
-         trace (" ! Responding to env Var: DEBUG="++s)$
+         trace (" [!] Responding to env Var: DEBUG="++s)$
          case reads s of
            ((n,_):_) -> n
            [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s

@@ -82,24 +82,25 @@ newFromList ls = newMap (M.fromList ls)
 withCallbacksThenFreeze :: forall k v b s . Eq b =>
                            IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
 withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
-    do
-       res <- IV.new -- TODO, specialize to skip this when the init action returns ()
-       WrapPar$ freezeLVAfter lv (initCB res) deltaCB
-       -- freezeSet lv -- This does nothing, but it gives us the value.
+    do hp  <- newPool 
+       res <- IV.new 
+       WrapPar$ freezeLVAfter lv (initCB hp res) deltaCB
+       -- We additionally have to quiesce here because we fork the inital set of
+       -- callbacks on their own threads:
+       quiesce hp
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: IV.IVar s b -> (IORef (M.Map k v)) -> IO (Maybe (L.Par ()))
-    initCB resIV ref = do
+    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> IO (Maybe (L.Par ()))
+    initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ do 
         -- Data.Foldable should give us a non-copying way to iterate:
         -- But it's actually insufficient because it only exposes the values:
-        -- F.foldlM (\() v -> fork$ callback undefined v) () mp
-        mapM_ (\(k,v) -> fork$ callback k v) (M.toList mp)
--- FIXME: forkInPool
+        -- FIXME: we need traverseWithKey_
+        mapM_ (\(k,v) -> forkInPool hp$ callback k v) (M.toList mp)
         
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
@@ -118,8 +119,7 @@ addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ 
         -- FIXME: need traverseWithKey_ to be added to 'containers':
-        mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
-
+        mapM_ (\(k,v) -> forkInPool hp$ callb k v) (M.toList mp)
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
 insert :: (Ord k, Eq v) =>
