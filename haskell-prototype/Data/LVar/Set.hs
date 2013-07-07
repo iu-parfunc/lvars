@@ -265,6 +265,7 @@ forEachHP mh is cb = do
    addHandler hp is cb
    return hp
 
+-- | Variant that optionally uses an existing handler pool.
 traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
                  Par d s (HandlerPool, ISet s b)
 traverseSetHP mh fn set = do
@@ -272,6 +273,7 @@ traverseSetHP mh fn set = do
   hp <- traverseSetHP_ mh fn set os  
   return (hp,os)
 
+-- | Variant that optionally uses an existing handler pool.
 traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a -> ISet s b ->
                   Par d s HandlerPool
 traverseSetHP_ mh fn set os = do

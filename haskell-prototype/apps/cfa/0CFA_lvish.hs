@@ -256,7 +256,6 @@ analyse e = res
      finStore <- summarize allStates
      monovariantStore finStore
 
---fvStuff :: [Var] -> Par d s (BEnv, Store s)
     
 -- | Get the free vars of an expression 
 fvsExp :: Exp -> S.Set Var
@@ -267,7 +266,6 @@ fvsExp (Lam _ xs c) = fvsCall c S.\\ S.fromList xs
 fvsCall :: Call -> S.Set Var
 fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
-{-
 
 -- Helper functions for constructing syntax trees
 
@@ -278,7 +276,6 @@ newLabel = State.state (\i -> (i, i + 1))
 
 runUniqM :: UniqM a -> a
 runUniqM = fst . flip State.runState 0
-
 
 ref :: Var -> UniqM Exp
 ref = return . Ref
@@ -318,13 +315,11 @@ fvExample =
                    lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
+main = forM_ [fvExample, standardExample] runExample
 
-main = forM_ [fvExample, standardExample] $ \example -> do
-         putStrLn "====="
-         forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
-           putStrLn (x ++ ":")
-           mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
--}
-
-main = putStrLn "hi"
+runExample example = do
+  putStrLn "====="
+  forM_ (M.toList (analyse (runUniqM example))) $ \(x, ISetSnap es) -> do
+    putStrLn (x ++ ":")
+    mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 

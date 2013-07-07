@@ -19,17 +19,19 @@ module Data.LVar.Map
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy
+         copy,
          
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         
+         forEachHP
        ) where
 
 import           Data.IORef
+import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
 
+import           Control.Monad (void)
 import           Control.LVish hiding (addHandler)
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
@@ -55,12 +57,6 @@ instance LVarData1 (IMap k) where
       deriving (Show,Ord,Read,Eq)
   freeze    = fmap IMapSnap . freezeMap
   newBottom = newEmptyMap
-
--- | Return a fresh map which will contain strictly more elements than the input.
--- That is, things put in the former go in the latter, but not vice versa.
-copy :: IMap k s v -> Par d s (IMap k s a)
-copy =
-  error "finish Set / copy"
 
 --------------------------------------------------------------------------------
 
@@ -113,16 +109,7 @@ addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
         mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
 
 
--- | Shorthandfor creating a new handler pool and adding a single handler to it.
-forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
-forEach is cb = do 
-   hp <- newPool
-   addHandler hp is cb
-   return hp
-
-
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
--- 
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
@@ -211,6 +198,59 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
+--------------------------------------------------------------------------------
+-- Higher level routines that could (mostly) be defined using the above interface.
+--------------------------------------------------------------------------------
+
+-- | Shorthandfor creating a new handler pool and adding a single handler to it.
+forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
+forEach = forEachHP Nothing
+
+-- | Establish monotonic map between the input and output sets.  Produce a new result
+-- based on each element, while leaving the keys the same.
+traverseMap :: (Ord k, Eq b) =>
+               (k -> a -> Par d s b) -> IMap k s a -> Par d s (IMap k s b)
+traverseMap f s = fmap snd $ traverseMapHP Nothing f s
+
+-- | An imperative-style, inplace version of 'traverseMap' that takes the output set
+-- as an argument.
+traverseMap_ :: (Ord k, Eq b) =>
+                (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
+traverseMap_ f s o = void $ traverseMapHP_ Nothing f s o
+
+--------------------------------------------------------------------------------
+-- Alternate versions of functions that EXPOSE the HandlerPools
+--------------------------------------------------------------------------------
+
+-- | Variant of 'forEach' that optionally uses an existing handler pool.
+forEachHP :: Maybe HandlerPool -> IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
+forEachHP mh is cb = do 
+   hp <- fromMaybe newPool (fmap return mh)
+   addHandler hp is cb
+   return hp
+
+-- | Return a fresh map which will contain strictly more elements than the input.
+-- That is, things put in the former go in the latter, but not vice versa.
+copy :: (Ord k, Eq v) => IMap k s v -> Par d s (IMap k s v)
+copy = traverseMap (\ _ x -> return x)
+
+-- | Variant that optionally uses an existing handler pool.
+traverseMapHP :: (Ord k, Eq b) =>
+                 Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a ->
+                 Par d s (HandlerPool, IMap k s b)
+traverseMapHP mh fn set = do
+  os <- newEmptyMap
+  hp <- traverseMapHP_ mh fn set os  
+  return (hp,os)
+
+-- | Variant that optionally uses an existing handler pool.
+traverseMapHP_ :: (Ord k, Eq b) =>
+                  Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a -> IMap k s b ->
+                  Par d s HandlerPool
+traverseMapHP_ mh fn set os = do
+  forEachHP mh set $ \ k x -> do 
+    x' <- fn k x
+    insert k x' os
 
 --------------------------------------------------------------------------------
 -- Map specific DeepFreeze instances:
