@@ -11,7 +11,8 @@
 module Data.LVar.Map
        (
          IMap, Snapshot(IMapSnap),
-         newEmptyMap, insert, 
+         newEmptyMap, newMap, newFromList,
+         insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
 
          -- * Iteration and callbacks
@@ -19,10 +20,11 @@ module Data.LVar.Map
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy,
+         copy, traverseMap, traverseMap_, 
          
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         forEachHP
+         forEachHP, traverseMapHP, traverseMapHP_, 
+         unionHP
        ) where
 
 import           Data.IORef
@@ -60,8 +62,18 @@ instance LVarData1 (IMap k) where
 
 --------------------------------------------------------------------------------
 
+-- | Create a fresh map with nothing in it.
 newEmptyMap :: Par d s (IMap k s v)
 newEmptyMap = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef M.empty
+
+-- | Create a new map populated with initial elements.
+newMap :: M.Map k v -> Par d s (IMap k s v)
+newMap m = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef m
+
+-- | Create a new 'IMap' drawing initial elements from an existing list.
+newFromList :: (Ord k, Eq v) =>
+               [(k,v)] -> Par d s (IMap k s v)
+newFromList ls = newMap (M.fromList ls)
 
 
 -- | Register a per-element callback, then run an action in this context, and freeze
@@ -251,6 +263,17 @@ traverseMapHP_ mh fn set os = do
   forEachHP mh set $ \ k x -> do 
     x' <- fn k x
     insert k x' os
+
+-- | Return a new map which will (ultimately) contain everything in either input map.
+--   Conflicting entries will result in a multiple put exception.
+unionHP :: (Ord k, Eq a) => Maybe HandlerPool ->
+           IMap k s a -> IMap k s a -> Par d s (HandlerPool, IMap k s a)
+unionHP mh m1 m2 = do
+  hp <- fromMaybe newPool (fmap return mh)  
+  os <- newEmptyMap
+  addHandler hp m1 (\ k v -> insert k v os)
+  addHandler hp m2 (\ k v -> insert k v os)
+  return (hp, os)
 
 --------------------------------------------------------------------------------
 -- Map specific DeepFreeze instances:

@@ -376,33 +376,25 @@ v8b = runParIO $ do
   logStrLn " [v8b] quiesce finished, next freeze::"
   freezeSet s4
 
--- | The same test with Maps instead of Sets.
--- v8c :: IO (M.Map [Int])
--- v8c = runParIO $ do
---   hp <- newPool
---   s1 <- IS.newFromList [1,2]
---   s2 <- IS.newFromList [40,50]
---     -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
---   (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
---   (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
---   IS.forEachHP (Just hp) s4 $ \ elm ->
---     logStrLn $ " [v8b]   Got element: "++show elm
---   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
---   -- liftIO$ threadDelay$ 100*1000
---   quiesce hp
---   logStrLn " [v8b] quiesce finished, next freeze::"
---   freezeSet s4
+case_v8c :: Assertion
+case_v8c = assertEqual "union on maps"
+           (M.fromList [(1,101),(2,102),
+                        (40,40),(50,50)] )
+             =<< v8c
 
-
-
-
--- v8b :: IO (S.Set Int)
--- v8b = runParIO $ do
---   s1 <- IS.newFromList [1,2,3]
---   s2 <- IS.newFromList [2,3,4]
---   s3 <- IS.intersection s1 s2
---   quiesce h
---   freezeSet s3
+-- | Similar test with Maps instead of Sets.
+v8c :: IO (M.Map Int Int)
+v8c = runParIO $ do
+  hp <- newPool
+  m1 <- IM.newFromList [(1,1),(2,2)]
+  m2 <- IM.newFromList [(40,40),(50,50)]
+  (_,m3) <- IM.traverseMapHP (Just hp) (\ _ v -> return (v+100)) m1
+  (_,m4) <- IM.unionHP       (Just hp) m2 m3
+  IM.forEachHP (Just hp) m4 $ \ k elm ->
+    logStrLn $ " [v8c]   Got element: "++show (k,elm)
+  quiesce hp
+  logStrLn " [v8c] quiesce finished, next freeze::"
+  freezeMap m4
   
 --------------------------------------------------------------------------------
 -- TESTS FOR SNZI  
