@@ -91,10 +91,10 @@
 
          (StoreVal status) ;; return value of `get` (we use (StoreVal
                            ;; status) instead of p here because it
-                           ;; will never be TopP)
+                           ;; will never be Top-p)
 
          l  ;; locations (pointers to LVars in the store)
-         Q  ;; threshold sets
+         P  ;; threshold sets
          (lambda (x) e))
 
       ;; Lattice elements, representing the "value" part of the state
@@ -133,14 +133,14 @@
       ;; have a good way to express infinite threshold sets in Redex.
       ;; In the paper, we sometimes define infinite threshold sets
       ;; using predicates.
-      (Q (p p (... ...)))
+      (P (p p (... ...)))
 
       ;; States.
-      (p (StoreVal status) TopP)
+      (p (StoreVal status) Top-p)
 
-      ;; Like Q, but potentially empty.  Used in the type of the
+      ;; Like P, but potentially empty.  Used in the type of the
       ;; exists-p metafunction.
-      (Q/null Q ())
+      (P/null P ())
 
       ;; Codomains for a couple of metafunctions.
       (Maybe-p p #f)
@@ -198,15 +198,15 @@
        (--> (S (in-hole E (put l d_2)))
             Error
             (where p_1 (lookup-state S l))
-            (where TopP (lub-p p_1 (d_2 #f)))
+            (where Top-p (lub-p p_1 (d_2 #f)))
             "E-Put-Err")
 
        ;; Threshold reads from LVars.
-       (--> (S (in-hole E (get l Q)))
+       (--> (S (in-hole E (get l P)))
             (S (in-hole E p_2))
             (where p_1 (lookup-state S l))
-            (where #t (incomp Q))
-            (where p_2 (exists-p p_1 Q))
+            (where #t (incomp P))
+            (where p_2 (exists-p p_1 P))
             "E-Get")
 
        ;; Creation of the intermediate language forms that
@@ -439,26 +439,26 @@
       [(lub-p (d_1 #f) (d_2 #f))
        ,(let ([d (term (lub d_1 d_2))])
           (if (equal? d (term Top))
-              (term TopP)
+              (term Top-p)
               `(,d #f)))]
 
       ;; Both frozen:
       [(lub-p (d_1 #t) (d_2 #t))
        ,(if (equal? (term d_1) (term d_2))
             (term (d_1 #t))
-            (term TopP))]
+            (term Top-p))]
 
       ;; d_1 unfrozen, d_2 frozen:
       [(lub-p (d_1 #f) (d_2 #t))
        ,(if (term (leq d_1 d_2))
             (term (d_2 #t))
-            (term TopP))]
+            (term Top-p))]
 
       ;; d_1 frozen, d_2 unfrozen:
       [(lub-p (d_1 #t) (d_2 #f))
        ,(if (term (leq d_2 d_1))
             (term (d_1 #t))
-            (term TopP))])
+            (term Top-p))])
 
     ;; The leq operation, but extended to handle status bits:
     (define-metafunction name
@@ -516,35 +516,35 @@
        ,(if (equal? (term l_1) (term l_2))
             ;; The side conditions on E-Put should ensure that the
             ;; call to update-state only happens when the lub of the
-            ;; old and new values is non-TopP.
+            ;; old and new values is non-Top-p.
             (cons (term (l_2 (lub-p p_1 p_2)))
                   (term ((l_3 p_3) (... ...))))
             (cons (term (l_2 p_2))
                   (term (update-state ((l_3 p_3) (... ...)) l_1 p_1))))])
 
     ;; Used as a premise of the E-Get rule.  Returns #t if, for any
-    ;; two distinct elements in Q, the lub of them is TopP, and #f
+    ;; two distinct elements in P, the lub of them is Top-p, and #f
     ;; otherwise.
     (define-metafunction name
-      incomp : Q -> boolean
+      incomp : P -> boolean
       [(incomp ()) #t]
       [(incomp (p)) #t]
-      [(incomp (p_1 p_2)) ,(equal? (term (lub-p p_1 p_2)) (term TopP))]
+      [(incomp (p_1 p_2)) ,(equal? (term (lub-p p_1 p_2)) (term Top-p))]
       [(incomp (p_1 p_2 p_3 (... ...)))
-       ,(and (equal? (term (lub-p p_1 p_2)) (term TopP))
+       ,(and (equal? (term (lub-p p_1 p_2)) (term Top-p))
              (term (incomp (p_1 p_3 (... ...))))
              (term (incomp (p_2 p_3 (... ...)))))])
 
     ;; Used as a premise of the E-Get rule.  If there exists a p_2
-    ;; that is a member of Q and is less than or equal to p_1, returns
+    ;; that is a member of P and is less than or equal to p_1, returns
     ;; that p_2.  Otherwise, returns #f.
     (define-metafunction name
-      exists-p : p Q/null -> Maybe-p
+      exists-p : p P/null -> Maybe-p
 
       ;; If the second argument is null, then there definitely isn't a p_2.
       [(exists-p p_1 ()) #f]
 
-      ;; If the first item in Q is less than p_1, return it.
+      ;; If the first item in P is less than p_1, return it.
       [(exists-p p_1 (p_21 p_22 (... ...))) p_21
        (where #t (leq-p p_21 p_1))]
 

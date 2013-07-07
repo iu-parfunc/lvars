@@ -92,7 +92,7 @@
 
     (test-equal
      (term (lub-p (3 #t) (4 #t)))
-     (term TopP))
+     (term Top-p))
 
     (test-equal
      (term (lub-p (3 #f) (4 #t)))
@@ -100,7 +100,7 @@
 
     (test-equal
      (term (lub-p (4 #f) (3 #t)))
-     (term TopP))
+     (term Top-p))
 
     (test-equal
      (term (lub-p (4 #t) (3 #f)))
@@ -108,7 +108,7 @@
 
     (test-equal
      (term (lub-p (3 #t) (4 #f)))
-     (term TopP))
+     (term Top-p))
 
     (test-equal
      (term (leq 3 3))
