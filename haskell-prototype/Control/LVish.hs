@@ -15,7 +15,8 @@ module Control.LVish
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO, -- runParThenFreeze,
+    runPar, runParIO,
+    runParThenFreeze, runParThenFreezeIO,
     quiesce,
     
     -- * Interfaces for generic operations
@@ -109,6 +110,9 @@ class LVarData1 (f :: * -> * -> *) where
   -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
   -- I don't know of a good way, so instead we expose this:
   traverseSnap :: (a -> Par d s b) -> Snapshot f a -> Par d s (Snapshot f b)
+  -- TODO: use constraint kinds to constrain 'b'.
+
+  foldSnap :: (a -> b -> Par d s b) -> b -> f s a -> Par d s b
 
   -- What else?
   -- Merge op?
