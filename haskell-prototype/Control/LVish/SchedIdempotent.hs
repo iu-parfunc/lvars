@@ -448,8 +448,8 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
+  C.inc $ numHandlers hp  
   Sched.pushWork q (k ()) -- "Work-first" policy.
-  C.inc $ numHandlers hp
   hpMsg " [dbg-lvish] forkInPool" hp   
   exec (close child $ onFinishHandler hp) q  
 
