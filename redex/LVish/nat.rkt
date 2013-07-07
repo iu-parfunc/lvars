@@ -154,66 +154,155 @@
      (term (extend-H (3 4 5) 6))
      (term (6 3 4 5)))
 
+    ;; For the remaining tests, note that (downset 3) => (Bot 0 1 2 3).
+
+    ;; The following tests all use the entire downset as Q:
+
     (test-equal
-     (term (contains-all-leq 3 (Bot 0 1 2 3)))
+     (term (contains-all-Q 3
+                           (Bot 0 1 2 3)
+                           (Bot 0 1 2 3)))
      (term #t))
 
     (test-equal
-     (term (contains-all-leq 3 (Bot 1 2 3)))
+     (term (contains-all-Q 3
+                           (Bot 1 2 3)
+                           (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (Bot 2 3)))
+     (term (contains-all-Q 3
+                             (Bot 2 3)
+                             (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (Bot 2 3 4 5)))
+     (term (contains-all-Q 3
+                           (Bot 2 3 4 5)
+                           (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (contains-all-leq 3 (Bot 0 1 2 3 4 5)))
+     (term (contains-all-Q 3
+                           (Bot 0 1 2 3 4 5)
+                           (Bot 0 1 2 3)))
      (term #t))
 
-    ;; For the next few tests, note that (downset 3) => (Bot 0 1 2 3)
+    ;; And these use smaller sets as Q:
+
     (test-equal
-     (term (first-unhandled-d 3 (0 1 2 3 4 5)))
+     (term (contains-all-Q 3
+                           (Bot 0 1 2 3)
+                           (Bot)))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q 3
+                           (Bot 1 2 3)
+                           (Bot 0)))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-Q 3
+                           (Bot 2 3)
+                           (Bot 2 3)))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q 3
+                           (Bot 2 3 4 5)
+                           (0 1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-Q 3
+                           (Bot 0 1 2 3 4 5)
+                           (Bot 0)))
+     (term #t))
+
+    ;; The following tests all use the entire downset as Q:
+
+    ;; "Return the first element <= 3 that is *not* in (0 1 2 3 4 5)
+    ;; but *is* in (Bot 0 1 2 3)."
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (0 1 2 3 4 5) (Bot 0 1 2 3)))
      (term Bot))
     
     (test-equal
-     (term (first-unhandled-d 3 (Bot 1 2 3 4 5)))
+     (term (first-unhandled-d-in-Q 3 (Bot 1 2 3 4 5) (Bot 0 1 2 3)))
      (term 0))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 0 1 2 3 4 5)))
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2 3 4 5) (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 0 1 2 3)))
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2 3) (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 2 3)))
+     (term (first-unhandled-d-in-Q 3 (Bot 2 3) (Bot 0 1 2 3)))
      (term 0))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 0 2 3)))
+     (term (first-unhandled-d-in-Q 3 (Bot 0 2 3) (Bot 0 1 2 3)))
      (term 1))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 0 1 2)))
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2) (Bot 0 1 2 3)))
      (term 3))
 
     (test-equal
-     (term (first-unhandled-d 3 (Bot 0 1 2 4 5 6 7)))
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2 4 5 6 7) (Bot 0 1 2 3)))
      (term 3))
 
     (test-equal
-     (term (first-unhandled-d 3 (7 0 2 6 Bot 3 1 5 4)))
+     (term (first-unhandled-d-in-Q 3 (7 0 2 6 Bot 3 1 5 4) (Bot 0 1 2 3)))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d 3 (7 6 5 4 3 0 Bot)))
+     (term (first-unhandled-d-in-Q 3 (7 6 5 4 3 0 Bot) (Bot 0 1 2 3)))
      (term 1))
+
+    ;; And these use smaller sets as Q:
+
+    ;; "Return the first element <= 3 that is *not* in (0 1 2 3 4 5)
+    ;; but *is* in (1 2 3)."
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (0 1 2 3 4 5) (1 2 3)))
+     (term #f))
+    
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 1 2 3 4 5) (1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2 3 4 5) (1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 0 1 2 3) (1 2 3)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 2 3) (0 1 2)))
+     (term 0))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 0 2 3) (0 1 2)))
+     (term 1))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 1 (Bot 0 3) (2)))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 0 3) (2)))
+     (term 2))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q 3 (Bot 0 2 3) (2)))
+     (term #f))
 
     (test-equal
      (term (store-dom ((l1 (4 #f)) (l2 (5 #f)) (l3 (Bot #f)))))
@@ -533,20 +622,24 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let ((x_2 (put x_1 3)))
-                    (freeze x_1 after ())))))
+                    (freeze x_1)))))
               (term
                (((l (3 #t)))
                 3)))
 
-    ;; Thresholding on frozenness:
+    ;; Thresholding on frozenness.  The actual state of the LVar will
+    ;; reach 3 (and so it will eventually have a downset of (Bot 0 1 2
+    ;; 3), but the only elements in that set that need to be handled
+    ;; are those that are members of the event set (Bot).  Hence the
+    ;; callback will run only once.
     (test-->> rr
               (term
                (() ;; empty store
                 (let ((x_1 new))
                   (let par
                       ((x_2 (get x_1 ((1 #t) (2 #t) (3 #t) (4 #t))))
-                       (x_3 (freeze x_1 after (lambda (x)
-                                                (put x_1 3)))))
+                       (x_3 (freeze x_1 after (Bot) with (lambda (x)
+                                                           (put x_1 3)))))
                     x_2))))
               (term
                (((l (3 #t)))
@@ -563,7 +656,7 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (let ((x_4 (put x_1 3)))
-                              (freeze x_1 after ())))
+                              (freeze x_1)))
                        (x_3 (put x_1 4)))
                     x_2))))
               (term
@@ -571,10 +664,6 @@
                 4))
               (term
                Error))
-
-    ;; Try with larger numbers at your own risk!  The number of terms
-    ;; Redex has to find grows combinatorially, I think, with the size
-    ;; of the "handled" set.
 
     ;; Fancier freezing.  This one will actually never raise an error
     ;; because the racing put is less than 2!
@@ -585,8 +674,8 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (let ((x_4 (put x_1 0)))
-                              (freeze x_1 after (lambda (x)
-                                                  (put x_1 2)))))
+                              (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_1 2)))))
                        (x_3 (put x_1 1)))
                     x_2))))
               (term
@@ -602,8 +691,8 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (let ((x_4 (put x_1 0)))
-                              (freeze x_1 after (lambda (x)
-                                                  (put x_1 2)))))
+                              (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_1 2)))))
                        (x_3 (put x_1 3)))
                     x_2))))
               (term
@@ -621,8 +710,8 @@
                 (let ((x_1 new))
                   (let ((x_2 new))
                     (let par
-                        ((x_3 (freeze x_1 after (lambda (x)
-                                                  (put x_2 7))))
+                        ((x_3 (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_2 7))))
                          (x_4 (put x_2 5)))
                       x_3)))))
               (term
@@ -640,10 +729,10 @@
                 (let ((x_1 new))
                   (let ((x_2 new))
                     (let par
-                        ((x_3 (freeze x_1 after (lambda (x)
-                                                  (put x_2 0))))
-                         (x_4 (freeze x_2 after (lambda (x)
-                                                  (put x_1 1)))))
+                        ((x_3 (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_2 0))))
+                         (x_4 (freeze x_2 after (Bot) with (lambda (x)
+                                                             (put x_1 1)))))
                       x_3)))))
               (term
                (((l (1 #t))
@@ -659,14 +748,14 @@
                 (let ((x_1 new))
                   (let ((x_2 new))
                     (let par
-                        ((x_3 (freeze x_1 after ((lambda (x)
-                                                  (lambda (x)
-                                                    (put x_2 0)))
-                                                 ())))
-                         (x_4 (freeze x_2 after ((lambda (x)
-                                                   (lambda (x)
-                                                     (put x_1 1)))
-                                                 ()))))
+                        ((x_3 (freeze x_1 after (Bot) with ((lambda (x)
+                                                              (lambda (x)
+                                                                (put x_2 0)))
+                                                            ())))
+                         (x_4 (freeze x_2 after (Bot) with ((lambda (x)
+                                                              (lambda (x)
+                                                                (put x_1 1)))
+                                                            ()))))
                       x_3)))))
               (term
                (((l (1 #t))
@@ -682,14 +771,14 @@
                   (let ((x_2 new))
                     (let ((x_3 new))
                       (let par
-                          ((x_3 (freeze x_1 after ((lambda (x)
-                                                     (lambda (x)
-                                                       (put x_2 0)))
-                                                   (put x_3 4))))
-                           (x_4 (freeze x_2 after ((lambda (x)
-                                                     (lambda (x)
-                                                       (put x_1 1)))
-                                                   (put x_3 3)))))
+                          ((x_3 (freeze x_1 after (Bot) with ((lambda (x)
+                                                                (lambda (x)
+                                                                  (put x_2 0)))
+                                                              (put x_3 4))))
+                           (x_4 (freeze x_2 after (Bot) with ((lambda (x)
+                                                                (lambda (x)
+                                                                  (put x_1 1)))
+                                                              (put x_3 3)))))
                         x_3))))))
               (term
                (((l (1 #t))
@@ -700,24 +789,22 @@
                Error))
 
     ;; Freezing an LVar twice with different values is
-    ;; quasi-deterministic.  (Commented out because it takes a while
-    ;; to run.)
-
-    ;; (test-->> rr
-    ;;           (term
-    ;;            (() ;; empty store
-    ;;             (let ((x_1 new))
-    ;;               (let par
-    ;;                     ((x_3 (freeze x_1 after (lambda (x)
-    ;;                                               (put x_1 0))))
-    ;;                      (x_4 (freeze x_1 after (lambda (x)
-    ;;                                               (put x_1 1)))))
-    ;;                   x_3))))
-    ;;           (term
-    ;;            (((l (1 #t)))
-    ;;             1))
-    ;;           (term
-    ;;            Error))
+    ;; quasi-deterministic.
+    (test-->> rr
+              (term
+               (() ;; empty store
+                (let ((x_1 new))
+                  (let par
+                        ((x_3 (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_1 0))))
+                         (x_4 (freeze x_1 after (Bot) with (lambda (x)
+                                                             (put x_1 1)))))
+                      x_3))))
+              (term
+               (((l (1 #t)))
+                1))
+              (term
+               Error))
 
     (test-results)))
 

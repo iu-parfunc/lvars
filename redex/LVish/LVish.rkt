@@ -38,8 +38,8 @@
              lub-p
              leq
              extend-H
-             contains-all-leq
-             first-unhandled-d
+             contains-all-Q
+             first-unhandled-d-in-Q
              store-dom
              lookup-val
              lookup-status
@@ -67,13 +67,14 @@
          (get e e)
          (put e e)
          new
-         (freeze e after e)
+         (freeze e)
+         (freeze e after e with e)
 
          ;; An intermediate language form -- this doesn't show up in
          ;; user programs.
-         (freeze e after ((callback (lambda (x) e))
-                          (running (e (... ...)))
-                          (handled H)))
+         (freeze e after e with ((callback (lambda (x) e))
+                                 (running (e (... ...)))
+                                 (handled H)))
 
          ;; Derived forms; these immediately desugar to application
          ;; and lambda.
@@ -95,6 +96,7 @@
 
          l  ;; locations (pointers to LVars in the store)
          P  ;; threshold sets
+         Q  ;; event sets
          (lambda (x) e))
 
       ;; Lattice elements, representing the "value" part of the state
@@ -135,6 +137,13 @@
       ;; using predicates.
       (P (p p (... ...)))
 
+      ;; Event sets.  In `freeze l after Q with (lambda (x) e)`, Q is
+      ;; the event set.  It's a set of lattice elements on which we
+      ;; want (lambda (x) e) to be invoked when l reaches them.  It
+      ;; doesn't have to be pairwise incompatible in the way that a
+      ;; threshold set does; It's just a set of lattice states.
+      (Q (d d (... ...)))
+
       ;; States.
       (p (StoreVal status) Top-p)
 
@@ -154,11 +163,12 @@
          (get e E)
          (put E e)
          (put e E)
-         (freeze E after e)
-         (freeze e after E)
-         (freeze v after ((callback v)
-                          (running (e (... ...) E e (... ...)))
-                          (handled H)))
+         (freeze E after e with e)
+         (freeze e after E with e)
+         (freeze e after e with E)
+         (freeze v after v with ((callback v)
+                                 (running (e (... ...) E e (... ...)))
+                                 (handled H)))
 
          ;; Special context for desugaring only.
          (let par ((x e) (... ...) (x E) (x e) (... ...)) e)))
@@ -211,26 +221,30 @@
 
        ;; Creation of the intermediate language forms that
        ;; E-Spawn-Handler and E-Finalize-Freeze need to operate on.
-       (--> (S (in-hole E (freeze l after (lambda (x) e))))
-            (S (in-hole E (freeze l after ((callback (lambda (x) e))
-                                           (running ())
-                                           (handled ())))))
+       (--> (S (in-hole E (freeze l after Q with (lambda (x) e))))
+            (S (in-hole E (freeze l after Q with ((callback (lambda (x) e))
+                                                  (running ())
+                                                  (handled ())))))
             "E-Freeze-Init")
 
        ;; Launching of handlers.  This rule can fire potentially many
        ;; times for a given `freeze ... after` expression.  It fires
-       ;; once for each lattice element d_2 that is <= the current
-       ;; value d_1 of l, so long as that element is not already a
-       ;; member of H.  For each such d_2, it launches a handler in
-       ;; the `running` set and adds d_2 to the `handled` set.
-       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e_0))
-                                           (running (e (... ...)))
-                                           (handled H)))))
-            (S (in-hole E (freeze l after ((callback (lambda (x) e_0))
-                                           (running ((subst x d_2 e_0) e (... ...)))
-                                           (handled H_2)))))
+       ;; once for each lattice element d_2 that is:
+       ;;
+       ;;   * <= the current value d_1 of l.
+       ;;   * not a member of the current handled set H.
+       ;;   * a member of the event set Q.
+       ;;
+       ;; For each such d_2, it launches a handler in the `running`
+       ;; set and adds d_2 to the `handled` set.
+       (--> (S (in-hole E (freeze l after Q with ((callback (lambda (x) e_0))
+                                                  (running (e (... ...)))
+                                                  (handled H)))))
+            (S (in-hole E (freeze l after Q with ((callback (lambda (x) e_0))
+                                                  (running ((subst x d_2 e_0) e (... ...)))
+                                                  (handled H_2)))))
             (where d_1 (lookup-val S l))
-            (where d_2 (first-unhandled-d d_1 H))
+            (where d_2 (first-unhandled-d-in-Q d_1 H Q))
             (where H_2 (extend-H H d_2))
             "E-Spawn-Handler")
 
@@ -243,17 +257,17 @@
        ;; its value is Bot), then the callback must still run once, to
        ;; add Bot to the `handled` set.  Only then will the premises
        ;; of E-Finalize-Freeze be satisfied, allowing it to run.
-       (--> (S (in-hole E (freeze l after ((callback (lambda (x) e))
-                                           (running (v (... ...)))
-                                           (handled H)))))
+       (--> (S (in-hole E (freeze l after Q with ((callback (lambda (x) e))
+                                                  (running (v (... ...)))
+                                                  (handled H)))))
             ((freeze-helper S l) (in-hole E d_1))
             (where d_1 (lookup-val S l))
-            (where #t (contains-all-leq d_1 H))
+            (where #t (contains-all-Q d_1 H Q))
             "E-Freeze-Final")
 
        ;; Special case of freeze-after, where there are no handlers to
        ;; run.
-       (--> (S (in-hole E (freeze l after ())))
+       (--> (S (in-hole E (freeze l)))
             ((freeze-helper S l) (in-hole E d_1))
             (where d_1 (lookup-val S l))
             "E-Freeze-Simple")
@@ -343,25 +357,29 @@
       [(extend-H H d) ,(cons (term d) (term H))])
 
     ;; Checks to see that, for all lattice elements that are less than
-    ;; or equal to d, they're a member of H.  In other words, the set
-    ;; (downset-op d) is a subset of H.
+    ;; or equal to d and a member of Q, they're a member of H.  In
+    ;; other words, (contains-all-Q d H Q) returns true exacyly when
+    ;; the set (intersection (downset-op d) Q) is a subset of H.
     (define-metafunction name
-      contains-all-leq : d H -> boolean
-      [(contains-all-leq d H)
+      contains-all-Q : d H Q -> boolean
+      [(contains-all-Q d H Q)
        ,(lset<= equal?
-                (downset-op (term d))
+                (lset-intersection equal?
+                                   (downset-op (term d))
+                                   (term Q))
                 (term H))])
 
     ;; A helper for the E-Spawn-Handler reduction rule.  Takes a
-    ;; lattice element d_1 and a finite set H of elements, and
-    ;; returns the first element that is <= d_1 in the lattice that is
-    ;; *not* a member of H, if such an element exists; returns #f
-    ;; otherwise.
+    ;; lattice element d_1, a finite set H of elements, and a finite
+    ;; set Q of elements of interest.  returns the first element that
+    ;; is <= d_1 in the lattice that is *not* a member of H and *is* a
+    ;; member of Q, if such an element exists; returns #f otherwise.
     (define-metafunction name
-      first-unhandled-d : d H -> Maybe-d
-      [(first-unhandled-d d_1 H)
+      first-unhandled-d-in-Q : d H Q -> Maybe-d
+      [(first-unhandled-d-in-Q d_1 H Q)
        ,(let ([ls (filter (lambda (x)
-                            (not (member x (term H))))
+                            (and (not (member x (term H)))
+                                 (member x (term Q))))
                           (downset-op (term d_1)))])
           (if (null? ls)
               #f

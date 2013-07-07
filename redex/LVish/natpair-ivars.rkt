@@ -164,69 +164,153 @@
      (term (extend-H ((3 3) (4 4) (5 5)) (6 6)))
      (term ((6 6) (3 3) (4 4) (5 5))))
 
-    (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 1) (1 Bot) (1 1))))
-     (term #t))
-
-    (test-equal
-     (term (contains-all-leq (1 1) ((Bot 1) (1 Bot) (1 1))))
-     (term #f))
-
-    (test-equal
-     (term (contains-all-leq (1 1) (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))))
-     (term #f))
-
-    ;; For the next few tests, note that (downset (1 1)) =>
+    ;; For the rest of the tests, note that (downset (1 1)) =>
     ;; '(Bot
     ;;   (1 Bot)
     ;;   (Bot 1)
     ;;   (1 1))
 
+    ;; The following tests all just use the entire downset as Q:
+
     (test-equal
-     (term (first-unhandled-d (1 1) ((Bot 0) (Bot 1))))
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (1 1))
+                           (Bot (1 Bot) (Bot 1) (1 1))))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           ((Bot 1) (1 Bot) (1 1))
+                           (Bot (1 Bot) (Bot 1) (1 1))))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))
+                           (Bot (1 Bot) (Bot 1) (1 1))))
+     (term #f))
+
+    ;; And these ones use various smaller sets for Q:
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (1 1))
+                           ((1 1))))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           ((Bot 1) (1 Bot) (1 1))
+                           ((1 1))))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))
+                           ((1 1) (2 2))))
+     (term #f))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))
+                           (Bot (1 Bot))))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (1 Bot) (2 Bot) (2 0) (2 1))
+                           ((1 Bot))))
+     (term #t))
+
+    (test-equal
+     (term (contains-all-Q (1 1)
+                           (Bot (Bot 1) (2 Bot) (2 0) (2 1))
+                           ((1 Bot))))
+     (term #f))
+
+    ;; The following tests all just use the entire downset as Q:
+
+    (test-equal
+     (term (first-unhandled-d-in-Q (1 1)
+                                   ((Bot 0) (Bot 1))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term Bot))
     
     (test-equal
-     (term (first-unhandled-d (1 1) (Bot (0 Bot) (1 Bot))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (0 Bot) (1 Bot))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term (Bot 1)))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              (Bot (Bot 1) (1 Bot) (1 1) (5 5) (6 6) (7 7))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 1) (1 Bot) (1 1) (5 5) (6 6) (7 7))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              (Bot (Bot 1) (1 Bot) (1 0) (1 1))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 1) (1 Bot) (1 0) (1 1))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term #f))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              (Bot (1 Bot) (1 0) (1 1))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (1 Bot) (1 0) (1 1))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term (Bot 1)))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              (Bot (Bot 0) (Bot 1)
-                               (0 Bot) (0 0) (0 1)
-                               (1 Bot) (1 0))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 0) (Bot 1)
+                                        (0 Bot) (0 0) (0 1)
+                                        (1 Bot) (1 0))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
 
      (term (1 1)))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              (Bot (Bot 0) (Bot 1)
-                               (0 Bot) (0 0) (0 1)
-                               (1 Bot) (1 0)
-                               (5 5) (6 6) (7 7))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 0) (Bot 1)
+                                        (0 Bot) (0 0) (0 1)
+                                        (1 Bot) (1 0)
+                                        (5 5) (6 6) (7 7))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
      (term (1 1)))
 
     (test-equal
-     (term (first-unhandled-d (1 1)
-                              ((1 Bot) (0 0) (7 7)
-                               (5 5) Bot (1 0)
-                               (Bot 0) (1 1) (Bot 1) 
-                               (0 Bot) (6 6) (0 1))))
+     (term (first-unhandled-d-in-Q (1 1)
+                                   ((1 Bot) (0 0) (7 7)
+                                    (5 5) Bot (1 0)
+                                    (Bot 0) (1 1) (Bot 1) 
+                                    (0 Bot) (6 6) (0 1))
+                                   (Bot (1 Bot) (Bot 1) (1 1))))
+     (term #f))
+
+    ;; And these ones use various smaller sets for Q:
+
+    (test-equal
+     (term (first-unhandled-d-in-Q (1 1)
+                                   ((Bot 0) (Bot 1))
+                                   ((1 Bot) (Bot 1) (1 1))))
+     (term (1 Bot)))
+    
+    (test-equal
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (0 Bot) (1 Bot))
+                                   ((Bot 1) (1 1))))
+     (term (Bot 1)))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 1) (1 Bot) (1 1) (5 5) (6 6) (7 7))
+                                   ((1 1))))
+     (term #f))
+
+    (test-equal
+     (term (first-unhandled-d-in-Q (1 1)
+                                   (Bot (Bot 1) (1 Bot) (1 0) (1 1))
+                                   ((1 Bot) (Bot 1) (1 1))))
      (term #f))
 
     (test-results))
@@ -238,7 +322,7 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let ((x_2 (put x_1 (3 4))))
-                    (freeze x_1 after ())))))
+                    (freeze x_1)))))
               (term
                (((l ((3 4) #t)))
                 (3 4))))
@@ -250,7 +334,7 @@
                 (let ((x_1 new))
                   (let par
                       ((x_2 (let ((x_4 (put x_1 (3 Bot))))
-                              (freeze x_1 after ())))
+                              (freeze x_1)))
                        (x_3 (put x_1 (Bot 6))))
                     x_2))))
               (term
@@ -282,14 +366,14 @@
                 (let ((x_1 new))
                   (let ((x_2 new))
                     (let par
-                        ((x_3 (freeze x_1 after ((lambda (x)
-                                                  (lambda (x)
-                                                    (put x_2 (Bot 0))))
-                                                 ())))
-                         (x_4 (freeze x_2 after ((lambda (x)
-                                                   (lambda (x)
-                                                     (put x_1 (0 Bot))))
-                                                 ()))))
+                        ((x_3 (freeze x_1 after (Bot) with ((lambda (x)
+                                                              (lambda (x)
+                                                                (put x_2 (Bot 0))))
+                                                            ())))
+                         (x_4 (freeze x_2 after (Bot) with ((lambda (x)
+                                                              (lambda (x)
+                                                                (put x_1 (0 Bot))))
+                                                            ()))))
                       x_3)))))
               (term
                (((l ((0 Bot) #t))
