@@ -5,6 +5,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Data.LVar.Map
        (
@@ -18,11 +20,15 @@ module Data.LVar.Map
 
          -- * Higher-level derived operations
          copy
+         
+         -- * Alternate versions of derived ops that expose HandlerPools they create.
+         
        ) where
 
 import           Data.IORef
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
+import qualified Data.Traversable as T
 
 import           Control.LVish hiding (addHandler)
 import           Control.LVish.Internal as LI
@@ -103,7 +109,7 @@ addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
     globalCB ref = do
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ 
-        -- Fixme: need traverseWithKey_ :
+        -- FIXME: need traverseWithKey_ to be added to 'containers':
         mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
 
 
@@ -207,7 +213,7 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
 
 
 --------------------------------------------------------------------------------
--- Set specific DeepFreeze instances:
+-- Map specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
@@ -215,16 +221,14 @@ instance DeepFreeze (IMap k s a) (M.Map k a) where
   type Session (IMap k s a) = s
   deepFreeze iv = do IMapSnap m <- freeze iv
                      return m
-{-
-instance (DeepFreeze (IMap k2 s a) b, Ord b) =>
-         DeepFreeze (IMap k s (IMap k2 s a)) (M.Map k b)
-  where
-    type Session (ISet s (ISet s a)) = s
-    deepFreeze (from :: (ISet s (ISet s a))) = do
-      x <- freezeSet from :: QPar s (S.Set (ISet s a))
-      let fn :: ISet s a -> S.Set b -> QPar s (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x :: QPar s (S.Set b)
-      return y
--}
+
+instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
+         DeepFreeze (IMap key s0 (f s0 a))
+                    (M.Map key b)  where
+    type Session (IMap key s0 (f s0 a)) = s0
+    deepFreeze from = do
+      x <- freezeMap from
+      let fn :: key -> f s0 a -> M.Map key b -> QPar s0 (M.Map key b)
+          fn k elm acc = do elm' <- deepFreeze elm
+                            return (M.insert k elm' acc)
+      T.traverse deepFreeze x

@@ -360,8 +360,6 @@ case_v8b = assertEqual "3-way cartesian product"
             )
            =<< v8b
 
--- [2013.07.03] Seeing nondeterministic failures here... hmm...
--- Ah, possibly divergence too... jeez.
 v8b :: IO (S.Set [Int])
 v8b = runParIO $ do
   hp <- newPool
@@ -377,6 +375,24 @@ v8b = runParIO $ do
   quiesce hp
   logStrLn " [v8b] quiesce finished, next freeze::"
   freezeSet s4
+
+-- | The same test with Maps instead of Sets.
+-- v8c :: IO (M.Map [Int])
+-- v8c = runParIO $ do
+--   hp <- newPool
+--   s1 <- IS.newFromList [1,2]
+--   s2 <- IS.newFromList [40,50]
+--     -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
+--   (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
+--   (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
+--   IS.forEachHP (Just hp) s4 $ \ elm ->
+--     logStrLn $ " [v8b]   Got element: "++show elm
+--   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
+--   -- liftIO$ threadDelay$ 100*1000
+--   quiesce hp
+--   logStrLn " [v8b] quiesce finished, next freeze::"
+--   freezeSet s4
+
 
 
 

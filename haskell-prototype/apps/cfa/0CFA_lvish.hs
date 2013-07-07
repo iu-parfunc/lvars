@@ -2,6 +2,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 
+-- module Apps.CFA.KCFA_LVish
+module Main where
+
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
