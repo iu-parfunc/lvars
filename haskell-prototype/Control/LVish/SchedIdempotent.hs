@@ -27,7 +27,7 @@ module Control.LVish.SchedIdempotent
     runPar, runParIO, 
         
     -- * Quasi-deterministic operations:
-    quiesce, 
+    quiesce, quiesceAll,
 
     -- * Debug facilities
     logStrLn, dbgLvl,
@@ -77,14 +77,17 @@ globalLog = unsafePerformIO $ newIORef []
 -- | Atomically add a line to the given log.
 logStrLn  :: String -> Par ()
 logStrLn_ :: String -> IO ()
+logLnAt_ :: Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 logStrLn = liftIO . logStrLn_
-logStrLn_ s =
-  when (dbgLvl >= 1) $ 
+logStrLn_ s = logLnAt_ 1 s
+logLnAt_ lvl s = 
+  when (dbgLvl >= lvl) $ 
    atomicModifyIORef globalLog $ \ss -> (s:ss, ())
 #else 
 logStrLn _  = return ()
 logStrLn_ _ = return ()
+logLnAt_ _ _ = return ()
 {-# INLINE logStrLn #-}
 {-# INLINE logStrLn_ #-}
 #endif
@@ -92,8 +95,26 @@ logStrLn_ _ = return ()
 -- | Print all accumulated log lines
 printLog :: IO ()
 printLog = do
-  lines <- readIORef globalLog
-  mapM_ putStrLn $ reverse lines
+  -- Clear the log when we read it:
+  lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
+  -- mapM_ (hPutStrLn stderr) $ reverse lines
+  mapM_ putStrLn $ reverse lines  
+  
+printLogThread :: IO (IO ())
+printLogThread = do
+  tid <- forkIO $
+         E.catch loop (\ (e :: E.AsyncException) -> do
+                        -- One last time on kill:
+                        printLog
+                        putStrLn " [dbg-log-printer] Shutting down."
+                      )
+  return (killThread tid)
+ where
+   loop = do
+     -- Flush the log at 5Hz:
+     printLog
+     threadDelay (200 * 1000)
+     loop
 
 theEnv :: [(String, String)]
 theEnv = unsafePerformIO getEnvironment
@@ -382,6 +403,13 @@ quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
     exec (k ()) q 
   else sched q
 
+-- | A global barrier.
+quiesceAll :: Par ()
+quiesceAll = mkPar $ \k q -> do
+  sched q
+  logStrLn_ " [dbg-lvish] Return from global barrier."
+  exec (k ()) q
+
 -- | Freeze an LVar after a given handler quiesces
 --   This is quasideterministic, but it 
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
@@ -457,8 +485,9 @@ runPar_internal c = do
         tid <- forkWithExceptions (forkOn cpu) "worker thread" $
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
-                              sched q      -- ensure any remaining, enabled threads run to 
-                              putMVar answerMV x  -- completion prior to returning the result
+                              sched q            -- ensure any remaining, enabled threads run to 
+                              putMVar answerMV x -- completion prior to returning the result
+                              -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
                         in exec (close c k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
                    -- the main thread exits.  Subsequent exceptions on child threads, even if
@@ -466,17 +495,23 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
+  closeLogger <- if dbgLvl >= 1
+                 then printLogThread
+                 else return (return ())
   logStrLn_ " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        logStrLn_$ "Killing off workers.. "++show tids
+        logStrLn_$ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
-        error ("EXCEPTION in runPar: "++show e)
+        mytid <- myThreadId
+        when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
+        error ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
-  printLog
+  -- printLog
+  closeLogger
   hFlush stdout
   return ans
 #else

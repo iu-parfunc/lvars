@@ -17,7 +17,9 @@ module Control.LVish
     yield, newPool, fork, forkInPool,
     runPar, runParIO,
     runParThenFreeze, runParThenFreezeIO,
-    quiesce,
+    
+    -- * Quasi-deterministic operations:
+    quiesce, quiesceAll,
     
     -- * Interfaces for generic operations
     LVarData1(..), DeepFreeze(..),
@@ -53,6 +55,10 @@ yield = WrapPar L.yield
 
 quiesce :: L.HandlerPool -> Par d s ()
 quiesce = WrapPar . L.quiesce
+
+-- | A global barrier.
+quiesceAll :: Par d s ()
+quiesceAll = WrapPar L.quiesceAll
 
 fork :: Par d s () -> Par d s ()
 fork (WrapPar f) = WrapPar$ L.fork f
