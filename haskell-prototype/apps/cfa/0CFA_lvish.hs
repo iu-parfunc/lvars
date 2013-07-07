@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
@@ -15,6 +16,7 @@ import Data.List ((\\))
 import Debug.Trace
 
 import Control.LVish
+import Control.LVish.Internal (liftIO)
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
 
@@ -26,8 +28,7 @@ data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show)
 data Call = Call Label Exp [Exp] deriving (Eq, Ord, Show)
 
 -- Abstract state space
-data State = State Call BEnv Store Time
---           deriving (Eq, Ord, Show)
+data State s = State Call BEnv (Store s) Time
   deriving (Show, Eq)
 
 -- A binding environment maps variables to addresses
@@ -36,10 +37,10 @@ data State = State Call BEnv Store Time
 type BEnv = M.Map Var Time
 
 -- A store maps addresses to denotable values
-type Store = IM.IMap Addr Denotable
+type Store s = IM.IMap Addr s (Denotable s)
 
 -- | An abstact denotable value is a set of possible values
-type Denotable = IS.ISet Value
+type Denotable s = IS.ISet s Value
 
 -- For pure CPS, closures are the only kind of value
 type Value = Clo
@@ -59,11 +60,11 @@ data Bind = Binding Var Time
 -- the program has traversed.
 type Time = [Label]
 
-instance Show Store where
+instance Show (Store s) where
   show _ = "<Store>"
 
 -- State Call BEnv Store Time
-instance Ord State where
+instance Ord (State s) where
   compare (State c1 be1 s1 t1)
           (State c2 be2 s2 t2)
     = compare c1 c2    `andthen`
@@ -80,7 +81,7 @@ andthen a _  = a
 
 --------------------------------------------------------------------------------
 
-storeInsert :: Addr -> Value -> Store -> Par ()
+storeInsert :: Addr -> Value -> Store s -> Par d s ()
 storeInsert a v s = IM.modify s a (IS.putInSet v)
   
 -- storeJoin :: Store -> Store -> Store
@@ -96,7 +97,7 @@ tick l t = take k (l:t)
 
 -- k-CFA abstract interpreter
 
-atomEval :: BEnv -> Store -> Exp -> Par Denotable
+atomEval :: BEnv -> Store s -> Exp -> Par d s (Denotable s)
 atomEval benv store Halt    = single HaltClosure
 atomEval benv store (Ref x) = case M.lookup x benv of
     Nothing -> error $ "Variable unbound in BEnv: " ++ show x
@@ -107,14 +108,14 @@ atomEval benv store (Ref x) = case M.lookup x benv of
         
 atomEval benv _  (Lam l v c) = single (Closure (l, v, c) benv)
 
-single :: Ord a => a -> Par (ISet a)
+single :: Ord a => a -> Par d s (ISet s a)
 single x = do 
   s <- newEmptySet  
   IS.putInSet x s
   return s
 
 
-next :: IS.ISet State -> State -> Par () -- Next states
+next :: IS.ISet s (State s) -> State s -> Par d s () -- Next states
 next seen st0@(State (Call l fun args) benv store time)
   = trace ("next" ++ show st0) $ do
     procs   <- atomEval benv store fun
@@ -173,7 +174,7 @@ escape (Closure (_l, formals, call) benv) store = Just (State call (benv `M.unio
 -}
 
 -- | Create an environment and store with empty/Arbitrary bindings.
-fvStuff :: [Var] -> Par (BEnv, Store)
+fvStuff :: [Var] -> Par d s (BEnv, Store s)
 fvStuff xs = do
   store <- newEmptyMap
   forM_ xs $ \x -> do
@@ -193,7 +194,7 @@ fvStuff xs = do
 --     explore (S.insert todo seen) (S.toList nbrs ++ todos)
 
 -- | Kick off the state space exploration by setting up a handler.
-explore :: State -> Par (IS.ISet State)
+explore :: State s -> Par d s (IS.ISet  s (State s))
 explore initial = do
   allSeen <- newEmptySet
   liftIO$ putStrLn$ "Kicking off with an initial state: "++show initial
@@ -224,7 +225,7 @@ explore initial = do
 -- User interface
 
 -- summarize :: S.Set State -> Par Store
-summarize :: IS.ISet State -> Par Store  
+summarize :: IS.ISet s (State s) -> Par d s (Store s)
 summarize states = do
   storeFin <- newEmptyMap
   -- Note: a generic union operation could also handle this:
@@ -237,7 +238,7 @@ summarize states = do
   
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
 -- monovariantStore :: Store -> M.Map Var (S.Set Exp)
-monovariantStore :: Store -> Par (M.Map Var (S.Set Exp))
+monovariantStore :: Store s -> Par d s (M.Map Var (S.Set Exp))
 monovariantStore store = do 
   -- M.foldrWithKey (\(Binding x _) d res ->
   --                  M.alter (\mb_exp -> Just $ maybe id S.union mb_exp (S.map monovariantValue d)) x res)
