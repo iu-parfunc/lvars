@@ -30,7 +30,7 @@ module Control.LVish.SchedIdempotent
     quiesce, 
 
     -- * Debug facilities
-    logStrLn,
+    logStrLn, dbgLvl,
        
     -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
     newLV, getLV, putLV, freezeLV, freezeLVAfter,
@@ -52,6 +52,8 @@ import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
+import           System.Environment(getEnvironment)
+import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
@@ -61,6 +63,7 @@ import Data.Traversable
 
 -- import qualified Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
+
 
 ----------------------------------------------------------------------------------------------------
 -- THREAD-SAFE LOGGING
@@ -76,7 +79,9 @@ logStrLn  :: String -> Par ()
 logStrLn_ :: String -> IO ()
 #ifdef DEBUG_LVAR
 logStrLn = liftIO . logStrLn_
-logStrLn_ s = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+logStrLn_ s =
+  when (dbgLvl >= 1) $ 
+   atomicModifyIORef globalLog $ \ss -> (s:ss, ())
 #else 
 logStrLn _  = return ()
 logStrLn_ _ = return ()
@@ -89,6 +94,25 @@ printLog :: IO ()
 printLog = do
   lines <- readIORef globalLog
   mapM_ putStrLn $ reverse lines
+
+theEnv :: [(String, String)]
+theEnv = unsafePerformIO getEnvironment
+
+-- | Debugging flag shared by several modules.
+--   This is activated by setting the environment variable DEBUG=1..5
+dbgLvl :: Int
+dbgLvl = case lookup "DEBUG" theEnv of
+       Nothing  -> defaultDbg
+       Just ""  -> defaultDbg
+       Just "0" -> defaultDbg
+       Just s   ->
+         trace (" ! Responding to env Var: DEBUG="++s)$
+         case reads s of
+           ((n,_):_) -> n
+           [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
+
+defaultDbg :: Int
+defaultDbg = 0
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
