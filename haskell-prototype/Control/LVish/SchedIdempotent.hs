@@ -20,21 +20,21 @@
 module Control.LVish.SchedIdempotent
   (
     -- * Basic types and accessors:
-    LVar(), state, HandlerPool(), Par(), QPar(), liftQ, 
+    LVar(), state, HandlerPool(), Par(), 
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
     runPar, runParIO, 
         
     -- * Quasi-deterministic operations:
-    quiesce, runQParIO,
+    quiesce, 
 
     -- * Debug facilities
     logStrLn,
        
     -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
     newLV, getLV, putLV, freezeLV, freezeLVAfter,
-    addHandler, liftIO, unsafeUnQPar,
+    addHandler, liftIO, 
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -179,16 +179,6 @@ instance Applicative Par where
   (<*>) = ap
   pure  = return
 
-newtype QPar a = QPar (Par a)
-  deriving (Functor, Monad, Applicative)
-
--- | It is always safe to lift a deterministic computation to a quasi-determinism one.
-liftQ :: Par a -> QPar a
-liftQ = QPar
-
--- | UNSAFE
-unsafeUnQPar :: QPar a -> Par a
-unsafeUnQPar (QPar p) = p
 
 ------------------------------------------------------------------------------
 -- A few auxiliary functions
@@ -291,7 +281,7 @@ putLV LVar {state, status, name} doPut = mkPar $ \k q -> do
   exec (k ()) q
 
 -- | Freeze an LVar (limited nondeterminism)
---   It is the data-structure implementors responsibility to expose this as QPar.
+--   It is the data-structure implementors responsibility to expose this as qasi-deterministc.
 freezeLV :: LVar a d -> Par ()
 freezeLV LVar {name, status} = mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
@@ -514,9 +504,6 @@ data NonDeterminismExn = NonDeterminismExn String
 
 instance E.Exception NonDeterminismExn where
 
--- | Quasi-deterministic.  May throw 'NonDeterminismExn' on the thread that calls it.
-runQParIO :: QPar a -> IO a
-runQParIO (QPar p) = runParIO p
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()

@@ -63,6 +63,8 @@ forkInPool hp (WrapPar f) = WrapPar$ L.forkInPool hp f
 newPool :: Par d s L.HandlerPool
 newPool = WrapPar L.newPool
 
+-- | If the input computation is quasi-deterministic, this may throw
+-- 'NonDeterminismExn' on the thread that calls it.
 runParIO :: (forall s . Par d s a) -> IO a
 runParIO (WrapPar p) = L.runParIO p 
 
