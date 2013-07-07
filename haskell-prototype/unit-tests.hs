@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, CPP, ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -628,37 +629,31 @@ dftest2 = runParIO $ do
   IV.put_ iv2 "hello"
   deepFreeze iv1
 
-
+case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
 dftest3 :: IO (Maybe Int)
 dftest3 = runParIO $ do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
   deepFreeze iv1 
 
--- | Polymorphic version of previous
-{-
-dftest4 :: DeepFreeze (IV.IVar s Int) b => IO b
-dftest4 = runParIO $ do
-  iv1::IV.IVar s1 Int <- newBottom 
+-- | Polymorphic version of previous.  DeepFreeze is more flexible than regular
+-- freeze, because we can pick multiple return types for the same code.  But we must
+-- be very careful with this kind of thing due to the 's' type variables.
+dftest4_ :: DeepFreeze (IV.IVar s1 Int) b =>
+            Par QuasiDet s1 b
+dftest4_ = do
+  iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
---  res <- deepFreeze iv1 :: Par QuasiDet (Session (IV.IVar s1 Int)) b
-  res <- deepFreeze iv1 :: Par QuasiDet s1 b
+  res <- deepFreeze iv1 
   return res
 
-ase_dftest4a = assertEqual "freeze polymorphic 1"
-                  (IV.IVarSnap (Just 3)) =<< dftest4a
-
--- More flexible than regular freeze, can pick either type:
+case_dftest4a = assertEqual "freeze polymorphic 1" (IV.IVarSnap (Just 3)) =<< dftest4a
 dftest4a :: IO (Snapshot IV.IVar Int)
-dftest4a = dftest4
+dftest4a = runParIO dftest4_
 
-ase_dftest4b = assertEqual "freeze polymorphic 2"
-                  (Just 3) =<< dftest4b
-
--- uh... how is this one actually working?
+case_dftest4b = assertEqual "freeze polymorphic 2" (Just 3) =<< dftest4b
 dftest4b :: IO (Maybe Int)
-dftest4b = dftest4
--}
+dftest4b = runParIO dftest4_
 
 ------------------------------------------------------------------------------------------
 
