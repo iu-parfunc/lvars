@@ -1,11 +1,8 @@
-{-# LANGUAGE DataKinds #-}  -- For Determinism
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DataKinds #-}  -- For Determinism
 
 -- | A module that reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
@@ -13,10 +10,8 @@
 module Control.LVish
   (
     -- * Basic types and accessors:
-    LVar(WrapLVar), state, L.HandlerPool(), Par(WrapPar), 
+    LVar(), state, L.HandlerPool(), Par(), 
     Determinism(..), liftQ,
-    -- NOTE: It is safe to export WrapPar, because without importing the Internal
-    -- SchedIdempotent module, a client cannot do anything with it.
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
@@ -31,13 +26,13 @@ module Control.LVish
   ) where
 
 import           Control.Applicative
+import           Control.LVish.Internal
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO)
 
 --------------------------------------------------------------------------------
 -- Inline *everything*, because these are just wrappers:
 {-# INLINE liftQ #-}
-{-# INLINE state  #-}
 {-# INLINE yield #-}
 {-# INLINE newPool #-}
 {-# INLINE runParIO #-}
@@ -47,28 +42,6 @@ import           System.IO.Unsafe (unsafePerformIO)
 {-# INLINE forkInPool #-}
 {-# INLINE quiesce #-}
 --------------------------------------------------------------------------------
-
--- | This datatype is promoted to type-level and used to indicate whether a `Par`
--- computation is guaranteed-deterministic, or only quasi-deterministic (i.e. might throw NonDeterminismExn).
-data Determinism = Det | QuasiDet
-  deriving Show
-
--- Use DataKinds promotion to constrain the phantom type argument to be what we want.
-newtype Par :: Determinism -> * -> * -> * where
-  WrapPar :: L.Par a -> Par d s a
-  deriving (Monad, Functor, Applicative)
--- type Foo = Par Det -- This is fine.
--- type Bar = Par Int -- Nice type error for this.
-
-
-newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
-
-state :: LVar s a d -> a
-state = L.state . unWrapLVar
-
--- | Ignore the extra type annotations regarding both determinism and session-sealing.
-unsafeConvert :: Par d1 s1 a -> Par d2 s2 a
-unsafeConvert (WrapPar p) = (WrapPar p)
 
 -- | It is always safe to lift a deterministic computation to a quasi-determinism one.
 liftQ :: Par Det s a -> Par QuasiDet s a

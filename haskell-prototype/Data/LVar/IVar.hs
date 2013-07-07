@@ -17,6 +17,7 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish as LV
+import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.Traversable (traverse)
@@ -32,22 +33,22 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
-instance LVarData1 (IVar s) where
+instance LVarData1 IVar where
   -- type Snapshot IVar a = Maybe a
-  newtype Snapshot (IVar s) a = IVarSnap (Maybe a)
+  newtype Snapshot IVar a = IVarSnap (Maybe a)
     deriving (Show,Ord,Read,Eq)
   
-  -- freeze :: f a -> Par QuasiDet s (Snapshot f a)
-  -- freeze    = fmap IVarSnap . freezeIVar
+  freeze :: IVar s a -> Par QuasiDet s (Snapshot IVar a)
+  freeze = unsafeConvert . fmap IVarSnap . freezeIVar
 
 --newBottom :: forall (d :: Determinism) s1 a. Par d s1 (IVar s a)
   newBottom :: Par d s (IVar s a)
   newBottom = new
   
-  -- traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
   
 
-unSnap :: Snapshot (IVar s) a -> Maybe a
+unSnap :: Snapshot IVar a -> Maybe a
 unSnap (IVarSnap m) = m
 
 --------------------------------------
@@ -121,17 +122,29 @@ instance PC.ParIVar IVar Par where
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IVar s a) (Maybe a) where
-  deepFreeze iv = do IVarSnap m <- freeze iv
-                     return m
+  deepFreeze iv = I.unsafeConvert $
+      do IVarSnap m <- freeze iv
+         return m
 
 instance DeepFreeze (IVar s a) b =>
          DeepFreeze (IVar s (IVar s a)) (Maybe b)
   where
-{-    
 --    deepFreeze (from :: (IVar s (IVar s a))) = do    
-    deepFreeze from = do    
+    deepFreeze from = unsafeConvert $ do    
       x <- freezeIVar from       -- :: Par QuasiDet s (Maybe (IVar s a))
       y <- traverse deepFreeze x -- :: Par QuasiDet s (Maybe b)
       return y
--}
 
+
+
+test :: IO Int
+test = runParIO $ do
+  v <- new
+  logStrLn $ "First, put to the lvar..."
+  put_ v 3
+  logStrLn $ show $ unsafePerformIO$  runParIO $
+    do
+       (x::Maybe Int) <- deepFreeze v
+       -- get v
+       return x
+  get v
