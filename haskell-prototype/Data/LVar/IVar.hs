@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE InstanceSigs #-} 
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE CPP #-} 
 module Data.LVar.IVar
 --       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
        where
@@ -104,7 +105,8 @@ spawnP a = spawn (return a)
 put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 
-{-
+#ifdef VERSION_abstract_par
+#if MIN_VERSION_abstract_par(0,4,0)
 instance PC.ParFuture IVar Par where
   spawn_ = spawn_
   get = get
@@ -113,7 +115,8 @@ instance PC.ParIVar IVar Par where
   fork = fork  
   put_ = put_
   new = new
--}
+#endif
+#endif
 
 --------------------------------------------------------------------------------
 -- IVar specific DeepFreeze instances:
@@ -122,19 +125,19 @@ instance PC.ParIVar IVar Par where
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IVar s a) (Maybe a) where
-  deepFreeze iv = I.unsafeConvert $
+  type Session (IVar s a) = s 
+  deepFreeze iv = 
       do IVarSnap m <- freeze iv
          return m
 
 instance DeepFreeze (IVar s a) b =>
          DeepFreeze (IVar s (IVar s a)) (Maybe b)
   where
---    deepFreeze (from :: (IVar s (IVar s a))) = do    
-    deepFreeze from = unsafeConvert $ do    
+    type Session (IVar s (IVar s a)) = s 
+    deepFreeze from = do
       x <- freezeIVar from       -- :: Par QuasiDet s (Maybe (IVar s a))
       y <- traverse deepFreeze x -- :: Par QuasiDet s (Maybe b)
       return y
-
 
 {-
 -- [2013.07.06] Good, this errors post refactoring:
