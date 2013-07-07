@@ -12,7 +12,8 @@
 module Data.LVar.Set
        (
          -- * Basic operations
-         ISet, newEmptySet, newSet, newFromList,
+         ISet, Snapshot(ISetSnap),
+         newEmptySet, newSet, newFromList,
          putInSet, waitElem, waitSize, 
 
          -- * Iteration and callbacks

@@ -3,11 +3,13 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 
 module Data.LVar.Map
        (
-         IMap, newEmptyMap, insert, 
+         IMap, Snapshot(IMapSnap),
+         newEmptyMap, insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
 
          -- * Iteration and callbacks
@@ -202,3 +204,27 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
+
+
+--------------------------------------------------------------------------------
+-- Set specific DeepFreeze instances:
+--------------------------------------------------------------------------------
+
+-- Teach it how to freeze WITHOUT the annoying snapshot constructor:
+instance DeepFreeze (IMap k s a) (M.Map k a) where
+  type Session (IMap k s a) = s
+  deepFreeze iv = do IMapSnap m <- freeze iv
+                     return m
+{-
+instance (DeepFreeze (IMap k2 s a) b, Ord b) =>
+         DeepFreeze (IMap k s (IMap k2 s a)) (M.Map k b)
+  where
+    type Session (ISet s (ISet s a)) = s
+    deepFreeze (from :: (ISet s (ISet s a))) = do
+      x <- freezeSet from :: QPar s (S.Set (ISet s a))
+      let fn :: ISet s a -> S.Set b -> QPar s (S.Set b)
+          fn elm acc = do elm' <- deepFreeze elm
+                          return (S.insert elm' acc)
+      y <- F.foldrM fn S.empty x :: QPar s (S.Set b)
+      return y
+-}
