@@ -377,32 +377,49 @@ v8b = runParIO $ do
   freezeSet s4
 
 case_v8c :: Assertion
-case_v8c = assertEqual "union on maps"
---           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
-           (M.fromList [(1,101),(2,102)] )
---           (M.fromList [(40,40),(50,50)])
-             =<< v8c
+case_v8c = assertEqual "addHandler on maps"
+           (M.fromList [(1,101),(2,102)] ) =<< v8c
 
 -- | Similar test with Maps instead of Sets.
 v8c :: IO (M.Map Int Int)
 v8c = runParIO $ do
   hp <- newPool
-  logStrLn " [v8c] Got a new pool..."  
+  m1 <- IM.newFromList [(1,1),(2,2)]
+  m2 <- newEmptyMap
+  let cb k v = do logStrLn$" [v8c]  Inside callback for Map.. key="++show k
+                  IM.insert k (v+100) m2
+  IM.addHandler hp m1 cb 
+  logStrLn " [v8c] Everything set up; about to quiesce..."
+  quiesce hp
+  logStrLn " [v8c] quiesce finished, next freeze:"
+  freezeMap m2
+
+
+case_v8d :: Assertion
+case_v8d = assertEqual "union on maps"
+--           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
+           (M.fromList [(1,101),(2,102)] )
+--           (M.fromList [(40,40),(50,50)])
+             =<< v8d
+v8d :: IO (M.Map Int Int)
+v8d = runParIO $ do
+  hp <- newPool
+  logStrLn " [v8d] Got a new pool..."  
   m1 <- IM.newFromList [(1,1),(2,2)]
   m2 <- IM.newFromList [(40,40),(50,50)]
-  logStrLn " [v8c] Got two fresh maps..."
-  let cb k v = do logStrLn$" [v8c]  Inside callback for traverse.. key="++show k
+  logStrLn " [v8d] Got two fresh maps..."
+  let cb k v = do logStrLn$" [v8d]  Inside callback for traverse.. key="++show k
                   return (v+100)
   (_,m3) <- IM.traverseMapHP (Just hp) cb m1
 {-      
   (_,m4) <- IM.unionHP       (Just hp) m2 m3
   IM.forEachHP (Just hp) m4 $ \ k elm ->
-    logStrLn $ " [v8c]   Got element: "++show (k,elm)
+    logStrLn $ " [v8d]   Got element: "++show (k,elm)
 -}  
-  logStrLn " [v8c] Everything set up; about to quiesce..."
+  logStrLn " [v8d] Everything set up; about to quiesce..."
   quiesce hp
 --  quiesceAll  
-  logStrLn " [v8c] quiesce finished, next freeze::"
+  logStrLn " [v8d] quiesce finished, next freeze::"
   freezeMap m3
   
 --------------------------------------------------------------------------------

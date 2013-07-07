@@ -348,8 +348,9 @@ newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
-  logLnAt_ 3 $ " [dbg-lvish] Created new pool, identity= " ++ (show$ unsafeName cnt)
-  exec (k $ HandlerPool cnt bag) q
+  let hp = HandlerPool cnt bag
+  logLnAt_ 3 $ " [dbg-lvish] Created new pool, identity= " ++ hpId hp
+  exec (k hp) q
   
 -- | Special "done" continuation for handler threads
 onFinishHandler :: HandlerPool -> a -> ClosedPar  
@@ -357,11 +358,12 @@ onFinishHandler hp _ = ClosedPar $ \q -> do
   let cnt = numHandlers hp
   C.dec cnt                 -- record handler completion in pool
   quiescent <- C.poll cnt   -- check for (transient) quiescence
-  when quiescent $          -- wake any threads waiting on quiescence
+  when quiescent $ do       -- wake any threads waiting on quiescence
+    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent now.. waking conts, pool identity= " ++ hpId hp
     let invoke t tok = do
           B.remove tok
           Sched.pushWork q t                
-    in B.foreach (blockedOnQuiesce hp) invoke
+    B.foreach (blockedOnQuiesce hp) invoke
   sched q
 
 -- | Add a handler to an existing pool
@@ -395,18 +397,18 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
 
 -- | Block until a handler pool is quiescent      
 quiesce :: HandlerPool -> Par ()
-quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
-  logLnAt_ 3 $ " [dbg-lvish] Begin quiescing pool, identity= " ++ (show$ unsafeName cnt)        
+quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
+  logLnAt_ 3 $ " [dbg-lvish] Begin quiescing pool, identity= " ++ hpId hp
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
   quiescent <- C.poll cnt
   if quiescent then do
     B.remove tok
-    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent!, pool identity= " ++ (show$ unsafeName cnt)
+    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent already!, pool identity= " ++ hpId hp
     exec (k ()) q 
   else do 
-    logLnAt_ 3 $ " [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= " ++ (show$ unsafeName cnt)
+    logLnAt_ 3 $ " [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= " ++ hpId hp
     sched q
 
 -- | A global barrier.
@@ -446,6 +448,7 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
+  logLnAt_ 3 $ " [dbg-lvish] forkInPool, pool identity= " ++ hpId hp    
   Sched.pushWork q (k ()) -- "Work-first" policy.
   C.inc $ numHandlers hp
   exec (close child $ onFinishHandler hp) q  
@@ -580,3 +583,5 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
+
+hpId (HandlerPool cnt bag) = show$ show (unsafeName cnt) ++"/"++ show (unsafeName bag)
