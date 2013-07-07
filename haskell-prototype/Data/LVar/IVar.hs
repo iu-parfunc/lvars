@@ -136,7 +136,8 @@ instance DeepFreeze (IVar s a) b =>
       return y
 
 
-
+{-
+-- [2013.07.06] Good, this errors post refactoring:
 test :: IO Int
 test = runParIO $ do
   v <- new
@@ -145,6 +146,6 @@ test = runParIO $ do
   logStrLn $ show $ unsafePerformIO$  runParIO $
     do
        (x::Maybe Int) <- deepFreeze v
-       -- get v
        return x
   get v
+-}
