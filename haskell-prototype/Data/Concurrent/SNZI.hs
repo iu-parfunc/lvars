@@ -42,52 +42,61 @@
 module Data.Concurrent.SNZI
 where
   
+import System.IO.Unsafe
 import Control.Reagent  
 import Control.Monad
 import GHC.Conc
 import Data.IORef
 import Data.Atomics
+import Data.Concurrent.AlignedIORef
   
 -- | An entry point for a shared SNZI value
 data SNZI = 
-    Child {-# UNPACK #-} !(IORef Int) SNZI
-  | Root  {-# UNPACK #-} !(IORef Int)
+    Child (AlignedIORef Int) SNZI
+  | Root  (AlignedIORef Int)
 
 -- | Signal the presence of a thread at a SNZI
 arrive :: SNZI -> IO ()    
-arrive (Root cnt) = react $ atomicUpdate_ cnt (+1)
+arrive (Root cnt) = react $ atomicUpdate_ (ref cnt) (+1)
 arrive (Child cnt parent) = 
   let upd 0    = Just (-1, True)
       upd (-1) = Nothing
       upd n    = Just (n+1, False)
   in do
-    tellParent <- react $ atomicUpdate cnt upd
+    tellParent <- react $ atomicUpdate (ref cnt) upd
     when tellParent $ do
       arrive parent
-      writeIORef cnt 1
+      writeBarrier
+      writeIORef (ref cnt) 1
   
+data TellParent = Yes | No | Err
+    
 -- | Signal the departure of a thread at a SNZI.  IMPORTANT: depart MUST NOT be
 -- called more times than arrive for a given SNZI value.
 depart :: SNZI -> IO ()  
-depart (Root cnt) = react $ atomicUpdate_ cnt (\x -> x-1)
+depart (Root cnt) = react $ atomicUpdate_ (ref cnt) (\x -> x-1)
 depart (Child cnt parent) = 
-  let upd 0    = error "BUG: departs outnumber arrives"
+  let upd 0    = Just (0, Err)
       upd (-1) = Nothing
-      upd 1    = Just (0,   True)
-      upd n    = Just (n-1, False)
+      upd 1    = Just (0,   Yes)
+      upd n    = Just (n-1, No)
   in do
-    tellParent <- react $ atomicUpdate cnt upd
-    when tellParent $ depart parent 
+    tellParent <- react $ atomicUpdate (ref cnt) upd
+    case tellParent of
+      No  -> return ()
+      Yes -> depart parent
+      Err -> do putStrLn "BUG: departs outnumber arrives"
+                error "BUG: departs outnumber arrives"
     
--- Helpfer function to generate a tree of SNZI values.
+-- Helper function to generate a tree of SNZI values.
 makeTree :: Int -> [SNZI] -> [SNZI] -> IO [SNZI]
 makeTree n parents children = 
   if n >= numCapabilities then return children 
   else case parents of 
     [] -> makeTree 0 children []
     (parent:parents') -> do
-      c1 <- newIORef 0
-      c2 <- newIORef 0
+      c1 <- newAlignedIORef 0
+      c2 <- newAlignedIORef 0
       makeTree (n+2) parents' $ Child c1 parent : Child c2 parent : children
   
 -- | Create a shared SNZI values with numCapabilities number of entry points,
@@ -95,6 +104,6 @@ makeTree n parents children =
 -- present.
 newSNZI :: IO ([SNZI], IO Bool)
 newSNZI = do
-  rootRef <- newIORef 0
+  rootRef <- newAlignedIORef 0
   leaves  <- makeTree 1 [] [Root rootRef]
-  return (leaves, readIORef rootRef >>= return . (== 0))
+  return (leaves, readIORef (ref rootRef) >>= return . (== 0))

@@ -53,6 +53,7 @@ import           GHC.Conc hiding (yield)
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
+import           System.Mem.StableName (makeStableName, hashStableName)
 import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
@@ -347,7 +348,9 @@ newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
-  exec (k $ HandlerPool cnt bag) q
+  let hp = HandlerPool cnt bag
+  hpMsg " [dbg-lvish] Created new pool" hp
+  exec (k hp) q
   
 -- | Special "done" continuation for handler threads
 onFinishHandler :: HandlerPool -> a -> ClosedPar  
@@ -355,11 +358,12 @@ onFinishHandler hp _ = ClosedPar $ \q -> do
   let cnt = numHandlers hp
   C.dec cnt                 -- record handler completion in pool
   quiescent <- C.poll cnt   -- check for (transient) quiescence
-  when quiescent $          -- wake any threads waiting on quiescence
+  when quiescent $ do       -- wake any threads waiting on quiescence
+    hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
     let invoke t tok = do
           B.remove tok
           Sched.pushWork q t                
-    in B.foreach (blockedOnQuiesce hp) invoke
+    B.foreach (blockedOnQuiesce hp) invoke
   sched q
 
 -- | Add a handler to an existing pool
@@ -393,15 +397,19 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
 
 -- | Block until a handler pool is quiescent      
 quiesce :: HandlerPool -> Par ()
-quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
+quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
+  hpMsg " [dbg-lvish] Begin quiescing pool, identity= " hp
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
   quiescent <- C.poll cnt
   if quiescent then do
     B.remove tok
+    hpMsg " [dbg-lvish] -> Quiescent already!" hp
     exec (k ()) q 
-  else sched q
+  else do 
+    hpMsg " [dbg-lvish] -> Not quiescent yet, back to sched" hp
+    sched q
 
 -- | A global barrier.
 quiesceAll :: Par ()
@@ -440,8 +448,9 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
+  C.inc $ numHandlers hp  
   Sched.pushWork q (k ()) -- "Work-first" policy.
-  C.inc $ numHandlers hp
+  hpMsg " [dbg-lvish] forkInPool" hp   
   exec (close child $ onFinishHandler hp) q  
 
 -- | Perform an IO action
@@ -567,3 +576,25 @@ instance E.Exception NonDeterminismExn where
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
 atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)
+
+{-# INLINE hpMsg #-}
+hpMsg msg hp = 
+  when (dbgLvl >= 3) $ do
+    s <- hpId_ hp
+    logLnAt_ 3 $ msg++", pool identity= " ++s
+
+{-# NOINLINE hpId #-}   
+hpId hp = unsafePerformIO (hpId_ hp)
+
+hpId_ (HandlerPool cnt bag) = do
+  sn1 <- makeStableName cnt
+  sn2 <- makeStableName bag
+  c   <- readIORef cnt
+  return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
+           " transient cnt "++show c
