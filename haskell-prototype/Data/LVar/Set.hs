@@ -39,7 +39,7 @@ import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 
 import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.Internal
+import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, unsafeUnQPar)
 import qualified Control.LVish.SchedIdempotent as L
@@ -234,7 +234,7 @@ intersection s1 s2 = do
  where  
   fn outSet other@(ISet lv) elm = do
     -- At this point 'elm' has ALREADY been added to "us", we check "them":    
-    peek <- WrapPar $ liftIO$ readIORef (state lv)
+    peek <- LI.liftIO$ readIORef (state lv)
     if S.member elm peek 
       then putInSet elm outSet
       else return ()
@@ -292,7 +292,7 @@ cartesianProdHP mh s1 s2 = do
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
   fn outSet other@(ISet lv) cmbn elm1 = do
-    peek <- WrapPar$ liftIO$ readIORef (state lv)
+    peek <- LI.liftIO$ readIORef (state lv)
 --    liftIO $ putStrLn " ! Cartesian prod handler running..."
     F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
 

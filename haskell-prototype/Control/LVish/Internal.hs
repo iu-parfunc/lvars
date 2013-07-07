@@ -9,6 +9,7 @@ module Control.LVish.Internal
     unWrapPar,
     Determinism(..), 
     unsafeConvert, state,
+    liftIO
   )
   where
 
@@ -44,3 +45,5 @@ state = L.state . unWrapLVar
 unsafeConvert :: Par d1 s1 a -> Par d2 s2 a
 unsafeConvert (WrapPar p) = (WrapPar p)
 
+liftIO :: IO a -> Par d s a
+liftIO = WrapPar . L.liftIO 

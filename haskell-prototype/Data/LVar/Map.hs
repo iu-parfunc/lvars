@@ -23,7 +23,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
 import           Control.LVish hiding (addHandler)
-import           Control.LVish.Internal
+import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
@@ -138,12 +138,12 @@ modify :: forall f a b d s key . (Ord key, LVarData1 f) =>
           IMap key s (f s a) -> key -> (f s a -> Par d s b) -> Par d s b
 modify (IMap lv) key fn = WrapPar $ do 
   let ref = state lv      
-  mp  <- liftIO$ readIORef ref
+  mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
     Just lv2 -> unWrapPar$ fn lv2
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
-      act <- liftIO$ atomicModifyIORef ref $ \ mp2 ->
+      act <- L.liftIO$ atomicModifyIORef ref $ \ mp2 ->
                case M.lookup key mp2 of
                  Just lv2 -> (mp2, unWrapPar$ fn lv2)
                  Nothing  -> (M.insert key bot mp2,
