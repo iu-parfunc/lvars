@@ -70,8 +70,6 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Control.LVish.SchedIdempotentInternal 
-                    Control.LVish.Classes
-                    Control.LVish.Classes2
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 

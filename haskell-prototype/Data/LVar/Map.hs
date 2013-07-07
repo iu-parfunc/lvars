@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds #-}
 
 module Data.LVar.Map
        (
@@ -22,20 +23,22 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 
 import           Control.LVish hiding (addHandler)
+import           Control.LVish.Internal
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
+
+type QPar = Par QuasiDet 
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
 ------------------------------------------------------------------------------
 
 -- | We only have one mutable location here, so this is not a scalable implementation.
-newtype IMap k v = IMap (LVar (IORef (M.Map k v)) (k,v))
+newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 
-instance Eq (IMap k v) where
+instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
-
 
 -- Need LVarData2:
 
@@ -47,62 +50,63 @@ instance LVarData1 (IMap k) where
 
 -- | Return a fresh map which will contain strictly more elements than the input.
 -- That is, things put in the former go in the latter, but not vice versa.
-copy :: IMap k v -> Par (IMap k a)
+copy :: IMap k s v -> Par d s (IMap k s a)
 copy =
   error "finish Set / copy"
 
-
 --------------------------------------------------------------------------------
 
+newEmptyMap :: Par d s (IMap k s v)
+newEmptyMap = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef M.empty
 
-newEmptyMap :: Par (IMap k v)
-newEmptyMap = fmap IMap $ newLV$ newIORef M.empty
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- valueof the Map variable.
-withCallbacksThenFreeze :: forall k v b . Eq b =>
-                           IMap k v -> (k -> v -> QPar ()) -> QPar b -> QPar b
-withCallbacksThenFreeze (IMap lv) callback action =
+withCallbacksThenFreeze :: forall k v b s . Eq b =>
+                           IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
     do
-       res <- liftQ IV.new -- TODO, specialize to skip this when the init action returns ()
-       freezeLVAfter lv (initCB res) (\(k,v) -> return$ Just$ callback k v)
+       res <- IV.new -- TODO, specialize to skip this when the init action returns ()
+       WrapPar$ freezeLVAfter lv (initCB res) deltaCB
        -- freezeSet lv -- This does nothing, but it gives us the value.
-       liftQ$ IV.get res
+       IV.get res
   where
-    initCB :: IV.IVar b -> (IORef (M.Map k v)) -> IO (Maybe (QPar ()))
+    deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
+    initCB :: IV.IVar s b -> (IORef (M.Map k v)) -> IO (Maybe (L.Par ()))
     initCB resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- readIORef ref -- Snapshot
-      return $ Just $ do 
+      return $ Just $ unWrapPar $ do 
         -- Data.Foldable should give us a non-copying way to iterate:
         -- But it's actually insufficient because it only exposes the values:
         -- F.foldlM (\() v -> fork$ callback undefined v) () mp
-        liftQ$ mapM_ (\(k,v) -> fork$ L.unsafeUnQPar$ callback k v) (M.toList mp)
+        mapM_ (\(k,v) -> fork$ callback k v) (M.toList mp)
 -- FIXME: forkInPool
         
         res <- action -- Any additional puts here trigger the callback.
-        liftQ$ IV.put_ resIV res
+        IV.put_ resIV res
 
 
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
-           -> IMap k v                    -- ^ Map to listen to
-           -> (k -> v -> Par ())          -- ^ callback
-           -> Par ()
-addHandler hp (IMap lv) callb = do
-    L.addHandler hp lv globalCB (\(k,v) -> return$ Just$ callb k v)
+           -> IMap k s v                    -- ^ Map to listen to
+           -> (k -> v -> Par d s ())          -- ^ callback
+           -> Par d s ()
+addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
+    L.addHandler hp lv globalCB deltaCB
     return ()
   where
+    deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
     globalCB ref = do
       mp <- readIORef ref -- Snapshot
-      return $ Just $
+      return $ Just $ unWrapPar $ 
         -- Fixme: need traverseWithKey_ :
         mapM_ (\(k,v) -> fork$ callb k v) (M.toList mp)
 
 
 -- | Shorthandfor creating a new handler pool and adding a single handler to it.
-forEach :: IMap k v -> (k -> v -> Par ()) -> Par HandlerPool
+forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
 forEach is cb = do 
    hp <- newPool
    addHandler hp is cb
@@ -112,8 +116,8 @@ forEach is cb = do
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
 -- 
 insert :: (Ord k, Eq v) =>
-          k -> v -> IMap k v -> Par () 
-insert !key !elm (IMap lv) = putLV lv putter
+          k -> v -> IMap k s v -> Par d s () 
+insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORef ref update
         update mp =
           let mp' = M.insertWith fn key elm mp
@@ -130,24 +134,25 @@ insert !key !elm (IMap lv) = putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
-modify :: forall f a b key . (Ord key, LVarData1 f) =>
-          IMap key (f a) -> key -> (f a -> Par b) -> Par b
-modify (IMap lv) key fn = do 
-  let ref = state lv 
+modify :: forall f a b d s key . (Ord key, LVarData1 f) =>
+          IMap key s (f s a) -> key -> (f s a -> Par d s b) -> Par d s b
+modify (IMap lv) key fn = WrapPar $ do 
+  let ref = state lv      
   mp  <- liftIO$ readIORef ref
   case M.lookup key mp of
-    Just lv2 -> fn lv2
+    Just lv2 -> unWrapPar$ fn lv2
     Nothing -> do 
-      bot <- newBottom :: Par (f a)
+      bot <- unWrapPar newBottom :: L.Par (f s a)
       act <- liftIO$ atomicModifyIORef ref $ \ mp2 ->
                case M.lookup key mp2 of
-                 Just lv2 -> (mp2, fn lv2)
-                 Nothing  -> (M.insert key bot mp2, fn bot)
+                 Just lv2 -> (mp2, unWrapPar$ fn lv2)
+                 Nothing  -> (M.insert key bot mp2,
+                              unWrapPar$ fn bot)
       act
 
 -- | Wait for the map to contain a specified key, and return the associated value.
-getKey :: Ord k => k -> IMap k v -> Par v
-getKey !key (IMap lv) = getLV lv globalThresh deltaThresh
+getKey :: Ord k => k -> IMap k s v -> Par d s v
+getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       mp <- readIORef ref
@@ -156,8 +161,8 @@ getKey !key (IMap lv) = getLV lv globalThresh deltaThresh
                       | otherwise = return Nothing 
 
 -- | Wait until the map contains a certain value (on any key).
-waitValue :: (Ord k, Eq v) => v -> IMap k v -> Par ()
-waitValue !val (IMap lv) = getLV lv globalThresh deltaThresh
+waitValue :: (Ord k, Eq v) => v -> IMap k s v -> Par d s ()
+waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       mp <- readIORef ref
@@ -172,8 +177,9 @@ waitValue !val (IMap lv) = getLV lv globalThresh deltaThresh
 
 
 -- | Wait on the SIZE of the map, not its contents.
-waitSize :: Int -> IMap k v -> Par ()
-waitSize !sz (IMap lv) = getLV lv globalThresh deltaThresh
+waitSize :: Int -> IMap k s v -> Par d s ()
+waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
+    getLV lv globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       mp <- readIORef ref
@@ -182,16 +188,16 @@ waitSize !sz (IMap lv) = getLV lv globalThresh deltaThresh
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
     -- the threshold.a
-    deltaThresh _ = globalThresh (state lv) False
+    deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map  Using this may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeMap :: IMap k v -> QPar (M.Map k v)
-freezeMap (IMap lv) =
+freezeMap :: IMap k s v -> QPar s (M.Map k v)
+freezeMap (IMap (WrapLVar lv)) = WrapPar $
    do freezeLV lv
-      liftQ$ getLV lv globalThresh deltaThresh
+      getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
