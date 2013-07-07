@@ -1,7 +1,8 @@
 {-# LANGUAGE ExplicitForAll, Rank2Types #-} 
 
 -- | An implementation of Reagents (http://www.mpi-sws.org/~turon/reagents.pdf)
--- NOTE: currently this is just a very tiny core of the Reagent design.
+-- NOTE: currently this is just a very tiny core of the Reagent design.  Needs
+-- lots of work.
 
 module Control.Reagent
 where

@@ -15,10 +15,14 @@ import Control.Applicative
 import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.MVar
+import GHC.Conc
 import Data.List (isInfixOf)
 import qualified Data.Set as S
 import System.Environment (getArgs)
 import System.IO
+import System.Random
+
+import Data.IORef
 
 import Control.Exception (catch, evaluate, SomeException)
 
@@ -37,6 +41,10 @@ import Control.LVish.SchedIdempotent (liftIO)
 import qualified Control.LVish.SchedIdempotent as L
 
 import Data.Concurrent.SNZI as SNZI
+import Data.Concurrent.LinkedMap as LM
+import Data.Concurrent.SkipListMap as SLM
+
+import Old.Common
 
 import TestHelpers as T
 
@@ -463,18 +471,14 @@ snzi2 = do
 case_snzi2 :: Assertion  
 case_snzi2 = snzi2 >>= assertEqual "sequential use of SNZI" False
 
-nTimes :: Int -> IO () -> IO ()
-nTimes 0 _ = return ()
-nTimes n c = c >> nTimes (n-1) c
-
 -- | Test snzi in a concurrent setting
 snzi3 :: IO (Bool)
 snzi3 = do
   (cs, poll) <- SNZI.newSNZI
   mvars <- forM cs $ \c -> do
     mv <- newEmptyMVar
-    forkIO $ do 
-      nTimes 1000000 $ do
+    forkWithExceptions forkIO "snzi3 test thread" $ do 
+      nTimes 1000000 $ \_ -> do
         SNZI.arrive c
         SNZI.depart c
         SNZI.arrive c
@@ -496,11 +500,11 @@ snzi4 = do
   mvars <- forM cs $ \c -> do
     mv <- newEmptyMVar
     internalMV <- newEmptyMVar
-    forkIO $ do
+    forkWithExceptions forkIO "snzi4 test thread type A" $ do 
       SNZI.arrive c
       putMVar internalMV ()
-    forkIO $ do 
-      nTimes 1000000 $ do
+    forkWithExceptions forkIO "snzi4 test thread type B" $ do 
+      nTimes 1000000 $ \_ -> do
         SNZI.arrive c
         SNZI.depart c
         SNZI.arrive c
@@ -515,6 +519,61 @@ snzi4 = do
   
 case_snzi4 :: Assertion  
 case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
+
+--------------------------------------------------------------------------------
+-- TESTS FOR SKIPLIST
+--------------------------------------------------------------------------------
+
+lm1 :: IO (String)
+lm1 = do
+  lm <- LM.newLMap
+  NotFound tok <- LM.find lm 1
+  LM.tryInsert tok "Hello"
+  NotFound tok <- LM.find lm 0
+  LM.tryInsert tok " World"
+  Found s1 <- LM.find lm 1
+  Found s0 <- LM.find lm 0
+  return $ s1 ++ s0
+  
+case_lm1 :: Assertion  
+case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello World"
+
+slm1 :: IO (String)
+slm1 = do
+  slm <- SLM.newSLMap 5
+  SLM.putIfAbsent slm randomIO 0 $ return "Hello "
+  SLM.putIfAbsent slm randomIO 1 $ return "World"
+  Just s0 <- SLM.find slm 0
+  Just s1 <- SLM.find slm 1
+  return $ s0 ++ s1
+  
+case_slm1 :: Assertion  
+case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
+
+slm2 :: IO ()
+slm2 = do
+  slm <- SLM.newSLMap 8
+  mvars <- replicateM numCapabilities $ do
+    mv <- newEmptyMVar
+    forkWithExceptions forkIO "slm2 test thread" $ do
+      rgen <- newIORef $ mkStdGen 0
+      let flip = do
+            g <- readIORef rgen
+            let (b, g') = random g
+            writeIORef rgen g'
+            return b
+      nTimes 1000 $ \n -> 
+--      forM_ (take 100000 [0..]) $ \n ->
+        SLM.putIfAbsent slm flip n $ return n
+      putMVar mv ()
+    return mv  
+  forM_ mvars takeMVar
+  SLM.forPairs slm $ \k v -> if k == v then return () else error "BUG"
+--  Just n <- SLM.find slm (slm2Count/2)  -- test find function
+--  return n
+  
+-- case_slm2 :: Assertion  
+-- case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" ()
 
 --------------------------------------------------------------------------------
 -- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects
@@ -723,3 +782,7 @@ assertOr :: Assertion -> Assertion -> Assertion
 assertOr act1 act2 = 
   catch act1 
         (\(e::SomeException) -> act2)
+
+nTimes :: Int -> (Int -> IO a) -> IO ()
+nTimes 0 _ = return ()
+nTimes n c = c n >> nTimes (n-1) c
