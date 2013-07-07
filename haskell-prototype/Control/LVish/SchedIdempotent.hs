@@ -53,6 +53,7 @@ import           GHC.Conc hiding (yield)
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
+import           System.Mem.StableName (makeStableName, hashStableName)
 import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
@@ -347,6 +348,7 @@ newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
+  logLnAt_ 3 $ " [dbg-lvish] Created new pool, identity= " ++ (show$ unsafeName cnt)
   exec (k $ HandlerPool cnt bag) q
   
 -- | Special "done" continuation for handler threads
@@ -394,14 +396,18 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
 -- | Block until a handler pool is quiescent      
 quiesce :: HandlerPool -> Par ()
 quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
+  logLnAt_ 3 $ " [dbg-lvish] Begin quiescing pool, identity= " ++ (show$ unsafeName cnt)        
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
   quiescent <- C.poll cnt
   if quiescent then do
     B.remove tok
+    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent!, pool identity= " ++ (show$ unsafeName cnt)
     exec (k ()) q 
-  else sched q
+  else do 
+    logLnAt_ 3 $ " [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= " ++ (show$ unsafeName cnt)
+    sched q
 
 -- | A global barrier.
 quiesceAll :: Par ()
@@ -567,3 +573,10 @@ instance E.Exception NonDeterminismExn where
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
 atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))
+
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)

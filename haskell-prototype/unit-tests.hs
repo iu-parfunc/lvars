@@ -400,8 +400,8 @@ v8c = runParIO $ do
     logStrLn $ " [v8c]   Got element: "++show (k,elm)
 -}  
   logStrLn " [v8c] Everything set up; about to quiesce..."
---  quiesce hp
-  quiesceAll  
+  quiesce hp
+--  quiesceAll  
   logStrLn " [v8c] quiesce finished, next freeze::"
   freezeMap m3
   
