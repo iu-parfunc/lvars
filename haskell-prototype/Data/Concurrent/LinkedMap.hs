@@ -67,8 +67,9 @@ find m k = findInner m Nothing
       
 -- | Attempt to insert a key/value pair at the given location (where the key is
 -- given by the token).  NB: tryInsert will *always* fail after the first attempt.
+-- If successful, returns a (mutable!) view of the map beginning at the given key.
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
-tryInsert Token { keyToInsert, nextRef, nextTicket } k v = do
+tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   newRef <- newIORef $ peekTicket nextTicket
   (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert v newRef
   return $ if success then Just nextRef else Nothing

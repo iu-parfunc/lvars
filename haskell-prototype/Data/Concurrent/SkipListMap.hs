@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification, GADTs #-}
 
--- | An implementation of concurrent finite maps based on skip lists.
+-- | An implementation of concurrent finite maps based on skip lists.  Only
+-- supports lookup and insertions, not modifications or removals.
 --
 -- Skip lists are a probabilistic data structure that roughly approximate
 -- balanced trees.  At the bottom layer is a standard linked list representation
