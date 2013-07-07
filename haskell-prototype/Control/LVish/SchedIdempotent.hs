@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveDataTypeable #-} 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-} -- For DeepFreeze
+
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This (experimental) module generalizes the Par monad to allow
@@ -19,24 +20,21 @@
 module Control.LVish.SchedIdempotent
   (
     -- * Basic types and accessors:
-    LVar(), state, HandlerPool(), Par(), QPar(), liftQ, 
+    LVar(), state, HandlerPool(), Par(), 
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO, runParThenFreeze, 
+    runPar, runParIO, 
         
     -- * Quasi-deterministic operations:
-    quiesce, runQParIO,
-
-    -- * Interfaces for generic operations
-    LVarData1(..), DeepFreeze(..),
+    quiesce, quiesceAll,
 
     -- * Debug facilities
-    logStrLn,
+    logStrLn, dbgLvl,
        
     -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
     newLV, getLV, putLV, freezeLV, freezeLVAfter,
-    addHandler, liftIO, unsafeUnQPar,
+    addHandler, liftIO, 
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -54,6 +52,9 @@ import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
+import           System.Environment(getEnvironment)
+import           System.Mem.StableName (makeStableName, hashStableName)
+import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 
 import           Old.Common (forkWithExceptions)
@@ -63,6 +64,7 @@ import Data.Traversable
 
 -- import qualified Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
+
 
 ----------------------------------------------------------------------------------------------------
 -- THREAD-SAFE LOGGING
@@ -76,12 +78,17 @@ globalLog = unsafePerformIO $ newIORef []
 -- | Atomically add a line to the given log.
 logStrLn  :: String -> Par ()
 logStrLn_ :: String -> IO ()
+logLnAt_ :: Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 logStrLn = liftIO . logStrLn_
-logStrLn_ s = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+logStrLn_ s = logLnAt_ 1 s
+logLnAt_ lvl s = 
+  when (dbgLvl >= lvl) $ 
+   atomicModifyIORef globalLog $ \ss -> (s:ss, ())
 #else 
 logStrLn _  = return ()
 logStrLn_ _ = return ()
+logLnAt_ _ _ = return ()
 {-# INLINE logStrLn #-}
 {-# INLINE logStrLn_ #-}
 #endif
@@ -89,64 +96,45 @@ logStrLn_ _ = return ()
 -- | Print all accumulated log lines
 printLog :: IO ()
 printLog = do
-  lines <- readIORef globalLog
-  mapM_ putStrLn $ reverse lines
-
-------------------------------------------------------------------------------
--- Interface for generic LVar handling
-------------------------------------------------------------------------------
-
--- class Traversable f => LVarData1 (f :: * -> *) where
-
--- | TODO: if there is a Par class, it needs to be a superclass of this.
-class LVarData1 (f :: * -> *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  -- type Snapshot f a :: *
-  data Snapshot f :: * -> *
+  -- Clear the log when we read it:
+  lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
+  -- mapM_ (hPutStrLn stderr) $ reverse lines
+  mapM_ putStrLn $ reverse lines  
   
-  freeze :: f a -> QPar (Snapshot f a)
-  newBottom :: Par (f a)
+printLogThread :: IO (IO ())
+printLogThread = do
+  tid <- forkIO $
+         E.catch loop (\ (e :: E.AsyncException) -> do
+                        -- One last time on kill:
+                        printLog
+                        putStrLn " [dbg-log-printer] Shutting down."
+                      )
+  return (killThread tid)
+ where
+   loop = do
+     -- Flush the log at 5Hz:
+     printLog
+     threadDelay (200 * 1000)
+     loop
 
-  -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
-  -- I don't know of a good way, so instead we expose this:
-  traverseSnap :: (a -> Par b) -> Snapshot f a -> Par (Snapshot f b)
+theEnv :: [(String, String)]
+theEnv = unsafePerformIO getEnvironment
 
-  -- What else?
-  -- Merge op?
+-- | Debugging flag shared by several modules.
+--   This is activated by setting the environment variable DEBUG=1..5
+dbgLvl :: Int
+dbgLvl = case lookup "DEBUG" theEnv of
+       Nothing  -> defaultDbg
+       Just ""  -> defaultDbg
+       Just "0" -> defaultDbg
+       Just s   ->
+         trace (" [!] Responding to env Var: DEBUG="++s)$
+         case reads s of
+           ((n,_):_) -> n
+           [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
 
--- This gets messy if we try to handle several Kinds:
-class LVarData0 (t :: *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  type Snapshot0 t
-  freeze0 :: t -> Par (Snapshot0 t)
-  newBottom0 :: Par t
-
---------------------------------------------------------------------------------
--- Freezing nested structures in one go
---------------------------------------------------------------------------------
-
--- | This establishes an unrestricted *relation* between input and output types.  Thus
--- it is powerful, but can be painful to use.  The input and output types of
--- deepFreeze must be fully constrained at every call site.  This allows the user to
--- potentially freeze a nested structure in various ways of their choosing.
-class DeepFreeze (from :: *) (to :: *) where
-  deepFreeze :: from -> QPar to 
-
-instance (LVarData1 f, LVarData1 g) =>
-         DeepFreeze (f (g a)) (Snapshot f (Snapshot g a)) where
-  deepFreeze lvd = do
-    x <- freeze lvd                                     :: QPar (Snapshot f (g a))
-    y <- liftQ $ traverseSnap (unsafeUnQPar . freeze) x :: QPar (Snapshot f (Snapshot g a))
-    return y
-
--- Inherit everything that regular freeze can do:
-instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
-  deepFreeze = freeze
-
+defaultDbg :: Int
+defaultDbg = 0
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
@@ -209,8 +197,8 @@ data HandlerPool = HandlerPool {
   blockedOnQuiesce :: B.Bag ClosedPar
 }
 
--- | A monadic type constructor for deterministic parallel computations
--- producing an answer @a@.
+-- | A monadic type constructor for parallel computations producing an answer @a@.
+-- This is the internal, unsafe type.
 newtype Par a = Par {
   -- the computation is represented in CPS
   close :: (a -> ClosedPar) -> ClosedPar  
@@ -237,16 +225,6 @@ instance Applicative Par where
   (<*>) = ap
   pure  = return
 
-newtype QPar a = QPar (Par a)
-  deriving (Functor, Monad, Applicative)
-
--- | It is always safe to lift a deterministic computation to a quasi-determinism one.
-liftQ :: Par a -> QPar a
-liftQ = QPar
-
--- | UNSAFE
-unsafeUnQPar :: QPar a -> Par a
-unsafeUnQPar (QPar p) = p
 
 ------------------------------------------------------------------------------
 -- A few auxiliary functions
@@ -349,9 +327,9 @@ putLV LVar {state, status, name} doPut = mkPar $ \k q -> do
   exec (k ()) q
 
 -- | Freeze an LVar (limited nondeterminism)
---   It is the data-structure implementors responsibility to expose this as QPar.
-freezeLV :: LVar a d -> QPar ()
-freezeLV LVar {name, status} = QPar$ mkPar $ \k q -> do
+--   It is the data-structure implementors responsibility to expose this as qasi-deterministc.
+freezeLV :: LVar a d -> Par ()
+freezeLV LVar {name, status} = mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
   case oldStatus of
     Frozen -> return ()
@@ -370,7 +348,9 @@ newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
-  exec (k $ HandlerPool cnt bag) q
+  let hp = HandlerPool cnt bag
+  logLnAt_ 3 $ " [dbg-lvish] Created new pool, identity= " ++ hpId hp
+  exec (k hp) q
   
 -- | Special "done" continuation for handler threads
 onFinishHandler :: HandlerPool -> a -> ClosedPar  
@@ -378,11 +358,12 @@ onFinishHandler hp _ = ClosedPar $ \q -> do
   let cnt = numHandlers hp
   C.dec cnt                 -- record handler completion in pool
   quiescent <- C.poll cnt   -- check for (transient) quiescence
-  when quiescent $          -- wake any threads waiting on quiescence
+  when quiescent $ do       -- wake any threads waiting on quiescence
+    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent now.. waking conts, pool identity= " ++ hpId hp
     let invoke t tok = do
           B.remove tok
           Sched.pushWork q t                
-    in B.foreach (blockedOnQuiesce hp) invoke
+    B.foreach (blockedOnQuiesce hp) invoke
   sched q
 
 -- | Add a handler to an existing pool
@@ -416,38 +397,41 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
 
 -- | Block until a handler pool is quiescent      
 quiesce :: HandlerPool -> Par ()
-quiesce (HandlerPool cnt bag) = mkPar $ \k q -> do
+quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
+  logLnAt_ 3 $ " [dbg-lvish] Begin quiescing pool, identity= " ++ hpId hp
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
   quiescent <- C.poll cnt
   if quiescent then do
     B.remove tok
+    logLnAt_ 3 $ " [dbg-lvish] -> Quiescent already!, pool identity= " ++ hpId hp
     exec (k ()) q 
-  else sched q
+  else do 
+    logLnAt_ 3 $ " [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= " ++ hpId hp
+    sched q
+
+-- | A global barrier.
+quiesceAll :: Par ()
+quiesceAll = mkPar $ \k q -> do
+  sched q
+  logStrLn_ " [dbg-lvish] Return from global barrier."
+  exec (k ()) q
 
 -- | Freeze an LVar after a given handler quiesces
 --   This is quasideterministic, but it 
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
-              -> (a -> IO (Maybe (QPar ())))  -- ^ initial callback
-              -> (d -> IO (Maybe (QPar ())))  -- ^ subsequent callbacks: updates
-              -> QPar ()
+              -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+              -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
+              -> Par ()
 freezeLVAfter lv globalCB updateCB = do
-  let globalCB' = (fmap (fmap unsafeUnQPar)) . globalCB
-      updateCB' = (fmap (fmap unsafeUnQPar)) . updateCB
-  hp <- liftQ newPool
-  liftQ$ addHandler hp lv globalCB' updateCB'
-  liftQ$ quiesce hp
+  let globalCB' = globalCB
+      updateCB' = updateCB
+  hp <- newPool
+  addHandler hp lv globalCB' updateCB'
+  quiesce hp
   freezeLV lv
 
--- | This function has an advantage vs. doing your own freeze at the end of your
--- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
--- barrier before the final freeze.
-runParThenFreeze :: (LVarData1 f, DeepFreeze (f a) b) =>
-                    Par (f a) -> b
-runParThenFreeze par = unsafePerformIO $ do 
-  res <- runPar_internal par
-  runPar_internal (unsafeUnQPar $ deepFreeze res)
 
 ------------------------------------------------------------------------------
 -- Par monad operations
@@ -464,6 +448,7 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
+  logLnAt_ 3 $ " [dbg-lvish] forkInPool, pool identity= " ++ hpId hp    
   Sched.pushWork q (k ()) -- "Work-first" policy.
   C.inc $ numHandlers hp
   exec (close child $ onFinishHandler hp) q  
@@ -509,8 +494,9 @@ runPar_internal c = do
         tid <- forkWithExceptions (forkOn cpu) "worker thread" $
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
-                              sched q      -- ensure any remaining, enabled threads run to 
-                              putMVar answerMV x  -- completion prior to returning the result
+                              sched q            -- ensure any remaining, enabled threads run to 
+                              putMVar answerMV x -- completion prior to returning the result
+                              -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
                         in exec (close c k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
                    -- the main thread exits.  Subsequent exceptions on child threads, even if
@@ -518,17 +504,23 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
+  closeLogger <- if dbgLvl >= 1
+                 then printLogThread
+                 else return (return ())
   logStrLn_ " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        logStrLn_$ "Killing off workers.. "++show tids
+        logStrLn_$ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
-        error ("EXCEPTION in runPar: "++show e)
+        mytid <- myThreadId
+        when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
+        error ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
-  printLog
+  -- printLog
+  closeLogger
   hFlush stdout
   return ans
 #else
@@ -580,10 +572,16 @@ data NonDeterminismExn = NonDeterminismExn String
 
 instance E.Exception NonDeterminismExn where
 
--- | Quasi-deterministic.  May throw 'NonDeterminismExn' on the thread that calls it.
-runQParIO :: QPar a -> IO a
-runQParIO (QPar p) = runParIO p
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
 atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))
+
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)
+
+hpId (HandlerPool cnt bag) = show$ show (unsafeName cnt) ++"/"++ show (unsafeName bag)

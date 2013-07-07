@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell, CPP, ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -33,7 +35,8 @@ import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.Pair as IP
 
-import Control.LVish 
+import Control.LVish
+import qualified Control.LVish.Internal as I
 import Control.LVish.SchedIdempotent (liftIO)
 import qualified Control.LVish.SchedIdempotent as L
 
@@ -93,10 +96,10 @@ case_v2a = v2a >>= assertEqual "put 10 in & wait"
 
 -- [2013.06.27] getting thread-blocked-indefinitely errors:
 v2a :: IO (S.Set Int)
-v2a = runQParIO $
-     do s <- liftQ IS.newEmptySet
-        liftQ$ mapM_ (\n -> fork $ IS.putInSet n s) [1..10]
-        liftQ$ IS.waitSize 10 s 
+v2a = runParIO $
+     do s <- IS.newEmptySet
+        mapM_ (\n -> fork $ IS.putInSet n s) [1..10]
+        IS.waitSize 10 s 
         IS.freezeSet s
 
 -- | This version uses a fork-join so it doesn't need the waitSize:
@@ -105,10 +108,10 @@ case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
            (S.fromList [1..10] :: S.Set Int)
            
 v2b :: IO (S.Set Int)
-v2b = runQParIO $
-     do s   <- liftQ IS.newEmptySet
-        ivs <- liftQ$ mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10]
-        liftQ$ mapM_ IV.get ivs -- Join point.
+v2b = runParIO $
+     do s   <- IS.newEmptySet
+        ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10]
+        mapM_ IV.get ivs -- Join point.
         IS.freezeSet s
 
 -- | This version uses deep freeze.
@@ -130,32 +133,31 @@ case_v3a = v3a >>= assertEqual "simple callback test"
 
 -- [2013.06.27] This is failing just occasionally with a multiple-put:
 v3a :: IO (S.Set Int)          
-v3a = runQParIO $
-     do s1 <- liftQ IS.newEmptySet
-        s2 <- liftQ IS.newEmptySet
-        let fn e = liftQ$ IS.putInSet (e*10) s2
+v3a = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
-          liftQ$ mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]        
+          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]        
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
           -- ten elements are written to s2.
-          liftQ$ IS.waitSize 10 s2
+          IS.waitSize 10 s2
           IS.freezeSet s2
-
 
 case_v3b :: Assertion
 case_v3b = v3b >>= assertEqual "simple callback test"
           (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
           
 v3b :: IO (S.Set Int)          
-v3b = runQParIO $
-     do s1 <- liftQ$ IS.newEmptySet
-        s2 <- liftQ$ IS.newEmptySet
-        let fn e = liftQ$ IS.putInSet (e*10) s2
+v3b = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
-          liftQ$  mapM_ (\n -> IS.putInSet n s1) [1..10]
+          mapM_ (\n -> IS.putInSet n s1) [1..10]
           -- Because we filled s1 sequentially, we know it is full at this point.
           -- (If the above were forked we would need a finish/asnyc style construct)
           
@@ -175,13 +177,13 @@ case_i3c = do
   return ()
     
 i3c :: IO (S.Set Int)
-i3c = runQParIO $
-     do s1 <- liftQ IS.newEmptySet
-        s2 <- liftQ IS.newEmptySet
-        let fn e = liftQ$ IS.putInSet (e*10) s2
+i3c = runParIO $
+     do s1 <- IS.newEmptySet
+        s2 <- IS.newEmptySet
+        let fn e = IS.putInSet (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
-          liftQ$ mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]          
-          liftQ$ IS.waitSize 1 s2 -- Not ENOUGH synchronization!
+          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]          
+          IS.waitSize 1 s2 -- Not ENOUGH synchronization!
           IS.freezeSet s2
           -- If this ^ freeze occurs *before* all the puts have happened,
           -- the a put happening after it will throw an exception.  If,
@@ -207,9 +209,9 @@ case_v3d = assertEqual "test of parallelism in freezeSetAfter"
 -- | This test has interdependencies between callbacks (that are launched on
 -- already-present data), which forces these to be handled in parallel.
 v3d :: IO (S.Set Int)
-v3d = runQParIO $ 
-     do s1 <- liftQ$ IS.newFromList [1..5]
-        s2 <- liftQ$ IS.newEmptySet
+v3d = runParIO $ 
+     do s1 <- IS.newFromList [1..5]
+        s2 <- IS.newEmptySet
         IS.freezeSetAfter s1 $ \ elm -> do
           let dep = case elm of
                       1 -> Just 2
@@ -218,12 +220,12 @@ v3d = runQParIO $
                       4 -> Just 3
                       5 -> Just 4
           case dep of
-            Nothing -> liftQ$ logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
-            Just d -> do liftQ$ logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
-                         liftQ$ IS.waitElem d s2
-                         liftQ$ logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
-          liftQ$ putInSet elm s2 
-        liftQ$ logStrLn " [freezeSetAfter completed] "
+            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+                         IS.waitElem d s2
+                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+          putInSet elm s2 
+        logStrLn " [freezeSetAfter completed] "
         freezeSet s2
 
 case_v3e :: Assertion
@@ -232,8 +234,7 @@ case_v3e = assertEqual "test of parallelism in addHandler"
 
 -- | Same as v3d but for addHandler
 v3e :: IO (S.Set Int)
-v3e = runQParIO $ IS.freezeSet =<<
-     (liftQ $ 
+v3e = runParIO $ IS.freezeSet =<<
      do s1 <- IS.newFromList [1..5]
         s2 <- IS.newEmptySet
         hp <- newPool
@@ -252,7 +253,7 @@ v3e = runQParIO $ IS.freezeSet =<<
           putInSet elm s2
         quiesce hp
         logStrLn " [quiesce completed] "
-        return s2)
+        return s2
 
 
 case_v7a :: Assertion
@@ -261,8 +262,7 @@ case_v7a = assertEqual "basic imap test"
            v7a
 
 v7a :: IO (M.Map Int Float)
-v7a = runQParIO $ IM.freezeMap =<<
- (liftQ $
+v7a = runParIO $ IM.freezeMap =<<
   do mp <- IM.newEmptyMap
      fork $ do IM.waitSize 3 mp
                IM.insert 100 100.1 mp
@@ -272,11 +272,11 @@ v7a = runQParIO $ IM.freezeMap =<<
      IM.insert 1 1 mp
      IM.insert 2 2 mp
      logStrLn "[v7a] Did the first two puts.."
-     liftIO$ threadDelay 1000
+     I.liftIO$ threadDelay 1000
      IM.insert 3 3 mp
      logStrLn "[v7a] Did the first third put."
      IM.waitSize 5 mp
-     return mp)
+     return mp
 
 case_i7b :: Assertion
 case_i7b = do 
@@ -290,21 +290,19 @@ case_i7b = do
 -- | A quasi-deterministic example.
 i7b :: IO (M.Map Int (S.Set Float))
 -- Do we need a "deep freeze" that freezes nested structures?
-i7b = runQParIO $ do
-  mp <- liftQ $ do
-         mp <- IM.newEmptyMap
-         s1 <- IS.newEmptySet
-         s2 <- IS.newEmptySet
-         IS.putInSet 0.11 s2
-         f1 <- IV.spawn_ $ do IM.insert 1 s1 mp 
-                              IM.insert 2 s2 mp
-         f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
-                              IS.putInSet 3.33 s
-         -- RACE: this modify is racing with the insert of s2:
-         IM.modify mp 2 (IS.putInSet 4.44)
+i7b = runParIO $ do
+  mp <- IM.newEmptyMap
+  s1 <- IS.newEmptySet
+  s2 <- IS.newEmptySet
+  IS.putInSet 0.11 s2
+  f1 <- IV.spawn_ $ do IM.insert 1 s1 mp 
+                       IM.insert 2 s2 mp
+  f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
+                       IS.putInSet 3.33 s
+  -- RACE: this modify is racing with the insert of s2:
+  IM.modify mp 2 (IS.putInSet 4.44)
 
-         IV.get f1; IV.get f2
-         return mp
+  IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
 
@@ -318,22 +316,20 @@ case_v7c = assertEqual "imap test - racing modifies"
 -- | This example is valid because two modifies may race.
 v7c :: IO (M.Map Int (S.Set Float))
 -- Do we need a "deep freeze" that freezes nested structures?
-v7c = runQParIO $ do
-  mp <- liftQ$ do 
-         mp <- IM.newEmptyMap
-         s1 <- IS.newEmptySet
-         f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
-         f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
-                              IS.putInSet 3.33 s
-         IM.modify mp 2 (IS.putInSet 4.44)
-         f3 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 5.55)
-         f4 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 6.6)
-         -- No easy way to wait on the total size of all contained sets...
-         -- 
-         -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
-         -- Global quiesce is convenient too..
-         IV.get f1; IV.get f2; IV.get f3; IV.get f4
-         return mp
+v7c = runParIO $ do
+  mp <- IM.newEmptyMap
+  s1 <- IS.newEmptySet
+  f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
+  f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
+                       IS.putInSet 3.33 s
+  IM.modify mp 2 (IS.putInSet 4.44)
+  f3 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 5.55)
+  f4 <- IV.spawn_ $ IM.modify mp 3 (IS.putInSet 6.6)
+  -- No easy way to wait on the total size of all contained sets...
+  -- 
+  -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
+  -- Global quiesce is convenient too..
+  IV.get f1; IV.get f2; IV.get f3; IV.get f4
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
 
@@ -351,19 +347,17 @@ case_v8a = assertEqual "simple cartesian product test"
 
 -- v8a :: IO (S.Set (Integer, Char))
 v8a :: IO (S.Set (Integer, Char))
-v8a = runQParIO $ do
-  s3 <- liftQ$ do
-          s1 <- IS.newFromList [1,2,3]
-          s2 <- IS.newFromList ['a','b']
-          logStrLn " [v8a] now to construct cartesian product..."
-          (h,s3) <- IS.cartesianProdHP Nothing s1 s2
-          logStrLn " [v8a] cartesianProd call finished... next quiesce"
-          IS.forEach s3 $ \ elm ->
-            logStrLn$ " [v8a]   Got element: "++show elm
-          putInSet 'c' s2
-          quiesce h
-          logStrLn " [v8a] quiesce finished, next freeze::"
-          return s3
+v8a = runParIO $ do
+  s1 <- IS.newFromList [1,2,3]
+  s2 <- IS.newFromList ['a','b']
+  logStrLn " [v8a] now to construct cartesian product..."
+  (h,s3) <- IS.cartesianProdHP Nothing s1 s2
+  logStrLn " [v8a] cartesianProd call finished... next quiesce"
+  IS.forEach s3 $ \ elm ->
+    logStrLn$ " [v8a]   Got element: "++show elm
+  putInSet 'c' s2
+  quiesce h
+  logStrLn " [v8a] quiesce finished, next freeze::"
   freezeSet s3
 
 case_v8b :: Assertion
@@ -374,33 +368,67 @@ case_v8b = assertEqual "3-way cartesian product"
             )
            =<< v8b
 
--- [2013.07.03] Seeing nondeterministic failures here... hmm...
--- Ah, possibly divergence too... jeez.
 v8b :: IO (S.Set [Int])
-v8b = runQParIO $ do
-  hp <- liftQ$ newPool
-  s1 <- liftQ$ IS.newFromList [1,2]
-  s2 <- liftQ$ IS.newFromList [40,50]
+v8b = runParIO $ do
+  hp <- newPool
+  s1 <- IS.newFromList [1,2]
+  s2 <- IS.newFromList [40,50]
     -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
-  (_,s3) <- liftQ$ IS.traverseSetHP    (Just hp) (return . (+100)) s1
-  (_,s4) <- liftQ$ IS.cartesianProdsHP (Just hp) [s1,s2,s3]
-  liftQ$ IS.forEachHP (Just hp) s4 $ \ elm ->
+  (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
+  (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
+  IS.forEachHP (Just hp) s4 $ \ elm ->
     logStrLn $ " [v8b]   Got element: "++show elm
   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
   -- liftIO$ threadDelay$ 100*1000
-  liftQ$ quiesce hp
-  liftQ$ logStrLn " [v8b] quiesce finished, next freeze::"
+  quiesce hp
+  logStrLn " [v8b] quiesce finished, next freeze::"
   freezeSet s4
 
+case_v8c :: Assertion
+case_v8c = assertEqual "addHandler on maps"
+           (M.fromList [(1,101),(2,102)] ) =<< v8c
+
+-- | Similar test with Maps instead of Sets.
+v8c :: IO (M.Map Int Int)
+v8c = runParIO $ do
+  hp <- newPool
+  m1 <- IM.newFromList [(1,1),(2,2)]
+  m2 <- newEmptyMap
+  let cb k v = do logStrLn$" [v8c]  Inside callback for Map.. key="++show k
+                  IM.insert k (v+100) m2
+  IM.addHandler hp m1 cb 
+  logStrLn " [v8c] Everything set up; about to quiesce..."
+  quiesce hp
+  logStrLn " [v8c] quiesce finished, next freeze:"
+  freezeMap m2
 
 
--- v8b :: IO (S.Set Int)
--- v8b = runParIO $ do
---   s1 <- IS.newFromList [1,2,3]
---   s2 <- IS.newFromList [2,3,4]
---   s3 <- IS.intersection s1 s2
---   quiesce h
---   freezeSet s3
+case_v8d :: Assertion
+case_v8d = assertEqual "union on maps"
+--           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
+           (M.fromList [(1,101),(2,102)] )
+--           (M.fromList [(40,40),(50,50)])
+             =<< v8d
+v8d :: IO (M.Map Int Int)
+v8d = runParIO $ do
+  hp <- newPool
+  logStrLn " [v8d] Got a new pool..."  
+  m1 <- IM.newFromList [(1,1),(2,2)]
+  m2 <- IM.newFromList [(40,40),(50,50)]
+  logStrLn " [v8d] Got two fresh maps..."
+  let cb k v = do logStrLn$" [v8d]  Inside callback for traverse.. key="++show k
+                  return (v+100)
+  (_,m3) <- IM.traverseMapHP (Just hp) cb m1
+{-      
+  (_,m4) <- IM.unionHP       (Just hp) m2 m3
+  IM.forEachHP (Just hp) m4 $ \ k elm ->
+    logStrLn $ " [v8d]   Got element: "++show (k,elm)
+-}  
+  logStrLn " [v8d] Everything set up; about to quiesce..."
+  quiesce hp
+--  quiesceAll  
+  logStrLn " [v8d] quiesce finished, next freeze::"
+  freezeMap m3
   
 --------------------------------------------------------------------------------
 -- TESTS FOR SNZI  
@@ -663,11 +691,11 @@ case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
 
 dftest0 :: IO String
 dftest0 = runParIO $ do
-  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
+  iv1 <- newBottom -- :: Par d s (IV.IVar s (IV.IVar s String))
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  IV.IVarSnap m <- L.unsafeUnQPar $ freeze iv1
+  IV.IVarSnap m <- freeze iv1
   case m of
     Just i -> IV.get i
 
@@ -675,11 +703,11 @@ case_dftest1 = assertEqual "deefreeze double ivar" (Just (Just "hello")) =<< dft
 
 -- | Should return (Just (Just "hello"))
 dftest1 :: IO(Maybe (Maybe String))
-dftest1 = runQParIO $ do
-  iv1 <- liftQ newBottom :: QPar (IV.IVar (IV.IVar String))
-  iv2 <- liftQ newBottom
-  liftQ$ IV.put_ iv1 iv2
-  liftQ$ IV.put_ iv2 "hello"
+dftest1 = runParIO $ do
+  iv1 <- newBottom -- :: Par QuasiDet s (IV.IVar (IV.IVar String))
+  iv2 <- newBottom
+  IV.put_ iv1 iv2
+  IV.put_ iv2 "hello"
   deepFreeze iv1
 
 case_dftest2 = assertEqual "deefreeze double ivar"
@@ -688,31 +716,37 @@ case_dftest2 = assertEqual "deefreeze double ivar"
 -- | This uses the more generic lifting... but it's more annoying to unpack:
 dftest2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
 dftest2 = runParIO $ do
-  iv1 <- newBottom :: Par (IV.IVar (IV.IVar String))
+  iv1 <- newBottom --- :: Par (IV.IVar s (IV.IVar s String))
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  L.unsafeUnQPar$ deepFreeze iv1
+  deepFreeze iv1
 
-dftest4 :: DeepFreeze (IV.IVar Int) b => IO b
-dftest4 = runParIO $ do
+case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
+dftest3 :: IO (Maybe Int)
+dftest3 = runParIO $ do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
-  L.unsafeUnQPar$ deepFreeze iv1
+  deepFreeze iv1 
 
-case_dftest4a = assertEqual "freeze polymorphic 1"
-                  (IV.IVarSnap (Just 3)) =<< dftest4a
+-- | Polymorphic version of previous.  DeepFreeze is more flexible than regular
+-- freeze, because we can pick multiple return types for the same code.  But we must
+-- be very careful with this kind of thing due to the 's' type variables.
+dftest4_ :: DeepFreeze (IV.IVar s1 Int) b =>
+            Par QuasiDet s1 b
+dftest4_ = do
+  iv1 <- newBottom 
+  IV.put_ iv1 (3::Int)
+  res <- deepFreeze iv1 
+  return res
 
--- More flexible than regular freeze, can pick either type:
+case_dftest4a = assertEqual "freeze polymorphic 1" (IV.IVarSnap (Just 3)) =<< dftest4a
 dftest4a :: IO (Snapshot IV.IVar Int)
-dftest4a = dftest4
+dftest4a = runParIO dftest4_
 
-case_dftest4b = assertEqual "freeze polymorphic 2"
-                  (Just 3) =<< dftest4b
-
--- uh... how is this one actually working?
+case_dftest4b = assertEqual "freeze polymorphic 2" (Just 3) =<< dftest4b
 dftest4b :: IO (Maybe Int)
-dftest4b = dftest4
+dftest4b = runParIO dftest4_
 
 ------------------------------------------------------------------------------------------
 

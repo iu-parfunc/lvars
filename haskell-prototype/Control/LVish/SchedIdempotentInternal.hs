@@ -6,6 +6,7 @@ module Control.LVish.SchedIdempotentInternal (
   State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await
   ) where
 
+
 import Prelude
 import Control.Monad
 import Control.Concurrent
