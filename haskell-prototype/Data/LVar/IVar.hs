@@ -2,7 +2,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DataKinds #-} 
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-} 
 module Data.LVar.IVar
 --       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
        where
@@ -16,8 +17,7 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish as LV
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                DeepFreeze(..), unsafeUnQPar)
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.Traversable (traverse)
 
@@ -32,18 +32,24 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
-{-
 instance LVarData1 (IVar s) where
   -- type Snapshot IVar a = Maybe a
   newtype Snapshot (IVar s) a = IVarSnap (Maybe a)
     deriving (Show,Ord,Read,Eq)
-  freeze    = fmap IVarSnap . freezeIVar
+  
+  -- freeze :: f a -> Par QuasiDet s (Snapshot f a)
+  -- freeze    = fmap IVarSnap . freezeIVar
+
+--newBottom :: forall (d :: Determinism) s1 a. Par d s1 (IVar s a)
+  newBottom :: Par d s (IVar s a)
   newBottom = new
-  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+  
+  -- traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+  
 
 unSnap :: Snapshot (IVar s) a -> Maybe a
 unSnap (IVarSnap m) = m
--}
+
 --------------------------------------
 
 new :: Par d s (IVar s a)
@@ -108,12 +114,11 @@ instance PC.ParIVar IVar Par where
   new = new
 -}
 
-
 --------------------------------------------------------------------------------
 -- IVar specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
-{-
+
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IVar s a) (Maybe a) where
   deepFreeze iv = do IVarSnap m <- freeze iv
@@ -122,9 +127,11 @@ instance DeepFreeze (IVar s a) (Maybe a) where
 instance DeepFreeze (IVar s a) b =>
          DeepFreeze (IVar s (IVar s a)) (Maybe b)
   where
-    deepFreeze (from :: (IVar (IVar a))) = do
-      x <- freezeIVar from       :: Par QuasiDet s (Maybe (IVar a))
-      y <- traverse deepFreeze x :: Par QuasiDet s (Maybe b)
+{-    
+--    deepFreeze (from :: (IVar s (IVar s a))) = do    
+    deepFreeze from = do    
+      x <- freezeIVar from       -- :: Par QuasiDet s (Maybe (IVar s a))
+      y <- traverse deepFreeze x -- :: Par QuasiDet s (Maybe b)
       return y
-
 -}
+

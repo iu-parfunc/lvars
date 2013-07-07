@@ -24,13 +24,10 @@ module Control.LVish.SchedIdempotent
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkInPool,
-    runPar, runParIO, runParThenFreezeIO, 
+    runPar, runParIO, 
         
     -- * Quasi-deterministic operations:
     quiesce, runQParIO,
-
-    -- * Interfaces for generic operations
-    LVarData1(..), DeepFreeze(..),
 
     -- * Debug facilities
     logStrLn,
@@ -92,62 +89,6 @@ printLog :: IO ()
 printLog = do
   lines <- readIORef globalLog
   mapM_ putStrLn $ reverse lines
-
-------------------------------------------------------------------------------
--- Interface for generic LVar handling
-------------------------------------------------------------------------------
-
--- class Traversable f => LVarData1 (f :: * -> *) where
-
--- | TODO: if there is a Par class, it needs to be a superclass of this.
-class LVarData1 (f :: * -> *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  -- type Snapshot f a :: *
-  data Snapshot f :: * -> *
-  
-  freeze :: f a -> QPar (Snapshot f a)
-  newBottom :: Par (f a)
-
-  -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
-  -- I don't know of a good way, so instead we expose this:
-  traverseSnap :: (a -> Par b) -> Snapshot f a -> Par (Snapshot f b)
-
-  -- What else?
-  -- Merge op?
-
--- This gets messy if we try to handle several Kinds:
-class LVarData0 (t :: *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  type Snapshot0 t
-  freeze0 :: t -> Par (Snapshot0 t)
-  newBottom0 :: Par t
-
---------------------------------------------------------------------------------
--- Freezing nested structures in one go
---------------------------------------------------------------------------------
-
--- | This establishes an unrestricted *relation* between input and output types.  Thus
--- it is powerful, but can be painful to use.  The input and output types of
--- deepFreeze must be fully constrained at every call site.  This allows the user to
--- potentially freeze a nested structure in various ways of their choosing.
-class DeepFreeze (from :: *) (to :: *) where
-  deepFreeze :: from -> QPar to 
-
-instance (LVarData1 f, LVarData1 g) =>
-         DeepFreeze (f (g a)) (Snapshot f (Snapshot g a)) where
-  deepFreeze lvd = do
-    x <- freeze lvd                                     :: QPar (Snapshot f (g a))
-    y <- liftQ $ traverseSnap (unsafeUnQPar . freeze) x :: QPar (Snapshot f (Snapshot g a))
-    return y
-
--- Inherit everything that regular freeze can do:
-instance LVarData1 f => DeepFreeze (f a) (Snapshot f a) where
-  deepFreeze = freeze
-
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
@@ -441,14 +382,6 @@ freezeLVAfter lv globalCB updateCB = do
   quiesce hp
   freezeLV lv
 
--- | This function has an advantage vs. doing your own freeze at the end of your
--- computation.  Namely, when you use `runParThenFreeze`, there is an implicit
--- barrier before the final freeze.
-runParThenFreezeIO :: (LVarData1 f, DeepFreeze (f a) b) =>
-                    Par (f a) -> IO b
-runParThenFreezeIO par = do 
-  res <- runPar_internal par
-  runPar_internal (unsafeUnQPar $ deepFreeze res)
 
 ------------------------------------------------------------------------------
 -- Par monad operations
