@@ -105,3 +105,45 @@ Maybe this is known, but just in case it hasn't been seen before, here:
 It seems like I have to run it on the order of 75 times to reproduce
 it, but it is reproducable.
 
+
+[2013.07.07] {Aaron fixed forkInPool bug, but...}
+
+I'm seeing failures on v3d like this:
+
+     [!] Responding to env Var: DEBUG=5
+     [dbg-lvish] About to fork workers...
+      [dbg-lvish] Created new pool, pool identity= 19/20 transient cnt 0
+     [dbg-lvish] Created new pool, pool identity= 21/22 transient cnt 0
+     [dbg-lvish] Begin quiescing pool, identity= , pool identity= 21/22 transient cnt 1
+     [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= 21/22 transient cnt 1
+     [dbg-lvish] forkInPool, pool identity= 19/20 transient cnt 2
+      [Invocation 2] waiting on Just 3
+     [dbg-lvish] forkInPool, pool identity= 19/20 transient cnt 3
+      [Invocation 3] has no dependencies, running...
+     [dbg-lvish] forkInPool, pool identity= 19/20 transient cnt 3
+      [Invocation 1] waiting on Just 2
+      [Invocation 2] dependency satisfied!
+     [dbg-lvish] forkInPool, pool identity= 19/20 transient cnt 4
+      [Invocation 4] waiting on Just 3
+      [Invocation 4] dependency satisfied!
+      [Invocation 1] dependency satisfied!
+      [Invocation 2] dependency satisfied!
+     [dbg-lvish] -> Quiescent now.. waking conts, pool identity= 19/20 transient cnt 1
+     [dbg-lvish] forkInPool, pool identity= 19/20 transient cnt 1
+      [Invocation 5] waiting on Just 4
+      [Invocation 5] dependency satisfied!
+     [dbg-lvish] -> Quiescent now.. waking conts, pool identity= 19/20 transient cnt 0
+     [dbg-lvish] -> Quiescent now.. waking conts, pool identity= 21/22 transient cnt 0
+     [dbg-lvish] Begin quiescing pool, identity= , pool identity= 19/20 transient cnt -1
+     [dbg-lvish] -> Not quiescent yet, back to sched, pool identity= 19/20 transient cnt -1
+
+It fails by getting stuck, it fails with:
+
+   ERROR: EXCEPTION in runPar(ThreadId 5): Attempt to change a frozen LVar
+
+And I even went back before Aaron's most recent bugfix and still got:
+
+   ERROR: EXCEPTION in runPar(ThreadId 6): thread blocked indefinitely in an MVar operation
+
+It is particularly unusual that the counter goes negative.
+

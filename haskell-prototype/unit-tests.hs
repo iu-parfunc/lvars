@@ -405,9 +405,7 @@ v8c = runParIO $ do
 
 case_v8d :: Assertion
 case_v8d = assertEqual "union on maps"
---           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
-           (M.fromList [(1,101),(2,102)] )
---           (M.fromList [(40,40),(50,50)])
+           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
              =<< v8d
 v8d :: IO (M.Map Int Int)
 v8d = runParIO $ do
@@ -419,16 +417,14 @@ v8d = runParIO $ do
   let cb k v = do logStrLn$" [v8d]  Inside callback for traverse.. key="++show k
                   return (v+100)
   (_,m3) <- IM.traverseMapHP (Just hp) cb m1
-{-      
   (_,m4) <- IM.unionHP       (Just hp) m2 m3
   IM.forEachHP (Just hp) m4 $ \ k elm ->
     logStrLn $ " [v8d]   Got element: "++show (k,elm)
--}  
   logStrLn " [v8d] Everything set up; about to quiesce..."
   quiesce hp
 --  quiesceAll  
   logStrLn " [v8d] quiesce finished, next freeze::"
-  freezeMap m3
+  freezeMap m4
   
 --------------------------------------------------------------------------------
 -- TESTS FOR SNZI  
