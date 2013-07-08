@@ -20,5 +20,14 @@ all:
 	time ./bugged.exe
 
 unbugged:
-	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t2 -o unbugged_mmap.exe
+#	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t2 -o unbugged_mmap.exe
 #	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t4 -o unbugged_readFile.exe
+	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t5 -o unbugged_mmap.exe
+
+small:
+	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t0 -o small_mmap.exe
+
+
+dbg:
+	ghc $(BASICOPTS)                PBBS.hs -main-is Util.PBBS.t0 -o small_mmap.exe
+	ghc $(BASICOPTS) -osuf=po -prof PBBS.hs -main-is Util.PBBS.t0 -o small_mmap_dbg.exe

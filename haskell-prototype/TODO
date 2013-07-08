@@ -25,3 +25,7 @@ Fixes:
   * modify and insert operations on the same IMap probably should be
     disqualified at the type level...
 
+Optimizations:
+
+  * Expose a version of addHandler that does NOT support quiesce.
+
