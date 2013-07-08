@@ -13,11 +13,11 @@ module Main where
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
 import Control.Monad
+import Control.Exception (evaluate)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.List ((\\))
-
 import Debug.Trace
 
 import Control.LVish
@@ -89,7 +89,6 @@ instance Out Call
 instance Out Exp
 instance Out Clo
 instance Out Bind
--- instance Out a => Out (OpTree a)
 
 instance Out (M.Map Var Time) where
   doc = docPrec 0
@@ -142,7 +141,9 @@ single x = do
 --   mutates the set of states (first parameter), adding the new states.
 next :: IS.ISet s (State s) -> State s -> Par d s () -- Next states
 next seen st0@(State (Call l fun args) benv store time)
-  = trace ("next " ++ show (doc st0)) $ do
+  =  -- trace ("next " ++ show (doc st0)) $
+  do
+    liftIO $ putStrLn ("next " ++ show (doc st0))
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
 
@@ -343,8 +344,13 @@ fvExample =
 main = runExample standardExample
 
 runExample example = do
-  putStrLn "====="
-  forM_ (M.toList (analyse (runUniqM example))) $ \(x, ISetSnap es) -> do
+  let res = M.toList (analyse (runUniqM example))
+  len <- evaluate (length res)
+  putStrLn$ "===== #results = "++show len
+  forM_ res $ \(x, ISetSnap es) -> do
     putStrLn (x ++ ":")
     mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
+         -- forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
+         --   putStrLn (x ++ ":")
+         --   mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
