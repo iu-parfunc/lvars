@@ -43,25 +43,21 @@ overPartition = 4
 --------------------------------------------------------------------------------
 
 
-readNumFile :: (U.Unbox nty, Num nty, Eq nty) =>
-               FilePath -> IO [PartialNums nty]
+{-# INLINE readNumFile #-}
+readNumFile :: (U.Unbox nty, Num nty, Eq nty) => FilePath -> IO [PartialNums nty]
+-- readNumFile :: FilePath -> IO [PartialNums Word]
 readNumFile path = do
   bs <- unsafeMMapFile path
   parReadNats bs
 
-
 {-# INLINE parReadNats #-}
 -- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
 -- non-digit characters are treated as separators.
-parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
---               S.ByteString -> IO [U.Vector nty]
-               S.ByteString -> IO [PartialNums nty]
+parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO [PartialNums nty]
+-- parReadNats :: S.ByteString -> IO [PartialNums Word]
 parReadNats bs = do
-#ifdef ACTIVATE_BUG  
   ncap <- getNumCapabilities
-#endif
-  -- par ncap
-  par 4
+  par ncap
  where
    par ncap = do 
         let chunks = ncap * overPartition
@@ -77,16 +73,7 @@ parReadNats bs = do
         runParIO $                   
           parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
                                      mapper reducer []
-#elif 0
-        let loop bs [] acc = concatMapM get (reverse acc)
-            loop bs (sz:rst) acc = do 
-               let (bs1,bs2) = S.splitAt sz bs
-               liftIO $ putStrLn$ "(monad-par/flat) Launching chunk of "++show sz
-               fut <- spawn_ (liftIO$ readNatsPartial bs1)
-               loop bs2 rst (fut:acc)
-            sizes = replicate (chunks-1) each ++ [each + left]
-        runParIO (loop bs sizes [])
-#elif 0
+#else
         let loop bs [] acc = concatMapM wait (reverse acc)
             loop bs (sz:rst) acc = do 
                let (bs1,bs2) = S.splitAt sz bs
@@ -95,21 +82,6 @@ parReadNats bs = do
                loop bs2 rst (fut:acc)
             sizes = replicate (chunks-1) each ++ [each + left]
         loop bs sizes []
-#elif 0 
-#warning "Ok, how about serial..."
-        let loop bs [] acc = return (reverse acc)
-            loop bs (sz:rst) acc = do 
-               let (bs1,bs2) = S.splitAt sz bs
-               putStrLn$ "(SEQUENTIAL) Launching chunk of "++show sz
-               res <- readNatsPartial bs1
-               loop bs2 rst (res ++ acc)
-            sizes = replicate (chunks-1) each ++ [each + left]
-        putStrLn$ "Sequential debug version running on sizes: "++ show sizes
-        loop bs sizes []
-#else
-        putStrLn "Now this is getting ridiculous..."
-        res <- readNatsPartial bs
-        return [res]
 #endif
                           
 -- Partially parsed number fragments
@@ -162,8 +134,8 @@ instance NFData (PartialNums n) where
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
-readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
-               S.ByteString -> IO [PartialNums nty]
+-- readNatsPartial :: S.ByteString -> IO [PartialNums Word]
+readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO [PartialNums nty]
 readNatsPartial bs
  | bs == S.empty = return [Single (MiddleFrag 0 0)]
  | otherwise = do   
@@ -187,8 +159,8 @@ readNatsPartial bs
    -- vecSize n = min chunkSize ((n `quot` 2) + 1)
    vecSize n = ((n `quot` 2) + 1)
    
-   loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
-           IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
+   -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
+   --         IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
    loop !lmt !ind !acc !vec !nxt !rst
      -- Extend the currently accumulating number in 'acc':
      | digit nxt =
@@ -230,11 +202,11 @@ case_t3 = assertEqual "t3" [Single (MiddleFrag 3 (123::Word))] =<<
           readNatsPartial (S.take 3 "123")
 case_t4 = assertEqual "t4" [Single (MiddleFrag 2 (12::Word))] =<<
           readNatsPartial (S.take 2 "123")
-case_t5 = assertEqual "t5" [Compound Nothing U.empty (Just (LeftFrag (12::Word64)))] =<<
+case_t5 = assertEqual "t5" [Compound Nothing U.empty (Just (LeftFrag (12::Word32)))] =<<
           readNatsPartial (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
-          [Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word32)))] =<<
+          [Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word64)))] =<<
           readNatsPartial (S.take 10 "023 456 789")
 
 runTests = $(defaultMainGenerator)
