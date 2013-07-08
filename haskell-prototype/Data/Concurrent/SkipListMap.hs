@@ -20,13 +20,14 @@
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
-  SLMap(), newSLMap, find, putIfAbsent, forPairs)
+  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, foldlWithKey)
 where
   
 import System.Random  
   
 import Control.Monad  
 import Control.Monad.IO.Class
+import Control.LVish.MonadToss
   
 import Data.IORef
 import Data.Atomics
@@ -39,6 +40,10 @@ data SLMap_ k v t where
   Index  :: LM.LMap k (t, v) -> SLMap_ k v t -> SLMap_ k v (LM.LMap k (t, v))
   
 data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
+
+-- | Physical identity
+instance Eq (SLMap k v) where
+  SLMap _ lm1 == SLMap _ lm2 = lm1 == lm2
 
 -- | Create a new skip list with the given number of levels.
 newSLMap :: Int -> IO (SLMap k v)
@@ -80,67 +85,67 @@ find_ (Index m slm) shortcut k = do
                                                 -- so start at the beginning of
                                                 -- the level below.
       
+data PutResult v = Added v | Found v
+
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
-putIfAbsent :: Ord k => MonadIO m => 
+putIfAbsent :: (Ord k, MonadIO m, MonadToss m) => 
                SLMap k v ->     -- ^ The map
-               IO Bool ->       -- ^ A coin tosser (should be thread-local)
                k ->             -- ^ The key to lookup/insert
                m v ->           -- ^ A computation of the value to insert
-               m v 
-putIfAbsent (SLMap slm _) gen k vc = 
-  putIfAbsent_ slm Nothing gen k vc $ \_ _ -> return ()
+               m (PutResult v)
+putIfAbsent (SLMap slm _) k vc = 
+  putIfAbsent_ slm Nothing k vc $ \_ _ -> return ()
 
 -- Helper for putIfAbsent
-putIfAbsent_ :: Ord k => MonadIO m =>
+putIfAbsent_ :: (Ord k, MonadIO m, MonadToss m) => 
                 SLMap_ k v t -> -- ^ The map    
                 Maybe t ->      -- ^ A shortcut into this skiplist level
-                IO Bool ->      -- ^ A coin tosser 
                 k ->            -- ^ The key to lookup/insert
                 m v ->          -- A computation of the value to insert
-                (t -> v -> IO ()) ->    -- A thunk for inserting into the higher
-                                        -- levels of the skiplist
-                m v
+                (t -> v -> m ()) ->    -- A thunk for inserting into the higher
+                                       -- levels of the skiplist
+                m (PutResult v)
                 
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap
-putIfAbsent_ (Bottom m) shortcut gen k vc install = retryLoop vc where 
+putIfAbsent_ (Bottom m) shortcut k vc install = retryLoop vc where 
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (maybe m id shortcut) k
     case searchResult of
-      LM.Found v      -> return v
+      LM.Found v      -> return $ Found v
       LM.NotFound tok -> do
         v <- vc
         maybeMap <- liftIO $ LM.tryInsert tok v
         case maybeMap of
           Just m' -> do
-            liftIO $ install m' v         -- all set on the bottom level, now try indices
-            return v
+            install m' v                  -- all set on the bottom level, now try indices
+            return $ Added v
           Nothing -> retryLoop $ return v -- next time around, remember the value to insert
           
 -- At an index level; try to shortcut into the level below, while remembering
 -- where we were so that we can insert index nodes later on
-putIfAbsent_ (Index m slm) shortcut gen k vc install = do          
+putIfAbsent_ (Index m slm) shortcut k vc install = do          
   searchResult <- liftIO $ LM.find (maybe m id shortcut) k
   case searchResult of 
-    LM.Found (_, v) -> return v         -- key is in the index; bail out
+    LM.Found (_, v) -> return $ Found v -- key is in the index; bail out
     LM.NotFound tok -> 
       let install' mBelow v = do        -- to add an index node here,
-            flip <- gen                 -- first, see if we (probabilistically) should
-            when flip $ do 
-              maybeHere <- LM.tryInsert tok (mBelow, v)  -- then, try it!
+            shouldAdd <- toss           -- first, see if we (probabilistically) should
+            when shouldAdd $ do 
+              maybeHere <- liftIO $ LM.tryInsert tok (mBelow, v)  -- then, try it!
               case maybeHere of
                 Just mHere -> install mHere v  -- if we succeed, keep inserting
                                                -- into the levels above us
                               
                 Nothing -> return ()    -- otherwise, oh well; we tried.
       in case LM.value tok of
-        Just (m', _) -> putIfAbsent_ slm (Just m') gen k vc install'
-        Nothing      -> putIfAbsent_ slm Nothing   gen k vc install'
-        
--- | Concurrently iterate over all key/value pairs in the map within the given
--- monad.  Inserts that arrive concurrently may or may not be included in the
--- iteration.
-forPairs :: MonadIO m => SLMap k v -> (k -> v -> m ()) -> m ()
-forPairs (SLMap _ lm) f = LM.forPairs lm f
+        Just (m', _) -> putIfAbsent_ slm (Just m') k vc install'
+        Nothing      -> putIfAbsent_ slm Nothing   k vc install'
+
+-- | Concurrently fold over all key/value pairs in the map within the given
+-- monad, in increasing key order.  Inserts that arrive concurrently may or may
+-- not be included in the fold.
+foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> SLMap k v -> m a
+foldlWithKey f a (SLMap _ lm) = LM.foldlWithKey f a lm
