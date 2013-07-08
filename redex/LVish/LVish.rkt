@@ -72,7 +72,7 @@
 
          ;; An intermediate language form -- this doesn't show up in
          ;; user programs.
-         (freeze e after e with ((callback (lambda (x) e))
+         (freeze l after Q with ((callback (lambda (x) e))
                                  (running (e (... ...)))
                                  (handled H)))
 
@@ -86,9 +86,9 @@
 
       ;; Values.
       (v () ;; unit value
-         StoreVal  ;; return value of `freeze ... after` (we use
-                   ;;  StoreVal instead of d here because it will
-                   ;;  never be Top)
+         StoreVal  ;; return value of `freeze ... after ... with ...`
+                   ;; (we use StoreVal instead of d here because it
+                   ;; will never be Top)
 
          (StoreVal status) ;; return value of `get` (we use (StoreVal
                            ;; status) instead of p here because it
@@ -142,6 +142,9 @@
       ;; want (lambda (x) e) to be invoked when l reaches them.  It
       ;; doesn't have to be pairwise incompatible in the way that a
       ;; threshold set does; It's just a set of lattice states.
+
+      ;; N.B. Event sets are potentially infinite, but we don't have a
+      ;; good way to express infinite event sets in Redex.
       (Q (d d (... ...)))
 
       ;; States.
@@ -163,6 +166,7 @@
          (get e E)
          (put E e)
          (put e E)
+         (freeze E)
          (freeze E after e with e)
          (freeze e after E with e)
          (freeze e after e with E)
@@ -358,7 +362,7 @@
 
     ;; Checks to see that, for all lattice elements that are less than
     ;; or equal to d and a member of Q, they're a member of H.  In
-    ;; other words, (contains-all-Q d H Q) returns true exacyly when
+    ;; other words, (contains-all-Q d H Q) returns true exactly when
     ;; the set (intersection (downset-op d) Q) is a subset of H.
     (define-metafunction name
       contains-all-Q : d H Q -> boolean
