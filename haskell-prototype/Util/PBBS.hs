@@ -1,6 +1,11 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables, CPP #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- | Utilities for reading PBBS data files, etc.
+
+-- TODO:
+--  * It is probably a better strategy to shift the slices around to match number
+--    boundaries than it is to deal with this whole fragments business.  Try that.
 
 module Util.PBBS where 
 
@@ -12,7 +17,7 @@ import Control.Monad.Par.Combinator
 import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (getNumCapabilities)
 import Data.Word
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, maybeToList)
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.ByteString as S
@@ -20,6 +25,7 @@ import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 
 import Data.Time.Clock
 import Control.Concurrent.Async
+import Debug.Trace
 
 -- import qualified Data.ByteString.Word8      as S
 -- import qualified Data.ByteString.Lazy.Word8 as L
@@ -44,11 +50,16 @@ overPartition = 4
 
 
 {-# INLINE readNumFile #-}
-readNumFile :: (U.Unbox nty, Num nty, Eq nty) => FilePath -> IO [PartialNums nty]
+readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty) =>
+               FilePath -> IO [U.Vector nty]
 -- readNumFile :: FilePath -> IO [PartialNums Word]
 readNumFile path = do
   bs <- unsafeMMapFile path
-  parReadNats bs
+  ls <- parReadNats bs
+  let ls' = sewEnds ls
+  putStrLn $ "Number of chunks after sewing: "++show (length ls')
+  putStrLn $ "Lengths: "++show (map U.length ls')
+  return ls'
 
 {-# INLINE parReadNats #-}
 -- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
@@ -68,9 +79,9 @@ parReadNats bs = do
                   mychunk = S.take howmany $ S.drop (ind * each) bs
               liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
               partial <- liftIO (readNatsPartial mychunk)
-              return partial
-            reducer a b = return (a++b)
-        runParIO $                   
+              return [partial]
+            reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
+        ls <- runParIO $                   
           parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
                                      mapper reducer []
 #else
@@ -81,14 +92,17 @@ parReadNats bs = do
                fut <- async (readNatsPartial bs1)
                loop bs2 rst (fut:acc)
             sizes = replicate (chunks-1) each ++ [each + left]
-        loop bs sizes []
+        ls <- loop bs sizes []
 #endif
-                          
+        putStrLn$ "Finished, got "++show (length ls)++" partial reads of output."
+        return ls
+
+--------------------------------------------------------------------------------                          
 -- Partially parsed number fragments
 --------------------------------------------------------------------------------
 
 -- | A sequence of parsed numbers with ragged edges.
-data PartialNums n = Compound !(Maybe (RightFrag n)) !(U.Vector n) !(Maybe (LeftFrag n))
+data PartialNums n = Compound !(Maybe (RightFrag n)) ![U.Vector n] !(Maybe (LeftFrag n))
                    | Single !(MiddleFrag n)
   deriving (Show,Eq,Ord,Read)
 
@@ -120,73 +134,123 @@ instance NFData (PartialNums n) where
   rnf (Compound a b c) = a `seq` b `seq` c `seq` ()
   rnf (Single a)       = rnf a
 
+{-# INLINE sewEnds #-}
+-- Sew up a list of ragged-edged fragments into a list of normal vector chunks.
+sewEnds :: (U.Unbox nty, Integral nty, Eq nty) => [PartialNums nty] -> [U.Vector nty]
+sewEnds [] = []
+sewEnds ls =
+  trace "Going into loop..." $ 
+  loop Nothing ls
+ where
+   loop mleft []     = error "Internal error."
+   loop mleft [last] =
+     trace "loop last" $ 
+     case last of
+       Single _                  -> error "sewEnds: Got a MiddleFrag at the END!"
+       Compound _ _ (Just _)     -> error "sewEnds: Got a LeftFrag at the END!"
+       Compound rf ls Nothing    -> sew mleft rf ls
+     
+   loop mleft (Compound rf ls lf : rst) =
+     trace ("loop compound, length rst "++show (length rst))  $
+     sew mleft rf ls ++ loop lf rst
+
+   loop mleft (Single (MiddleFrag nd m) : rst) =
+     error "Finishme"
+
+   sew mleft rf ls = 
+     case (mleft, rf) of
+       (Just (LeftFrag n), Just (RightFrag nd m)) -> let nd' = fromIntegral nd'
+                                                         num = n * (10^nd') + m in
+                                                     U.singleton num : ls 
+       (Just (LeftFrag n), Nothing)               -> U.singleton n   : ls 
+       (Nothing, Just (RightFrag _ m))            -> U.singleton m   : ls 
+       (Nothing, Nothing)                         ->                   ls 
+
+
+
 --------------------------------------------------------------------------------
 -- Efficient sequential parsing
 --------------------------------------------------------------------------------
 
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}  
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word16] #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
-{-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Int] #-}
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}  
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word16] #-}
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
+-- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Int] #-}
 {-# INLINE readNatsPartial #-}
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
 -- readNatsPartial :: S.ByteString -> IO [PartialNums Word]
-readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO [PartialNums nty]
+readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO (PartialNums nty)
 readNatsPartial bs
- | bs == S.empty = return [Single (MiddleFrag 0 0)]
+ | bs == S.empty = return (Single (MiddleFrag 0 0))
  | otherwise = do   
-  let hd        = S.head bs
-      charLimit = S.length bs
-  initV <- M.new (vecSize charLimit)
-  (v,w,ind) <- scanfwd charLimit 0 initV hd (S.tail bs)
-  v'        <- U.unsafeFreeze v
-  let pref  = U.take ind v'
-      rfrag = Just (RightFrag (fromJust$ S.findIndex (not . digit) bs) (U.head pref))
+  let hd         = S.head bs
+      charsTotal = S.length bs
+  initV <- M.new (vecSize charsTotal)
+  (vs,lfrg) <- scanfwd charsTotal 0 initV [] hd (S.tail bs)
+
+  putStrLn$ " Got back "++show(length vs)++" partial reads"
+  
+  -- Once we are done looping we need some logic to figure out the corner cases:
+  ----------------------------------------
+  let total = sum $ map U.length vs
   if digit hd then
-    (if pref == U.empty
-     then case w of
-           Nothing  -> return [Compound rfrag (U.tail pref) Nothing]
-           Just (LeftFrag w) -> return [Single$ MiddleFrag charLimit w]
-     else return [Compound rfrag (U.tail pref) w])
-   else
-    return [Compound Nothing pref w]
+    (let first = U.head $ head vs -- The first (possibly partial) number parsed.
+         rest  = U.tail (head vs) : tail vs
+         pref  = U.take total (head vs) -- This is usually smaller than total!
+         -- If we start in the middle of a number, then the RightFrag goes till the first whitespace:
+         rfrag = Just (RightFrag (fromJust$ S.findIndex (not . digit) bs) first) in
+     if total == 0 
+     then case lfrg of
+           Nothing           -> return (Compound rfrag [] Nothing)
+           Just (LeftFrag w) -> return (Single$ MiddleFrag charsTotal w)
+     else return (Compound rfrag   rest lfrg)) -- Rfrag gobbles first.
+   else   return (Compound Nothing vs   lfrg) -- May be completely empty (whitespace only).
+  ---------------------------------------- 
  where
    -- Given the number of characters left, how big of a vector chunk shall we allocate?
-   -- vecSize n = min chunkSize ((n `quot` 2) + 1)
-   vecSize n = ((n `quot` 2) + 1)
+   vecSize n = min chunkSize ((n `quot` 2) + 1) -- At minimum numbers must be one character.
+   -- vecSize n = ((n `quot` 4) + 1) -- Assume at least 3 digit numbers... tunable parameter.
    
    -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
    --         IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
-   loop !lmt !ind !acc !vec !nxt !rst
+   loop !lmt !ind !acc !vec !vecacc !nxt !rst
      -- Extend the currently accumulating number in 'acc':
      | digit nxt =
        let acc' = (10*acc + (fromIntegral nxt-48)) in 
-       if lmt == 1
-       then return (vec, Just (LeftFrag acc'), ind)
-       else loop (lmt-1) ind acc' vec (unsafeHead rst) (unsafeTail rst)
-#if 0            
+       if lmt == 1 
+       then closeOff vec vecacc ind (Just (LeftFrag acc'))
+       else loop (lmt-1) ind acc' vec vecacc (unsafeHead rst) (unsafeTail rst)
+
+     -- When we fill one chunk we move to the next:
      | ind >= M.length vec = do
+         -- putStrLn$ " [!] Overflow at "++show ind++", next chunk!"
+         -- putStr$ show ind ++ " "
          fresh <- M.new (vecSize$ S.length rst) :: IO (M.IOVector nty)
          vec'  <- U.unsafeFreeze vec
-         loop lmt 0 acc fresh nxt rst
-#endif         
-     | otherwise =
-       do M.write vec ind acc
-          if lmt == 1
-            then return (vec, Nothing, ind+1)
-            else scanfwd (lmt-1) (ind+1) vec (unsafeHead rst) (unsafeTail rst)
+         loop lmt 0 acc fresh (vec':vecacc) nxt rst
 
-   scanfwd !lmt !ind !vec !nxt !rst
-     | digit nxt = loop lmt ind 0 vec nxt rst
+     | otherwise =
+       do M.write vec ind acc          
+          if lmt == 1
+            then closeOff vec vecacc (ind+1) Nothing
+            else scanfwd (lmt-1) (ind+1) vec vecacc (unsafeHead rst) (unsafeTail rst)
+
+   scanfwd !lmt !ind !vec !vecacc !nxt !rst
+     | digit nxt = loop lmt ind 0 vec vecacc nxt rst -- We've started a number.
      | otherwise = if lmt == 1
-                   then return (vec, Nothing, ind)
-                   else scanfwd (lmt-1) ind vec (unsafeHead rst) (unsafeTail rst)
+                   then closeOff vec vecacc ind Nothing
+                   else scanfwd (lmt-1) ind vec vecacc (unsafeHead rst) (unsafeTail rst)
 
    digit nxt = nxt >= 48 && nxt <= 57
+
+   closeOff vec vecacc ind frag = 
+     do vec' <- U.unsafeFreeze (M.take ind vec)
+        return (reverse (vec':vecacc), frag)
+
 
 
 --------------------------------------------------------------------------------
@@ -194,39 +258,41 @@ readNatsPartial bs
 --------------------------------------------------------------------------------
 
 case_t1 :: IO ()
-case_t1 = assertEqual "t1" [Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) Nothing] =<<
+case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
           readNatsPartial (S.take 4 "123 4")
-case_t2 = assertEqual "t1" [Compound (Just (RightFrag 3 (123::Word))) (U.fromList []) (Just (LeftFrag 4))] =<<
+case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] (Just (LeftFrag 4))) =<<
           readNatsPartial (S.take 5 "123 4")
-case_t3 = assertEqual "t3" [Single (MiddleFrag 3 (123::Word))] =<<
+case_t3 = assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
           readNatsPartial (S.take 3 "123")
-case_t4 = assertEqual "t4" [Single (MiddleFrag 2 (12::Word))] =<<
+case_t4 = assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
           readNatsPartial (S.take 2 "123")
-case_t5 = assertEqual "t5" [Compound Nothing U.empty (Just (LeftFrag (12::Word32)))] =<<
+case_t5 = assertEqual "t5" (Compound Nothing [] (Just (LeftFrag (12::Word32)))) =<<
           readNatsPartial (S.take 3 " 123")
 
 case_t6 = assertEqual "t6"
-          [Compound (Just (RightFrag 3 23)) (U.fromList [456]) (Just (LeftFrag (78::Word64)))] =<<
+          (Compound (Just (RightFrag 3 23)) [U.fromList [456]] (Just (LeftFrag (78::Word64)))) =<<
           readNatsPartial (S.take 10 "023 456 789")
 
 runTests = $(defaultMainGenerator)
 
 
-t0 :: IO [PartialNums Word]
-t0 = readNumFile "/tmp/grid_1000"
+t0 :: IO [U.Vector Word]
+-- t0 = readNumFile "/tmp/grid_1000"
+t0 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
 
-t1 :: IO [PartialNums Word]
-t1 = readNumFile "/tmp/grid_125000"
+t1 :: IO [U.Vector Word]
+-- t1 = readNumFile "/tmp/grid_125000"
+t1 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000"
 
-t2 :: IO [PartialNums Word]
+t2 :: IO [U.Vector Word]
 t2 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
 
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO [PartialNums Word]
 t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
         pn <- readNatsPartial bs
-        consume pn
-        return pn
+        consume [pn]
+        return [pn]
 
 -- | Try it with readFile...
 t3B :: IO [PartialNums Word]
@@ -236,8 +302,8 @@ t3B = do putStrLn "Sequential version + readFile"
          t1 <- getCurrentTime
          putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
          pn <- readNatsPartial bs
-         consume pn
-         return pn
+         consume [pn]
+         return [pn]
 
 
 t4 :: IO [PartialNums Word]
@@ -258,7 +324,7 @@ consume x = do
     mapM_ fn x
   where
   fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
-  fn (Compound _ uv _) = putStrLn$ " <segment, length "++show (U.length uv)++">"
+  fn (Compound _ uvs _) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++">"
 
 main = t4
 

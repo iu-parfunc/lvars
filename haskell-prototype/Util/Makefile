@@ -22,3 +22,6 @@ all:
 unbugged:
 	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t2 -o unbugged_mmap.exe
 #	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t4 -o unbugged_readFile.exe
+
+small:
+	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t0 -o small_mmap.exe
