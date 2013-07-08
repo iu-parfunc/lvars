@@ -40,9 +40,9 @@ import qualified Control.LVish.Internal as I
 import Control.LVish.SchedIdempotent (liftIO)
 import qualified Control.LVish.SchedIdempotent as L
 
-import Data.Concurrent.SNZI as SNZI
-import Data.Concurrent.LinkedMap as LM
-import Data.Concurrent.SkipListMap as SLM
+import qualified Data.Concurrent.SNZI as SNZI
+import qualified Data.Concurrent.LinkedMap as LM
+import qualified Data.Concurrent.SkipListMap as SLM
 
 import Old.Common
 
@@ -523,12 +523,12 @@ case_snzi4 = snzi4 >>= assertEqual "concurrent use of SNZI" False
 lm1 :: IO (String)
 lm1 = do
   lm <- LM.newLMap
-  NotFound tok <- LM.find lm 1
+  LM.NotFound tok <- LM.find lm 1
   LM.tryInsert tok "Hello"
-  NotFound tok <- LM.find lm 0
+  LM.NotFound tok <- LM.find lm 0
   LM.tryInsert tok " World"
-  Found s1 <- LM.find lm 1
-  Found s0 <- LM.find lm 0
+  LM.Found s1 <- LM.find lm 1
+  LM.Found s0 <- LM.find lm 0
   return $ s1 ++ s0
   
 case_lm1 :: Assertion  
@@ -537,8 +537,8 @@ case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello 
 slm1 :: IO (String)
 slm1 = do
   slm <- SLM.newSLMap 5
-  SLM.putIfAbsent slm randomIO 0 $ return "Hello "
-  SLM.putIfAbsent slm randomIO 1 $ return "World"
+  SLM.putIfAbsent slm 0 $ return "Hello "
+  SLM.putIfAbsent slm 1 $ return "World"
   Just s0 <- SLM.find slm 0
   Just s1 <- SLM.find slm 1
   return $ s0 ++ s1
@@ -546,30 +546,22 @@ slm1 = do
 case_slm1 :: Assertion  
 case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
 
-slm2 :: IO ()
+slm2 :: IO Bool
 slm2 = do
   slm <- SLM.newSLMap 8
   mvars <- replicateM numCapabilities $ do
     mv <- newEmptyMVar
     forkWithExceptions forkIO "slm2 test thread" $ do
-      rgen <- newIORef $ mkStdGen 0
-      let flip = do
-            g <- readIORef rgen
-            let (b, g') = random g
-            writeIORef rgen g'
-            return b
-      nTimes 1000 $ \n -> 
---      forM_ (take 100000 [0..]) $ \n ->
-        SLM.putIfAbsent slm flip n $ return n
+      nTimes 10000 $ \n -> SLM.putIfAbsent slm n $ return n
       putMVar mv ()
     return mv  
   forM_ mvars takeMVar
-  SLM.forPairs slm $ \k v -> if k == v then return () else error "BUG"
+  SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n
   
--- case_slm2 :: Assertion  
--- case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" ()
+case_slm2 :: Assertion  
+case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" True
 
 --------------------------------------------------------------------------------
 -- TEMPLATE HASKELL BUG? -- if we have *block* commented case_foo decls, it detects

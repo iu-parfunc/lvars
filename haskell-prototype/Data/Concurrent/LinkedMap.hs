@@ -16,7 +16,7 @@
 -- data structures, e.g. SkipListMap.
 
 module Data.Concurrent.LinkedMap (
-  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert, forPairs)
+  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert, foldlWithKey)
 where
   
 import Data.IORef
@@ -74,14 +74,14 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert v newRef
   return $ if success then Just nextRef else Nothing
 
--- | Concurrently iterate over all key/value pairs in the map within the given
--- monad.  Inserts that arrive concurrently may or may not be included in the
--- iteration.
-forPairs :: MonadIO m => LMap k v -> (k -> v -> m ()) -> m ()
-forPairs m f = do
+-- | Concurrently fold over all key/value pairs in the map within the given
+-- monad, in increasing key order.  Inserts that arrive concurrently may or may
+-- not be included in the fold.
+foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> LMap k v -> m a
+foldlWithKey f a m = do
   n <- liftIO $ readIORef m
   case n of
-    Empty -> return ()
+    Empty -> return a
     Node k v next -> do
-      f k v
-      forPairs next f
+      a' <- f a k v
+      foldlWithKey f a' m

@@ -13,6 +13,7 @@ module Control.LVish.Internal
   )
   where
 
+import           Control.Monad.IO.Class
 import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
 
@@ -45,5 +46,6 @@ state = L.state . unWrapLVar
 unsafeConvert :: Par d1 s1 a -> Par d2 s2 a
 unsafeConvert (WrapPar p) = (WrapPar p)
 
-liftIO :: IO a -> Par d s a
-liftIO = WrapPar . L.liftIO 
+instance MonadIO (Par d s) where
+  liftIO = WrapPar . L.liftIO   
+

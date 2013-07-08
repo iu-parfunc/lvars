@@ -34,7 +34,7 @@ module Control.LVish.SchedIdempotent
        
     -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
     newLV, getLV, putLV, freezeLV, freezeLVAfter,
-    addHandler, liftIO, flipCoin
+    addHandler, liftIO, toss
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -43,6 +43,7 @@ import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.Concurrent.Async as Async
+import           Control.LVish.MonadToss
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
@@ -479,12 +480,12 @@ liftIO io = mkPar $ \k q -> do
   exec (k r) q
   
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
-flipCoin :: Par Bool
-flipCoin = mkPar $ \k q -> do  
-  g <- readIORef $ Sched.prng q
-  let (b, g' ) = random g
-  writeIORef (Sched.prng q) g'
-  exec (k b) q
+instance MonadToss Par where  
+  toss = mkPar $ \k q -> do  
+    g <- readIORef $ Sched.prng q
+    let (b, g' ) = random g
+    writeIORef (Sched.prng q) g'
+    exec (k b) q
 
 -- | Cooperatively schedule other threads
 yield :: Par ()  
