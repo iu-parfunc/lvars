@@ -93,7 +93,8 @@ library
 executable kcfa-lvish
     main-is:    apps/cfa/0CFA_lvish.hs
     ghc-options: -O2 -threaded -rtsopts
-    build-depends: mtl, GenericPretty, pretty
+    build-depends: mtl, GenericPretty, pretty,
+                   atomic-primops
 --    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
