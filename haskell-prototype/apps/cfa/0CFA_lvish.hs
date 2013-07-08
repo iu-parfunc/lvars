@@ -15,6 +15,8 @@ import qualified Control.Monad.State as State
 import Control.Monad
 import Control.Exception (evaluate)
 import Control.Concurrent
+import           System.IO.Unsafe (unsafePerformIO)
+import           System.Mem.StableName (makeStableName, hashStableName)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -72,6 +74,9 @@ type Time = [Label]
 instance Show (Store s) where
   show _ = "<Store>"
 
+instance Show (IS.ISet s a) where
+  show _ = "<ISet>"
+
 -- State Call BEnv Store Time
 instance Ord (State s) where
   compare (State c1 be1 s1 t1)
@@ -95,6 +100,10 @@ instance Out Bind
 instance Out (M.Map Var Time) where
   doc = docPrec 0
   docPrec _ mp = doc (M.toList mp)
+
+instance Out (IS.ISet s a) where
+  doc = docPrec 0
+  docPrec _ s = PP.text (show s)
 
 instance Out (State s) where
   doc = docPrec 0
@@ -145,7 +154,8 @@ next :: IS.ISet s (State s) -> State s -> Par d s () -- Next states
 next seen st0@(State (Call l fun args) benv store time)
   =  -- trace ("next " ++ show (doc st0)) $
   do
-    liftIO $ putStrLn ("next " ++ show (doc st0))
+    -- liftIO $ putStrLn ("next " ++ show (doc st0))
+    logStrLn ("next " ++ show (doc st0))
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
 
@@ -238,24 +248,24 @@ summarize :: IS.ISet s (State s) -> Par d s (Store s)
 summarize states = do
   storeFin <- newEmptyMap
   -- Note: a generic union operation could also handle this:
-  void$ IS.forEach states $ \ (State _ _ store_n _) -> 
-    void$ IM.forEach store_n $ \ key val -> 
-      void$ IS.forEach val $ \ elem  -> 
-        IM.modify storeFin key $ putInSet elem
+  void$ IS.forEach states $ \ (State _ _ store_n _) -> do 
+    logStrLn "1 Summarizing state... " 
+    void$ IM.forEach store_n $ \ key val -> do
+      logStrLn$ "2 Summarizing store, key "++ show key
+      void$ IS.forEach val $ \ elem  -> do
+        logStrLn$ "3 Summarizing val: "++ show (doc elem)++" putting in key "++show key 
+        IM.modify storeFin key $ \ st -> do
+           logStrLn$ "4 callback... inserting element in set: "++
+              (show$ unsafeName st)++" map "++show(unsafeName storeFin)
+           putInSet elem st
   return storeFin
 --    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
--- monovariantStore :: Store -> M.Map Var (S.Set Exp)
--- monovariantStore :: Store s -> Par d s (M.Map Var (S.Set Exp))
 monovariantStore :: Store s -> Par d s (IM.IMap Var s (IS.ISet s Exp))
 monovariantStore store = do 
-  -- M.foldrWithKey (\(Binding x _) d res ->
-  --                  M.alter (\mb_exp -> Just $ maybe id S.union mb_exp (S.map monovariantValue d)) x res)
-  --       M.empty store
   mp <- newEmptyMap
   IM.forEach store $ \ (Binding vr _) d -> do
-    -- d' <- IS.traverseSet (return . monovariantValue) d
     IS.forEach d $ \ elm -> do
       let elm' = monovariantValue elm
       IM.modify mp vr (IS.putInSet elm')
@@ -271,13 +281,14 @@ monovariantStore store = do
 -- | Perform a complete, monovariant analysis.
 analyse :: Call -> IO (M.Map Var (S.Set Exp))
 -- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
-analyse e =  runParIO par
-  -- do IMapSnap res <- runParIO par
-  --    return res
+analyse e =  
+  runParThenFreezeIO par
+  -- do x <- runParThenFreezeIO par
+  --    putStrLn (show$ doc x)
+  --    return undefined
  where
-   -- IMapSnap res = runParThenFreeze par  
---   par :: Par QuasiDet s (M.Map Var (Snapshot IS.ISet Exp))
-   par :: Par QuasiDet s (M.Map Var (S.Set Exp))
+   par :: Par d s (IM.IMap Var s (IS.ISet s Exp))
+   -- par :: Par d s (Store s)
    par = do
      liftIO $ putStrLn " Starting program..."
      logStrLn " [kcfa] Starting program..."
@@ -285,9 +296,17 @@ analyse e =  runParIO par
      (benv, store) <- fvStuff (S.toList (fvsCall e)) newStore
      let initState = State e benv store []
      allStates <- explore initState
+     -- logStrLn$ " [kcfa] all states explored: "++show (length allStates)
      finStore <- summarize allStates
+     logStrLn $ "Got back finStore: "++show(unsafeName finStore)
+
+     IM.forEach finStore $ \ k x -> 
+       logStrLn $ "---Member of final store: "++show(doc (k,x))
+     IS.forEach allStates $ \ x -> 
+       logStrLn $ "---Member of allStates: "++show(doc x)
+
      r <- monovariantStore finStore
-     deepFreeze r 
+     return r
 
     
 -- | Get the free vars of an expression 
@@ -366,3 +385,9 @@ runExample example = do
          -- forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
          --   putStrLn (x ++ ":")
          --   mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)
