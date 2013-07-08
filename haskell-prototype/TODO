@@ -19,3 +19,9 @@ Fill out data structure interfaces:
     elements at the outset, before it is exposed for concurrent
     modification.
 
+
+Fixes:
+
+  * modify and insert operations on the same IMap probably should be
+    disqualified at the type level...
+
