@@ -39,6 +39,8 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
+import           System.IO.Unsafe (unsafePerformIO)
+import           System.Mem.StableName (makeStableName, hashStableName)
 
 type QPar = Par QuasiDet 
 
@@ -144,20 +146,23 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
-modify :: forall f a b d s key . (Ord key, LVarData1 f) =>
+modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key) =>
           IMap key s (f s a) -> key -> (f s a -> Par d s b) -> Par d s b
 modify (IMap lv) key fn = WrapPar $ do 
   let ref = state lv      
   mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
-    Just lv2 -> unWrapPar$ fn lv2
+    Just lv2 -> do L.logStrLn$ " [Map.modify] key already present: "++show key++" adding to inner "++show(unsafeName lv2)
+                   unWrapPar$ fn lv2
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
+      L.logStrLn$ " [Map.modify] allocated new inner "++show(unsafeName bot)
       act <- L.liftIO$ atomicModifyIORef ref $ \ mp2 ->
                case M.lookup key mp2 of
                  Just lv2 -> (mp2, unWrapPar$ fn lv2)
                  Nothing  -> (M.insert key bot mp2,
-                              unWrapPar$ fn bot)
+                             do L.logStrLn$ " [Map.modify] key absent, adding the new one."
+                                unWrapPar$ fn bot)
       act
 
 -- | Wait for the map to contain a specified key, and return the associated value.
@@ -298,3 +303,9 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
           fn k elm acc = do elm' <- deepFreeze elm
                             return (M.insert k elm' acc)
       T.traverse deepFreeze x
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)
