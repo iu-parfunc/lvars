@@ -254,10 +254,15 @@ summarize states = do
       logStrLn$ "2 Summarizing store, key "++ show key
       void$ IS.forEach val $ \ elem  -> do
         logStrLn$ "3 Summarizing val: "++ show (doc elem)++" putting in key "++show key 
+#if 1
         IM.modify storeFin key $ \ st -> do
            logStrLn$ "4 callback... inserting element in set: "++
               (show$ unsafeName st)++" map "++show(unsafeName storeFin)
            putInSet elem st
+#else
+        st <- single elem
+        IM.insert key st storeFin
+#endif
   return storeFin
 --    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
