@@ -7,7 +7,17 @@
 --  * It is probably a better strategy to shift the slices around to match number
 --    boundaries than it is to deal with this whole fragments business.  Try that.
 
-module Util.PBBS where 
+module Util.PBBS
+       (
+         -- * PBBS specific
+         readAdjacencyGraph, 
+         
+         -- * Generally useful utilities
+         readNumFile, parReadNats,
+                      
+         -- * Testing
+         t0,t1,t2,t3,t3B,t4,t5
+       ) where 
 
 import Control.DeepSeq
 import Control.Exception (evaluate)
@@ -20,6 +30,7 @@ import Control.Monad.Par.Combinator
 import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (getNumCapabilities)
 import Data.Word
+import Data.Char (isSpace)
 import Data.Maybe (fromJust, maybeToList)
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
@@ -41,6 +52,36 @@ import Test.Framework.Providers.HUnit
 import Test.Framework.TH (defaultMainGenerator)
 
 --------------------------------------------------------------------------------
+-- PBBS specific:
+
+data AdjacencyGraph =
+  AdjacencyGraph {
+    vertOffets :: U.Vector Word, 
+    allEdges   :: U.Vector Word
+  }
+
+-- | Read a PBBS AdjacencyGraph file format.
+readAdjacencyGraph :: String -> IO AdjacencyGraph
+readAdjacencyGraph path = do
+  bs <- fmap (B.dropWhile isSpace) $
+        unsafeMMapFile path
+  let tag = "AdjacencyGraph"      
+  case B.splitAt (B.length tag) bs of
+    (fst, rst) | fst /= tag -> error$ "readAdjacencyGraph: First word in file was not "++B.unpack tag
+               | otherwise -> do                 
+      ls <- parReadNats rst
+      let vec  = U.concat (sewEnds ls)
+          vec' = U.drop 2 vec
+      unless (U.length vec >= 2)$  error "readAdjacencyGraph: file ends prematurely."
+      let verts = fromIntegral$ vec U.! 0
+          edges = fromIntegral$ vec U.! 1
+          v1    = U.take verts vec'
+          v2    = U.take edges vec'
+      if U.length v1 == verts && U.length v2 == edges
+        then return (AdjacencyGraph v1 v2)
+        else error "readAdjacencyGraph: file doesn't contain as many entry as the header claims."
+
+--------------------------------------------------------------------------------
 
 -- How many words shoud go in each continuously allocated vector?
 chunkSize :: Int
@@ -49,6 +90,9 @@ chunkSize = 32768
 -- | How much should we partition a loop beyond what is necessary to have one task
 -- per processor core.
 overPartition = 4
+-- Overpartitioning definitely makes it faster... over 2X faster.
+-- 8 doesn't gain anything over 4 however.. but it may reduce variance.
+-- Hyperthreading shows some benefit!!
 
 --------------------------------------------------------------------------------
 #if 1
@@ -61,6 +105,9 @@ overPartition = 4
 {-# NOINLINE readNatsPartial #-}
 #endif
 
+-- | A simple front-end to 'parReadNats'.  This @mmap@s the file as a byte string and
+-- parses it in parallel.  It returns a list of chunks of arbitrary size that may be
+-- concattenated for a final result.
 readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read nty) =>
                FilePath -> IO [U.Vector nty]
 readNumFile path = do
@@ -83,10 +130,11 @@ testReadNumFile path = do
    else error "Did not match expected!"
   return ls'
 
--- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
--- non-digit characters are treated as separators.
-parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO [PartialNums nty]
--- parReadNats :: S.ByteString -> IO [PartialNums Word]
+-- | Read all the decimal numbers from a Bytestring.  They must be positive integers.
+-- Be warned that this function is very permissive -- all non-digit characters are
+-- treated as separators.
+parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
+               S.ByteString -> IO [PartialNums nty]
 parReadNats bs = do
   ncap <- getNumCapabilities
   par ncap
@@ -98,7 +146,7 @@ parReadNats bs = do
             mapper ind = do
               let howmany = each + if ind==chunks-1 then left else 0
                   mychunk = S.take howmany $ S.drop (ind * each) bs
-              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
+--              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
               partial <- liftIO (readNatsPartial mychunk)
               return [partial]
             reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
@@ -115,7 +163,7 @@ parReadNats bs = do
             sizes = replicate (chunks-1) each ++ [each + left]
         ls <- loop bs sizes []
 #endif
-        putStrLn$ "Finished, got "++show (length ls)++" partial reads of output."
+        -- putStrLn$ "Finished, got "++show (length ls)++" partial reads of output."
         return ls
 
 --------------------------------------------------------------------------------                          
@@ -210,8 +258,7 @@ readNatsPartial bs
       charsTotal = S.length bs
   initV <- M.new (vecSize charsTotal)
   (vs,lfrg) <- scanfwd charsTotal 0 initV [] hd (S.tail bs)
-
-  putStrLn$ " Got back "++show(length vs)++" partial reads"
+  -- putStrLn$ " Got back "++show(length vs)++" partial reads"
   
   -- Once we are done looping we need some logic to figure out the corner cases:
   ----------------------------------------
@@ -231,8 +278,8 @@ readNatsPartial bs
   ---------------------------------------- 
  where
    -- Given the number of characters left, how big of a vector chunk shall we allocate?
-   vecSize n = min chunkSize ((n `quot` 2) + 1) -- At minimum numbers must be one character.
-   -- vecSize n = ((n `quot` 4) + 1) -- Assume at least 3 digit numbers... tunable parameter.
+   -- vecSize n = min chunkSize ((n `quot` 2) + 1) -- At minimum numbers must be one character.
+   vecSize n = ((n `quot` 4) + 1) -- Assume at least 3 digit numbers... tunable parameter.
    
    -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
    --         IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
@@ -304,9 +351,16 @@ t1 :: IO [U.Vector Word]
 -- t1 = testReadNumFile "/tmp/grid_125000"
 t1 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000"
 
-t2 :: IO [U.Vector Word]
-t2 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-
+t2 :: IO ()
+t2 = do t0 <- getCurrentTime
+        ls <- readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+        t1 <- getCurrentTime
+        let v :: U.Vector Word
+            v = U.concat ls
+        putStrLn$ "Resulting vector has length: "++show (U.length v)
+        t2 <- getCurrentTime
+        putStrLn$ "Time parsing/reading "++show (diffUTCTime t1 t0)++" and coalescing "++show(diffUTCTime t2 t1)
+        
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO [PartialNums Word]
 t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
@@ -335,7 +389,15 @@ t4 = do putStrLn$ "Using parReadNats + readFile"
         pns <- parReadNats bs
         consume pns
         return pns
-        
+
+t5 :: IO ()
+t5 = do t0 <- getCurrentTime
+        AdjacencyGraph v1 v2 <- readAdjacencyGraph "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+        t1 <- getCurrentTime
+        putStrLn$ "Read adjacency graph in: "++show (diffUTCTime t1 t0)
+        putStrLn$ " Edges and Verts: "++show (U.length v1, U.length v2)
+        return ()
+
 -- Make sure everything is forced
 consume :: (Show n, M.Unbox n) => [PartialNums n] -> IO ()
 consume x = do
