@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds, BangPatterns #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 
 -- | A counter that contains the maximum value of all puts.
 
@@ -24,6 +25,9 @@ newtype MC = MC Int
 instance JoinSemiLattice MC where 
   join (MC a) (MC b) = MC (a `max` b)
 
+instance BoundedJoinSemiLattice MC where
+  bottom = MC minBound
+
 newMaxCounter :: Int -> Par d s (MaxCounter s)
 newMaxCounter n = newPureLVar (MC n)
 
@@ -37,4 +41,7 @@ freezeMaxCounter :: MaxCounter s -> Par QuasiDet s Int
 freezeMaxCounter lv = do
   MC n <- freezePureLVar lv
   return n
-
+  
+instance DeepFreeze (MaxCounter s) Int where
+  type Session (MaxCounter s) = s
+  deepFreeze = freezeMaxCounter

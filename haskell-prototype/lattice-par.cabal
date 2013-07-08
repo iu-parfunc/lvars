@@ -64,7 +64,8 @@ library
                     Data.LVar.Map
                     Data.LVar.SLSet
                     Data.LVar.SLMap
-
+                    Data.LVar.MaxCounter
+                    Data.LVar.Internal.Pure                    
                     Util.PBBS
   
                     -- These versions are out of date:

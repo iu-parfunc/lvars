@@ -1,9 +1,12 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, ScopedTypeVariables #-}
+
+import Data.Set as Set
 
 import Util.PBBS
 import Control.LVish
 import Control.LVish.Internal
 import Data.LVar.Set as S
+import Data.LVar.MaxCounter as C
 import Data.Traversable as T
 import qualified Data.Vector.Unboxed as U
 
@@ -104,6 +107,12 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
   return st
 --    T.traverse_ (`putInSet` st) (nbrs gr nd)
 
+maxDegree :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
+maxDegree gr component = do
+  mc <- newMaxCounter 0 
+  forEach component $ \ nd ->
+    C.put mc (U.length$ nbrs gr nd)
+  return mc
 
 main = do
 --  gr <- readAdjacencyGraph "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
@@ -116,9 +125,16 @@ main = do
   putStrLn$ "max edge target "++show (U.foldl1 max (allEdges gr))  
   writeFile "/tmp/debug" (show gr)
   putStrLn$ "Dumped parsed graph to /tmp/debug"
-  runParIO$ do
+  
+  -- maxDeg::Int
+  set <- runParThenFreezeIO $ do
     component <- bfs_async gr 0
     liftIO$ putStrLn "Got component..."
-    return ()
+    mc <- maxDegree gr component    
+    -- return mc
+    return component
 
-
+  -- putStrLn$ "Processing finished, max degree was: "++show maxDeg
+  putStrLn$ "Connected component: "++show (set:: Snapshot ISet NodeID)
+  -- putStrLn$ "Connected component: "++show (set::Set.Set NodeID)
+  
