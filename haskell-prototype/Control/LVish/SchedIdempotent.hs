@@ -44,6 +44,7 @@ import           Control.DeepSeq
 import           Control.Applicative
 import           Control.Concurrent.Async as Async
 import           Data.IORef
+import           Data.Atomics
 import           Data.Typeable
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -352,20 +353,42 @@ newPool = mkPar $ \k q -> do
   let hp = HandlerPool cnt bag
   hpMsg " [dbg-lvish] Created new pool" hp
   exec (k hp) q
-  
--- | Special "done" continuation for handler threads
-onFinishHandler :: HandlerPool -> a -> ClosedPar  
-onFinishHandler hp _ = ClosedPar $ \q -> do
+
+data DecStatus = HasDec | HasNotDec
+
+-- | Close a Par task so that it is properly registered with a handler pool
+closeInPool :: HandlerPool -> Par () -> IO ClosedPar
+closeInPool hp c = do
+  decRef <- newIORef HasNotDec      -- in case the thread is duplicated, ensure
+                                    -- that the counter is decremented only once
+                                    -- on termination
   let cnt = numHandlers hp
-  C.dec cnt                 -- record handler completion in pool
-  quiescent <- C.poll cnt   -- check for (transient) quiescence
-  when quiescent $ do       -- wake any threads waiting on quiescence
-    hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
-    let invoke t tok = do
-          B.remove tok
-          Sched.pushWork q t                
-    B.foreach (blockedOnQuiesce hp) invoke
-  sched q
+      
+      tryDecRef = do                -- attempt to claim the role of decrementer
+        ticket <- readForCAS decRef
+        case peekTicket ticket of
+          HasDec    -> return False
+          HasNotDec -> do
+            (firstToDec, _) <- casIORef decRef ticket HasDec
+            return firstToDec
+            
+      onFinishHandler _ = ClosedPar $ \q -> do
+        shouldDec <- tryDecRef      -- are we the first copy of the thread to
+                                    -- terminate?
+        when shouldDec $ do
+          C.dec cnt                 -- record handler completion in pool
+          quiescent <- C.poll cnt   -- check for (transient) quiescence
+          when quiescent $ do       -- wake any threads waiting on quiescence
+            hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
+            let invoke t tok = do
+                  B.remove tok
+                  Sched.pushWork q t                
+            B.foreach (blockedOnQuiesce hp) invoke
+        sched q
+  C.inc $ numHandlers hp            -- record handler invocation in pool
+  return $ close c onFinishHandler  -- close the task with a special "done"
+                                    -- continuation that clears it from the
+                                    -- handler pool
 
 -- | Add a handler to an existing pool
 addHandler :: HandlerPool                 -- ^ pool to enroll in 
@@ -377,15 +400,10 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
   let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          C.inc $ numHandlers hp  -- record handler invocation in pool        
-          
-          -- create callback thread, which is responsible for recording its
-          -- termination in the handler pool
-          Sched.pushWork q $ close cb $ onFinishHandler hp          
-        
+          closed <- closeInPool hp cb
+          Sched.pushWork q closed        
       onUpdate d _ q = spawnWhen (updateThresh d) q
-      onFreeze   _ _ = return ()
-        
+      onFreeze   _ _ = return ()        
   in mkPar $ \k q -> do
     curStatus <- readIORef status 
     case curStatus of
@@ -449,10 +467,10 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
-  C.inc $ numHandlers hp  
+  closed <- closeInPool hp child
   Sched.pushWork q (k ()) -- "Work-first" policy.
-  hpMsg " [dbg-lvish] forkInPool" hp   
-  exec (close child $ onFinishHandler hp) q  
+  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
+  exec closed q  
 
 -- | Perform an IO action
 liftIO :: IO a -> Par a
