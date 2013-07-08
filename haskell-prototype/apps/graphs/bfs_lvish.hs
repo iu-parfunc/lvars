@@ -127,14 +127,19 @@ main = do
   putStrLn$ "Dumped parsed graph to /tmp/debug"
   
   -- maxDeg::Int
-  set <- runParThenFreezeIO $ do
-    component <- bfs_async gr 0
-    liftIO$ putStrLn "Got component..."
-    mc <- maxDegree gr component    
-    -- return mc
-    return component
+  --(maxDeg::Int, set)
+  let par :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
+      par = do component <- bfs_async gr 0
+               liftIO$ putStrLn "Got component..."
+               mc <- maxDegree gr component    
+               -- return mc
+               return (mc,component)
+               -- return component
+  (maxdeg::Int,set) <- runParThenFreezeIO2 par
 
-  -- putStrLn$ "Processing finished, max degree was: "++show maxDeg
+  putStrLn$ "Processing finished, max degree was: "++show maxdeg
   putStrLn$ "Connected component: "++show (set:: Snapshot ISet NodeID)
   -- putStrLn$ "Connected component: "++show (set::Set.Set NodeID)
+  
+  putStrLn$ "Done"
   
