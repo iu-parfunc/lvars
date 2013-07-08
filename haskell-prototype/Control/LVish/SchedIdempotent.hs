@@ -166,6 +166,9 @@ data LVar a d = LVar {
 type LVarID = IORef ()
 newLVID = newIORef ()
 
+type TaskID = IORef ()
+newTaskID = newIORef ()
+
 -- a global ID that is *not* the name of any LVar.  Makes it possible to
 -- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation.
 noName :: LVarID
@@ -353,10 +356,10 @@ newPool = mkPar $ \k q -> do
   exec (k hp) q
   
 -- | Special "done" continuation for handler threads
-onFinishHandler :: HandlerPool -> a -> ClosedPar  
-onFinishHandler hp _ = ClosedPar $ \q -> do
+onFinishHandler :: Int -> HandlerPool -> a -> ClosedPar  
+onFinishHandler uid hp _ = ClosedPar $ \q -> do
   let cnt = numHandlers hp
-  C.dec cnt                 -- record handler completion in pool
+  C.dec cnt uid             -- record handler completion in pool
   quiescent <- C.poll cnt   -- check for (transient) quiescence
   when quiescent $ do       -- wake any threads waiting on quiescence
     hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
@@ -376,11 +379,11 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
   let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          C.inc $ numHandlers hp  -- record handler invocation in pool        
+          id <- C.inc $ numHandlers hp  -- record handler invocation in pool        
           
           -- create callback thread, which is responsible for recording its
           -- termination in the handler pool
-          Sched.pushWork q $ close cb $ onFinishHandler hp          
+          Sched.pushWork q $ close cb $ onFinishHandler id hp
         
       onUpdate d _ q = spawnWhen (updateThresh d) q
       onFreeze   _ _ = return ()
@@ -448,10 +451,10 @@ fork child = mkPar $ \k q -> do
 -- | Fork a child thread in the context of a handler pool
 forkInPool :: HandlerPool -> Par () -> Par ()
 forkInPool hp child = mkPar $ \k q -> do
-  C.inc $ numHandlers hp  
+  id <- C.inc $ numHandlers hp  
   Sched.pushWork q (k ()) -- "Work-first" policy.
   hpMsg " [dbg-lvish] forkInPool" hp   
-  exec (close child $ onFinishHandler hp) q  
+  exec (close child $ onFinishHandler id hp) q  
 
 -- | Perform an IO action
 liftIO :: IO a -> Par a
