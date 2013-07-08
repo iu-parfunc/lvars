@@ -168,9 +168,6 @@ data LVar a d = LVar {
 type LVarID = IORef ()
 newLVID = newIORef ()
 
-type TaskID = IORef ()
-newTaskID = newIORef ()
-
 -- a global ID that is *not* the name of any LVar.  Makes it possible to
 -- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation.
 noName :: LVarID
