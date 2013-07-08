@@ -11,9 +11,12 @@ module Util.PBBS where
 
 import Control.DeepSeq
 import Control.Exception (evaluate)
+import Control.Monad (unless)
+
 import Control.Monad.Par.Class
 import Control.Monad.Par.IO
 import Control.Monad.Par.Combinator
+
 import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (getNumCapabilities)
 import Data.Word
@@ -21,6 +24,7 @@ import Data.Maybe (fromJust, maybeToList)
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.ByteString as S
+import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 
 import Data.Time.Clock
@@ -47,21 +51,38 @@ chunkSize = 32768
 overPartition = 4
 
 --------------------------------------------------------------------------------
-
-
+#if 1
 {-# INLINE readNumFile #-}
-readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty) =>
+{-# INLINE parReadNats #-}
+{-# INLINE readNatsPartial #-}
+#else
+{-# NOINLINE readNumFile #-}
+{-# NOINLINE parReadNats #-}
+{-# NOINLINE readNatsPartial #-}
+#endif
+
+readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read nty) =>
                FilePath -> IO [U.Vector nty]
--- readNumFile :: FilePath -> IO [PartialNums Word]
 readNumFile path = do
   bs <- unsafeMMapFile path
   ls <- parReadNats bs
+  return (sewEnds ls)
+
+testReadNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read nty) =>
+                   FilePath -> IO [U.Vector nty]
+testReadNumFile path = do
+  bs <- unsafeMMapFile path
+  ls <- parReadNats bs
+  consume ls
   let ls' = sewEnds ls
   putStrLn $ "Number of chunks after sewing: "++show (length ls')
-  putStrLn $ "Lengths: "++show (map U.length ls')
+  putStrLn $ "Lengths: "++show (map U.length ls')++" sum "++ show(sum$ map U.length ls')
+  let flat = U.concat ls'
+  if (U.toList flat == map (read . B.unpack) (B.words bs)) 
+   then putStrLn "Sewed version matched expected!!"
+   else error "Did not match expected!"
   return ls'
 
-{-# INLINE parReadNats #-}
 -- | Read all the decimal numbers from a Bytestring.  This is very permissive -- all
 -- non-digit characters are treated as separators.
 parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO [PartialNums nty]
@@ -138,34 +159,33 @@ instance NFData (PartialNums n) where
 -- Sew up a list of ragged-edged fragments into a list of normal vector chunks.
 sewEnds :: (U.Unbox nty, Integral nty, Eq nty) => [PartialNums nty] -> [U.Vector nty]
 sewEnds [] = []
-sewEnds ls =
-  trace "Going into loop..." $ 
-  loop Nothing ls
+sewEnds origls = loop Nothing origls
  where
    loop mleft []     = error "Internal error."
-   loop mleft [last] =
-     trace "loop last" $ 
+   loop mleft [last] = 
      case last of
        Single _                  -> error "sewEnds: Got a MiddleFrag at the END!"
        Compound _ _ (Just _)     -> error "sewEnds: Got a LeftFrag at the END!"
        Compound rf ls Nothing    -> sew mleft rf ls
      
-   loop mleft (Compound rf ls lf : rst) =
-     trace ("loop compound, length rst "++show (length rst))  $
+   loop mleft (Compound rf ls lf : rst) = 
      sew mleft rf ls ++ loop lf rst
 
+   -- TODO: Test this properly... doesn't occur in most files:
    loop mleft (Single (MiddleFrag nd m) : rst) =
-     error "Finishme"
-
+     case mleft of
+       Nothing           -> loop (Just (LeftFrag m)) rst
+       Just (LeftFrag n) -> loop (Just (LeftFrag (shiftCombine n m nd))) rst
+         
    sew mleft rf ls = 
      case (mleft, rf) of
-       (Just (LeftFrag n), Just (RightFrag nd m)) -> let nd' = fromIntegral nd'
-                                                         num = n * (10^nd') + m in
+       (Just (LeftFrag n), Just (RightFrag nd m)) -> let num = shiftCombine n m nd in
                                                      U.singleton num : ls 
        (Just (LeftFrag n), Nothing)               -> U.singleton n   : ls 
        (Nothing, Just (RightFrag _ m))            -> U.singleton m   : ls 
        (Nothing, Nothing)                         ->                   ls 
 
+   shiftCombine n m nd = n * (10 ^ fromIntegral nd) + m
 
 
 --------------------------------------------------------------------------------
@@ -178,7 +198,6 @@ sewEnds ls =
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
 -- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Int] #-}
-{-# INLINE readNatsPartial #-}
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
@@ -277,15 +296,16 @@ runTests = $(defaultMainGenerator)
 
 
 t0 :: IO [U.Vector Word]
--- t0 = readNumFile "/tmp/grid_1000"
-t0 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+-- t0 = testReadNumFile "/tmp/grid_1000"
+-- t0 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+t0 = testReadNumFile "1000_nums"
 
 t1 :: IO [U.Vector Word]
--- t1 = readNumFile "/tmp/grid_125000"
-t1 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000"
+-- t1 = testReadNumFile "/tmp/grid_125000"
+t1 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000"
 
 t2 :: IO [U.Vector Word]
-t2 = readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+t2 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
 
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO [PartialNums Word]
@@ -324,7 +344,7 @@ consume x = do
     mapM_ fn x
   where
   fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
-  fn (Compound _ uvs _) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++">"
+  fn (Compound r uvs l) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++", ends "++show(r,l)++">"
 
 main = t4
 

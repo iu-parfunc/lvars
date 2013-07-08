@@ -25,3 +25,8 @@ unbugged:
 
 small:
 	ghc $(BASICOPTS) PBBS.hs -main-is Util.PBBS.t0 -o small_mmap.exe
+
+
+dbg:
+	ghc $(BASICOPTS)                PBBS.hs -main-is Util.PBBS.t0 -o small_mmap.exe
+	ghc $(BASICOPTS) -osuf=po -prof PBBS.hs -main-is Util.PBBS.t0 -o small_mmap_dbg.exe
