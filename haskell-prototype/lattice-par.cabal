@@ -57,6 +57,7 @@ library
   exposed-modules:
                     Control.LVish
                     Control.LVish.SchedIdempotent
+                    Control.LVish.Internal
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set
@@ -92,12 +93,14 @@ library
 executable kcfa-lvish
     main-is:    apps/cfa/0CFA_lvish.hs
     ghc-options: -O2 -threaded -rtsopts
-    build-depends: mtl
+    build-depends: mtl, GenericPretty, pretty
 --    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par ==0.3.*, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                    monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*
+    if flag(debug)
+      cpp-options: -DDEBUG_LVAR
     if flag(quick)
       buildable: False
 --------------------------------------------------------------------------------

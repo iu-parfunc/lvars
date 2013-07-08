@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- module Apps.CFA.KCFA_LVish
 module Main where
@@ -11,28 +13,32 @@ module Main where
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
 import Control.Monad
+import Control.Exception (evaluate)
+import Control.Concurrent
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.List ((\\))
-
 import Debug.Trace
 
 import Control.LVish
 import Control.LVish.Internal (liftIO)
+-- import Control.LVish.SchedIdempotent (logStrLn)
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
+import Text.PrettyPrint as PP
+import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 
 --------------------------------------------------------------------------------
 
 type Var = String
 type Label = Int
-data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show)
-data Call = Call Label Exp [Exp] deriving (Eq, Ord, Show)
+data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show, Generic)
+data Call = Call Label Exp [Exp]                 deriving (Eq, Ord, Show, Generic)
 
 -- Abstract state space
 data State s = State Call BEnv (Store s) Time
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
 
 -- A binding environment maps variables to addresses
 -- (In Matt's example, this mapped to Addr, but I found this a bit redundant
@@ -51,13 +57,13 @@ type Value = Clo
 -- Closures pair a lambda-term with a binding environment that determines
 -- the values of its free variables
 data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary
-         deriving (Eq, Ord, Show)
+         deriving (Eq, Ord, Show, Generic)
 -- Addresses can point to values in the store. In pure CPS, the only kind of addresses are bindings
 type Addr = Bind
 
 -- A binding is minted each time a variable gets bound to a value
 data Bind = Binding Var Time
-          deriving (Eq, Ord, Show)
+          deriving (Eq, Ord, Show, Generic)
 -- In k-CFA, time is a bounded memory of program history.
 -- In particular, it is the last k call sites through which
 -- the program has traversed.
@@ -77,10 +83,25 @@ instance Ord (State s) where
       then EQ
       else error "Ord State: states are equivalent except for Store... FINISHME"
 
-
 andthen :: Ordering -> Ordering -> Ordering 
 andthen EQ b = b
 andthen a _  = a
+
+instance Out Call
+instance Out Exp
+instance Out Clo
+instance Out Bind
+
+instance Out (M.Map Var Time) where
+  doc = docPrec 0
+  docPrec _ mp = doc (M.toList mp)
+
+instance Out (State s) where
+  doc = docPrec 0
+  docPrec _ (State call benv _str time) = 
+   PP.text "State" <+> doc call 
+                   <+> doc benv 
+                   <+> doc time
 
 --------------------------------------------------------------------------------
 
@@ -122,7 +143,9 @@ single x = do
 --   mutates the set of states (first parameter), adding the new states.
 next :: IS.ISet s (State s) -> State s -> Par d s () -- Next states
 next seen st0@(State (Call l fun args) benv store time)
-  = trace ("next" ++ show st0) $ do
+  =  -- trace ("next " ++ show (doc st0)) $
+  do
+    liftIO $ putStrLn ("next " ++ show (doc st0))
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
 
@@ -154,36 +177,39 @@ next seen st0@(State (Call l fun args) benv store time)
             return ()
           return ()
 
-     -- TODO: arbitrary:          
-                     -- Arbitrary
-                     --   -> [ state'
-                     --      | params <- S.toList (transpose paramss)
-                     --      , param <- params
-                     --      , Just state' <- [escape param store]
-                     --      ]
+        Arbitrary -> do 
+          allParamConfs <- IS.cartesianProds paramss
+          IS.forEach allParamConfs $ \ params -> do
+            forM_ params $ \ param -> do
+              ms <- escape param store
+              case ms of 
+                Just state' -> putInSet state' seen
+                Nothing -> return ()
+          return ()
       return ()
     return ()
 
 storeJoin = error "Shouldn't need storeJoin"
 
-{-
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
--- lambda flow to them, no lambdas, or all lambdas
-escape :: Value -> Store -> Maybe State
-escape Arbitrary                          _     = Nothing -- If an arbitrary value from outside escapes we don't care
-escape HaltClosure                        _     = Nothing
-escape (Closure (_l, formals, call) benv) store = Just (State call (benv `M.union` benv') (store `storeJoin` store') [])
-  where (benv', store') = fvStuff formals
--}
+-- lambda flow to them, no lambdas, or all lambdas 
+escape :: Value -> Store s -> Par d s (Maybe (State s))
+-- If an arbitrary value from outside escapes we don't care:
+escape Arbitrary                          _     = return Nothing 
+escape HaltClosure                        _     = return Nothing
+escape (Closure (_l, formals, call) benv) store = do 
+   (benv', store') <- fvStuff formals store
+   return $ Just $ 
+     (State call (benv `M.union` benv') store' [])
+
 
 -- | Create an environment and store with empty/Arbitrary bindings.
-fvStuff :: [Var] -> Par d s (BEnv, Store s)
-fvStuff xs = do
-  store <- newEmptyMap
+--   Second argument is an output parameter.
+fvStuff :: [Var] -> Store s -> Par d s (BEnv, Store s)
+fvStuff xs store = do
   forM_ xs $ \x -> do
-    set <- single Arbitrary
-    IM.insert (Binding x []) set store
+    IM.modify store (Binding x []) $ putInSet Arbitrary
   return (M.fromList [(x, []) | x <- xs], store)
 
 -- State-space exploration
@@ -192,7 +218,7 @@ fvStuff xs = do
 explore :: State s -> Par d s (IS.ISet s (State s))
 explore initial = do
   allSeen <- newEmptySet
-  liftIO$ putStrLn$ "Kicking off with an initial state: "++show initial
+--  liftIO$ putStrLn$ "Kicking off with an initial state: "++show (doc initial)
   putInSet initial allSeen   
   -- Feedback: recursively feed back new states into allSeen in parallel:
   IS.forEach allSeen (next allSeen)
@@ -243,18 +269,25 @@ monovariantStore store = do
    monovariantValue Arbitrary             = Ref "unknown"
 
 -- | Perform a complete, monovariant analysis.
--- analyse :: Call -> M.Map Var (S.Set Exp)
--- analyse :: Call -> Snapshot (IM.IMap Var) (Snapshot IS.ISet Exp)
-analyse :: Call -> M.Map Var (Snapshot IS.ISet Exp)
-analyse e = res 
+analyse :: Call -> IO (M.Map Var (S.Set Exp))
+-- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
+analyse e =  runParIO par
+  -- do IMapSnap res <- runParIO par
+  --    return res
  where
-   IMapSnap res = runParThenFreeze par
+   -- IMapSnap res = runParThenFreeze par  
+--   par :: Par QuasiDet s (M.Map Var (Snapshot IS.ISet Exp))
+   par :: Par QuasiDet s (M.Map Var (S.Set Exp))
    par = do
-     (benv, store) <- fvStuff (S.toList (fvsCall e))
+     liftIO $ putStrLn " Starting program..."
+     logStrLn " [kcfa] Starting program..."
+     newStore <- newEmptyMap 
+     (benv, store) <- fvStuff (S.toList (fvsCall e)) newStore
      let initState = State e benv store []
      allStates <- explore initState
      finStore <- summarize allStates
-     monovariantStore finStore
+     r <- monovariantStore finStore
+     deepFreeze r 
 
     
 -- | Get the free vars of an expression 
@@ -315,11 +348,21 @@ fvExample =
                    lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
-main = forM_ [fvExample, standardExample] runExample
+-- main = forM_ [fvExample, standardExample] runExample
+main = do
+  runExample standardExample
+  threadDelay (1000 * 1000)
 
 runExample example = do
-  putStrLn "====="
-  forM_ (M.toList (analyse (runUniqM example))) $ \(x, ISetSnap es) -> do
+  mp <- analyse (runUniqM example)
+  let res = M.toList mp
+  len <- evaluate (length res)
+  putStrLn$ "===== #results = "++show len
+--  forM_ res $ \(x, ISetSnap es) -> do
+  forM_ res $ \(x, es) -> do
     putStrLn (x ++ ":")
     mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
+         -- forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
+         --   putStrLn (x ++ ":")
+         --   mapM_ (putStrLn . ("  " ++) . show) (S.toList es)

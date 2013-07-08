@@ -1,5 +1,10 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
+
+module Main where
 
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
@@ -10,15 +15,18 @@ import qualified Data.Set as S
 import Data.List ((\\))
 
 import Debug.Trace
+import Text.PrettyPrint as PP
+import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 
+--------------------------------------------------------------------------------
 
 type Var = String
 type Label = Int
-data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show)
-data Call = Call Label Exp [Exp] deriving (Eq, Ord, Show)
+data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show, Generic)
+data Call = Call Label Exp [Exp]                 deriving (Eq, Ord, Show, Generic)
 
 -- Abstract state space
-data State = State Call BEnv Store Time deriving (Eq, Ord, Show)
+data State = State Call BEnv Store Time          deriving (Eq, Ord, Show, Generic)
 -- A binding environment maps variables to addresses
 -- (In Matt's example, this mapped to Addr, but I found this a bit redundant
 -- since the Var in the Addr can be inferred, so I map straight to Time)
@@ -31,15 +39,38 @@ type Denotable = S.Set Value
 type Value = Clo
 -- Closures pair a lambda-term with a binding environment that determines
 -- the values of its free variables
-data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary deriving (Eq, Ord, Show)
+data Clo = Closure (Label, [Var], Call) BEnv | HaltClosure | Arbitrary deriving (Eq, Ord, Show, Generic)
 -- Addresses can point to values in the store. In pure CPS, the only kind of addresses are bindings
 type Addr = Bind
 -- A binding is minted each time a variable gets bound to a value
-data Bind = Binding Var Time deriving (Eq, Ord, Show)
+data Bind = Binding Var Time                   deriving (Eq, Ord, Show, Generic)
 -- In k-CFA, time is a bounded memory of program history.
 -- In particular, it is the last k call sites through which
 -- the program has traversed.
 type Time = [Label]
+
+instance Out Call
+-- instance Out BEnv
+-- instance Out Store
+instance Out Exp
+instance Out Clo
+instance Out Bind
+
+instance (Out a, Out b) => Out (M.Map a b) where
+  doc = docPrec 0
+  docPrec _ mp = doc (M.toList mp)
+
+instance (Out a) => Out (S.Set a) where
+  doc = docPrec 0
+  docPrec _ st = doc (S.toList st)
+
+instance Out State where
+  doc = docPrec 0
+  docPrec _ (State call benv str time) = 
+   PP.text "State" <+> doc call 
+                   <+> doc benv 
+--                   <+> doc str
+                   <+> doc time
 
 storeInsert :: Addr -> Value -> Store -> Store
 storeInsert a v s = M.insertWith S.union a (S.singleton v) s
@@ -68,7 +99,7 @@ atomEval benv _     (Lam l v c) = S.singleton (Closure (l, v, c) benv)
 
 next :: State -> S.Set State -- Next states
 next s@(State (Call l fun args) benv store time)
-  = trace ("next" ++ show s) $
+  = trace ("next " ++ show (doc s)) $
     S.fromList [ state'
                | clo <- S.toList procs
                , state' <- case clo of
@@ -196,7 +227,8 @@ fvExample =
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
 
-main = forM_ [fvExample, standardExample] $ \example -> do
+-- main = forM_ [fvExample, standardExample] $ \example -> do
+main = forM_ [standardExample] $ \example -> do
          putStrLn "====="
          forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
            putStrLn (x ++ ":")
