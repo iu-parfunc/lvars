@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- | Utilities for reading PBBS data files, etc.
@@ -10,7 +11,8 @@
 module Util.PBBS
        (
          -- * PBBS specific
-         readAdjacencyGraph, 
+         readAdjacencyGraph,
+         AdjacencyGraph(..), NodeID, nbrs,
          
          -- * Generally useful utilities
          readNumFile, parReadNats,
@@ -59,6 +61,15 @@ data AdjacencyGraph =
     vertOffets :: U.Vector Word, 
     allEdges   :: U.Vector Word
   }
+
+nbrs :: AdjacencyGraph -> NodeID -> U.Vector NodeID
+nbrs AdjacencyGraph{vertOffets, allEdges} nid = 
+  let ind = vertOffets U.! (fromIntegral nid)
+      nxt = vertOffets U.! (fromIntegral (nid+1))
+  in U.take (fromIntegral$ nxt-ind) $
+     U.drop (fromIntegral ind) allEdges
+
+type NodeID = Word
 
 -- | Read a PBBS AdjacencyGraph file format.
 readAdjacencyGraph :: String -> IO AdjacencyGraph
