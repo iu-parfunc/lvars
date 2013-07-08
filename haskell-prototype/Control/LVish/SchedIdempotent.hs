@@ -80,11 +80,12 @@ logStrLn  :: String -> Par ()
 logStrLn_ :: String -> IO ()
 logLnAt_ :: Int -> String -> IO ()
 #ifdef DEBUG_LVAR
+#warning "Compiling in LVish DEBUG mode."
 logStrLn = liftIO . logStrLn_
 logStrLn_ s = logLnAt_ 1 s
-logLnAt_ lvl s = 
-  when (dbgLvl >= lvl) $ 
-   atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+logLnAt_ lvl s | dbgLvl >= 5   = putStrLn s
+               | dbgLvl >= lvl = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
+               | otherwise     = return ()
 #else 
 logStrLn _  = return ()
 logStrLn_ _ = return ()
@@ -98,7 +99,6 @@ printLog :: IO ()
 printLog = do
   -- Clear the log when we read it:
   lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
-  -- mapM_ (hPutStrLn stderr) $ reverse lines
   mapM_ putStrLn $ reverse lines  
   
 printLogThread :: IO (IO ())
@@ -117,9 +117,11 @@ printLogThread = do
      threadDelay (200 * 1000)
      loop
 
+{-# NOINLINE theEnv #-}
 theEnv :: [(String, String)]
 theEnv = unsafePerformIO getEnvironment
 
+{-# NOINLINE dbgLvl #-}
 -- | Debugging flag shared by several modules.
 --   This is activated by setting the environment variable DEBUG=1..5
 dbgLvl :: Int
@@ -128,9 +130,8 @@ dbgLvl = case lookup "DEBUG" theEnv of
        Just ""  -> defaultDbg
        Just "0" -> defaultDbg
        Just s   ->
-         trace (" [!] Responding to env Var: DEBUG="++s)$
          case reads s of
-           ((n,_):_) -> n
+           ((n,_):_) -> trace (" [!] Responding to env Var: DEBUG="++show n) n
            [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
 
 defaultDbg :: Int

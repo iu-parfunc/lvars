@@ -14,6 +14,7 @@ import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
 import Control.Monad
 import Control.Exception (evaluate)
+import Control.Concurrent
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -22,6 +23,7 @@ import Debug.Trace
 
 import Control.LVish
 import Control.LVish.Internal (liftIO)
+-- import Control.LVish.SchedIdempotent (logStrLn)
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
 import Text.PrettyPrint as PP
@@ -267,19 +269,25 @@ monovariantStore store = do
    monovariantValue Arbitrary             = Ref "unknown"
 
 -- | Perform a complete, monovariant analysis.
--- analyse :: Call -> M.Map Var (S.Set Exp)
--- analyse :: Call -> Snapshot (IM.IMap Var) (Snapshot IS.ISet Exp)
-analyse :: Call -> M.Map Var (Snapshot IS.ISet Exp)
-analyse e = res 
+analyse :: Call -> IO (M.Map Var (S.Set Exp))
+-- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
+analyse e =  runParIO par
+  -- do IMapSnap res <- runParIO par
+  --    return res
  where
-   IMapSnap res = runParThenFreeze par
+   -- IMapSnap res = runParThenFreeze par  
+--   par :: Par QuasiDet s (M.Map Var (Snapshot IS.ISet Exp))
+   par :: Par QuasiDet s (M.Map Var (S.Set Exp))
    par = do
+     liftIO $ putStrLn " Starting program..."
+     logStrLn " [kcfa] Starting program..."
      newStore <- newEmptyMap 
      (benv, store) <- fvStuff (S.toList (fvsCall e)) newStore
      let initState = State e benv store []
      allStates <- explore initState
      finStore <- summarize allStates
-     monovariantStore finStore
+     r <- monovariantStore finStore
+     deepFreeze r 
 
     
 -- | Get the free vars of an expression 
@@ -341,13 +349,17 @@ fvExample =
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
 -- main = forM_ [fvExample, standardExample] runExample
-main = runExample standardExample
+main = do
+  runExample standardExample
+  threadDelay (1000 * 1000)
 
 runExample example = do
-  let res = M.toList (analyse (runUniqM example))
+  mp <- analyse (runUniqM example)
+  let res = M.toList mp
   len <- evaluate (length res)
   putStrLn$ "===== #results = "++show len
-  forM_ res $ \(x, ISetSnap es) -> do
+--  forM_ res $ \(x, ISetSnap es) -> do
+  forM_ res $ \(x, es) -> do
     putStrLn (x ++ ":")
     mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
