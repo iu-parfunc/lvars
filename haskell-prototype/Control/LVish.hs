@@ -120,7 +120,7 @@ class LVarData1 (f :: * -> * -> *) where
   traverseSnap :: (a -> Par d s b) -> Snapshot f a -> Par d s (Snapshot f b)
   -- TODO: use constraint kinds to constrain 'b'.
 
-  foldSnap :: (a -> b -> Par d s b) -> b -> f s a -> Par d s b
+  -- foldSnap :: (a -> b -> Par d s b) -> b -> f s a -> Par d s b
 
   -- What else?
   -- Merge op?

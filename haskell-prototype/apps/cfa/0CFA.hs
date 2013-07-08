@@ -196,7 +196,8 @@ fvExample =
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
 
-main = forM_ [fvExample, standardExample] $ \example -> do
+-- main = forM_ [fvExample, standardExample] $ \example -> do
+main = forM_ [standardExample] $ \example -> do
          putStrLn "====="
          forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
            putStrLn (x ++ ":")

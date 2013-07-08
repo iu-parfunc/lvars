@@ -60,6 +60,9 @@ instance LVarData1 (IMap k) where
   freeze    = fmap IMapSnap . freezeMap
   newBottom = newEmptyMap
 
+  traverseSnap fn (IMapSnap mp) = 
+    fmap IMapSnap $ T.traverse fn mp 
+
 --------------------------------------------------------------------------------
 
 -- | Create a fresh map with nothing in it.
