@@ -256,7 +256,7 @@
        ;; N.B.: If we haven't done any writes to an LVar yet (i.e.,
        ;; its value is Bot), then the callback must still run once, to
        ;; add Bot to the `handled` set.  Only then will the premises
-       ;; of E-Finalize-Freeze be satisfied, allowing it to run.
+       ;; of E-Freeze-Final be satisfied, allowing it to run.
        (--> (S (in-hole E (freeze l after Q with ((callback (lambda (x) e))
                                                   (running (v (... ...)))
                                                   (handled H)))))
