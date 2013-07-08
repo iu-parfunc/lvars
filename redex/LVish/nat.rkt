@@ -747,7 +747,7 @@
                (() ;; empty store
                 (let ((x_1 new))
                   (let ((x_2 new))
-                    (let ((x_3 (freeze (lambda (x) x) x_2)))
+                    (let ((x_3 (freeze ((lambda (x) x) x_2))))
                       x_3)))))
               (term
                (((l (Bot #f))
