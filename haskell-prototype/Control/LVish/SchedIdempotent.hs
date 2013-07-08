@@ -33,7 +33,7 @@ module Control.LVish.SchedIdempotent
     logStrLn, dbgLvl,
        
     -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
-    newLV, getLV, putLV, freezeLV, freezeLVAfter,
+    newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
     addHandler, liftIO, toss
   ) where
 
@@ -314,21 +314,30 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q ->
 
 
 -- | Update an LVar
-putLV :: LVar a d            -- ^ the LVar
-      -> (a -> IO (Maybe d)) -- ^ how to do the put, and whether the LVar's
-                             -- value changed
-      -> Par ()
-putLV LVar {state, status, name} doPut = mkPar $ \k q -> do  
+putLV_ :: LVar a d                 -- ^ the LVar
+       -> (a -> Par (Maybe d, b))  -- ^ how to do the put and whether the LVar's
+                                   -- value changed
+       -> Par b
+putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do  
   Sched.setStatus q name         -- publish our intent to modify the LVar
-  delta <- doPut state           -- possibly modify the LVar
-  curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
-  Sched.setStatus q noName       -- retract our modification intent
-  whenJust delta $ \d -> do
-    case curStatus of
-      Frozen -> error "Attempt to change a frozen LVar"
-      Active listeners -> 
-        B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-  exec (k ()) q
+  let cont (delta, ret) = ClosedPar $ \q -> do
+        curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
+        Sched.setStatus q noName       -- retract our modification intent
+        whenJust delta $ \d -> do
+          case curStatus of
+            Frozen -> error "Attempt to change a frozen LVar"
+            Active listeners -> 
+              B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
+        exec (k ret) q        
+  exec (close (doPut state) cont) q            -- possibly modify the LVar  
+  
+-- | Update an LVar without generating a result.  
+putLV :: LVar a d             -- ^ the LVar
+      -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
+                               -- value changed
+      -> Par ()
+putLV lv doPut = putLV_ lv doPut'
+  where doPut' a = do r <- liftIO (doPut a); return (r, ())
 
 -- | Freeze an LVar (limited nondeterminism)
 --   It is the data-structure implementors responsibility to expose this as qasi-deterministc.

@@ -86,8 +86,10 @@ newSet s = error "TODO"
 
 -- | Create a new 'ISet' drawing initial elements from an existing list.
 newFromList :: Ord a => [a] -> Par d s (ISet s a)
-newFromList ls = newSet (S.fromList ls)
+newFromList ls = newFromList_ ls defaultLevels
 
+-- | Create a new 'ISet' drawing initial elements from an existing list, with
+-- the given number of skiplist levels.
 newFromList_ :: Ord a => [a] -> Int -> Par d s (ISet s a)
 newFromList_ ls n = do  
   s@(ISet lv) <- newEmptySet_ n
@@ -137,9 +139,9 @@ withCallbacksThenFreeze (ISet lv) callback action = do
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 freezeSet :: Ord a => ISet s a -> QPar s (S.Set a)
-freezeSet (ISet lv) = WrapPar $ 
-   do freezeLV (unWrapLVar lv)
-      L.liftIO $ SLM.foldlWithKey (\s elm () -> return $ S.insert elm s) S.empty (state lv)
+freezeSet (ISet (WrapLVar lv)) = WrapPar $ do
+  freezeLV lv
+  L.liftIO $ SLM.foldlWithKey (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
 
 --------------------------------------------------------------------------------
 
@@ -171,8 +173,8 @@ putInSet !elm (ISet lv) = WrapPar$ putLV (unWrapLVar lv) putter
 
 -- | Wait for the set to contain a specified element.
 waitElem :: Ord a => a -> ISet s a -> Par d s ()
-waitElem !elm (ISet lv) = WrapPar $
-    getLV (unWrapLVar lv) globalThresh deltaThresh
+waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
+    getLV lv globalThresh deltaThresh
   where
     globalThresh slm _frzn = SLM.find slm elm
     deltaThresh e2 | e2 == elm = return $ Just ()
@@ -180,8 +182,8 @@ waitElem !elm (ISet lv) = WrapPar $
 
 -- | Wait on the SIZE of the set, not its contents.
 waitSize :: Int -> ISet s a -> Par d s ()
-waitSize !sz (ISet lv) = WrapPar$
-    getLV (unWrapLVar lv) globalThresh deltaThresh
+waitSize !sz (ISet (WrapLVar lv)) = WrapPar$
+    getLV lv globalThresh deltaThresh
   where
     globalThresh slm _ = do
       snapSize <- SLM.foldlWithKey (\n _ _ -> return $ n+1) 0 slm
@@ -190,7 +192,7 @@ waitSize !sz (ISet lv) = WrapPar$
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
     -- the threshold.a
-    deltaThresh _ = globalThresh (state lv) False
+    deltaThresh _ = globalThresh (L.state lv) False
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could be defined using the above interface.

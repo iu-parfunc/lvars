@@ -14,6 +14,7 @@ module Control.LVish.Internal
   where
 
 import           Control.Monad.IO.Class
+import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
 
@@ -49,3 +50,5 @@ unsafeConvert (WrapPar p) = (WrapPar p)
 instance MonadIO (Par d s) where
   liftIO = WrapPar . L.liftIO   
 
+instance MonadToss (Par d s) where
+  toss = WrapPar L.toss

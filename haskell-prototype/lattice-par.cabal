@@ -61,8 +61,9 @@ library
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set
-                    Data.LVar.SLSet
                     Data.LVar.Map
+                    Data.LVar.SLSet
+                    Data.LVar.SLMap
 
                     Util.PBBS
   
