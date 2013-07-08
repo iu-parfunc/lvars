@@ -2,6 +2,7 @@
 
 import Util.PBBS
 import Control.LVish
+import Control.LVish.Internal
 import Data.LVar.Set as S
 import Data.Traversable as T
 import qualified Data.Vector.Unboxed as U
@@ -98,8 +99,26 @@ bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
   forEach st $ \ nd -> do
+    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
     U.forM_ (nbrs gr nd) (`putInSet` st)
   return st
 --    T.traverse_ (`putInSet` st) (nbrs gr nd)
-main = putStrLn "hello"
+
+
+main = do
+--  gr <- readAdjacencyGraph "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+  let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+  putStrLn$ "Reading file: "++file
+  gr <- readAdjacencyGraph file
+  putStrLn$ "graph read: verts,edges: "++show (U.length (vertOffets gr), U.length (allEdges gr))
+
+  putStrLn$ "max vert off "++show (U.foldl1 max (vertOffets gr))
+  putStrLn$ "max edge target "++show (U.foldl1 max (allEdges gr))  
+  writeFile "/tmp/debug" (show gr)
+  putStrLn$ "Dumped parsed graph to /tmp/debug"
+  runParIO$ do
+    component <- bfs_async gr 0
+    liftIO$ putStrLn "Got component..."
+    return ()
+
 

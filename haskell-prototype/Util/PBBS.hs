@@ -61,13 +61,16 @@ data AdjacencyGraph =
     vertOffets :: U.Vector Word, 
     allEdges   :: U.Vector Word
   }
+ deriving (Read,Show,Eq,Ord)
 
 nbrs :: AdjacencyGraph -> NodeID -> U.Vector NodeID
 nbrs AdjacencyGraph{vertOffets, allEdges} nid = 
-  let ind = vertOffets U.! (fromIntegral nid)
-      nxt = vertOffets U.! (fromIntegral (nid+1))
-  in U.take (fromIntegral$ nxt-ind) $
-     U.drop (fromIntegral ind) allEdges
+    let ind = vertOffets U.! (fromIntegral nid)
+        nxt = vertOffets U.! (fromIntegral (nid+1))
+        suff = U.drop (fromIntegral ind) allEdges in
+    if fromIntegral nid == U.length vertOffets - 1
+    then suff 
+    else U.take (fromIntegral$ nxt-ind) suff
 
 type NodeID = Word
 
@@ -84,10 +87,9 @@ readAdjacencyGraph path = do
       let vec  = U.concat (sewEnds ls)
           vec' = U.drop 2 vec
       unless (U.length vec >= 2)$  error "readAdjacencyGraph: file ends prematurely."
-      let verts = fromIntegral$ vec U.! 0
-          edges = fromIntegral$ vec U.! 1
-          v1    = U.take verts vec'
-          v2    = U.take edges vec'
+      let verts   = fromIntegral$ vec U.! 0
+          edges   = fromIntegral$ vec U.! 1
+          (v1,v2) = U.splitAt verts vec'
       if U.length v1 == verts && U.length v2 == edges
         then return (AdjacencyGraph v1 v2)
         else error "readAdjacencyGraph: file doesn't contain as many entry as the header claims."
