@@ -3,7 +3,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await
+  State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
@@ -14,6 +14,7 @@ import Control.DeepSeq
 import Control.Applicative
 import Data.IORef 
 import GHC.Conc
+import System.Random (StdGen, mkStdGen)
 
 ------------------------------------------------------------------------------
 -- A nonscalable deque for work-stealing
@@ -50,26 +51,13 @@ popOther = popMine
 -- All the state relevant to a single worker thread
 data State a s = State
     { no       :: {-# UNPACK #-} !Int,
+      prng     :: IORef StdGen,      -- core-local random number generation
       status   :: IORef s,
       workpool :: IORef [a],         
       idle     :: IORef [MVar Bool], -- global list of idle workers
-      states   :: [State a s],       -- global list of all worker states.
-      
-      -- pad out to 64 bytes to avoid false sharing (assuming 4 byte words and
-      -- 64 byte cachelines)
-      pad4_1 :: {-# UNPACK #-} !Padding,
-      pad4_2 :: {-# UNPACK #-} !Padding,
-      pad4_3 :: {-# UNPACK #-} !Padding
+      states   :: [State a s]        -- global list of all worker states.
     }
     
-data Padding = Padding {    
-  pad1 :: {-# UNPACK #-} !Int,
-  pad2 :: {-# UNPACK #-} !Int,
-  pad3 :: {-# UNPACK #-} !Int,
-  pad4 :: {-# UNPACK #-} !Int  
-}
-padding = Padding { pad1=0, pad2=0, pad3=0, pad4=0 }
-
 -- | Process the next item on the work queue or, failing that, go into
 -- work-stealing mode.
 {-# INLINE next #-}
@@ -137,8 +125,8 @@ new n s = do
   let mkState states i = do 
         workpool <- newIORef []
         status   <- newIORef s
-        return State { no = i, workpool, idle, status, states, 
-                       pad4_1 = padding, pad4_2 = padding, pad4_3 = padding }
+        prng     <- newIORef $ mkStdGen i
+        return State { no = i, workpool, idle, status, states, prng }
   rec states <- forM [0..(n-1)] $ mkState states
   return states
 
