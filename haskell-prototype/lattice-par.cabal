@@ -84,7 +84,7 @@ library
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                 monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                 monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
                  atomic-primops, hashable, transformers, random
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
@@ -103,7 +103,7 @@ executable kcfa-lvish
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                   monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
                    atomic-primops, hashable, transformers, random
     if flag(debug)
       cpp-options: -DDEBUG_LVAR
@@ -119,7 +119,7 @@ test-suite test-lvish
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                   monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
                    atomic-primops, hashable, transformers, random, primitive
     if flag(debug)
        cpp-options: -DDEBUG_LVAR
@@ -133,7 +133,7 @@ test-suite test-old-lvarpure
     -- DUPLICATED:
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                   monad-par ==0.3.*, monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
+                   monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
                    atomic-primops, hashable, transformers, random, primitive
     cpp-options: -DLVARPURE
     if flag(quick)

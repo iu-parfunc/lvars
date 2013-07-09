@@ -79,7 +79,7 @@ instance LVarData1 PureLVar where
 --newBottom :: forall (d :: Determinism) s1 a. Par d s1 (IVar s a)
   newBottom :: -- BoundedJoinSemiLattice a =>
                Par d s (PureLVar s a)
-  newBottom = undefined -- newPureLVar undefined
+  newBottom = error "Pure.hs - FINISHME"  -- newPureLVar bottom
   -- FIXME -- constraint kinds...
   
   traverseSnap f (PureSnap x) = fmap PureSnap (f x)

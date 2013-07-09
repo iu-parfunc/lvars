@@ -26,10 +26,15 @@ import Control.Exception (evaluate)
 import Control.Monad (unless)
 
 import Control.Monad.Par.Class
-import Control.Monad.Par.IO
+-- import Control.Monad.Par.IO
 import Control.Monad.Par.Combinator
+import Control.LVish as LV
+-- import qualified Control.LVish.Internal as LI
+import Control.LVish.Internal (liftIO)
 
-import Control.Monad.IO.Class (liftIO)
+import qualified Data.LVar.IVar as I
+
+-- import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (getNumCapabilities)
 import Data.Word
 import Data.Char (isSpace)
@@ -152,10 +157,10 @@ parReadNats bs = do
   ncap <- getNumCapabilities
   par ncap
  where
-   par ncap = do 
+   par ncap = do        
         let chunks = ncap * overPartition
             (each,left) = S.length bs `quotRem` chunks
-#if 1
+
             mapper ind = do
               let howmany = each + if ind==chunks-1 then left else 0
                   mychunk = S.take howmany $ S.drop (ind * each) bs
@@ -163,19 +168,15 @@ parReadNats bs = do
               partial <- liftIO (readNatsPartial mychunk)
               return [partial]
             reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
-        ls <- runParIO $                   
-          parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
-                                     mapper reducer []
-#else
-        let loop bs [] acc = concatMapM wait (reverse acc)
-            loop bs (sz:rst) acc = do 
-               let (bs1,bs2) = S.splitAt sz bs
-               putStrLn$ "(async) Launching chunk of "++show sz
-               fut <- async (readNatsPartial bs1)
-               loop bs2 rst (fut:acc)
-            sizes = replicate (chunks-1) each ++ [each + left]
-        ls <- loop bs sizes []
-#endif
+
+            par :: LV.Par d s [PartialNums nty]
+            par = do _ <- if False
+                          then new    -- Fix IVar type, ugh.
+                          else I.new  -- Should be a better way...
+                     parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
+                                          mapper reducer []              
+        ls <- LV.runParIO par
+          
         -- putStrLn$ "Finished, got "++show (length ls)++" partial reads of output."
         return ls
 
