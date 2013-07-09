@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 
 import Data.Set as Set
 
@@ -6,6 +7,7 @@ import Util.PBBS
 import Control.LVish
 import Control.LVish.Internal
 import Control.Monad
+import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
 
 import Data.Word
 import Data.LVar.MaxCounter as C
@@ -150,10 +152,10 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+       -- logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
-  logStrLn $" [bfs] Seeding with start vertex... "
+  -- logStrLn $" [bfs] Seeding with start vertex... "
   NArr.put arr (fromIntegral start) 1
   return arr
 
@@ -174,16 +176,44 @@ flag_NBRCHOSEN = 2
 
 -- | Uses a notion of priority writes.
 -- maximalIndependentSet :: ISet s NodeID -> Par d s (ISet s NodeID)  -- Operate on a subgraph
-maximalIndependentSet :: AdjacencyGraph -> Par d s (ISet s NodeID) -- Operate on a whole graph.
-maximalIndependentSet = loop 0
-  where
-    loop self = do
-      let flag = undefined
-      prioWrite self flag
-      undefined
+-- maximalIndependentSet :: AdjacencyGraph -> Par d s (ISet s NodeID) -- Operate on a whole graph.
+maximalIndependentSet :: AdjacencyGraph -> Par d s (NatArray s Word8) -- Operate on a whole graph.
+maximalIndependentSet gr@(AdjacencyGraph vvec evec) = do
+  logStrLn$ " [MIS] Beginning maximalIndependentSet "
+  -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
+  let numVerts = U.length vvec
+  flagsArr :: NatArray s Word8 <- newNatArray numVerts
+  let       
+      -- Here's the loop that scans through the neighbors of a node.
+      loop !numNbrs !nbrs !selfInd !i 
+        | i == numNbrs = thisNodeWins
+        | otherwise = do
+          logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          let nbrInd = fromIntegral$ nbrs U.! i
+              nbr    = vvec U.! nbrInd
+              selfInd' = fromIntegral selfInd
+          -- If we got to the end of the neighbors below us, then we are NOT disqualified:
+          if nbrInd > selfInd
+            then thisNodeWins
+            else do
+              -- This should never block in a single-thread execution:
+              logStrLn (" [MIS] ! Blocking on: "++show nbr)
+              nbrFlag <- NArr.get flagsArr (fromIntegral nbr)
+              if nbrFlag == flag_CHOSEN
+                then NArr.put flagsArr selfInd' flag_NBRCHOSEN
+                else loop numNbrs nbrs selfInd (i+1)
+        where
+          thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
+                         NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
+  -- FIXME: Need a front-biased traversal strategy.
+  -- parFor (InclusiveRange 0 (numVerts-1)) $ \ ndIx -> do
+  lameFor 0 numVerts $ \ ndIx -> do          
+    let nds = nbrs gr (fromIntegral ndIx)
+    logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+    loop (U.length nds) nds ndIx  0
+  return flagsArr
 
-    prioWrite = undefined
-    
+  
 -- need to compute a fold over neighbors... some of which are bottom
 -- if any neighbors are less than us and decided, we commit too..
 
@@ -201,6 +231,19 @@ forVec vec fn = loop 0
     loop i | i == len = return ()
            | otherwise = fn (U.unsafeIndex vec i) >>
                          loop (i+1)
+
+-- My own forM for numeric ranges (not requiring deforestation optimizations).
+-- Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
+for_ start end _fn | start > end = error "for_: start is greater than end"
+for_ start end fn = loop start
+  where
+   loop !i | i == end  = return ()
+	   | otherwise = do fn i; loop (i+1)
+
+lameFor start end fn = for_ start end $ \i -> fork (fn i)
+
 
 --------------------------------------------------------------------------------
 -- Main Program
@@ -290,6 +333,13 @@ main = do
                 par4 = bfs_async_arr2 gr 0
             --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
             _ <- runParIO_ par4
+            return ()
+
+    ----------------------------------------
+    5 -> do putStrLn " ! Version 4: MIS only, with NatArrays "
+            let par :: Par d0 s0 (NatArray s0 Word8)
+                par = maximalIndependentSet gr
+            _ <- runParIO_ par
             return ()
 
 
