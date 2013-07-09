@@ -20,7 +20,7 @@
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
-  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, foldlWithKey)
+  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts)
 where
   
 import System.Random  
@@ -95,21 +95,33 @@ putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
                m v ->           -- ^ A computation of the value to insert
                m (PutResult v)
 putIfAbsent (SLMap slm _) k vc = 
-  putIfAbsent_ slm Nothing k vc $ \_ _ -> return ()
-
+  putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
+                                          
+-- | Adds a key/value pair if the key is not present, all within a given monad.
+-- Returns the value now associated with the key in the map.
+putIfAbsentToss :: (Ord k, MonadIO m) => 
+                   SLMap k v ->     -- ^ The map
+                   k ->             -- ^ The key to lookup/insert
+                   m v ->           -- ^ A computation of the value to insert
+                   m Bool ->        -- ^ An explicit, thread-local coin to toss
+                   m (PutResult v)
+putIfAbsentToss (SLMap slm _) k vc coin = 
+  putIfAbsent_ slm Nothing k vc coin $ \_ _ -> return () 
+                                               
 -- Helper for putIfAbsent
-putIfAbsent_ :: (Ord k, MonadIO m, MonadToss m) => 
+putIfAbsent_ :: (Ord k, MonadIO m) => 
                 SLMap_ k v t -> -- ^ The map    
                 Maybe t ->      -- ^ A shortcut into this skiplist level
                 k ->            -- ^ The key to lookup/insert
-                m v ->          -- A computation of the value to insert
+                m v ->          -- ^ A computation of the value to insert
+                m Bool ->       -- ^ A (thread-local) coin tosser
                 (t -> v -> m ()) ->    -- A thunk for inserting into the higher
                                        -- levels of the skiplist
                 m (PutResult v)
                 
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap
-putIfAbsent_ (Bottom m) shortcut k vc install = retryLoop vc where 
+putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where 
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (maybe m id shortcut) k
@@ -126,13 +138,13 @@ putIfAbsent_ (Bottom m) shortcut k vc install = retryLoop vc where
           
 -- At an index level; try to shortcut into the level below, while remembering
 -- where we were so that we can insert index nodes later on
-putIfAbsent_ (Index m slm) shortcut k vc install = do          
+putIfAbsent_ (Index m slm) shortcut k vc coin install = do          
   searchResult <- liftIO $ LM.find (maybe m id shortcut) k
   case searchResult of 
     LM.Found (_, v) -> return $ Found v -- key is in the index; bail out
     LM.NotFound tok -> 
       let install' mBelow v = do        -- to add an index node here,
-            shouldAdd <- toss           -- first, see if we (probabilistically) should
+            shouldAdd <- coin           -- first, see if we (probabilistically) should
             when shouldAdd $ do 
               maybeHere <- liftIO $ LM.tryInsert tok (mBelow, v)  -- then, try it!
               case maybeHere of
@@ -141,11 +153,24 @@ putIfAbsent_ (Index m slm) shortcut k vc install = do
                               
                 Nothing -> return ()    -- otherwise, oh well; we tried.
       in case LM.value tok of
-        Just (m', _) -> putIfAbsent_ slm (Just m') k vc install'
-        Nothing      -> putIfAbsent_ slm Nothing   k vc install'
+        Just (m', _) -> putIfAbsent_ slm (Just m') k vc coin install'
+        Nothing      -> putIfAbsent_ slm Nothing   k vc coin install'
 
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
 foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> SLMap k v -> m a
 foldlWithKey f a (SLMap _ lm) = LM.foldlWithKey f a lm
+
+-- | Returns the sizes of the skiplist levels; for performance debugging.
+counts :: SLMap k v -> IO [Int]
+counts (SLMap slm _) = counts_ slm
+
+counts_ :: SLMap_ k v t -> IO [Int]
+counts_ (Bottom m)    = do
+  c <- LM.foldlWithKey (\n _ _ -> return (n+1)) 0 m
+  return [c]
+counts_ (Index m slm) = do
+  c  <- LM.foldlWithKey (\n _ _ -> return (n+1)) 0 m
+  cs <- counts_ slm
+  return $ c:cs

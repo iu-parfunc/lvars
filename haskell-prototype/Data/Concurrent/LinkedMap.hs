@@ -51,6 +51,7 @@ data FindResult k v =
   | NotFound (Token k v)
 
 -- | Attempt to locate a key in the map
+{-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
 find m k = findInner m Nothing 
   where 
@@ -67,7 +68,8 @@ find m k = findInner m Nothing
       
 -- | Attempt to insert a key/value pair at the given location (where the key is
 -- given by the token).  NB: tryInsert will *always* fail after the first attempt.
--- If successful, returns a (mutable!) view of the map beginning at the given key.
+-- If successful, returns a (mutable!) view of the map beginning at the given key.            
+{-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   newRef <- newIORef $ peekTicket nextTicket
@@ -84,4 +86,4 @@ foldlWithKey f a m = do
     Empty -> return a
     Node k v next -> do
       a' <- f a k v
-      foldlWithKey f a' m
+      foldlWithKey f a' next

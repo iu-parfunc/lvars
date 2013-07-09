@@ -548,14 +548,22 @@ case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "He
 
 slm2 :: IO Bool
 slm2 = do
-  slm <- SLM.newSLMap 8
+  slm <- SLM.newSLMap 10
   mvars <- replicateM numCapabilities $ do
     mv <- newEmptyMVar
     forkWithExceptions forkIO "slm2 test thread" $ do
-      nTimes 10000 $ \n -> SLM.putIfAbsent slm n $ return n
+      rgen <- newIORef $ mkStdGen 0
+      let flip = do
+            g <- readIORef rgen
+            let (b, g') = random g
+            writeIORef rgen $! g'
+            return b
+      nTimes 10000 $ \n -> SLM.putIfAbsentToss slm n (return n) flip
       putMVar mv ()
     return mv  
   forM_ mvars takeMVar
+  -- cs <- SLM.counts slm
+  -- putStrLn $ show cs
   SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n
