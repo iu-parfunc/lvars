@@ -106,12 +106,14 @@ put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 
 #ifdef VERSION_abstract_par
-#if MIN_VERSION_abstract_par(0,4,0)
-instance PC.ParFuture IVar Par where
+#if 1
+  -- MIN_VERSION_abstract_par(0,4,0)
+#warning "Using the latest version of abstract par to activate ParFuture/IVar instances."
+instance PC.ParFuture (IVar s) (Par d s) where
   spawn_ = spawn_
   get = get
 
-instance PC.ParIVar IVar Par where
+instance PC.ParIVar (IVar s) (Par d s) where
   fork = fork  
   put_ = put_
   new = new

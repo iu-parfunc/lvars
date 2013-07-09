@@ -12,8 +12,7 @@
 module Data.LVar.SLSet
        (
          -- * Basic operations
-         ISet, 
---         Snapshot(ISetSnap),
+         ISet, Snapshot(ISetSnap),
          newEmptySet, newSet, newFromList,
          putInSet, waitElem, waitSize, 
 
@@ -58,12 +57,16 @@ instance Eq (ISet s v) where
   
 -- AJT: I'm not sure what to do with the following, given that freezeSet needs
 -- an Ord contraint...
-  
--- instance LVarData1 ISet where
---   newtype Snapshot ISet a = ISetSnap (S.Set a)
---       deriving (Show,Ord,Read,Eq)
---   freeze    = fmap ISetSnap . freezeSet
---   newBottom = newEmptySet
+
+-- RRN: We can add the constraint.  But also, in order to make freeze an O(1)
+-- operation, ideally the Snapshot type function would basically just be a cast from
+-- the mutable to the immutable form of the data structure.
+
+instance LVarData1 ISet where
+  newtype Snapshot ISet a = ISetSnap (S.Set a)
+      deriving (Show,Ord,Read,Eq)
+  -- freeze    = fmap ISetSnap . freezeSet
+  newBottom = newEmptySet
 
   -- TODO: traverseSnap
 
@@ -350,27 +353,6 @@ instance DeepFreeze (ISet s a) (S.Set a) where
   deepFreeze iv = do ISetSnap m <- freeze iv
                      return m
 
-#if 0
-------------------------------------------------------------
--- Most general, but causes overlapping instances
-------------------------------------------------------------    
-instance (DeepFreeze a b, Ord b, Session a ~ s0) =>
-         DeepFreeze (ISet s0 a) (S.Set b)
-  where
-    type Session (ISet s0 a) = s0
-    deepFreeze = freezer     
-      
-freezer :: forall a b s0 . (DeepFreeze a b, Ord b, Session a ~ s0) =>
-           (ISet s0 a) -> Par QuasiDet s0 (S.Set b)
-freezer from = do
-      x <- freezeSet from
-      let fn :: a -> S.Set b -> QPar s0 (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x
-      return y
-
-#else
 ------------------------------------------------------------
 -- Compromise to avoid overlap
 ------------------------------------------------------------
@@ -384,6 +366,5 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
                           return (S.insert elm' acc)
       y <- F.foldrM fn S.empty x 
       return y      
-#endif
 
 #endif
