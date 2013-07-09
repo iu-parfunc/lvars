@@ -203,6 +203,7 @@ forEach = forEachHP Nothing
 -- Strict in the element being put in the set.
 put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt) =>
        NatArray s elt -> Int -> elt -> Par d s ()
+put _ !ix 0 = error$ "NatArray: violation!  Attempt to put zero to index: "++show ix
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
           withForeignPtr fptr $ \ ptr -> do 

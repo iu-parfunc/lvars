@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Main where
 
@@ -17,6 +18,7 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import GHC.Conc
 import Data.List (isInfixOf)
+import qualified Data.Vector as V
 import qualified Data.Set as S
 import Data.IORef
 import Data.Time.Clock
@@ -474,6 +476,69 @@ v9d = runParIO$ do
   logStrLn "After fork."
   NA.put arr 5 5
   NA.get arr 6 
+
+-- WARNING: I'm seeing some livelocks here that depend on the number of threads
+-- (e.g. at -N4 but not -N2).  When deadlocked on -N4 it burns 250% cpu.
+case_v9e :: Assertion
+case_v9e = assertEqual "Scale up a bit" 5000050000 =<< v9e
+v9e :: IO Word64
+v9e = runParIO$ do
+  let size = 100000
+  arr <- NA.newEmptyNatArray size
+  fork $
+    forM_ [0..size-1] $ \ix ->
+      NA.put arr ix (fromIntegral ix + 1) -- Can't put 0
+  logStrLn "After fork."
+  let loop !acc ix | ix == size = return acc
+                   | otherwise  = do v <- NA.get arr ix
+                                     loop (acc+v) (ix+1)
+  loop 0 0
+-- NOTE: this test takes about 0.03 seconds.
+-- It is not faster with two threads, alas... but it is higher variance!
+
+-- | Here's the same test with an actual array of IVars.
+--   This one is reliable, but takes about 0.20-0.30 seconds.
+case_v9f :: Assertion
+case_v9f = assertEqual "Array of ivars, compare effficiency:" 5000050000 =<< v9f
+v9f :: IO Word64
+v9f = runParIO$ do
+  let size = 100000
+      news = V.replicate size IV.new
+  arr <- V.sequence news
+  fork $
+    forM_ [0..size-1] $ \ix ->
+      IV.put (arr V.! ix) (fromIntegral ix + 1)
+  logStrLn "After fork."
+  let loop !acc ix | ix == size = return acc
+                   | otherwise  = do v <- IV.get (arr V.! ix)
+                                     loop (acc+v) (ix+1)
+  loop 0 0
+
+
+-- Uh oh, this is blocking indefinitely sometimes...
+-- BUT, only when I run the whole test suite.. via cabal install --enable-tests
+case_i9g :: Assertion
+case_i9g = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9g
+i9g :: IO Word
+i9g = runParIO$ do
+  arr <- NA.newEmptyNatArray 1
+  NA.put arr 0 0
+  NA.get arr 0
+
+-- v9e :: IO Word64
+-- v9e = runParIO$ do
+--   let size = 100000
+--   arr <- NA.newEmptyNatArray size
+--   do -- fork $
+--     forM_ [0..size-1] $ \ix ->
+--             NA.put arr ix (fromIntegral ix)
+--   logStrLn "After fork."
+--   let loop !acc ix | ix == size = return acc
+--                    | otherwise  = do v <- NA.get arr ix
+--                                      loop (acc+v) (ix+1)
+--   loop 0 0
+
+
 
 
 --------------------------------------------------------------------------------
