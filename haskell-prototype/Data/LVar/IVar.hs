@@ -6,7 +6,10 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE CPP #-} 
 module Data.LVar.IVar
---       (IVar, new, get, put, put_, spawn, spawn_, spawnP, freezeIVar)
+       (IVar, Snapshot(IVarSnap),
+        new, get, put, put_,
+        spawn, spawn_, spawnP,
+        freezeIVar, addHandler)
        where
 
 import           Data.IORef
@@ -54,10 +57,12 @@ unSnap (IVarSnap m) = m
 
 --------------------------------------
 
+{-# INLINE new #-}
 new :: Par d s (IVar s a)
 new = WrapPar$ fmap (IVar . WrapLVar) $
       newLV $ newIORef Nothing
-      
+
+{-# INLINE get #-}
 -- | read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- @IVar@.
@@ -65,7 +70,8 @@ get :: IVar s a -> Par d s a
 get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
   where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
         deltaThresh  x     = return $ Just x  -- always past threshold
-        
+
+{-# INLINE put_ #-}
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
 -- are not allowed, and result in a runtime error.
 --         
@@ -91,17 +97,33 @@ freezeIVar (IVar (WrapLVar lv)) = WrapPar$
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
+{-# INLINE addHandler #-}
+addHandler :: Maybe HandlerPool -> IVar s elt -> (elt -> Par d s ()) -> Par d s ()
+addHandler mh (IVar (WrapLVar lv)) fn = 
+   WrapPar (LI.addHandler mh lv globalCB fn')
+  where
+    fn' x = return (Just (unWrapPar (fn x)))
+    globalCB ref = do
+      mx <- readIORef ref -- Snapshot
+      case mx of
+        Nothing -> return Nothing
+        Just v  -> fn' v
+  
 --------------------------------------------------------------------------------
 
+{-# INLINE spawn #-}
 spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
-              
+
+{-# INLINE spawn_ #-}
 spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
+{-# INLINE spawnP #-}
 spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
 spawnP a = spawn (return a)
 
+{-# INLINE put #-}
 put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 

@@ -18,7 +18,8 @@ module Data.LVar.IStructure
          IStructure,
          -- Snapshot(IStructSnap),
          
-         newIStructure, put, put_, get,
+         newIStructure, newIStructureWithCallback,
+         put, put_, get,
 
          -- * Iteration and callbacks
          -- forEach, forEachHP
@@ -55,20 +56,28 @@ unIStructure (IStructure lv) = lv
 instance LVarData1 IStructure where
   newtype Snapshot IStructure a = IStructSnap (V.Vector (Maybe a))
     deriving (Show,Ord,Read,Eq)
-  
   freeze :: IStructure s a -> LV.Par QuasiDet s (Snapshot IStructure a)  
   freeze = unsafeConvert . fmap IStructSnap . freezeIStructure
-
   -- newBottom :: Par d s (IStructSnap s a)
   -- newBottom = error "makes no sense for an IStructure, need size"
-  
   -- traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
 newIStructure :: Int -> Par d s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
+
+-- | This avoids a vector copy by registering handlers on each internal IVar as it is
+-- created.
+newIStructureWithCallback :: Int -> (elt -> Par d s ()) -> Par d s (IStructure s elt)
+newIStructureWithCallback len fn =
+  fmap IStructure $
+   V.generateM len $ \_ -> do 
+      iv <- IV.new
+      IV.addHandler Nothing iv fn
+      return iv
 
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) =
