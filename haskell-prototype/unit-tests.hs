@@ -487,7 +487,7 @@ case_v9a :: Assertion
 case_v9a = assertEqual "basic NatArray" 4 =<< v9a
 v9a :: IO Word8
 v9a = runParIO$ do
-  arr <- NA.newEmptyNatArray 10
+  arr <- NA.newNatArray 10
   NA.put arr 5 (4::Word8)
   NA.get arr 5
 
@@ -498,7 +498,7 @@ v9a = runParIO$ do
 -- -- | A test to make sure that we get an error when we should.
 -- i9b :: IO Word8
 -- i9b = runParIO$ do
---   arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+--   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
 --   fork $ do NA.get arr 5
 --             logStrLn "Unblocked!  Shouldn't see this."
 --             return ()
@@ -509,7 +509,7 @@ case_i9c :: Assertion
 case_i9c = exceptionOrTimeOut 0.3 ["thread blocked indefinitely"] i9c
 i9c :: IO Word8
 i9c = runParIO$ do
-  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+  arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logStrLn "Unblocked!  Shouldn't see this."
             NA.put arr 6 99
@@ -519,7 +519,7 @@ case_v9d :: Assertion
 case_v9d = assertEqual "NatArray blocking/unblocking" 99 =<< v9d
 v9d :: IO Word8
 v9d = runParIO$ do
-  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+  arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logStrLn "Unblocked! Good."
             NA.put arr 6 99
@@ -534,7 +534,7 @@ case_v9e = assertEqual "Scale up a bit" 5000050000 =<< v9e
 v9e :: IO Word64
 v9e = runParIO$ do
   let size = 100000
-  arr <- NA.newEmptyNatArray size
+  arr <- NA.newNatArray size
   fork $
     forM_ [0..size-1] $ \ix ->
       NA.put arr ix (fromIntegral ix + 1) -- Can't put 0
@@ -587,7 +587,7 @@ case_i9h :: Assertion
 case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
 i9i :: IO Word
 i9i = runParIO$ do
-  arr <- NA.newEmptyNatArray 1
+  arr <- NA.newNatArray 1
   NA.put arr 0 0
   NA.get arr 0
 

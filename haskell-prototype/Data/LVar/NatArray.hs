@@ -19,7 +19,7 @@ module Data.LVar.NatArray
          NatArray,
          -- Snapshot(NatArraySnap),
          
-         newEmptyNatArray, put, get,
+         newNatArray, put, get,
 
          -- -- * Iteration and callbacks
          forEach, forEachHP
@@ -97,9 +97,9 @@ instance LVarData1 NatArray where
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newEmptyNatArray :: forall elt d s . (Storable elt, Num elt) =>
+newNatArray :: forall elt d s . (Storable elt, Num elt) =>
                      Int -> Par d s (NatArray s elt)
-newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
+newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 #ifdef USE_CALLOC
   let bytes = sizeOf (undefined::elt) * len
   mem <- callocBytes bytes

@@ -29,6 +29,7 @@ import Data.LVar.SLSet as S
 import qualified Data.LVar.SLSet as SL
 
 import Data.LVar.IStructure as ISt
+import Data.LVar.NatArray as NArr
 
 -- An LVar-based version of bf_traverse.  As we traverse the graph,
 -- the results of applying f to each node accumulate in an LVar, where
@@ -123,7 +124,7 @@ parMapM_ f l =
 bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
-  forEach st $ \ nd -> do
+  S.forEach st $ \ nd -> do
     logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
     forVec (nbrs gr nd) (`putInSet` st)
   return st
@@ -144,10 +145,22 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   ISt.put_ arr (fromIntegral start) True
   return arr
 
+bfs_async_arr2 :: AdjacencyGraph -> NodeID -> Par d s (NatArray s Word8)
+bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do 
+  arr <- newNatArray (U.length vvec)
+  let callback nd flg = do
+       let myNbrs = nbrs gr (fromIntegral nd)        
+       logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+       forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
+  NArr.forEach arr callback
+  logStrLn $" [bfs] Seeding with start vertex... "
+  NArr.put arr (fromIntegral start) 1
+  return arr
+
 maxDegree :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
 maxDegree gr component = do
   mc <- newMaxCounter 0 
-  forEach component $ \ nd ->
+  S.forEach component $ \ nd ->
     C.put mc (U.length$ nbrs gr nd)
   return mc
 
@@ -232,33 +245,17 @@ main = do
   putStrLn$ "time for those simple folds: "++show (diffUTCTime t2 t1)
   performGC
   -- writeFile "/tmp/debug" (show gr)
-  -- putStrLn$ "Dumped parsed graph to /tmp/debug"
+  -- putStrLn$ "Dumped parsed graph to /tmp/debug"  
   
-  ----------------------------------------
-  -- Ver 1: trying combinations
-  let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
-      par1 = do component <- bfs_async gr 0
-                liftIO$ putStrLn "Got component..."
-                mc <- maxDegree gr component    
-                return (mc,component)
-  ----------------------------------------
-  -- Ver 2: just set BFS
-  let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-      -- par2 :: Par d0 s0 ()
-      par2 = do comp <- bfs_async gr 0
-                waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
-                return comp
-
-  ----------------------------------------
-  -- Ver 3: just array BFS
-  let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-      par3 :: Par d0 s0 (IStructure s0 Bool)
-      par3 = bfs_async_arr gr 0
-
-  ----------------------------------------
   t0 <- getCurrentTime
   case version of
+    ----------------------------------------
     1 -> do putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
+            let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
+                par1 = do component <- bfs_async gr 0
+                          liftIO$ putStrLn "Got component..."
+                          mc <- maxDegree gr component    
+                          return (mc,component)            
             (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
             putStrLn$ "Processing finished, max degree was: "++show maxdeg
             let ISetSnap s = set
@@ -266,6 +263,11 @@ main = do
 
     ----------------------------------------
     2 -> do putStrLn " ! Version 2: BFS only, with sets "
+            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                -- par2 :: Par d0 s0 ()
+                par2 = do comp <- bfs_async gr 0
+                          waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
+                          return comp
             _ <- runParIO_ par2
             -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
             -- let ISetSnap s = set                                          
@@ -273,15 +275,27 @@ main = do
             return ()
             
     ----------------------------------------
-    3 -> do putStrLn " ! Version 3: BFS only, with arrays "
+    3 -> do putStrLn " ! Version 3: BFS only, with IStructures "
+            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                par3 :: Par d0 s0 (IStructure s0 Bool)
+                par3 = bfs_async_arr gr 0
             --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
             _ <- runParIO_ par3
             return ()
 
+    ----------------------------------------
+    4 -> do putStrLn " ! Version 4: BFS only, with NatArrays "
+            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                par4 :: Par d0 s0 (NatArray s0 Word8)
+                par4 = bfs_async_arr2 gr 0
+            --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+            _ <- runParIO_ par4
+            return ()
+
+
   t1 <- getCurrentTime
   putStrLn$ "Done"
-  putStrLn$ "Time in runPar: "++show (diffUTCTime t1 t0)
+  putStrLn$ "SELFTIMED: "++show (diffUTCTime t1 t0)
   
-
 
 
