@@ -12,6 +12,7 @@ import Data.Traversable as T
 import Data.Time.Clock
 import qualified Data.Vector.Unboxed as U
 import System.Mem (performGC)
+import System.Environment (getArgs)
 
 #if 1
 import Data.LVar.Set as S
@@ -116,7 +117,7 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
   st <- S.newFromList [start]
   forEach st $ \ nd -> do
     logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
-    U.forM_ (nbrs gr nd) (`putInSet` st)
+    forVec (nbrs gr nd) (`putInSet` st)
   return st
 --    T.traverse_ (`putInSet` st) (nbrs gr nd)
 
@@ -125,12 +126,13 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
 bfs_async_arr :: AdjacencyGraph -> NodeID -> Par d s (IStructure s Bool)
 bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newIStructure (U.length vvec)
+  let callback nd _bool = do
+       -- logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+       -- TODO: possibly use a better for loop:
+       forVec (nbrs gr (fromIntegral nd))
+              (\ nbr -> ISt.put_ arr (fromIntegral nbr) True)
+  ISt.forEachHP Nothing arr callback
   ISt.put_ arr (fromIntegral start) True
-{-  
-  forEach st $ \ nd -> do
-    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
-    U.forM_ (nbrs gr nd) (`putInSet` st)
--}
   return arr
 
 maxDegree :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
@@ -164,6 +166,19 @@ maximalIndependentSet = loop 0
 -- if any neighbors are less than us and decided, we commit too..
 
 
+--------------------------------------------------------------------------------
+-- Misc helpers
+--------------------------------------------------------------------------------
+
+{-# INLINE forVec #-}
+-- | Simple for-each loops over vector elements.
+forVec :: U.Unbox a => U.Vector a -> (a -> Par d s ()) -> Par d s ()
+forVec vec fn = loop 0 
+  where
+    len = U.length vec
+    loop i | i == len = return ()
+           | otherwise = fn (U.unsafeIndex vec i) >>
+                         loop (i+1)
 
 --------------------------------------------------------------------------------
 -- Main Program
@@ -189,28 +204,52 @@ main = do
   performGC
   -- writeFile "/tmp/debug" (show gr)
   -- putStrLn$ "Dumped parsed graph to /tmp/debug"
-  
+
+  args <- getArgs
+  let version = case args of
+                 [n] -> read n
+                 _   -> 3
+
+  ----------------------------------------
+  -- Ver 1: trying combinations
   let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
       par1 = do component <- bfs_async gr 0
                 liftIO$ putStrLn "Got component..."
                 mc <- maxDegree gr component    
                 return (mc,component)
+  ----------------------------------------
+  -- Ver 2: just set BFS
   let -- par2 :: Par d0 s0 (ISet s0 NodeID)
       par2 :: Par d0 s0 ()
       par2 = do comp <- bfs_async gr 0
                 waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
+
+  ----------------------------------------
+  -- Ver 3: just array BFS
+  let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+      par3 :: Par d0 s0 (IStructure s0 Bool)
+      par3 = bfs_async_arr gr 0
+
+  ----------------------------------------
   t0 <- getCurrentTime
-#if 0               
-  (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
-  putStrLn$ "Processing finished, max degree was: "++show maxdeg
-  let ISetSnap s = set
-  putStrLn$ "Connected component, set size "++show (Set.size s)  
-#else  
---  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-  _ <- runParIO par2
-#endif
+  case version of
+    1 -> do (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
+            putStrLn$ "Processing finished, max degree was: "++show maxdeg
+            let ISetSnap s = set
+            putStrLn$ "Connected component, set size "++show (Set.size s)
+
+    2 -> do --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+            _ <- runParIO par2
+            return ()
+
+    3 -> do --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+            _ <- runParIO_ par3
+            return ()
+
   t1 <- getCurrentTime
   putStrLn$ "Done"
   putStrLn$ "Time in runPar: "++show (diffUTCTime t1 t0)
   
+
+
 

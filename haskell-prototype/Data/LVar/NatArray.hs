@@ -116,8 +116,8 @@ newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 -- the array, optionally enrolled in a handler pool.
 forEachHP :: (Storable a, Eq a, Num a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> NatArray s a                -- ^ Set to listen to
-          -> (Int -> a -> Par d s ())           -- ^ callback
+          -> NatArray s a                -- ^ array to listen to
+          -> (Int -> a -> Par d s ())    -- ^ callback
           -> Par d s ()
 forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB deltaCB

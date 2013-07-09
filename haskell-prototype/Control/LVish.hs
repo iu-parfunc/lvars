@@ -15,7 +15,7 @@ module Control.LVish
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
-    runPar, runParIO,
+    runPar, runParIO, runParIO_,
     runParThenFreeze, runParThenFreezeIO,
     runParThenFreezeIO2,
     withNewPool, withNewPool_,
@@ -80,6 +80,10 @@ withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 -- 'NonDeterminismExn' on the thread that calls it.
 runParIO :: (forall s . Par d s a) -> IO a
 runParIO (WrapPar p) = L.runParIO p 
+
+-- | Useful ONLY for timing.
+runParIO_ :: (Par d s a) -> IO ()
+runParIO_ (WrapPar p) = L.runParIO p >> return ()
 
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 

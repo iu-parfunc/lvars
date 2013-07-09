@@ -85,6 +85,8 @@ library
                     Data.Concurrent.SNZI
                     Data.Concurrent.LinkedMap
                     Data.Concurrent.SkipListMap
+                    Data.Concurrent.AlignedIORef
+                    Control.Reagent
                     Control.LVish.SchedIdempotentInternal 
                     Control.LVish.MonadToss
   -- Other library packages from which modules are imported.

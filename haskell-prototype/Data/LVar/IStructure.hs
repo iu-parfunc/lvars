@@ -22,7 +22,8 @@ module Data.LVar.IStructure
          put, put_, get,
 
          -- * Iteration and callbacks
-         -- forEach, forEachHP
+         -- forEach,
+         forEachHP
        ) where
 
 import Data.Vector as V
@@ -69,14 +70,13 @@ newIStructure :: Int -> Par d s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
 
--- | This avoids a vector copy by registering handlers on each internal IVar as it is
--- created.
-newIStructureWithCallback :: Int -> (elt -> Par d s ()) -> Par d s (IStructure s elt)
+-- | This registers handlers on each internal IVar as it is created.
+newIStructureWithCallback :: Int -> (Int -> elt -> Par d s ()) -> Par d s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
-   V.generateM len $ \_ -> do 
+   V.generateM len $ \ix -> do 
       iv <- IV.new
-      IV.addHandler Nothing iv fn
+      IV.addHandler Nothing iv (fn ix)
       return iv
 
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
@@ -89,29 +89,18 @@ instance DeepFreeze (IStructure s a) (V.Vector (Maybe a)) where
       do IStructSnap m <- LV.freeze iv
          return m
 
-{-
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the IStructure, optionally enrolled in a handler pool
-forEachHP :: (Storable a, Eq a, Num a) =>
+forEachHP :: (Eq a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> NatArray s a                -- ^ Set to listen to
+          -> IStructure s a              -- ^ IStructure to listen to
           -> (Int -> a -> Par d s ())    -- ^ callback
           -> Par d s ()
-forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler hp lv globalCB deltaCB
-    return ()
-  where
-    deltaCB (ix,x) = return$ Just$ unWrapPar$ callb ix x
-    globalCB vec = return$ Just$ unWrapPar$
-      -- FIXME / TODO: need a better (parallel) for loop:
-      forVec vec $ \ ix elm ->
-        -- FIXME: When it starts off, it is SPARSE... there must be a good way to
-        -- avoid testing each position for zero.
-        if elm == 0
-        then return ()                
-        else forkHP hp $ callb ix elm
--}
+forEachHP hp (IStructure vec) callb =
+  -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
+  for_ 0 (V.length vec) $ \ ix ->
+    IV.addHandler hp (V.unsafeIndex vec ix) (callb ix)
 
 {-
 
@@ -135,6 +124,18 @@ forEach :: (Num a, Storable a, Eq a) =>
 forEach = forEachHP Nothing
 -}
 
+-- My own forM for numeric ranges (not requiring deforestation optimizations).
+-- Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
+for_ start end _fn | start > end = error "for_: start is greater than end"
+for_ start end fn = loop start
+  where
+   loop !i | i == end  = return ()
+	   | otherwise = do fn i; loop (i+1)
+
+
+
 {-# INLINE put #-}
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
@@ -148,3 +149,4 @@ put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 -- | Wait for the indexed entry to contain a value.
 get :: Eq elt => IStructure s elt -> Int -> Par d s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)
+
