@@ -6,6 +6,7 @@ import Util.PBBS
 import Control.LVish
 import Control.LVish.Internal
 
+import Data.Word
 import Data.LVar.MaxCounter as C
 import Data.Traversable as T
 import Data.Time.Clock
@@ -104,6 +105,10 @@ parMapM_ f l =
 -}
 
 
+--------------------------------------------------------------------------------
+-- Graph algorithms
+--------------------------------------------------------------------------------
+
 bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
@@ -120,17 +125,24 @@ maxDegree gr component = do
     C.put mc (U.length$ nbrs gr nd)
   return mc
 
+
+
+--------------------------------------------------------------------------------
+-- Main Program
+--------------------------------------------------------------------------------
+  
 main = do
   -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
   -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000" -- ~1sec on 1core
-  let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_500000"    -- ~6sec 
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_500000"    -- ~6sec 
+  let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
   putStrLn$ "Reading file: "++file
   t0 <- getCurrentTime  
   gr <- readAdjacencyGraph file
-  t1 <- getCurrentTime  
+  t1 <- getCurrentTime
+  let numVerts = U.length (vertOffets gr)
   putStrLn$ "graph read ("++show (diffUTCTime t1 t0)++
-    "): verts,edges: "++show (U.length (vertOffets gr), U.length (allEdges gr))
+    "): verts,edges: "++show (numVerts, U.length (allEdges gr))
 
   putStrLn$ "max vert off "++show (U.foldl1 max (vertOffets gr))
   putStrLn$ "max edge target "++show (U.foldl1 max (allEdges gr))
@@ -145,18 +157,21 @@ main = do
                 liftIO$ putStrLn "Got component..."
                 mc <- maxDegree gr component    
                 return (mc,component)
-  let par2 :: Par d0 s0 (ISet s0 NodeID)
-      par2 = bfs_async gr 0
+  let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+      par2 :: Par d0 s0 ()
+      par2 = do comp <- bfs_async gr 0
+                waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
   t0 <- getCurrentTime
 #if 0               
   (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
   putStrLn$ "Processing finished, max degree was: "++show maxdeg
+  let ISetSnap s = set
+  putStrLn$ "Connected component, set size "++show (Set.size s)  
 #else  
-  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+--  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+  _ <- runParIO par2
 #endif
   t1 <- getCurrentTime
-  let ISetSnap s = set
-  putStrLn$ "Connected component, set size "++show (Set.size s)
   putStrLn$ "Done"
   putStrLn$ "Time in runPar: "++show (diffUTCTime t1 t0)
   
