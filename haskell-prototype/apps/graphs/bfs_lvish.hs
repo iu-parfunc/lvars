@@ -127,11 +127,12 @@ bfs_async_arr :: AdjacencyGraph -> NodeID -> Par d s (IStructure s Bool)
 bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newIStructure (U.length vvec)
   let callback nd _bool = do
-       -- logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+       let myNbrs = nbrs gr (fromIntegral nd)        
+       logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
-       forVec (nbrs gr (fromIntegral nd))
-              (\ nbr -> ISt.put_ arr (fromIntegral nbr) True)
+       forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
+  logStrLn $" [bfs] Seeding with start vertex... "
   ISt.put_ arr (fromIntegral start) True
   return arr
 

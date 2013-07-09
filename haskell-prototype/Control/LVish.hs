@@ -15,7 +15,7 @@ module Control.LVish
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
-    runPar, runParIO, runParIO_,
+    runPar, runParIO, runParIO_, runParLogged,
     runParThenFreeze, runParThenFreezeIO,
     runParThenFreezeIO2,
     withNewPool, withNewPool_,
@@ -84,6 +84,11 @@ runParIO (WrapPar p) = L.runParIO p
 -- | Useful ONLY for timing.
 runParIO_ :: (Par d s a) -> IO ()
 runParIO_ (WrapPar p) = L.runParIO p >> return ()
+
+-- | Useful for debugging.  Returns debugging logs, in realtime order, in addition to
+-- the final result.
+runParLogged :: (forall s . Par d s a) -> IO ([String],a)
+runParLogged (WrapPar p) = L.runParLogged p 
 
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 

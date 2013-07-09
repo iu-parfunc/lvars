@@ -24,7 +24,8 @@ module Control.LVish.SchedIdempotent
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
-    runPar, runParIO, withNewPool, withNewPool_,
+    runPar, runParIO, runParLogged,
+    withNewPool, withNewPool_,
         
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
@@ -528,10 +529,20 @@ sched q = do
 -- Forcing evaluation of a LVar is fruitless.
 instance NFData (LVar a d) where
   rnf _ = ()
-  
-{-# INLINE runPar_internal #-}
+
 runPar_internal :: Par a -> IO a
 runPar_internal c = do
+  closeLogger <- if dbgLvl >= 1
+                 then printLogThread
+                 else return (return ())    
+  res <- runPar_internal2 c
+  -- printLog
+  closeLogger
+  hFlush stdout
+  return res
+
+runPar_internal2 :: Par a -> IO a
+runPar_internal2 c = do
   queues <- Sched.new numCapabilities noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
@@ -556,9 +567,6 @@ runPar_internal c = do
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
-  closeLogger <- if dbgLvl >= 1
-                 then printLogThread
-                 else return (return ())
   logStrLn_ " [dbg-lvish] About to fork workers..."      
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
@@ -571,9 +579,6 @@ runPar_internal c = do
         error ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
-  -- printLog
-  closeLogger
-  hFlush stdout
   return ans
 #else
   let runWorker (cpu, q) = do 
@@ -617,6 +622,14 @@ runPar = unsafePerformIO . runPar_internal
 -- contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
 runParIO = runPar_internal
+
+-- | Debugging aide.  Return debugging logs, in realtime order, in addition to the
+-- final result.
+runParLogged :: Par a -> IO ([String],a)
+runParLogged c =
+  do res <- runPar_internal2 c
+     lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
+     return (reverse lines, res)
 
 -- | A trapped instance of non-determinism at runtime.
 data NonDeterminismExn = NonDeterminismExn String

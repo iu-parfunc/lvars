@@ -17,7 +17,7 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.MVar
 import GHC.Conc
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, intersperse)
 import qualified Data.Vector as V
 import qualified Data.Set as S
 import Data.IORef
@@ -85,15 +85,35 @@ main = $(defaultMainGenerator)
 case_v0 :: HU.Assertion
 case_v0 = do res <- v0
              HU.assertEqual "useless fork" (4::Int) res
-
 v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
 
-case_v1 :: Assertion
-case_v1 = assertEqual "fork put" (4::Int) =<< v1
+case_v1a :: Assertion
+case_v1a = assertEqual "fork put" (4::Int) =<< v1a
+v1a :: IO Int
+v1a = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
 
-v1 :: IO Int
-v1 = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
+case_v1b :: Assertion
+case_v1b = do ls <- v1b
+              case length ls of
+                0 -> return () -- Ok, i guess debugging is off.
+                1 -> return () 
+                _ -> error $ "Wrong number of log messages: \n" ++ concat (intersperse "\n" ls)
+
+-- | In this sequential case there should be no data-race, and thus no duplication of the callback.
+v1b :: IO [String]
+v1b = do let tag = "callback on ivar "
+         (logs,_) <- runParLogged $ do
+                       i <- IV.new
+                       IV.put i (3::Int)                       
+                       IV.addHandler Nothing i (\x -> logStrLn$ tag++show x)
+                       IV.put i 3
+                       IV.put i 3
+                       return ()
+         mapM_ putStrLn logs
+         return (filter (isInfixOf tag) logs)
+
+-- v1c
 
 case_v2a :: Assertion
 case_v2a = v2a >>= assertEqual "put 10 in & wait"
