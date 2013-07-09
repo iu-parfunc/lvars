@@ -11,16 +11,15 @@
 
 -- UNFINISHED!!!
 
--- | An array of bit-fields (numbers) with a monotonic OR operation.
+-- | An I-structure (array) of positive numbers.
 
-module Data.LVar.BoundedNatSet
+module Data.LVar.NatArray
        (
          -- * Basic operations
-         BitArray,
-         -- Snapshot(BitArraySnap),
+         NatArray,
+         -- Snapshot(NatArraySnap),
          
-         newEmptyBitArray, putBits,
-         -- waitElem, waitSize, 
+         newEmptyNatArray, put, get,
 
          -- -- * Iteration and callbacks
          forEach, forEachHP
@@ -70,18 +69,18 @@ import qualified Control.LVish.SchedIdempotent as L
 -- | An array of bit-fields with a monotonic OR operation.  This can be used to model
 --   a set of Ints by setting the vector entries to zero or one, but it can also
 --   model other finite lattices for each index.
-newtype BitArray s a = BitArray (LVar s (M.IOVector a) (Int,a))
+newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
 
-unBitArray (BitArray lv) = lv
+unNatArray (NatArray lv) = lv
 
 -- | Physical identity, just as with IORefs.
--- instance Eq (BitArray s v) where
---   BitArray lv1 == BitArray lv2 = state lv1 == state lv2 
+-- instance Eq (NatArray s v) where
+--   NatArray lv1 == NatArray lv2 = state lv1 == state lv2 
 
 {-
 
-instance LVarData1 BitArray where
-  newtype Snapshot BitArray a = ISetSnap (S.Set a)
+instance LVarData1 NatArray where
+  newtype Snapshot NatArray a = ISetSnap (S.Set a)
       deriving (Show,Ord,Read,Eq)
   freeze    = fmap ISetSnap . freezeSet
   newBottom = newEmptySet
@@ -91,11 +90,11 @@ instance LVarData1 BitArray where
 -}
 
 
--- | Create a new, empty, monotonically growing 'BitArray' of a given size.
+-- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newEmptyBitArray :: forall elt d s . Storable elt =>
-                    Int -> Par d s (BitArray s elt)
-newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do 
+newEmptyNatArray :: forall elt d s . Storable elt =>
+                     Int -> Par d s (NatArray s elt)
+newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do 
   let bytes = sizeOf (undefined::elt) * len
   mem <- callocBytes bytes
   fp <- newForeignPtr finalizerFree mem
@@ -108,19 +107,19 @@ newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do
 {-
 type QPar = Par QuasiDet 
 
--- | Freeze an 'BitArray' after a specified callback/handler is done running.  This
+-- | Freeze an 'NatArray' after a specified callback/handler is done running.  This
 -- differs from withCallbacksThenFreeze by not taking an additional action to run in
 -- the context of the handlers.
 --
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: BitArray s a -> (a -> QPar s ()) -> QPar s ()
+freezeSetAfter :: NatArray s a -> (a -> QPar s ()) -> QPar s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
   
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: Eq b => BitArray s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
-withCallbacksThenFreeze (BitArray (WrapLVar lv)) callback action =
+withCallbacksThenFreeze :: Eq b => NatArray s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze (NatArray (WrapLVar lv)) callback action =
     do
        hp  <- newPool 
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
@@ -145,8 +144,8 @@ withCallbacksThenFreeze (BitArray (WrapLVar lv)) callback action =
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeSet :: BitArray s a -> QPar s (S.Set a)
-freezeSet (BitArray (WrapLVar lv)) = WrapPar $ 
+freezeSet :: NatArray s a -> QPar s (S.Set a)
+freezeSet (NatArray (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
       getLV lv globalThresh deltaThresh
   where
@@ -160,12 +159,12 @@ freezeSet (BitArray (WrapLVar lv)) = WrapPar $
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set, optionally enrolled in a handler pool
-forEachHP :: Storable a =>
+forEachHP :: (Storable a, Eq a, Num a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> BitArray s a                -- ^ Set to listen to
+          -> NatArray s a                -- ^ Set to listen to
           -> (Int -> a -> Par d s ())           -- ^ callback
           -> Par d s ()
-forEachHP hp (BitArray (WrapLVar lv)) callb = WrapPar $ do
+forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB deltaCB
     return ()
   where
@@ -173,7 +172,11 @@ forEachHP hp (BitArray (WrapLVar lv)) callb = WrapPar $ do
     globalCB vec = return$ Just$ unWrapPar$
       -- FIXME / TODO: need a better (parallel) for loop:
       forVec vec $ \ ix elm ->
-        forkHP hp $ callb ix elm
+        -- FIXME: When it starts off, it is SPARSE... there must be a good way to
+        -- avoid testing each position for zero.
+        if elm == 0
+        then return ()                
+        else forkHP hp $ callb ix elm
 
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
@@ -190,37 +193,34 @@ forVec vec fn = loop 0
 {-# INLINE forEach #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
-forEach :: Storable a => BitArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
+forEach :: (Num a, Storable a, Eq a) =>
+           NatArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
 
 
--- | Put a single element in the set.  (WHNF) Strict in the element being put in the
--- set.     
-putBits :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-           Int -> elt -> BitArray s elt -> Par d s ()
-putBits !ix !elm (BitArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
+-- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
+-- Strict in the element being put in the set.
+put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
+           Int -> elt -> NatArray s elt -> Par d s ()
+put !ix !elm (NatArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
           withForeignPtr fptr $ \ ptr -> do 
             let offset = sizeOf (undefined::elt) * ix 
-            orig <- B.fetchAndOr (P.plusPtr ptr offset) elm
-            if orig .&. elm == 0 -- If those bits were not already set....
---              then return (Just (ix,elm))
-              then return (Just (ix, elm .|. orig))
-              else return Nothing
+            orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm
+            if orig == 0 
+              then return (Just (ix, elm))
+              else error "Multiple puts to index of a NatArray"
 
 -- | Wait for an indexed entry to contain ANY of a certain set of bits.
-waitBits :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-            Int -> a -> BitArray s a -> Par d s ()
-waitBits !elm (BitArray (WrapLVar lv)) = WrapPar $
+get :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
+       Int -> NatArray s elt -> Par d s elt
+get !ix (NatArray (WrapLVar lv)) = WrapPar $
     getLV lv globalThresh deltaThresh
   where
-    globalThresh ref _frzn = do
-      set <- readIORef ref
-      case S.member elm set of
-        True  -> return (Just ())
-        False -> return (Nothing)
-    deltaThresh e2 | e2 == elm = return $ Just ()
-                   | otherwise  = return Nothing 
+    globalThresh ref _frzn = do undefined
+
+    deltaThresh (ix2,e2) | ix == ix2 = return$! Just e2
+                         | otherwise = return Nothing 
 
 -- Wait for it to contain ALL of a certain set of bits.
 -- waitBitsAnd
@@ -228,8 +228,8 @@ waitBits !elm (BitArray (WrapLVar lv)) = WrapPar $
 {-
 
 -- | Wait on the SIZE of the set, not its contents.
-waitSize :: Int -> BitArray s a -> Par d s ()
-waitSize !sz (BitArray lv) = WrapPar$
+waitSize :: Int -> NatArray s a -> Par d s ()
+waitSize !sz (NatArray lv) = WrapPar$
     getLV (unWrapLVar lv) globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
@@ -247,20 +247,20 @@ waitSize !sz (BitArray lv) = WrapPar$
 
 -- | Return a fresh set which will contain strictly more elements than the input set.
 -- That is, things put in the former go in the latter, but not vice versa.
-copy :: Ord a => BitArray s a -> Par d s (BitArray s a)
+copy :: Ord a => NatArray s a -> Par d s (NatArray s a)
 copy = traverseSet return
 
 -- | Establish monotonic map between the input and output sets.
-traverseSet :: Ord b => (a -> Par d s b) -> BitArray s a -> Par d s (BitArray s b)
+traverseSet :: Ord b => (a -> Par d s b) -> NatArray s a -> Par d s (NatArray s b)
 traverseSet f s = traverseSetHP Nothing f s
 
 -- | An imperative-style, inplace version of 'traverseSet' that takes the output set
 -- as an argument.
-traverseSet_ :: Ord b => (a -> Par d s b) -> BitArray s a -> BitArray s b -> Par d s ()
+traverseSet_ :: Ord b => (a -> Par d s b) -> NatArray s a -> NatArray s b -> Par d s ()
 traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
-union :: Ord a => BitArray s a -> BitArray s a -> Par d s (BitArray s a)
+union :: Ord a => NatArray s a -> NatArray s a -> Par d s (NatArray s a)
 union s1 s2 = do
   os <- newEmptySet
   forEach s1 (`putInSet` os)
@@ -268,7 +268,7 @@ union s1 s2 = do
   return os
 
 -- | Build a new set which will contain the intersection of the two input sets.
-intersection :: Ord a => BitArray s a -> BitArray s a -> Par d s (BitArray s a)
+intersection :: Ord a => NatArray s a -> NatArray s a -> Par d s (NatArray s a)
 -- Can we do intersection with only the public interface?  It should be monotonic.
 -- Well, for now we cheat and use liftIO:
 intersection s1 s2 = do
@@ -277,7 +277,7 @@ intersection s1 s2 = do
   forEach s2 (fn os s1)
   return os
  where  
-  fn outSet other@(BitArray lv) elm = do
+  fn outSet other@(NatArray lv) elm = do
     -- At this point 'elm' has ALREADY been added to "us", we check "them":    
     peek <- LI.liftIO$ readIORef (state lv)
     if S.member elm peek 
@@ -285,11 +285,11 @@ intersection s1 s2 = do
       else return ()
 
 -- | Cartesian product of two sets.
-cartesianProd :: (Ord a, Ord b) => BitArray s a -> BitArray s b -> Par d s (BitArray s (a,b))
+cartesianProd :: (Ord a, Ord b) => NatArray s a -> NatArray s b -> Par d s (NatArray s (a,b))
 cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
   
 -- | Takes the cartesian product of several sets.
-cartesianProds :: Ord a => [BitArray s a] -> Par d s (BitArray s [a])
+cartesianProds :: Ord a => [NatArray s a] -> Par d s (NatArray s [a])
 cartesianProds ls = cartesianProdsHP Nothing ls
 
 --------------------------------------------------------------------------------
@@ -299,15 +299,15 @@ cartesianProds ls = cartesianProdsHP Nothing ls
 -- TODO: unionHP, intersectionHP...
 
 -- | Variant that optionally ties the handlers to a pool.
-traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> BitArray s a ->
-                 Par d s (BitArray s b)
+traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> NatArray s a ->
+                 Par d s (NatArray s b)
 traverseSetHP mh fn set = do
   os <- newEmptySet
   traverseSetHP_ mh fn set os  
   return os
 
 -- | Variant that optionally ties the handlers to a pool.
-traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> BitArray s a -> BitArray s b ->
+traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> NatArray s a -> NatArray s b ->
                   Par d s ()
 traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
@@ -320,8 +320,8 @@ traverseSetHP_ mh fn set os = do
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 
-instance DeepFreeze (BitArray s a) (S.Set a) where
-  type Session (BitArray s a) = s
+instance DeepFreeze (NatArray s a) (S.Set a) where
+  type Session (NatArray s a) = s
   deepFreeze iv = do ISetSnap m <- freeze iv
                      return m
 
@@ -329,8 +329,8 @@ instance DeepFreeze (BitArray s a) (S.Set a) where
 -- Compromise to avoid overlap
 ------------------------------------------------------------
 instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
-         DeepFreeze (BitArray s0 (f s0 a)) (S.Set b)  where
-    type Session (BitArray s0 (f s0 a)) = s0
+         DeepFreeze (NatArray s0 (f s0 a)) (S.Set b)  where
+    type Session (NatArray s0 (f s0 a)) = s0
     deepFreeze from = do
       x <- freezeSet from
       let fn :: f s0 a -> S.Set b -> QPar s0 (S.Set b)
