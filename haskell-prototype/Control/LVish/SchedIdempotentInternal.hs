@@ -16,11 +16,29 @@ import Data.IORef
 import GHC.Conc
 import System.Random (StdGen, mkStdGen)
 
+#ifdef CHASE_LEV
+#warning "Compling with Chase-Lev work-stealing deque"
+
+import Data.Concurrent.Deque.ChaseLev as CL
+
+type Deque a = CL.ChaseLevDeque a
+newDeque = CL.newQ
+pushMine = CL.pushL
+popMine  = CL.tryPopL
+popOther = CL.tryPopR 
+pushYield = pushMine -- for now...  
+
+#else
+
 ------------------------------------------------------------------------------
 -- A nonscalable deque for work-stealing
 ------------------------------------------------------------------------------
 
 type Deque a = IORef [a]
+
+-- | Create a new local work deque
+newDeque :: IO (Deque a)
+newDeque = newIORef []
 
 -- | Add work to a thread's own work deque
 pushMine :: Deque a -> a -> IO ()
@@ -44,6 +62,8 @@ pushYield deque t =
 popOther :: Deque a -> IO (Maybe a)
 popOther = popMine
 
+#endif
+
 ------------------------------------------------------------------------------
 -- A scheduling framework
 ------------------------------------------------------------------------------
@@ -53,7 +73,7 @@ data State a s = State
     { no       :: {-# UNPACK #-} !Int,
       prng     :: IORef StdGen,      -- core-local random number generation
       status   :: IORef s,
-      workpool :: IORef [a],         
+      workpool :: Deque a,         
       idle     :: IORef [MVar Bool], -- global list of idle workers
       states   :: [State a s]        -- global list of all worker states.
     }
@@ -123,7 +143,7 @@ new :: Int -> s -> IO [State a s]
 new n s = do
   idle <- newIORef []
   let mkState states i = do 
-        workpool <- newIORef []
+        workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
         return State { no = i, workpool, idle, status, states, prng }

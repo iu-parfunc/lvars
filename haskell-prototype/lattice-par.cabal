@@ -47,6 +47,10 @@ flag debug
                if DEBUGLVL env var is set to 1 or higher.
   default: False
 
+flag chaselev
+  description: Use the Chase-Lev work-stealing deque
+  default: True
+
 flag quick
   description: Build some targets but not others.
   default: False
@@ -85,13 +89,15 @@ library
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                  monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
-                 atomic-primops, hashable, transformers, random
+                 atomic-primops, hashable, transformers, random, chaselev-deque
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
 --                 TypeCompose
   if flag(debug)
      cpp-options: -DDEBUG_LVAR
+  if flag(chaselev)
+     cpp-options: -DCHASE_LEV
 
 --------------------------------------------------------------------------------
 executable kcfa-lvish
@@ -104,9 +110,11 @@ executable kcfa-lvish
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                    monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
-                   atomic-primops, hashable, transformers, random
+                   atomic-primops, hashable, transformers, random, chaselev-deque
     if flag(debug)
       cpp-options: -DDEBUG_LVAR
+    if flag(chaselev)
+      cpp-options: -DCHASE_LEV
     if flag(quick)
       buildable: False
 --------------------------------------------------------------------------------
@@ -120,9 +128,11 @@ test-suite test-lvish
     build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.4, lattices ==1.2.*, 
                    split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                    monad-par-extras ==0.3.*, parallel ==3.2.*, async ==2.0.*,
-                   atomic-primops, hashable, transformers, random, primitive
+                   atomic-primops, hashable, transformers, random, primitive, chaselev-deque
     if flag(debug)
        cpp-options: -DDEBUG_LVAR
+    if flag(chaselev)
+       cpp-options: -DCHASE_LEV
 
 --------------------------------------------------------------------------------
 test-suite test-old-lvarpure
