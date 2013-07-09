@@ -37,6 +37,7 @@ import qualified Data.LVar.NatArray as NA
 import Data.LVar.Set as IS
 import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
+import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
@@ -536,20 +537,36 @@ v9f = runParIO$ do
   arr <- V.sequence news
   fork $
     forM_ [0..size-1] $ \ix ->
-      IV.put (arr V.! ix) (fromIntegral ix + 1)
+      IV.put_ (arr V.! ix) (fromIntegral ix + 1)
   logStrLn "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
                                      loop (acc+v) (ix+1)
   loop 0 0
 
+-- | One more time with a full IStructure.
+case_v9g :: Assertion
+case_v9g = assertEqual "IStructure, compare effficiency:" 5000050000 =<< v9g
+v9g :: IO Word64
+v9g = runParIO$ do
+  let size = 100000
+  arr <- ISt.newIStructure size      
+  fork $
+    forM_ [0..size-1] $ \ix ->
+      ISt.put_ arr ix (fromIntegral ix + 1)
+  logStrLn "After fork."
+  let loop !acc ix | ix == size = return acc
+                   | otherwise  = do v <- ISt.get arr ix
+                                     loop (acc+v) (ix+1)
+  loop 0 0
+
 
 -- Uh oh, this is blocking indefinitely sometimes...
 -- BUT, only when I run the whole test suite.. via cabal install --enable-tests
-case_i9g :: Assertion
-case_i9g = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9g
-i9g :: IO Word
-i9g = runParIO$ do
+case_i9h :: Assertion
+case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
+i9i :: IO Word
+i9i = runParIO$ do
   arr <- NA.newEmptyNatArray 1
   NA.put arr 0 0
   NA.get arr 0

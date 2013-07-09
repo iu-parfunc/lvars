@@ -69,6 +69,7 @@ library
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     Data.LVar.NatArray
+                    Data.LVar.IStructure                    
                     Data.LVar.MaxCounter
                     Data.LVar.Internal.Pure
                     Util.PBBS

@@ -39,7 +39,6 @@ module Data.LVar.NatArray
 -- import qualified Data.Vector.Unboxed as U
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
-
 import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as M
 import Foreign.Marshal.MissingAlloc (callocBytes)
@@ -63,6 +62,12 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
+
+------------------------------------------------------------------------------
+-- Toggles
+
+#define USE_CALLOC
+-- A low-level optimization below.
 
 ------------------------------------------------------------------------------
 
@@ -95,7 +100,7 @@ instance LVarData1 NatArray where
 newEmptyNatArray :: forall elt d s . (Storable elt, Num elt) =>
                      Int -> Par d s (NatArray s elt)
 newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
-#if 0
+#ifdef USE_CALLOC
   let bytes = sizeOf (undefined::elt) * len
   mem <- callocBytes bytes
   fp <- newForeignPtr finalizerFree mem
@@ -168,7 +173,7 @@ put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
                                      show ix++" new/old : "++show elm++"/"++show orig
 
 {-# INLINE get #-}
--- | Wait for an indexed entry to contain ANY of a certain set of bits.
+-- | Wait for an indexed entry to contain a non-zero value.
 -- 
 -- Warning: this is inefficient if it needs to block, because the deltaThresh must
 -- monitor EVERY new addition.
