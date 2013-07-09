@@ -14,10 +14,11 @@ module Control.LVish
     Determinism(..), liftQ,
     
     -- * Safe, deterministic operations:
-    yield, newPool, fork, forkInPool,
+    yield, newPool, fork, forkHP,
     runPar, runParIO,
     runParThenFreeze, runParThenFreezeIO,
     runParThenFreezeIO2,
+    withNewPool, withNewPool_,
     
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
@@ -43,7 +44,6 @@ import           System.IO.Unsafe (unsafePerformIO)
 {-# INLINE runPar #-}
 -- {-# INLINE runParThenFreeze #-}
 {-# INLINE fork #-}
-{-# INLINE forkInPool #-}
 {-# INLINE quiesce #-}
 --------------------------------------------------------------------------------
 
@@ -64,11 +64,17 @@ quiesceAll = WrapPar L.quiesceAll
 fork :: Par d s () -> Par d s ()
 fork (WrapPar f) = WrapPar$ L.fork f
 
-forkInPool :: L.HandlerPool -> Par d s () -> Par d s ()
-forkInPool hp (WrapPar f) = WrapPar$ L.forkInPool hp f
+forkHP :: Maybe L.HandlerPool -> Par d s () -> Par d s ()
+forkHP mh (WrapPar f) = WrapPar$ L.forkHP mh f
 
 newPool :: Par d s L.HandlerPool
 newPool = WrapPar L.newPool
+
+withNewPool :: (L.HandlerPool -> Par d s a) -> Par d s (a, L.HandlerPool)
+withNewPool f = WrapPar $ L.withNewPool $ unWrapPar . f
+
+withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
+withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
 -- | If the input computation is quasi-deterministic, this may throw
 -- 'NonDeterminismExn' on the thread that calls it.

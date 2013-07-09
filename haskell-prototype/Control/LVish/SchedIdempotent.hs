@@ -23,8 +23,8 @@ module Control.LVish.SchedIdempotent
     LVar(), state, HandlerPool(), Par(), 
     
     -- * Safe, deterministic operations:
-    yield, newPool, fork, forkInPool,
-    runPar, runParIO, 
+    yield, newPool, fork, forkHP,
+    runPar, runParIO, withNewPool, withNewPool_,
         
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
@@ -364,12 +364,28 @@ newPool = mkPar $ \k q -> do
   let hp = HandlerPool cnt bag
   hpMsg " [dbg-lvish] Created new pool" hp
   exec (k hp) q
+  
+-- | Execute a Par computation in the context of a fresh handler pool
+withNewPool :: (HandlerPool -> Par a) -> Par (a, HandlerPool)
+withNewPool f = do
+  hp <- newPool
+  a  <- f hp
+  return (a, hp)
+  
+-- | Execute a Par computation in the context of a fresh handler pool, while
+-- ignoring the result of the computation
+withNewPool_ :: (HandlerPool -> Par ()) -> Par HandlerPool
+withNewPool_ f = do
+  hp <- newPool
+  f hp
+  return hp
 
 data DecStatus = HasDec | HasNotDec
 
 -- | Close a Par task so that it is properly registered with a handler pool
-closeInPool :: HandlerPool -> Par () -> IO ClosedPar
-closeInPool hp c = do
+closeInPool :: Maybe HandlerPool -> Par () -> IO ClosedPar
+closeInPool Nothing c = return $ close c $ const (ClosedPar sched)
+closeInPool (Just hp) c = do
   decRef <- newIORef HasNotDec      -- in case the thread is duplicated, ensure
                                     -- that the counter is decremented only once
                                     -- on termination
@@ -402,7 +418,8 @@ closeInPool hp c = do
                                     -- handler pool
 
 -- | Add a handler to an existing pool
-addHandler :: HandlerPool                 -- ^ pool to enroll in 
+{-# INLINE addHandler #-}
+addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> LVar a d                    -- ^ LVar to listen to
            -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
@@ -458,29 +475,27 @@ freezeLVAfter lv globalCB updateCB = do
   let globalCB' = globalCB
       updateCB' = updateCB
   hp <- newPool
-  addHandler hp lv globalCB' updateCB'
+  addHandler (Just hp) lv globalCB' updateCB'
   quiesce hp
   freezeLV lv
+  
+  
 
 ------------------------------------------------------------------------------
 -- Par monad operations
 ------------------------------------------------------------------------------
 
+-- | Fork a child thread, optionally in the context of a handler pool
+forkHP :: Maybe HandlerPool -> Par () -> Par ()
+forkHP mh child = mkPar $ \k q -> do
+  closed <- closeInPool mh child
+  Sched.pushWork q (k ()) -- "Work-first" policy.
+--  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
+  exec closed q  
+  
 -- | Fork a child thread
 fork :: Par () -> Par ()
-fork child = mkPar $ \k q -> do
-  Sched.pushWork q (k ()) -- "Work-first" policy.
-  exec (close child $ const (ClosedPar sched)) q
-  -- Sched.pushWork q (close child emptyCont) -- "Help-first" policy.  Generally bad.
-  --   exec (k ()) q
-  
--- | Fork a child thread in the context of a handler pool
-forkInPool :: HandlerPool -> Par () -> Par ()
-forkInPool hp child = mkPar $ \k q -> do
-  closed <- closeInPool hp child
-  Sched.pushWork q (k ()) -- "Work-first" policy.
-  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
-  exec closed q  
+fork f = forkHP Nothing f
 
 -- | Perform an IO action
 liftIO :: IO a -> Par a

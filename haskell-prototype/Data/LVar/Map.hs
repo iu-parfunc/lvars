@@ -16,15 +16,14 @@ module Data.LVar.Map
          getKey, waitValue, waitSize, modify, freezeMap,
 
          -- * Iteration and callbacks
-         forEach, addHandler, 
+         forEach, forEachHP,
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_, 
          
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         forEachHP, traverseMapHP, traverseMapHP_, 
-         unionHP
+         traverseMapHP, traverseMapHP_, unionHP
        ) where
 
 import           Data.IORef
@@ -34,10 +33,10 @@ import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
 
 import           Control.Monad (void)
-import           Control.LVish hiding (addHandler)
+import           Control.LVish 
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO)
+import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
+                                                freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
@@ -105,18 +104,19 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
         -- Data.Foldable should give us a non-copying way to iterate:
         -- But it's actually insufficient because it only exposes the values:
         -- FIXME: we need traverseWithKey_
-        mapM_ (\(k,v) -> forkInPool hp$ callback k v) (M.toList mp)
+        mapM_ (\(k,v) -> forkHP (Just hp)$ callback k v) (M.toList mp)
         
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
-
-addHandler :: HandlerPool                 -- ^ pool to enroll in 
-           -> IMap k s v                    -- ^ Map to listen to
-           -> (k -> v -> Par d s ())          -- ^ callback
-           -> Par d s ()
-addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler hp lv globalCB deltaCB
+-- | Add an (asynchronous) callback that listens for all new key/value pairs added to
+-- the map, optionally enrolled in a handler pool
+forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
+          -> IMap k s v                  -- ^ Map to listen to
+          -> (k -> v -> Par d s ())      -- ^ callback
+          -> Par d s ()
+forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
+    addHandler mh lv globalCB deltaCB
     return ()
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
@@ -124,7 +124,12 @@ addHandler hp (IMap (WrapLVar lv)) callb = WrapPar $ do
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ 
         -- FIXME: need traverseWithKey_ to be added to 'containers':
-        mapM_ (\(k,v) -> forkInPool hp$ callb k v) (M.toList mp)
+        mapM_ (\(k,v) -> forkHP mh$ callb k v) (M.toList mp)
+        
+-- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
+-- the map
+forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
+forEach = forEachHP Nothing 
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
 insert :: (Ord k, Eq v) =>
@@ -157,12 +162,15 @@ modify (IMap lv) key fn = WrapPar $ do
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
       L.logStrLn$ " [Map.modify] allocated new inner "++show(unsafeName bot)
-      act <- L.liftIO$ atomicModifyIORef ref $ \ mp2 ->
-               case M.lookup key mp2 of
-                 Just lv2 -> (mp2, unWrapPar$ fn lv2)
-                 Nothing  -> (M.insert key bot mp2,
-                             do L.logStrLn$ " [Map.modify] key absent, adding the new one."
-                                unWrapPar$ fn bot)
+      let putter _ = L.liftIO$ atomicModifyIORef ref $ \ mp2 ->
+            case M.lookup key mp2 of
+              Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
+              Nothing  -> (M.insert key bot mp2,
+                           (Just (key, bot), 
+                            do L.logStrLn$ " [Map.modify] key absent, adding the new one."
+                               unWrapPar$ fn bot))
+      
+      act <- putLV_ (unWrapLVar lv) putter
       act
 
 -- | Wait for the map to contain a specified key, and return the associated value.
@@ -222,66 +230,55 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
 -- Higher level routines that could (mostly) be defined using the above interface.
 --------------------------------------------------------------------------------
 
--- | Shorthandfor creating a new handler pool and adding a single handler to it.
-forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
-forEach = forEachHP Nothing
-
 -- | Establish monotonic map between the input and output sets.  Produce a new result
 -- based on each element, while leaving the keys the same.
 traverseMap :: (Ord k, Eq b) =>
                (k -> a -> Par d s b) -> IMap k s a -> Par d s (IMap k s b)
-traverseMap f s = fmap snd $ traverseMapHP Nothing f s
+traverseMap f s = traverseMapHP Nothing f s
 
 -- | An imperative-style, inplace version of 'traverseMap' that takes the output set
 -- as an argument.
 traverseMap_ :: (Ord k, Eq b) =>
                 (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
-traverseMap_ f s o = void $ traverseMapHP_ Nothing f s o
+traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
 --------------------------------------------------------------------------------
 -- Alternate versions of functions that EXPOSE the HandlerPools
 --------------------------------------------------------------------------------
-
--- | Variant of 'forEach' that optionally uses an existing handler pool.
-forEachHP :: Maybe HandlerPool -> IMap k s v -> (k -> v -> Par d s ()) -> Par d s HandlerPool
-forEachHP mh is cb = do 
-   hp <- fromMaybe newPool (fmap return mh)
-   addHandler hp is cb
-   return hp
 
 -- | Return a fresh map which will contain strictly more elements than the input.
 -- That is, things put in the former go in the latter, but not vice versa.
 copy :: (Ord k, Eq v) => IMap k s v -> Par d s (IMap k s v)
 copy = traverseMap (\ _ x -> return x)
 
--- | Variant that optionally uses an existing handler pool.
+-- | Variant that optionally ties the handlers to a pool.
 traverseMapHP :: (Ord k, Eq b) =>
                  Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a ->
-                 Par d s (HandlerPool, IMap k s b)
+                 Par d s (IMap k s b)
 traverseMapHP mh fn set = do
   os <- newEmptyMap
-  hp <- traverseMapHP_ mh fn set os  
-  return (hp,os)
+  traverseMapHP_ mh fn set os  
+  return os
 
--- | Variant that optionally uses an existing handler pool.
+-- | Variant that optionally ties the handlers to a pool.
 traverseMapHP_ :: (Ord k, Eq b) =>
                   Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a -> IMap k s b ->
-                  Par d s HandlerPool
+                  Par d s ()
 traverseMapHP_ mh fn set os = do
   forEachHP mh set $ \ k x -> do 
     x' <- fn k x
     insert k x' os
 
--- | Return a new map which will (ultimately) contain everything in either input map.
---   Conflicting entries will result in a multiple put exception.
+-- | Return a new map which will (ultimately) contain everything in either input
+-- map.  Conflicting entries will result in a multiple put exception.
+-- Optionally ties the handlers to a pool.
 unionHP :: (Ord k, Eq a) => Maybe HandlerPool ->
-           IMap k s a -> IMap k s a -> Par d s (HandlerPool, IMap k s a)
+           IMap k s a -> IMap k s a -> Par d s (IMap k s a)
 unionHP mh m1 m2 = do
-  hp <- fromMaybe newPool (fmap return mh)  
   os <- newEmptyMap
-  addHandler hp m1 (\ k v -> insert k v os)
-  addHandler hp m2 (\ k v -> insert k v os)
-  return (hp, os)
+  forEachHP mh m1 (\ k v -> insert k v os)
+  forEachHP mh m2 (\ k v -> insert k v os)
+  return os
 
 --------------------------------------------------------------------------------
 -- Map specific DeepFreeze instances:

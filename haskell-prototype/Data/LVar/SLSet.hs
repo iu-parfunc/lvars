@@ -17,7 +17,7 @@ module Data.LVar.SLSet
          putInSet, waitElem, waitSize, 
 
          -- * Iteration and callbacks
-         forEach, addHandler,
+         forEach, forEachHP,
 
          -- * Quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, freezeSet,
@@ -27,7 +27,7 @@ module Data.LVar.SLSet
          cartesianProd, cartesianProds, 
 
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         forEachHP, traverseSetHP, traverseSetHP_,
+         traverseSetHP, traverseSetHP_,
          cartesianProdHP, cartesianProdsHP
        ) where 
 
@@ -37,10 +37,10 @@ import           Data.Maybe
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Control.Monad
-import           Control.LVish as LV hiding (addHandler)
+import           Control.LVish as LV
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO)
+                                                freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
@@ -127,10 +127,10 @@ withCallbacksThenFreeze (ISet lv) callback action = do
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
         return $ Just $ unWrapPar $ do
-          SLM.foldlWithKey (\() v () -> forkInPool hp $ callback v) () slm
+          SLM.foldlWithKey (\() v () -> forkHP (Just hp) $ callback v) () slm
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
-  WrapPar $ L.addHandler hp (unWrapLVar lv) initCB deltCB
+  WrapPar $ addHandler (Just hp) (unWrapLVar lv) initCB deltCB
   
   -- We additionally have to quiesce here because we fork the inital set of
   -- callbacks on their own threads:
@@ -148,20 +148,22 @@ freezeSet (ISet (WrapLVar lv)) = WrapPar $ do
 
 --------------------------------------------------------------------------------
 
--- | Add an (asynchronous) callback that listens for all new elements added to the set.
-addHandler :: HandlerPool                 -- ^ pool to enroll in 
+-- | Add an (asynchronous) callback that listens for all new elements added to
+-- the set, optionally enrolled in a handler pool.
+forEachHP :: Maybe HandlerPool            -- ^ optional pool to enroll in 
            -> ISet s a                    -- ^ Set to listen to
            -> (a -> Par d s ())           -- ^ callback
            -> Par d s ()
-addHandler hp (ISet lv) callb = WrapPar $ 
-    L.addHandler hp (unWrapLVar lv) globalCB (\x -> return$ Just$ unWrapPar$ callb x)
+forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ 
+    addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
   where
     globalCB slm = 
       return $ Just $ unWrapPar $
-        SLM.foldlWithKey (\() v () -> forkInPool hp $ callb v) () slm
+        SLM.foldlWithKey (\() v () -> forkHP hp $ callb v) () slm
 
--- | Shorthandfor creating a new handler pool and adding a single handler to it.
-forEach :: ISet s a -> (a -> Par d s ()) -> Par d s HandlerPool
+-- | Add an (asynchronous) callback that listens for all new elements added to
+-- the set
+forEach :: ISet s a -> (a -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
@@ -208,20 +210,19 @@ copy = traverseSet return
 
 -- | Establish monotonic map between the input and output sets.
 traverseSet :: Ord b => (a -> Par d s b) -> ISet s a -> Par d s (ISet s b)
-traverseSet f s = fmap snd $ traverseSetHP Nothing f s
+traverseSet f s = traverseSetHP Nothing f s
 
 -- | An imperative-style, inplace version of 'traverseSet' that takes the output set
 -- as an argument.
 traverseSet_ :: Ord b => (a -> Par d s b) -> ISet s a -> ISet s b -> Par d s ()
-traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
+traverseSet_ f s o = traverseSetHP_ Nothing f s o
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
 union :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
 union s1 s2 = do
-  hp <- newPool
   os <- newEmptySet
-  addHandler hp s1 (`putInSet` os)
-  addHandler hp s2 (`putInSet` os)
+  forEach s1 (`putInSet` os)
+  forEach s2 (`putInSet` os)
   return os
 
 -- | Build a new set which will contain the intersection of the two input sets.
@@ -230,10 +231,9 @@ intersection :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
 --   AJT: You could do it using cartesian product...
 -- Well, for now we cheat and use liftIO:
 intersection s1 s2 = do
-  hp <- newPool
   os <- newEmptySet
-  addHandler hp s1 (fn os s2)
-  addHandler hp s2 (fn os s1)
+  forEach s1 (fn os s2)
+  forEach s2 (fn os s1)
   return os
  where  
   fn outSet other@(ISet lv) elm = do
@@ -245,15 +245,11 @@ intersection s1 s2 = do
 
 -- | Cartesian product of two sets.
 cartesianProd :: (Ord a, Ord b) => ISet s a -> ISet s b -> Par d s (ISet s (a,b))
-cartesianProd s1 s2 =
-  fmap snd $ 
-  cartesianProdHP Nothing s1 s2 
+cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
   
 -- | Takes the cartesian product of several sets.
 cartesianProds :: Ord a => [ISet s a] -> Par d s (ISet s [a])
-cartesianProds ls =
-  fmap snd $ 
-  cartesianProdsHP Nothing ls
+cartesianProds ls = cartesianProdsHP Nothing ls
 
 --------------------------------------------------------------------------------
 -- Alternate versions of functions that EXPOSE the HandlerPools
@@ -261,65 +257,50 @@ cartesianProds ls =
 
 -- TODO: unionHP, intersectionHP...
 
--- | Variant of 'forEach' that optionally uses an existing handler pool.
-forEachHP :: Maybe HandlerPool -> ISet s a -> (a -> Par d s ()) -> Par d s HandlerPool
-forEachHP mh is cb = do 
-   hp <- fromMaybe newPool (fmap return mh)
-   addHandler hp is cb
-   return hp
-
--- | Variant that optionally uses an existing handler pool.
+-- | Variant that optionally ties the handlers to a pool.
 traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
-                 Par d s (HandlerPool, ISet s b)
+                 Par d s (ISet s b)
 traverseSetHP mh fn set = do
   os <- newEmptySet
-  hp <- traverseSetHP_ mh fn set os  
-  return (hp,os)
+  traverseSetHP_ mh fn set os  
+  return os
 
--- | Variant that optionally uses an existing handler pool.
+-- | Variant that optionally ties the handlers to a pool.
 traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a -> ISet s b ->
-                  Par d s HandlerPool
+                  Par d s ()
 traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
     x' <- fn x
     putInSet x' os
 
--- | Variant of 'cartesianProd' that exposes the handler pool for quiescing and
--- optionally uses an existing, input handler pool.
+-- | Variant of 'cartesianProd' that optionally ties the handlers to a pool.
 cartesianProdHP :: (Ord a, Ord b) => Maybe HandlerPool -> ISet s a -> ISet s b ->
-                   Par d s (HandlerPool, ISet s (a,b))
+                   Par d s (ISet s (a,b))
 cartesianProdHP mh s1 s2 = do
   -- This is implemented much like intersection:
-  hp <- fromMaybe newPool (fmap return mh)
   os <- newEmptySet
-  addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
-  addHandler hp s2 (fn os s1 (\ x y -> (y,x)))
-  return (hp,os)
+  forEachHP mh s1 (fn os s2 (\ x y -> (x,y)))
+  forEachHP mh s2 (fn os s1 (\ x y -> (y,x)))
+  return os
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
   fn outSet other@(ISet lv) cmbn elm1 = 
     SLM.foldlWithKey (\() elm2 () -> putInSet (cmbn elm1 elm2) outSet) () (state lv)
 
--- | Variant of 'cartesianProds' that exposes the handler pool for quiescing and
--- optionally uses an existing, input handler pool.
+-- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
 cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
-                    Par d s (HandlerPool, ISet s [a])
-cartesianProdsHP mh [] = do s <- newEmptySet
-                            h <- fromMaybe newPool (fmap return mh) -- Pointless!
-                            return (h,s)
+                    Par d s (ISet s [a])
+cartesianProdsHP mh [] = newEmptySet
 cartesianProdsHP mh ls = do
-  -- We use one handler pool for the whole network of related sets we create:
-  hp <- fromMaybe newPool (fmap return mh)  
 #if 1
   -- Case 1: recursive definition in terms of pairwise products:
   -- It would be best to create a balanced tree of these, I believe:
-  let loop [lst]     = traverseSetHP (Just hp) (\x -> return [x]) lst -- Inefficient!
+  let loop [lst]     = traverseSetHP mh (\x -> return [x]) lst -- Inefficient!
       loop (nxt:rst) = do
-        (_, partial) <- loop rst
-        (_,p1) <- cartesianProdHP (Just hp) nxt partial
-        traverseSetHP (Just hp) (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
-  (_, x) <- loop ls
-  return (hp, x)
+        partial <- loop rst
+        p1 <- cartesianProdHP mh nxt partial
+        traverseSetHP mh (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
+  loop ls
 #else
   os <- newEmptySet
   let loop done [] acc = acc

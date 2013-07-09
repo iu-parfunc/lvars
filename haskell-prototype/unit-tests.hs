@@ -229,16 +229,16 @@ v3d = runParIO $
         freezeSet s2
 
 case_v3e :: Assertion
-case_v3e = assertEqual "test of parallelism in addHandler"
+case_v3e = assertEqual "test of parallelism in forEachHP"
               (S.fromList [1..5]) =<<  v3e
 
--- | Same as v3d but for addHandler
+-- | Same as v3d but for forEachHP
 v3e :: IO (S.Set Int)
 v3e = runParIO $ IS.freezeSet =<<
      do s1 <- IS.newFromList [1..5]
         s2 <- IS.newEmptySet
         hp <- newPool
-        IS.addHandler hp s1 $ \ elm -> do
+        IS.forEachHP (Just hp) s1 $ \ elm -> do
           let dep = case elm of
                       1 -> Just 2
                       2 -> Just 3
@@ -351,7 +351,8 @@ v8a = runParIO $ do
   s1 <- IS.newFromList [1,2,3]
   s2 <- IS.newFromList ['a','b']
   logStrLn " [v8a] now to construct cartesian product..."
-  (h,s3) <- IS.cartesianProdHP Nothing s1 s2
+  h  <- newPool
+  s3 <- IS.cartesianProdHP (Just h) s1 s2
   logStrLn " [v8a] cartesianProd call finished... next quiesce"
   IS.forEach s3 $ \ elm ->
     logStrLn$ " [v8a]   Got element: "++show elm
@@ -374,8 +375,8 @@ v8b = runParIO $ do
   s1 <- IS.newFromList [1,2]
   s2 <- IS.newFromList [40,50]
     -- (hp,s3) <- IS.traverseSetHP Nothing (return . (+100)) s1
-  (_,s3) <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
-  (_,s4) <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
+  s3 <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
+  s4 <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
   IS.forEachHP (Just hp) s4 $ \ elm ->
     logStrLn $ " [v8b]   Got element: "++show elm
   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
@@ -385,7 +386,7 @@ v8b = runParIO $ do
   freezeSet s4
 
 case_v8c :: Assertion
-case_v8c = assertEqual "addHandler on maps"
+case_v8c = assertEqual "forEachHP on maps"
            (M.fromList [(1,101),(2,102)] ) =<< v8c
 
 -- | Similar test with Maps instead of Sets.
@@ -396,7 +397,7 @@ v8c = runParIO $ do
   m2 <- newEmptyMap
   let cb k v = do logStrLn$" [v8c]  Inside callback for Map.. key="++show k
                   IM.insert k (v+100) m2
-  IM.addHandler hp m1 cb 
+  IM.forEachHP (Just hp) m1 cb 
   logStrLn " [v8c] Everything set up; about to quiesce..."
   quiesce hp
   logStrLn " [v8c] quiesce finished, next freeze:"
@@ -416,8 +417,8 @@ v8d = runParIO $ do
   logStrLn " [v8d] Got two fresh maps..."
   let cb k v = do logStrLn$" [v8d]  Inside callback for traverse.. key="++show k
                   return (v+100)
-  (_,m3) <- IM.traverseMapHP (Just hp) cb m1
-  (_,m4) <- IM.unionHP       (Just hp) m2 m3
+  m3 <- IM.traverseMapHP (Just hp) cb m1
+  m4 <- IM.unionHP       (Just hp) m2 m3
   IM.forEachHP (Just hp) m4 $ \ k elm ->
     logStrLn $ " [v8d]   Got element: "++show (k,elm)
   logStrLn " [v8d] Everything set up; about to quiesce..."
