@@ -11,7 +11,7 @@
 module Util.PBBS
        (
          -- * PBBS specific
-         readAdjacencyGraph,
+         readAdjacencyGraph, parseAdjacencyGraph,
          AdjacencyGraph(..), NodeID, nbrs,
          
          -- * Generally useful utilities
@@ -79,16 +79,21 @@ nbrs AdjacencyGraph{vertOffets, allEdges} nid =
 
 type NodeID = Word
 
--- | Read a PBBS AdjacencyGraph file format.
+-- | Read an PBBS AdjacencyGraph file into memory.
 readAdjacencyGraph :: String -> IO AdjacencyGraph
 readAdjacencyGraph path = do
   bs <- fmap (B.dropWhile isSpace) $
         unsafeMMapFile path
-  let tag = "AdjacencyGraph"      
+  ncap <- getNumCapabilities
+  runParIO $ parseAdjacencyGraph (ncap * overPartition) bs
+
+-- | Parse a PBBS AdjacencyGraph file from a ByteString, in parallel.
+parseAdjacencyGraph :: Int -> B.ByteString -> Par d s AdjacencyGraph
+parseAdjacencyGraph chunks bs = 
   case B.splitAt (B.length tag) bs of
     (fst, rst) | fst /= tag -> error$ "readAdjacencyGraph: First word in file was not "++B.unpack tag
                | otherwise -> do                 
-      ls <- parReadNats rst
+      ls <- parReadNats chunks rst
       let vec  = U.concat (sewEnds ls)
           vec' = U.drop 2 vec
       unless (U.length vec >= 2)$  error "readAdjacencyGraph: file ends prematurely."
@@ -98,6 +103,8 @@ readAdjacencyGraph path = do
       if U.length v1 == verts && U.length v2 == edges
         then return (AdjacencyGraph v1 v2)
         else error "readAdjacencyGraph: file doesn't contain as many entry as the header claims."
+ where
+   tag = "AdjacencyGraph"
 
 --------------------------------------------------------------------------------
 
@@ -129,15 +136,17 @@ overPartition = 4
 readNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read nty) =>
                FilePath -> IO [U.Vector nty]
 readNumFile path = do
-  bs <- unsafeMMapFile path
-  ls <- parReadNats bs
+  bs    <- unsafeMMapFile path
+  ncpus <- getNumCapabilities 
+  ls    <- runParIO $ parReadNats (ncpus * overPartition) bs
   return (sewEnds ls)
 
 testReadNumFile :: forall nty . (U.Unbox nty, Integral nty, Eq nty, Show nty, Read nty) =>
                    FilePath -> IO [U.Vector nty]
 testReadNumFile path = do
-  bs <- unsafeMMapFile path
-  ls <- parReadNats bs
+  bs    <- unsafeMMapFile path
+  ncpus <- getNumCapabilities 
+  ls    <- runParIO $ parReadNats (ncpus * overPartition) bs
   consume ls
   let ls' = sewEnds ls
   putStrLn $ "Number of chunks after sewing: "++show (length ls')
@@ -148,37 +157,29 @@ testReadNumFile path = do
    else error "Did not match expected!"
   return ls'
 
+
 -- | Read all the decimal numbers from a Bytestring.  They must be positive integers.
 -- Be warned that this function is very permissive -- all non-digit characters are
 -- treated as separators.
-parReadNats :: forall nty . (U.Unbox nty, Num nty, Eq nty) =>
-               S.ByteString -> IO [PartialNums nty]
-parReadNats bs = do
-  ncap <- getNumCapabilities
-  par ncap
- where
-   par ncap = do        
-        let chunks = ncap * overPartition
-            (each,left) = S.length bs `quotRem` chunks
+parReadNats :: forall nty d s . (U.Unbox nty, Num nty, Eq nty) =>
+               Int -> S.ByteString -> Par d s [PartialNums nty]
+parReadNats chunks bs = par
+  where
+    (each,left) = S.length bs `quotRem` chunks
+    mapper ind = do
+      let howmany = each + if ind==chunks-1 then left else 0
+          mychunk = S.take howmany $ S.drop (ind * each) bs
+ --              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
+      partial <- liftIO (readNatsPartial mychunk) -- TODO: move to ST.
+      return [partial]
+    reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
 
-            mapper ind = do
-              let howmany = each + if ind==chunks-1 then left else 0
-                  mychunk = S.take howmany $ S.drop (ind * each) bs
---              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
-              partial <- liftIO (readNatsPartial mychunk)
-              return [partial]
-            reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
-
-            par :: LV.Par d s [PartialNums nty]
-            par = do _ <- if False
-                          then new    -- Fix IVar type, ugh.
-                          else I.new  -- Should be a better way...
-                     parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
-                                          mapper reducer []              
-        ls <- LV.runParIO par
-          
-        -- putStrLn$ "Finished, got "++show (length ls)++" partial reads of output."
-        return ls
+    par :: LV.Par d s [PartialNums nty]
+    par = do _ <- if False
+                  then new    -- Fix IVar type, ugh.
+                  else I.new  -- Should be a better way...
+             parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
+                                  mapper reducer []              
 
 --------------------------------------------------------------------------------                          
 -- Partially parsed number fragments
@@ -400,7 +401,7 @@ t4 = do putStrLn$ "Using parReadNats + readFile"
         bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
         t1 <- getCurrentTime
         putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
-        pns <- parReadNats bs
+        pns <- runParIO $ parReadNats 4 bs
         consume pns
         return pns
 
