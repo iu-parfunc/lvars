@@ -125,6 +125,29 @@ maxDegree gr component = do
     C.put mc (U.length$ nbrs gr nd)
   return mc
 
+-- Lattice where undecided = bot, and chosen/nbrchosen are disjoint middle states
+flag_UNDECIDED :: Word8
+flag_CHOSEN    :: Word8
+flag_NBRCHOSEN :: Word8
+flag_UNDECIDED = 0
+flag_CHOSEN    = 1
+flag_NBRCHOSEN = 2
+
+-- | Uses a notion of priority writes.
+-- maximalIndependentSet :: ISet s NodeID -> Par d s (ISet s NodeID)  -- Operate on a subgraph
+maximalIndependentSet :: AdjacencyGraph -> Par d s (ISet s NodeID) -- Operate on a whole graph.
+maximalIndependentSet = loop 0
+  where
+    loop self = do
+      let flag = undefined
+      prioWrite self flag
+      undefined
+
+    prioWrite = undefined
+    
+-- need to compute a fold over neighbors... some of which are bottom
+-- if any neighbors are less than us and decided, we commit too..
+
 
 
 --------------------------------------------------------------------------------
