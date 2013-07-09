@@ -166,7 +166,7 @@ putInSet !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
           -- For idempotency it is important that we return Nothing if not.
           if S.size set' > S.size set
           then (set',Just elm)
-          else (set,Nothing)
+          else (set, Nothing)
 
 
 -- | Wait for the set to contain a specified element.

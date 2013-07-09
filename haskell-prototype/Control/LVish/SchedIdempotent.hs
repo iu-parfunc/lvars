@@ -164,8 +164,8 @@ defaultDbg = 0
 --     generally represent a single insertion.
 data LVar a d = LVar {
   state  :: a,                -- the current, "global" state of the LVar
-  status :: IORef (Status d), -- is the LVar active or frozen?  
-  name   :: LVarID            -- a unique identifier for this LVar
+  status :: {-# UNPACK #-} !(IORef (Status d)), -- is the LVar active or frozen?  
+  name   :: {-# UNPACK #-} !LVarID            -- a unique identifier for this LVar
 }
 
 type LVarID = IORef ()
@@ -329,7 +329,7 @@ putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
             Frozen -> error "Attempt to change a frozen LVar"
             Active listeners -> 
               B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-        exec (k ret) q        
+        exec (k ret) q 
   exec (close (doPut state) cont) q            -- possibly modify the LVar  
   
 -- | Update an LVar without generating a result.  

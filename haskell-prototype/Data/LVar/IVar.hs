@@ -79,8 +79,7 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 put_ :: Eq a => IVar s a -> a -> Par d s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef ref update
-
-        update (Just y) | x == y = (Just y, Just y)
+        update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
