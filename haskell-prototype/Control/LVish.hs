@@ -17,6 +17,7 @@ module Control.LVish
     yield, newPool, fork, forkInPool,
     runPar, runParIO,
     runParThenFreeze, runParThenFreezeIO,
+    runParThenFreezeIO2,
     
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
@@ -91,8 +92,18 @@ runParThenFreezeIO :: (DeepFreeze (f s a) b, LVarData1 f) =>
                     Par d s (f s a) -> IO b
 runParThenFreezeIO par@(WrapPar pi) = do 
   res <- L.runParIO pi
-  runParIO (unsafeConvert $ deepFreeze res)
+  runParIO (unsafeConvert $ deepFreeze res) -- Inefficient! TODO: run without worker threads.
 
+-- | If DeepFreeze were flexible enough, this should not be necessary.
+runParThenFreezeIO2 :: (DeepFreeze (f s a) b, LVarData1 f,
+                        DeepFreeze (g s c) d, LVarData1 g) =>
+                    Par det s (f s a, g s c) -> IO (b,d)
+runParThenFreezeIO2 par@(WrapPar pi) = do
+  (res1,res2) <- L.runParIO pi
+  v1 <- runParIO (unsafeConvert $ deepFreeze res1) -- Inefficient! TODO: run without worker threads.
+  v2 <- runParIO (unsafeConvert $ deepFreeze res2) -- Inefficient! TODO: run without worker threads.
+  return (v1,v2)
+  
 
 logStrLn :: String -> Par d s ()
 logStrLn = WrapPar . L.logStrLn
