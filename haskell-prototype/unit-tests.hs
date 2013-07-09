@@ -259,6 +259,33 @@ v3e = runParIO $ IS.freezeSet =<<
         logStrLn " [quiesce completed] "
         return s2
 
+-- RRN: Currently we have a policy where leaving the seen with running threads is
+-- disallowed, but blocked ones are tolerated.
+case_i3f :: Assertion
+case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
+#ifdef NO_DANGLING_THREADS
+-- | A test to make sure that we get an error when we block on an unavailable ivar.
+i3f :: IO ()
+i3f = runParIO$ do
+  iv <- IV.new
+  fork $ do IV.get iv
+            logStrLn "Unblocked!  Shouldn't see this."
+            return ()
+  return ()
+#else 
+i3f = error "test switched off"
+#endif
+
+case_i3g :: Assertion
+case_i3g = exceptionOrTimeOut 0.3 [] i3g
+-- | A still-running worker thread should NOT be allowed, because it may do a put that causes an exception.
+i3g :: IO Word8
+i3g = runParIO$ do
+  iv <- IV.new
+  fork $ do let loop !ls = loop [1 .. length ls]
+            loop [1..10]
+  return 9
+
 
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
@@ -444,16 +471,18 @@ v9a = runParIO$ do
   NA.get arr 5
 
 
-case_i9b :: Assertion
-case_i9b = exceptionOrTimeOut 0.3 [] i9b
--- | A test to make sure that we get an error when we should.
-i9b :: IO Word8
-i9b = runParIO$ do
-  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
-  fork $ do NA.get arr 5
-            logStrLn "Unblocked!  Shouldn't see this."
-            return ()
-  return 9
+-- #ifdef NO_DANGLING_THREADS
+-- case_i9b :: Assertion
+-- case_i9b = exceptionOrTimeOut 0.3 [] i9b
+-- -- | A test to make sure that we get an error when we should.
+-- i9b :: IO Word8
+-- i9b = runParIO$ do
+--   arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+--   fork $ do NA.get arr 5
+--             logStrLn "Unblocked!  Shouldn't see this."
+--             return ()
+--   return 9
+-- #endif
 
 case_i9c :: Assertion
 case_i9c = exceptionOrTimeOut 0.3 ["thread blocked indefinitely"] i9c
@@ -524,20 +553,6 @@ i9g = runParIO$ do
   arr <- NA.newEmptyNatArray 1
   NA.put arr 0 0
   NA.get arr 0
-
--- v9e :: IO Word64
--- v9e = runParIO$ do
---   let size = 100000
---   arr <- NA.newEmptyNatArray size
---   do -- fork $
---     forM_ [0..size-1] $ \ix ->
---             NA.put arr ix (fromIntegral ix)
---   logStrLn "After fork."
---   let loop !acc ix | ix == size = return acc
---                    | otherwise  = do v <- NA.get arr ix
---                                      loop (acc+v) (ix+1)
---   loop 0 0
-
 
 
 

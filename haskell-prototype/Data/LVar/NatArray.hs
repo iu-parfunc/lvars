@@ -9,9 +9,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
 
--- UNFINISHED!!!
-
 -- | An I-structure (array) of positive numbers.
+--
+-- Experimental.
 
 module Data.LVar.NatArray
        (
@@ -92,69 +92,19 @@ instance LVarData1 NatArray where
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newEmptyNatArray :: forall elt d s . Storable elt =>
+newEmptyNatArray :: forall elt d s . (Storable elt, Num elt) =>
                      Int -> Par d s (NatArray s elt)
-newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do 
+newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
+#if 0
   let bytes = sizeOf (undefined::elt) * len
   mem <- callocBytes bytes
   fp <- newForeignPtr finalizerFree mem
   return $! M.unsafeFromForeignPtr0 fp len
+#else
+  M.replicate len 0
+#endif
 
 --------------------------------------------------------------------------------
--- Quasi-deterministic ops:
---------------------------------------------------------------------------------
-
-{-
-type QPar = Par QuasiDet 
-
--- | Freeze an 'NatArray' after a specified callback/handler is done running.  This
--- differs from withCallbacksThenFreeze by not taking an additional action to run in
--- the context of the handlers.
---
---    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: NatArray s a -> (a -> QPar s ()) -> QPar s ()
-freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
-  
--- | Register a per-element callback, then run an action in this context, and freeze
--- when all (recursive) invocations of the callback are complete.  Returns the final
--- value of the provided action.
-withCallbacksThenFreeze :: Eq b => NatArray s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
-withCallbacksThenFreeze (NatArray (WrapLVar lv)) callback action =
-    do
-       hp  <- newPool 
-       res <- IV.new -- TODO, specialize to skip this when the init action returns ()
-       WrapPar$ 
-         freezeLVAfter lv (initCB hp res) deltCB
-       -- We additionally have to quiesce here because we fork the inital set of
-       -- callbacks on their own threads:
-       quiesce hp
-       IV.get res
-  where
-    deltCB x = return$ Just$ unWrapPar$ callback x
-    initCB hp resIV ref = do
-      -- The implementation guarantees that all elements will be caught either here,
-      -- or by the delta-callback:
-      set <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ do
-        F.foldlM (\() v -> forkHP (Just hp)$ callback v) () set -- Non-allocating traversal.
-        res <- action -- Any additional puts here trigger the callback.
-        IV.put_ resIV res
-
--- | Get the exact contents of the set.  Using this may cause your
--- program to exhibit a limited form of nondeterminism: it will never
--- return the wrong answer, but it may include synchronization bugs
--- that can (nondeterministically) cause exceptions.
-freezeSet :: NatArray s a -> QPar s (S.Set a)
-freezeSet (NatArray (WrapLVar lv)) = WrapPar $ 
-   do freezeLV lv
-      getLV lv globalThresh deltaThresh
-  where
-    globalThresh _  False = return Nothing
-    globalThresh ref True = fmap Just $ readIORef ref
-    deltaThresh _ = return Nothing
-
---------------------------------------------------------------------------------
--}
 
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
@@ -218,15 +168,16 @@ put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
                                      show ix++" new/old : "++show elm++"/"++show orig
 
 {-# INLINE get #-}
--- | Wait for an indexed entry to contain ANY of a certain set of bits.  Warning,
---   this is inefficient if it needs to block, because the deltaThresh must test
---   EVERY new addition.
+-- | Wait for an indexed entry to contain ANY of a certain set of bits.
+-- 
+-- Warning: this is inefficient if it needs to block, because the deltaThresh must
+-- monitor EVERY new addition.
 get :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
        NatArray s elt -> Int -> Par d s elt
 get (NatArray (WrapLVar lv)) !ix  = WrapPar $
     getLV lv globalThresh deltaThresh
   where
-    globalThresh ref@(M.MVector offset fptr) _frzn = do      
+    globalThresh ref _frzn = do      
       elm <- M.read ref ix 
       if elm == 0
         then return Nothing
@@ -235,111 +186,6 @@ get (NatArray (WrapLVar lv)) !ix  = WrapPar $
       -- We want more locality than that...
     deltaThresh (ix2,e2) | ix == ix2 = return$! Just e2
                          | otherwise = return Nothing 
-
--- Wait for it to contain ALL of a certain set of bits.
--- waitBitsAnd
-
-{-
-
---------------------------------------------------------------------------------
--- Higher level routines that could be defined using the above interface.
---------------------------------------------------------------------------------
-
--- | Return a fresh set which will contain strictly more elements than the input set.
--- That is, things put in the former go in the latter, but not vice versa.
-copy :: Ord a => NatArray s a -> Par d s (NatArray s a)
-copy = traverseSet return
-
--- | Establish monotonic map between the input and output sets.
-traverseSet :: Ord b => (a -> Par d s b) -> NatArray s a -> Par d s (NatArray s b)
-traverseSet f s = traverseSetHP Nothing f s
-
--- | An imperative-style, inplace version of 'traverseSet' that takes the output set
--- as an argument.
-traverseSet_ :: Ord b => (a -> Par d s b) -> NatArray s a -> NatArray s b -> Par d s ()
-traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
-
--- | Return a new set which will (ultimately) contain everything in either input set.
-union :: Ord a => NatArray s a -> NatArray s a -> Par d s (NatArray s a)
-union s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (`putInSet` os)
-  forEach s2 (`putInSet` os)
-  return os
-
--- | Build a new set which will contain the intersection of the two input sets.
-intersection :: Ord a => NatArray s a -> NatArray s a -> Par d s (NatArray s a)
--- Can we do intersection with only the public interface?  It should be monotonic.
--- Well, for now we cheat and use liftIO:
-intersection s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (fn os s2)
-  forEach s2 (fn os s1)
-  return os
- where  
-  fn outSet other@(NatArray lv) elm = do
-    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
-    peek <- LI.liftIO$ readIORef (state lv)
-    if S.member elm peek 
-      then putInSet elm outSet
-      else return ()
-
--- | Cartesian product of two sets.
-cartesianProd :: (Ord a, Ord b) => NatArray s a -> NatArray s b -> Par d s (NatArray s (a,b))
-cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
-  
--- | Takes the cartesian product of several sets.
-cartesianProds :: Ord a => [NatArray s a] -> Par d s (NatArray s [a])
-cartesianProds ls = cartesianProdsHP Nothing ls
-
---------------------------------------------------------------------------------
--- Alternate versions of functions that EXPOSE the HandlerPools
---------------------------------------------------------------------------------
-
--- TODO: unionHP, intersectionHP...
-
--- | Variant that optionally ties the handlers to a pool.
-traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> NatArray s a ->
-                 Par d s (NatArray s b)
-traverseSetHP mh fn set = do
-  os <- newEmptySet
-  traverseSetHP_ mh fn set os  
-  return os
-
--- | Variant that optionally ties the handlers to a pool.
-traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> NatArray s a -> NatArray s b ->
-                  Par d s ()
-traverseSetHP_ mh fn set os = do
-  forEachHP mh set $ \ x -> do 
-    x' <- fn x
-    putInSet x' os
-
---------------------------------------------------------------------------------
--- Set specific DeepFreeze instances:
---------------------------------------------------------------------------------
-
--- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-
-instance DeepFreeze (NatArray s a) (S.Set a) where
-  type Session (NatArray s a) = s
-  deepFreeze iv = do ISetSnap m <- freeze iv
-                     return m
-
-------------------------------------------------------------
--- Compromise to avoid overlap
-------------------------------------------------------------
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
-         DeepFreeze (NatArray s0 (f s0 a)) (S.Set b)  where
-    type Session (NatArray s0 (f s0 a)) = s0
-    deepFreeze from = do
-      x <- freezeSet from
-      let fn :: f s0 a -> S.Set b -> QPar s0 (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x 
-      return y      
-
- -}
 
 
 {-
