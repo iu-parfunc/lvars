@@ -83,11 +83,11 @@ instance DeepFreeze (IStructure s a) (V.Vector (Maybe a)) where
 {-
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
--- the set, optionally enrolled in a handler pool
+-- the IStructure, optionally enrolled in a handler pool
 forEachHP :: (Storable a, Eq a, Num a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> NatArray s a                -- ^ Set to listen to
-          -> (Int -> a -> Par d s ())           -- ^ callback
+          -> (Int -> a -> Par d s ())    -- ^ callback
           -> Par d s ()
 forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB deltaCB
@@ -102,6 +102,9 @@ forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
         if elm == 0
         then return ()                
         else forkHP hp $ callb ix elm
+-}
+
+{-
 
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.

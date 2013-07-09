@@ -113,7 +113,7 @@ newEmptyNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
--- the set, optionally enrolled in a handler pool
+-- the array, optionally enrolled in a handler pool.
 forEachHP :: (Storable a, Eq a, Num a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> NatArray s a                -- ^ Set to listen to

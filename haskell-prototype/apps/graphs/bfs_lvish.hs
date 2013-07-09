@@ -19,6 +19,8 @@ import Data.LVar.Set as S
 import Data.LVar.SLSet as S
 #endif
 
+import Data.LVar.IStructure as ISt
+
 -- An LVar-based version of bf_traverse.  As we traverse the graph,
 -- the results of applying f to each node accumulate in an LVar, where
 -- they are available to other computations, enabling pipelining.
@@ -117,6 +119,19 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
     U.forM_ (nbrs gr nd) (`putInSet` st)
   return st
 --    T.traverse_ (`putInSet` st) (nbrs gr nd)
+
+
+-- | A version that uses an array rather than set representation.
+bfs_async_arr :: AdjacencyGraph -> NodeID -> Par d s (IStructure s Bool)
+bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
+  arr <- newIStructure (U.length vvec)
+  ISt.put_ arr (fromIntegral start) True
+{-  
+  forEach st $ \ nd -> do
+    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+    U.forM_ (nbrs gr nd) (`putInSet` st)
+-}
+  return arr
 
 maxDegree :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
 maxDegree gr component = do
