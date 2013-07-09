@@ -14,6 +14,7 @@ import Data.LVar.MaxCounter as C
 import Data.Traversable as T
 import Data.Time.Clock
 import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Storable as UV
 import System.Mem (performGC)
 import System.Environment (getArgs)
 import System.Directory
@@ -189,16 +190,15 @@ maximalIndependentSet gr@(AdjacencyGraph vvec evec) = do
         | i == numNbrs = thisNodeWins
         | otherwise = do
           logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
-          let nbrInd = fromIntegral$ nbrs U.! i
-              nbr    = vvec U.! nbrInd
+          let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
               selfInd' = fromIntegral selfInd
           -- If we got to the end of the neighbors below us, then we are NOT disqualified:
           if nbrInd > selfInd
             then thisNodeWins
             else do
               -- This should never block in a single-thread execution:
-              logStrLn (" [MIS] ! Blocking on: "++show nbr)
-              nbrFlag <- NArr.get flagsArr (fromIntegral nbr)
+              logStrLn (" [MIS] ! Blocking on nbrInd "++show nbrInd)
+              nbrFlag <- NArr.get flagsArr (fromIntegral nbrInd)
               if nbrFlag == flag_CHOSEN
                 then NArr.put flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
@@ -339,7 +339,13 @@ main = do
     5 -> do putStrLn " ! Version 4: MIS only, with NatArrays "
             let par :: Par d0 s0 (NatArray s0 Word8)
                 par = maximalIndependentSet gr
+#if 1                
             _ <- runParIO_ par
+#else                 
+            NatArraySnap (x :: UV.Vector Word8) <- runParThenFreezeIO par
+            putStrLn$"MIS: result: "++x
+            putStrLn$"MIS: number of vertices in result: "++show (UV.sum (UV.filter (==1) x))
+#endif
             return ()
 
 

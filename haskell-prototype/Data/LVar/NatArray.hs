@@ -8,6 +8,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE GADTs #-}
 
 -- | An I-structure (array) of positive numbers.
 --
@@ -16,8 +18,7 @@
 module Data.LVar.NatArray
        (
          -- * Basic operations
-         NatArray,
-         -- Snapshot(NatArraySnap),
+         NatArray, Snapshot(NatArraySnap),
          
          newNatArray, put, get,
 
@@ -74,7 +75,8 @@ import qualified Control.LVish.SchedIdempotent as L
 -- | An array of bit-fields with a monotonic OR operation.  This can be used to model
 --   a set of Ints by setting the vector entries to zero or one, but it can also
 --   model other finite lattices for each index.
-newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
+-- newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
+data NatArray s a = Storable a => NatArray !(LVar s (M.IOVector a) (Int,a))
 
 unNatArray (NatArray lv) = lv
 
@@ -82,18 +84,22 @@ unNatArray (NatArray lv) = lv
 -- instance Eq (NatArray s v) where
 --   NatArray lv1 == NatArray lv2 = state lv1 == state lv2 
 
-{-
-
 instance LVarData1 NatArray where
-  newtype Snapshot NatArray a = ISetSnap (S.Set a)
-      deriving (Show,Ord,Read,Eq)
-  freeze    = fmap ISetSnap . freezeSet
-  newBottom = newEmptySet
+  newtype Snapshot NatArray a = NatArraySnap (U.Vector a)
+    deriving (Show,Ord,Read,Eq)
 
-  -- TODO: traverseSnap
+  -- Here we use the data constructor to carry the Storable instance for us:
+  freeze :: NatArray s a -> LV.Par QuasiDet s (Snapshot NatArray a)  
+  freeze (NatArray lv) = unsafeConvert $ fmap NatArraySnap $ freezeNatArray (NatArray lv)
+  -- newBottom :: Par d s (NatArraySnap s a)
+  -- newBottom = error "makes no sense for an NatArray, need size"
+  -- traverseSnap f (NatArraySnap m) = fmap IVarSnap $ traverse f m
 
--}
-
+instance DeepFreeze (NatArray s a) (U.Vector a) where
+  type Session (NatArray s a) = s 
+  deepFreeze iv = 
+      do NatArraySnap m <- LV.freeze iv
+         return m
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
@@ -108,6 +114,10 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 #else
   M.replicate len 0
 #endif
+
+freezeNatArray :: Storable a => NatArray s a -> LV.Par QuasiDet s (U.Vector a)
+freezeNatArray (NatArray lv) = LI.liftIO$ U.unsafeFreeze (LI.state lv)
+
 
 --------------------------------------------------------------------------------
 

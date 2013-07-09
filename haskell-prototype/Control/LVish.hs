@@ -2,7 +2,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}  -- For Determinism
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}  -- For 'Determinism'
+-- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
 
 -- | A module that reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
@@ -34,6 +36,8 @@ import           Control.Applicative
 import           Control.LVish.Internal
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO)
+
+-- import GHC.Exts (Constraint)
 
 --------------------------------------------------------------------------------
 -- Inline *everything*, because these are just wrappers:
@@ -137,8 +141,10 @@ class LVarData1 (f :: * -> * -> *) where
   -- IVar, instead of just the payload.
   -- type Snapshot f a :: *
   data Snapshot f :: * -> *
-  
-  freeze :: f s a -> Par QuasiDet s (Snapshot f a)
+  -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
+
+  freeze :: -- LVCtxt f s a =>
+            f s a -> Par QuasiDet s (Snapshot f a)
   newBottom :: Par d s (f s a)
 
   -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
@@ -175,9 +181,10 @@ class DeepFreeze (from :: *) (to :: *) where
 -- class DeepFreeze (from :: * -> * -> *) (to :: * -> * -> *) where
 --   deepFreeze :: from s a -> Par QuasiDet s (to s a)
 
-instance forall f g a s . (LVarData1 f, LVarData1 g) =>
+instance forall f g a s .
+         (LVarData1 f, LVarData1 g) =>
          DeepFreeze (f s (g s a)) (Snapshot f (Snapshot g a)) where
-  type Session (f s (g s a)) = s 
+  type Session (f s (g s a)) = s
   deepFreeze lvd = unsafeConvert par
     where
       -- RRN: Type signatures here are not in the scope of the above forall... ergh.
@@ -191,6 +198,6 @@ type QPar = Par QuasiDet
 
 -- Inherit everything that regular freeze can do:
 instance LVarData1 f => DeepFreeze (f s a) (Snapshot f a) where
-  type Session (f s a) = s   
+  type Session (f s a) = s
   deepFreeze = unsafeConvert . freeze
 

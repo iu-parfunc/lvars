@@ -43,13 +43,10 @@ import           Control.Concurrent hiding (yield)
 import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
-import           Control.Concurrent.Async as Async
 import           Control.LVish.MonadToss
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
-import qualified Data.Map as M
-import qualified Data.Set as S
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
