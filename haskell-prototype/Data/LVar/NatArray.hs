@@ -198,19 +198,25 @@ forEach :: (Num a, Storable a, Eq a) =>
 forEach = forEachHP Nothing
 
 
+{-# INLINE put #-}
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
-put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
+put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt) =>
        NatArray s elt -> Int -> elt -> Par d s ()
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
           withForeignPtr fptr $ \ ptr -> do 
-            let offset = sizeOf (undefined::elt) * ix 
-            orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm
-            if orig == 0 
-              then return (Just (ix, elm))
-              else error "Multiple puts to index of a NatArray"
+            let offset = sizeOf (undefined::elt) * ix
+            -- ARG, if it weren't for the idempotency requirement we could use fetchAndAdd here:
+            -- orig <- B.fetchAndAdd (P.plusPtr ptr offset) elm                          
+            orig <- B.compareAndSwap (P.plusPtr ptr offset) 0 elm
+            case orig of
+              0 -> return (Just (ix, elm))
+              i | i == elm  -> return Nothing -- Allow repeated, equal puts.
+                | otherwise -> error$"Multiple puts to index of a NatArray: "++
+                                     show ix++" new/old : "++show elm++"/"++show orig
 
+{-# INLINE get #-}
 -- | Wait for an indexed entry to contain ANY of a certain set of bits.  Warning,
 --   this is inefficient if it needs to block, because the deltaThresh must test
 --   EVERY new addition.

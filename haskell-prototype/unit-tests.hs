@@ -433,7 +433,6 @@ v8d = runParIO $ do
 -- NatArrays
 --------------------------------------------------------------------------------
 
-
 case_v9a :: Assertion
 case_v9a = assertEqual "basic NatArray" 4 =<< v9a
 v9a :: IO Word8
@@ -470,8 +469,9 @@ v9d :: IO Word8
 v9d = runParIO$ do
   arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
   fork $ do NA.get arr 5
-            logStrLn "Unblocked!  Shouldn't see this."
+            logStrLn "Unblocked! Good."
             NA.put arr 6 99
+  logStrLn "After fork."
   NA.put arr 5 5
   NA.get arr 6 
 
