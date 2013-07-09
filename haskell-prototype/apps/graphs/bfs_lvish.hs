@@ -5,6 +5,7 @@ import Data.Set as Set
 import Util.PBBS
 import Control.LVish
 import Control.LVish.Internal
+import Control.Monad
 
 import Data.Word
 import Data.LVar.MaxCounter as C
@@ -13,12 +14,19 @@ import Data.Time.Clock
 import qualified Data.Vector.Unboxed as U
 import System.Mem (performGC)
 import System.Environment (getArgs)
-
+import System.Directory
+import System.Process
+  
 #if 1
 import Data.LVar.Set as S
-#else 
+#else
+-- [2013.07.09] This one still isn't terminating on 125K+
+--  Well, maybe it's just slow... 5000 takes 2 seconds.
+--  Yes, it's literally over 100 times slower currently.
 import Data.LVar.SLSet as S
 #endif
+
+import qualified Data.LVar.SLSet as SL
 
 import Data.LVar.IStructure as ISt
 
@@ -126,9 +134,9 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
 bfs_async_arr :: AdjacencyGraph -> NodeID -> Par d s (IStructure s Bool)
 bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newIStructure (U.length vvec)
-  let callback nd _bool = do
+  let callback nd bool = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show myNbrs
+       logStrLn $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
@@ -186,10 +194,30 @@ forVec vec fn = loop 0
 --------------------------------------------------------------------------------
   
 main = do
+  putStrLn "USAGE: ./bfs_lvish <version> <graphSize>"
+
+  args <- getArgs
+  let (version,size) = case args of
+                         [n,s] -> (read n, read s)
+                         [n]   -> (read n, 1000)
+                         _     -> (3,1000)
+
+  let root = "../../../pbbs/breadthFirstSearch/graphData/data/"
+      file = "3Dgrid_J_"++show size
   -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_500000"    -- ~6sec
   -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000" -- ~1sec on 1core
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_500000"    -- ~6sec 
-  let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+
+  origdir <- getCurrentDirectory
+  setCurrentDirectory root  
+  b <- doesFileExist file
+  unless b $ do
+    putStrLn "Input file does not exist!  Building..."
+    system$ "make "++file
+    return ()
+  
+  ------------------------------------------------------------  
   putStrLn$ "Reading file: "++file
   t0 <- getCurrentTime  
   gr <- readAdjacencyGraph file
@@ -205,12 +233,7 @@ main = do
   performGC
   -- writeFile "/tmp/debug" (show gr)
   -- putStrLn$ "Dumped parsed graph to /tmp/debug"
-
-  args <- getArgs
-  let version = case args of
-                 [n] -> read n
-                 _   -> 3
-
+  
   ----------------------------------------
   -- Ver 1: trying combinations
   let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
@@ -221,9 +244,10 @@ main = do
   ----------------------------------------
   -- Ver 2: just set BFS
   let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-      par2 :: Par d0 s0 ()
+      -- par2 :: Par d0 s0 ()
       par2 = do comp <- bfs_async gr 0
                 waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
+                return comp
 
   ----------------------------------------
   -- Ver 3: just array BFS
@@ -234,16 +258,23 @@ main = do
   ----------------------------------------
   t0 <- getCurrentTime
   case version of
-    1 -> do (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
+    1 -> do putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
+            (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
             putStrLn$ "Processing finished, max degree was: "++show maxdeg
             let ISetSnap s = set
             putStrLn$ "Connected component, set size "++show (Set.size s)
 
-    2 -> do --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-            _ <- runParIO par2
+    ----------------------------------------
+    2 -> do putStrLn " ! Version 2: BFS only, with sets "
+            _ <- runParIO_ par2
+            -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+            -- let ISetSnap s = set                                          
+            -- putStrLn$ "Connected component, set size "++show (Set.size s)
             return ()
-
-    3 -> do --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+            
+    ----------------------------------------
+    3 -> do putStrLn " ! Version 3: BFS only, with arrays "
+            --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
             _ <- runParIO_ par3
             return ()
 
