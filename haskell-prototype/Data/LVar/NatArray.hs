@@ -201,8 +201,8 @@ forEach = forEachHP Nothing
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
 put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-           Int -> elt -> NatArray s elt -> Par d s ()
-put !ix !elm (NatArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
+       NatArray s elt -> Int -> elt -> Par d s ()
+put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
           withForeignPtr fptr $ \ ptr -> do 
             let offset = sizeOf (undefined::elt) * ix 
@@ -211,14 +211,21 @@ put !ix !elm (NatArray (WrapLVar lv)) = WrapPar$ putLV lv (putter ix)
               then return (Just (ix, elm))
               else error "Multiple puts to index of a NatArray"
 
--- | Wait for an indexed entry to contain ANY of a certain set of bits.
+-- | Wait for an indexed entry to contain ANY of a certain set of bits.  Warning,
+--   this is inefficient if it needs to block, because the deltaThresh must test
+--   EVERY new addition.
 get :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-       Int -> NatArray s elt -> Par d s elt
-get !ix (NatArray (WrapLVar lv)) = WrapPar $
+       NatArray s elt -> Int -> Par d s elt
+get (NatArray (WrapLVar lv)) !ix  = WrapPar $
     getLV lv globalThresh deltaThresh
   where
-    globalThresh ref _frzn = do undefined
-
+    globalThresh ref@(M.MVector offset fptr) _frzn = do      
+      elm <- M.read ref ix 
+      if elm == 0
+        then return Nothing
+        else return (Just elm)
+    -- FIXME: we don't actually want to call the deltaThresh on every element...
+      -- We want more locality than that...
     deltaThresh (ix2,e2) | ix == ix2 = return$! Just e2
                          | otherwise = return Nothing 
 
@@ -226,20 +233,6 @@ get !ix (NatArray (WrapLVar lv)) = WrapPar $
 -- waitBitsAnd
 
 {-
-
--- | Wait on the SIZE of the set, not its contents.
-waitSize :: Int -> NatArray s a -> Par d s ()
-waitSize !sz (NatArray lv) = WrapPar$
-    getLV (unWrapLVar lv) globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      set <- readIORef ref
-      case S.size set >= sz of
-        True  -> return (Just ())
-        False -> return (Nothing)
-    -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.a
-    deltaThresh _ = globalThresh (state lv) False
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could be defined using the above interface.

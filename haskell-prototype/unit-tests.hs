@@ -18,18 +18,20 @@ import Control.Concurrent.MVar
 import GHC.Conc
 import Data.List (isInfixOf)
 import qualified Data.Set as S
+import Data.IORef
+import Data.Time.Clock
 import System.Environment (getArgs)
 import System.IO
 import System.Random
-
-import Data.IORef
 
 import Control.Exception (catch, evaluate, SomeException)
 
 import Data.Traversable (traverse)
 import qualified Data.Set as S
 import qualified Data.Map as M
+import Data.Word
 
+import qualified Data.LVar.NatArray as NA
 import Data.LVar.Set as IS
 import Data.LVar.Map as IM
 import qualified Data.LVar.IVar as IV
@@ -37,7 +39,7 @@ import qualified Data.LVar.Pair as IP
 
 import Control.LVish
 import qualified Control.LVish.Internal as I
-import Control.LVish.SchedIdempotent (liftIO)
+import Control.LVish.SchedIdempotent (liftIO, dbgLvl)
 import qualified Control.LVish.SchedIdempotent as L
 
 import qualified Data.Concurrent.SNZI as SNZI
@@ -426,7 +428,54 @@ v8d = runParIO $ do
 --  quiesceAll  
   logStrLn " [v8d] quiesce finished, next freeze::"
   freezeMap m4
-  
+
+--------------------------------------------------------------------------------
+-- NatArrays
+--------------------------------------------------------------------------------
+
+
+case_v9a :: Assertion
+case_v9a = assertEqual "basic NatArray" 4 =<< v9a
+v9a :: IO Word8
+v9a = runParIO$ do
+  arr <- NA.newEmptyNatArray 10
+  NA.put arr 5 (4::Word8)
+  NA.get arr 5
+
+
+case_i9b :: Assertion
+case_i9b = exceptionOrTimeOut 0.3 [] i9b
+-- | A test to make sure that we get an error when we should.
+i9b :: IO Word8
+i9b = runParIO$ do
+  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+  fork $ do NA.get arr 5
+            logStrLn "Unblocked!  Shouldn't see this."
+            return ()
+  return 9
+
+case_i9c :: Assertion
+case_i9c = exceptionOrTimeOut 0.3 ["thread blocked indefinitely"] i9c
+i9c :: IO Word8
+i9c = runParIO$ do
+  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+  fork $ do NA.get arr 5
+            logStrLn "Unblocked!  Shouldn't see this."
+            NA.put arr 6 99
+  NA.get arr 6 
+
+case_v9d :: Assertion
+case_v9d = assertEqual "NatArray blocking/unblocking" 99 =<< v9d
+v9d :: IO Word8
+v9d = runParIO$ do
+  arr:: NA.NatArray s Word8 <- NA.newEmptyNatArray 10 
+  fork $ do NA.get arr 5
+            logStrLn "Unblocked!  Shouldn't see this."
+            NA.put arr 6 99
+  NA.put arr 5 5
+  NA.get arr 6 
+
+
 --------------------------------------------------------------------------------
 -- TESTS FOR SNZI  
 --------------------------------------------------------------------------------
@@ -770,11 +819,46 @@ allowSomeExceptions msgs action = do
        (\e ->
          let estr = show e in
          if  any (`isInfixOf` estr) msgs
-          then do putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
+          then do when (dbgLvl>=1) $
+                    putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
                   return (Left e)
           else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
                ++ "\nInstead got this exception:\n  " ++ show estr)
 
+exceptionOrTimeOut :: Double -> [String] -> IO a -> IO ()
+exceptionOrTimeOut time msgs action = do
+  x <- timeOut time $
+       allowSomeExceptions msgs action
+  case x of
+    Just (Right _val) -> error "exceptionOrTimeOut: action returned successfully!" 
+    Just (Left _exn)  -> return () -- Error, yay!
+    Nothing           -> return () -- Timeout.
+
+-- | Time-out an IO action by running it on a separate thread, which is killed when
+-- the timer expires.  This requires that the action do allocation, otherwise it will
+-- be non-preemptable.
+timeOut :: Double -> IO a -> IO (Maybe a)
+timeOut interval act = do
+  result <- newIORef Nothing
+  tid <- forkIO (act >>= writeIORef result . Just)
+  t0  <- getCurrentTime
+  let loop = do
+        stat <- threadStatus tid
+        case stat of
+          ThreadFinished  -> readIORef result
+          ThreadBlocked _ -> return Nothing
+          ThreadDied      -> return Nothing
+          ThreadRunning   -> do 
+            now <- getCurrentTime
+            let delt :: Double
+                delt = fromRational$ toRational$ diffUTCTime now t0
+            if delt >= interval
+              then do killThread tid -- TODO: should probably wait for it to show up as dead.
+                      return Nothing
+              else do threadDelay (10 * 1000)
+                      loop   
+  loop
+  
 assertOr :: Assertion -> Assertion -> Assertion
 assertOr act1 act2 = 
   catch act1 
