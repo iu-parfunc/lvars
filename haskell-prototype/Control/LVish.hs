@@ -128,8 +128,16 @@ runParThenFreezeIO2 par@(WrapPar pi) = do
   return (v1,v2)
   
 
+
 logStrLn :: String -> Par d s ()
+#ifdef DEBUG_LVAR
 logStrLn = WrapPar . L.logStrLn
+#else 
+logStrLn _  = return ()
+{-# INLINE logStrLn #-}
+#endif
+
+
 
 
 ------------------------------------------------------------------------------

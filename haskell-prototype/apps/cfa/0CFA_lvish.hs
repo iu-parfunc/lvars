@@ -25,7 +25,6 @@ import Debug.Trace
 
 import Control.LVish
 import Control.LVish.Internal (liftIO)
--- import Control.LVish.SchedIdempotent (logStrLn)
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
 import Text.PrettyPrint as PP
@@ -135,11 +134,7 @@ atomEval :: BEnv -> Store s -> Exp -> Par d s (Denotable s)
 atomEval benv store Halt    = single HaltClosure
 atomEval benv store (Ref x) = case M.lookup x benv of
     Nothing -> error $ "Variable unbound in BEnv: " ++ show x
-    Just t  -> IM.getKey (Binding x t) store 
---      case m of
---        Nothing -> error $ "Address unbound in Store: " -- ++ show (Binding x t)
---        Just d  -> return d
-        
+    Just t  -> IM.getKey (Binding x t) store         
 atomEval benv _  (Lam l v c) = single (Closure (l, v, c) benv)
 
 single :: Ord a => a -> Par d s (ISet s a)
@@ -154,7 +149,6 @@ next :: IS.ISet s (State s) -> State s -> Par d s () -- Next states
 next seen st0@(State (Call l fun args) benv store time)
   =  -- trace ("next " ++ show (doc st0)) $
   do
-    -- liftIO $ putStrLn ("next " ++ show (doc st0))
     logStrLn ("next " ++ show (doc st0))
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
@@ -174,10 +168,10 @@ next seen st0@(State (Call l fun args) benv store time)
           IS.forEach allParamConfs $ \ params -> do
 
             -- Hmm... we need to create a new store for the extended bindings
-#if 1
-            store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
-#else
+#ifdef INPLACE
             let store' = store
+#else
+            store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
 #endif                      
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
@@ -249,20 +243,10 @@ summarize states = do
   storeFin <- newEmptyMap
   -- Note: a generic union operation could also handle this:
   void$ IS.forEach states $ \ (State _ _ store_n _) -> do 
-    logStrLn "1 Summarizing state... " 
     void$ IM.forEach store_n $ \ key val -> do
-      logStrLn$ "2 Summarizing store, key "++ show key
       void$ IS.forEach val $ \ elem  -> do
-        logStrLn$ "3 Summarizing val: "++ show (doc elem)++" putting in key "++show key 
-#if 1
         IM.modify storeFin key $ \ st -> do
-           logStrLn$ "4 callback... inserting element in set: "++
-              (show$ unsafeName st)++" map "++show(unsafeName storeFin)
            putInSet elem st
-#else
-        st <- single elem
-        IM.insert key st storeFin
-#endif
   return storeFin
 --    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
@@ -295,7 +279,6 @@ analyse e =
    par :: Par d s (IM.IMap Var s (IS.ISet s Exp))
    -- par :: Par d s (Store s)
    par = do
-     liftIO $ putStrLn " Starting program..."
      logStrLn " [kcfa] Starting program..."
      newStore <- newEmptyMap 
      (benv, store) <- fvStuff (S.toList (fvsCall e)) newStore
@@ -305,11 +288,12 @@ analyse e =
      finStore <- summarize allStates
      logStrLn $ "Got back finStore: "++show(unsafeName finStore)
 
+{-
      IM.forEach finStore $ \ k x -> 
        logStrLn $ "---Member of final store: "++show(doc (k,x))
      IS.forEach allStates $ \ x -> 
        logStrLn $ "---Member of allStates: "++show(doc x)
-
+-}
      r <- monovariantStore finStore
      return r
 
@@ -372,10 +356,8 @@ fvExample =
                    lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
--- main = forM_ [fvExample, standardExample] runExample
-main = do
-  runExample standardExample
-  threadDelay (1000 * 1000)
+main = forM_ [fvExample, standardExample] runExample
+-- main = runExample standardExample
 
 runExample example = do
   mp <- analyse (runUniqM example)
