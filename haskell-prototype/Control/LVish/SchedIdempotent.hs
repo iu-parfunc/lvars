@@ -271,51 +271,63 @@ getLV :: (LVar a d)                  -- ^ the LVar
       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
       -> (d ->         IO (Maybe b)) -- ^ does d pass the threshold?
       -> Par b
-getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q ->
-  let unblockWhen thresh tok q = do
-        tripped <- thresh
-        whenJust tripped $ \b -> do
-          B.remove tok 
-          Sched.pushWork q (k b)
-      onUpdate d = unblockWhen $ deltaThresh d
-      onFreeze   = unblockWhen $ globalThresh state True
-  in do
+getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
+  -- tradeoff: we fastpath the case where the LVar is already beyond the
+  -- threshhold by polling *before* enrolling the callback.  The price is
+  -- that, if we are not currently above the threshhold, we will have to poll
+  -- *again* after enrolling the callback.  This race may also result in the
+  -- continuation being executed twice, which is permitted by idempotence.
 
-    -- tradeoff: we fastpath the case where the LVar is already beyond the
-    -- threshhold by polling *before* enrolling the callback.  The price is
-    -- that, if we are not currently above the threshhold, we will have to poll
-    -- *again* after enrolling the callback.  This race may also result in the
-    -- continuation being executed twice, which is permitted by idempotence.
+  curStatus <- readIORef status
+  case curStatus of
+    Frozen -> do 
+      tripped <- globalThresh state True
+      case tripped of
+        Just b -> exec (k b) q -- already past the threshold; invoke the
+                               -- continuation immediately                    
+        Nothing -> sched q     
+    Active listeners -> do
+      tripped <- globalThresh state False
+      case tripped of
+        Just b -> exec (k b) q -- already past the threshold; invoke the
+                               -- continuation immediately        
 
-    curStatus <- readIORef status
-    case curStatus of
-      Frozen -> do 
-        tripped <- globalThresh state True
-        case tripped of
-          Just b -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately                    
-          Nothing -> sched q     
-      Active listeners -> do
-        tripped <- globalThresh state False
-        case tripped of
-          Just b -> exec (k b) q -- already past the threshold; invoke the
-                                 -- continuation immediately        
+        Nothing -> do          -- *transiently* not past the threshhold; block        
           
-          Nothing -> do          -- *transiently* not past the threshhold; block        
-            -- add listener, i.e., move the continuation to the waiting bag
-            tok <- B.put listeners $ Listener onUpdate onFreeze
+#if GET_ONCE
+          execFlag <- newIORef False
+#endif
+  
+          let onUpdate d = unblockWhen $ deltaThresh d
+              onFreeze   = unblockWhen $ globalThresh state True
+              
+              unblockWhen thresh tok q = do
+                tripped <- thresh
+                whenJust tripped $ \b -> do        
+                  B.remove tok
+#if GET_ONCE
+                  ticket <- readForCAS execFlag
+                  unless (peekTicket ticket) $ do
+                    (winner, _) <- casIORef execFlag ticket True
+                    when winner $ Sched.pushWork q (k b) 
+#else 
+                  Sched.pushWork q (k b)                     
+#endif
+          
+          -- add listener, i.e., move the continuation to the waiting bag
+          tok <- B.put listeners $ Listener onUpdate onFreeze
 
-            -- but there's a race: the threshold might be passed (or the LVar
-            -- frozen) between our check and the enrollment as a listener, so we
-            -- must poll again
-            frozen <- isFrozen lv
-            tripped' <- globalThresh state frozen
-            case tripped' of
-              Just b -> do
-                B.remove tok  -- remove the listener we just added, and
-                exec (k b) q  -- execute the continuation. this work might be
-                              -- redundant, but by idempotence that's OK
-              Nothing -> sched q
+          -- but there's a race: the threshold might be passed (or the LVar
+          -- frozen) between our check and the enrollment as a listener, so we
+          -- must poll again
+          frozen <- isFrozen lv
+          tripped' <- globalThresh state frozen
+          case tripped' of
+            Just b -> do
+              B.remove tok  -- remove the listener we just added, and
+              exec (k b) q  -- execute the continuation. this work might be
+                            -- redundant, but by idempotence that's OK
+            Nothing -> sched q
 
 
 -- | Update an LVar

@@ -55,6 +55,11 @@ flag quick
   description: Build some targets but not others.
   default: False
 
+flag getonce
+  description: Ensure that continuations of get run at most once 
+               (by using extra synchronization)
+  default: False
+
 --------------------------------------------------------------------------------
 library
   -- Modules exported by the library.
@@ -102,6 +107,8 @@ library
      cpp-options: -DDEBUG_LVAR
   if flag(chaselev)
      cpp-options: -DCHASE_LEV
+  if flag(getonce)
+     cpp-options: -DGET_ONCE
 
 --------------------------------------------------------------------------------
 executable lvish-kcfa
@@ -119,6 +126,8 @@ executable lvish-kcfa
       cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
       cpp-options: -DCHASE_LEV
+    if flag(getonce)
+      cpp-options: -DGET_ONCE
     if flag(quick)
       buildable: False
 --------------------------------------------------------------------------------
@@ -138,6 +147,8 @@ executable lvish-bfs
       cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
       cpp-options: -DCHASE_LEV
+    if flag(getonce)
+      cpp-options: -DGET_ONCE
     if flag(quick)
       buildable: False
 
@@ -157,6 +168,8 @@ test-suite test-lvish
        cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
        cpp-options: -DCHASE_LEV
+    if flag(getonce)
+       cpp-options: -DGET_ONCE
 
 --------------------------------------------------------------------------------
 test-suite test-old-lvarpure
