@@ -280,7 +280,9 @@ monovariantStore store = do
 -- | Perform a complete, monovariant analysis.
 analyse :: Call -> IO (M.Map Var (S.Set Exp))
 -- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
-analyse e =  
+analyse e = do 
+--  IMapSnap m <- runParThenFreezeIO par
+--  return m
   runParThenFreezeIO par
   -- do x <- runParThenFreezeIO par
   --    putStrLn (show$ doc x)

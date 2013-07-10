@@ -7,6 +7,12 @@ CREDENTIALS= --clientid=905767673358.apps.googleusercontent.com --clientsecret=2
 run: build
 	./run_benchmarks.exe --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
 
+fullrun: build
+	./run_benchmarks.exe --trials=3 --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
+
+basic: build
+	./run_benchmarks.exe
+
 # -threaded is important here:
 build:
 	ghc -threaded run_benchmarks.hs -o run_benchmarks.exe

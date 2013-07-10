@@ -19,7 +19,7 @@ module Data.LVar.IStructure
          -- Snapshot(IStructSnap),
          
          newIStructure, newIStructureWithCallback,
-         put, put_, get,
+         put, put_, get, getLength,
 
          -- * Iteration and callbacks
          -- forEach,
@@ -49,6 +49,9 @@ import qualified Control.LVish.SchedIdempotent as L
 newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 
 unIStructure (IStructure lv) = lv
+
+getLength :: IStructure s a -> Par d s Int
+getLength (IStructure vec) = return $! V.length vec
 
 -- | Physical identity, just as with IORefs.
 -- instance Eq (IStructure s v) where

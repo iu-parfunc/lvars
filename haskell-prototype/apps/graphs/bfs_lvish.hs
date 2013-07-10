@@ -157,6 +157,7 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   ISt.put_ arr (fromIntegral start) True
   return arr
 
+-- | Same, but with NatArray.
 bfs_async_arr2 :: AdjacencyGraph -> NodeID -> Par d s (NatArray s Word8)
 bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newNatArray (U.length vvec)
@@ -169,12 +170,50 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   NArr.put arr (fromIntegral start) 1
   return arr
 
-maxDegree :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
-maxDegree gr component = do
+------------------------------------------------------------------------------------------
+-- A simple FOLD operation.
+------------------------------------------------------------------------------------------  
+
+maxDegreeS :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
+maxDegreeS gr component = do
   mc <- newMaxCounter 0 
   S.forEach component $ \ nd ->
     C.put mc (U.length$ nbrs gr nd)
   return mc
+
+
+maxDegreeN :: AdjacencyGraph -> (NatArray s Word8) -> Par d s (MaxCounter s)
+maxDegreeN gr component = do
+  mc <- newMaxCounter 0 
+  NArr.forEach component $ \ nd flg ->
+    when (flg == 1) $
+      C.put mc (U.length$ nbrs gr (fromIntegral nd))
+  return mc
+
+
+maxDegreeI :: AdjacencyGraph -> (IStructure s Word8) -> Par d s (MaxCounter s)
+maxDegreeI gr component = do
+  mc <- newMaxCounter 0
+  -- INEFFICIENT: this attaches a handler to ALL ivars:
+  ISt.forEachHP Nothing component $ \ nd flg -> do
+    when (flg == 1) $ do
+      let degree = U.length$ nbrs gr (fromIntegral nd)
+      -- logStrLn$ " [maxDegreeI] Processing: "++show(nd,flg)++" with degree "++show degree
+      C.put mc degree
+
+  -- Better to just do this... wait for it to freeze and then loop.
+  -- Problem is, we need to add wait-till-frozen!
+  -- len <- ISt.getLength component
+  -- parForTiled (0,len) $ \ nd ->
+  --   when (flg == 1) $
+  --     C.put mc (U.length$ nbrs gr (fromIntegral nd))
+
+  return mc
+
+
+------------------------------------------------------------------------------------------
+-- Maximal Independent Set
+------------------------------------------------------------------------------------------  
 
 -- Lattice where undecided = bot, and chosen/nbrchosen are disjoint middle states
 flag_UNDECIDED :: Word8
@@ -220,7 +259,7 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
       loop (U.length nds) nds ndIx  0
   return flagsArr
 
--- DUPLICATE CODE: IStructure version.
+-- | DUPLICATE CODE: IStructure version.
 maximalIndependentSet2 :: ParFor d s -> AdjacencyGraph -> Par d s (IStructure s Word8) -- Operate on a whole graph.
 maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
   logStrLn$ " [MIS] Beginning maximalIndependentSet / Istructures"
@@ -280,11 +319,37 @@ maximalIndependentSet3 gr@(AdjacencyGraph vvec evec) = U.create $ do
       loop (U.length nds) nds ndIx 0
   return flagsArr
 
-
-  
--- need to compute a fold over neighbors... some of which are bottom
--- if any neighbors are less than us and decided, we commit too..
-
+-- MIS over a preexisting, filtered subgraph
+------------------------------------------------------------
+-- Right now this uses an IStructure because it's (temporarily) better at blocking gets:
+maximalIndependentSet4 :: AdjacencyGraph -> (NatArray s Word8) -> Par d s (IStructure s Word8)
+maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
+  let numVerts = U.length vvec
+  -- Tradeoff: we use storage proportional to the ENTIRE graph.  If the subset is
+  -- very small, this is silly and we could use a sparse representation:
+  flagsArr <- newIStructure numVerts
+  let       
+      -- Here's the loop that scans through the neighbors of a node.
+      loop !numNbrs !nbrs !selfInd !i 
+        | i == numNbrs = thisNodeWins
+        | otherwise = do
+          let nbrInd   = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
+              selfInd' = fromIntegral selfInd
+          -- If we got to the end of the neighbors below us, then we are NOT disqualified:
+          if nbrInd > selfInd
+            then thisNodeWins
+            else do
+              nbrFlag <- ISt.get flagsArr (fromIntegral nbrInd)
+              if nbrFlag == flag_CHOSEN
+                then ISt.put_ flagsArr selfInd' flag_NBRCHOSEN
+                else loop numNbrs nbrs selfInd (i+1)
+        where
+          thisNodeWins = ISt.put_ flagsArr (fromIntegral selfInd) flag_CHOSEN
+          
+  NArr.forEach vertSubset $ \ ndIx _ -> 
+        let nds = nbrs gr (fromIntegral ndIx) in
+        loop (U.length nds) nds ndIx  0
+  return flagsArr
 
 --------------------------------------------------------------------------------
 -- Misc helpers
@@ -462,12 +527,31 @@ main = do
 
 
     ----------------------------------------
+    "bfsN_misI" -> do 
+            putStrLn " ! Version 10: BFS and then MIS w/ NatArrays/IStructure"
+            let par :: Par d0 s0 (IStructure s0 Word8)
+                par = do natarr <- bfs_async_arr2 gr 0
+                         maximalIndependentSet4 gr natarr
+            _ <- runParIO_ par
+            return ()
+
+    ----------------------------------------
+    "bfsN_misI_deg" -> do 
+            putStrLn " ! Version 10: BFS, MIS, and maxDegree"
+            let par :: Par d0 s0 (MaxCounter s0)
+                par = do natarr <- bfs_async_arr2 gr 0
+                         narr2 <- maximalIndependentSet4 gr natarr
+                         maxDegreeI gr narr2
+            mx <- runParThenFreezeIO par
+            putStrLn$ "Max degree in MIS was: "++show(mx::Int)
+
+    ----------------------------------------
     "?" -> do
             putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
             let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
                 par1 = do component <- bfs_async gr 0
                           liftIO$ putStrLn "Got component..."
-                          mc <- maxDegree gr component    
+                          mc <- maxDegreeS gr component    
                           return (mc,component)            
             (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
             putStrLn$ "Processing finished, max degree was: "++show maxdeg
