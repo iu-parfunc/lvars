@@ -16,15 +16,17 @@ benches =
   ]
   ++
   [ Benchmark "graphs/bfs_lvish.hs" (words args) withthreads
-  | args <- [ "7 100000"
-            , "8 100000" ]
+  | args <- [ "foo bfsN  grid 500000"
+            , "foo misI3 grid 100000" ]
   ]
 
 --------------------------------------------------------------------------------
 
 main = do
   putStrLn$ "Automatic thread selection: "++show threadSelection
-  defaultMainWithBechmarks benches
+  defaultMainModifyConfig $ \ conf ->
+    conf{ benchlist  = benches
+        , runTimeOut = Just 20 }
 
 withthreads = defaultHSSettings$ varyThreads none
 none = And []

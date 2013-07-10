@@ -307,17 +307,24 @@ type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
 --------------------------------------------------------------------------------
   
 main = do
-  putStrLn "USAGE: ./bfs_lvish <version> <graphSize>"
-
+  putStrLn "USAGE: ./bfs_lvish <version> <topo> <graphSize>"
+  putStrLn "USAGE:   Topo must be one of: grid rmat rand chains"
+  putStrLn "USAGE:   Version must be one of: "
+  putStrLn "USAGE:      bfsS bfsN bfsI"
+  putStrLn "USAGE:      misN1 misN2 misN3 misI3 misSeq" 
+  
+  --------------------------------------------------------------------------------
   args <- getArgs
-  let (version,size) = case args of
-                         [n,s] -> (read n, read s)
-                         [n]   -> (read n, 1000)
-                         _     -> (3,1000)
-
+  let (version,topo,size) = case args of
+                             [ver,tp,s] -> (ver, tp, read s)
+                             [ver,tp]   -> (ver, tp, 1000)
+                             [ver]      -> (ver, "grid", 1000) 
+                             []         -> ("bfsN","grid",1000)
+                             oth        -> error "Too many command line args!"
       existD d = do b <- doesDirectoryExist d
                     return$ if b then (Just d) else Nothing
-  -- Here's a silly hack:
+                    
+  -- Here's a silly hack to let this executable run from different working directories:
   pbbsdirs <- fmap catMaybes $ mapM existD [ "../pbbs"
                                            , "../../pbbs"
                                            , "../../../pbbs"
@@ -325,21 +332,36 @@ main = do
   let pbbsroot = case pbbsdirs of
                    [] -> error "PBBS dir not found!  Is the submodule checked out?"
                    hd:_ -> hd
-      root = pbbsroot++"/breadthFirstSearch/graphData/data/"
+      datroot = pbbsroot++"/breadthFirstSearch/graphData/data/"
+      -- The PBBS Makefile knowns how to build the common graphs:
+      buildPBBSdat file = do 
+        origdir <- getCurrentDirectory
+        setCurrentDirectory datroot  
+        b <- doesFileExist file
+        unless b $ do
+          putStrLn "Input file does not exist!  Building..."
+          system$ "make "++file
+          return ()
+        setCurrentDirectory origdir
 
-
-  -- Run JUST on the grid topology for now.  TODO! VaryME!
-  let file = "3Dgrid_J_"++show size
-
-  origdir <- getCurrentDirectory
-  setCurrentDirectory root  
-  b <- doesFileExist file
-  unless b $ do
-    putStrLn "Input file does not exist!  Building..."
-    system$ "make "++file
-    return ()
-  
-  ------------------------------------------------------------  
+  file <- case topo of
+           "grid" -> do let f = "3Dgrid_J_"++show size
+                        buildPBBSdat f
+                        return (datroot ++ f)
+           -- Models social-network graphs:
+           "rmat" -> do let f = "rMatGraph_J_5_"++show size
+                        buildPBBSdat f
+                        return (datroot ++ f)
+           "rand" -> do let f = "randLocalGraph_J_5_"++show size
+                        buildPBBSdat f
+                        return (datroot ++ f)
+           "chains" -> error "TODO: finish generating graph topology for chains!"
+           _        -> error$"Unknown graph topology: "++topo
+           
+  putStrLn$"Running config: "++show(version,topo,size)
+  ------------------------------------------------------------
+  wd <- getCurrentDirectory
+  putStrLn$ "Working dir: "++wd
   putStrLn$ "Reading file: "++file
   t0 <- getCurrentTime  
   gr <- readAdjacencyGraph file
@@ -358,52 +380,42 @@ main = do
   
   t0 <- getCurrentTime
   case version of
-    ----------------------------------------
-    1 -> do putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
-            let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
-                par1 = do component <- bfs_async gr 0
-                          liftIO$ putStrLn "Got component..."
-                          mc <- maxDegree gr component    
-                          return (mc,component)            
-            (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
-            putStrLn$ "Processing finished, max degree was: "++show maxdeg
-            let ISetSnap s = set
-            putStrLn$ "Connected component, set size "++show (Set.size s)
 
     ----------------------------------------
-    2 -> do putStrLn " ! Version 2: BFS only, with sets "
-            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                -- par2 :: Par d0 s0 ()
-                par2 = do comp <- bfs_async gr 0
-                          waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
-                          return comp
-            _ <- runParIO_ par2
-            -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-            -- let ISetSnap s = set                                          
-            -- putStrLn$ "Connected component, set size "++show (Set.size s)
-            return ()
+    "bfsS" -> do 
+                 putStrLn " ! Version 2: BFS only, with sets "
+                 let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                     -- par2 :: Par d0 s0 ()
+                     par2 = do comp <- bfs_async gr 0
+                               waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
+                               return comp
+                 _ <- runParIO_ par2
+                 -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+                 -- let ISetSnap s = set                                          
+                 -- putStrLn$ "Connected component, set size "++show (Set.size s)
+                 return ()
             
     ----------------------------------------
-    3 -> do putStrLn " ! Version 3: BFS only, with IStructures "
-            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                par3 :: Par d0 s0 (IStructure s0 Bool)
-                par3 = bfs_async_arr gr 0
-            --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-            _ <- runParIO_ par3
-            return ()
+    "bfsI" -> do putStrLn " ! Version 3: BFS only, with IStructures "
+                 let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                     par3 :: Par d0 s0 (IStructure s0 Bool)
+                     par3 = bfs_async_arr gr 0
+                 --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+                 _ <- runParIO_ par3
+                 return ()
 
     ----------------------------------------
-    4 -> do putStrLn " ! Version 4: BFS only, with NatArrays "
-            let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                par4 :: Par d0 s0 (NatArray s0 Word8)
-                par4 = bfs_async_arr2 gr 0
-            --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
-            _ <- runParIO_ par4
-            return ()
-
+    "bfsN" -> do putStrLn " ! Version 4: BFS only, with NatArrays "
+                 let -- par2 :: Par d0 s0 (ISet s0 NodeID)
+                     par4 :: Par d0 s0 (NatArray s0 Word8)
+                     par4 = bfs_async_arr2 gr 0
+                 --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
+                 _ <- runParIO_ par4
+                 return ()
 
     ----------------------------------------
-    5 -> do putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
+    "misN1" -> do 
+            putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
             let par :: Par d0 s0 (NatArray s0 Word8)
                 par = maximalIndependentSet parForSimple gr
 #ifdef DEBUG_CHECKS
@@ -416,21 +428,24 @@ main = do
             return ()
 
     ----------------------------------------
-    6 -> do putStrLn " ! Version 6: MIS only, with NatArrays / parForTree"
+    "misN2" -> do 
+            putStrLn " ! Version 6: MIS only, with NatArrays / parForTree"
             let par :: Par d0 s0 (NatArray s0 Word8)
                 par = maximalIndependentSet parForTree gr
             _ <- runParIO_ par
             return ()
 
     ----------------------------------------
-    7 -> do putStrLn " ! Version 7: MIS only, with NatArrays / parForL"
+    "misN3" -> do 
+            putStrLn " ! Version 7: MIS only, with NatArrays / parForL"
             let par :: Par d0 s0 (NatArray s0 Word8)
                 par = maximalIndependentSet parForL gr
             _ <- runParIO_ par
             return ()
 
     ----------------------------------------
-    8 -> do putStrLn " ! Version 8: MIS only, with IStructures / parForL"
+    "misI3" -> do 
+            putStrLn " ! Version 8: MIS only, with IStructures / parForL"
             let par :: Par d0 s0 (IStructure s0 Word8)
                 par = maximalIndependentSet2 parForL gr
             _ <- runParIO_ par
@@ -440,9 +455,26 @@ main = do
     -- And version 9 sequential is WAY better (>50X faster)
   
     ----------------------------------------
-    9 -> do putStrLn " ! Version 9: MIS only, sequential"
+    "misSeq" -> do 
+            putStrLn " ! Version 9: MIS only, sequential"
             evaluate $ maximalIndependentSet3 gr
             return ()
+
+
+    ----------------------------------------
+    "?" -> do
+            putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
+            let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
+                par1 = do component <- bfs_async gr 0
+                          liftIO$ putStrLn "Got component..."
+                          mc <- maxDegree gr component    
+                          return (mc,component)            
+            (maxdeg::Int, set:: Snapshot ISet NodeID) <- runParThenFreezeIO2 par1
+            putStrLn$ "Processing finished, max degree was: "++show maxdeg
+            let ISetSnap s = set
+            putStrLn$ "Connected component, set size "++show (Set.size s)
+
+    oth -> error$"Unknown benchmark mode "++oth
 
   t1 <- getCurrentTime
   putStrLn$ "Done"

@@ -11,6 +11,9 @@ run: build
 build:
 	ghc -threaded run_benchmarks.hs -o run_benchmarks.exe
 
+prof:
+	ghc -O0 -fforce-recomp -prof -fprof-auto -fprof-cafs -fprof-auto-calls -threaded run_benchmarks.hs -o run_benchmarks.exe
+
 clean:
 	rm -f *.hi *.o *.exe
 
