@@ -14,6 +14,7 @@ import GHC.Conc           (getNumProcessors)
 benches = 
   [ Benchmark "cfa/0CFA_lvish.hs" (words args) withthreads
   | args <- [ "-t fvExample"
+            , "-t standardExample"
             ]    
   ]
   ++
@@ -48,8 +49,13 @@ benches =
   ]
 
 -- Multiply by one thousand.  TODO: make changeable.
-scale = "000"
--- scale = ""
+scale =
+  let def = "000" in
+  case lookup "QUICK" theEnv of
+    Just "0"     -> def
+    Just "False" -> def
+    Nothing      -> def
+    Just _       -> ""
 
 --------------------------------------------------------------------------------
 
@@ -98,3 +104,7 @@ threadSelection = unsafePerformIO $ do
 --      ]
 
 Just threader = setThreads ghcMethod 
+
+theEnv = unsafePerformIO $ getEnvironment
+
+

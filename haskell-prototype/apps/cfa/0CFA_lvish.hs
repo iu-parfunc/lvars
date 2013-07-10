@@ -34,14 +34,13 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit (Test(..))
 
+import CFA_Common
+
 -- define INPLACE
 
 --------------------------------------------------------------------------------
-
-type Var = String
-type Label = Int
-data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show, Generic)
-data Call = Call Label Exp [Exp]                 deriving (Eq, Ord, Show, Generic)
+-- Abstract State Space for analysis
+--------------------------------------------------------------------------------
 
 -- Abstract state space
 data State s = State Call BEnv (Store s) Time
@@ -99,8 +98,6 @@ andthen :: Ordering -> Ordering -> Ordering
 andthen EQ b = b
 andthen a _  = a
 
-instance Out Call
-instance Out Exp
 instance Out Clo
 instance Out Bind
 
@@ -125,9 +122,6 @@ instance Out (State s) where
 storeInsert :: Addr -> Value -> Store s -> Par d s ()
 storeInsert a v s = IM.modify s a (IS.putInSet v)
   
--- storeJoin :: Store -> Store -> Store
--- storeJoin = M.unionWith S.union
-
 -- k-CFA parameters
 
 k_param :: Int
@@ -202,8 +196,6 @@ next seen st0@(State (Call l fun args) benv store time)
           return ()
       return ()
     return ()
-
-storeJoin = error "Shouldn't need storeJoin"
 
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
@@ -319,81 +311,6 @@ fvsExp (Lam _ xs c) = fvsCall c S.\\ S.fromList xs
 fvsCall :: Call -> S.Set Var
 fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
-
--- Helper functions for constructing syntax trees
-
-type UniqM = State.State Int
-
-newLabel :: UniqM Int
-newLabel = State.state (\i -> (i, i + 1))
-
-runUniqM :: UniqM a -> a
-runUniqM = fst . flip State.runState 0
-
-ref :: Var -> UniqM Exp
-ref = return . Ref
-
-lam :: [Var] -> UniqM Call -> UniqM Exp
-lam xs c = liftA2 (flip Lam xs) newLabel c
-
-call :: UniqM Exp -> [UniqM Exp] -> UniqM Call
-call e es = liftA3 Call newLabel e (sequence es)
-
-let_ :: Var -> UniqM Exp -> UniqM Call -> UniqM Call
-let_ x e c = call (lam [x] c) [e]
-
-halt :: UniqM Exp -> UniqM Call
-halt e = call (return Halt) [e]
-
---------------------------------------------------------------------------------
--- Input Programs for Analysis
---------------------------------------------------------------------------------
-
--- The Standard Example
---
--- In direct style:
---
--- let id = \x -> x
---     a = id (\z -> halt z)
---     b = id (\y -> halt y)
--- in halt b
-standardExample :: UniqM Call
-standardExample = 
-  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
-  call (ref "id") [lam ["z"] (halt (ref "z")),
-                   lam ["a"] (call (ref "id") [lam ["y"] (halt (ref "y")),
-                                               lam ["b"] (halt (ref "b"))])]
-
--- Example with free varibles (showing escapes):
-fvExample :: UniqM Call
-fvExample = 
-  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
-  call (ref "id") [lam ["z"] (call (ref "escape") [ref "z"]),
-                   lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
-                                               lam ["b"] (call (ref "escape") [ref "b"])])]
-
--- Look here for more:
--- https://github.com/ilyasergey/reachability/tree/master/benchmarks/gcfa2
-
-#if 0
-blur :: UniqM Call
-blur =
-  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
-  let_ "blur" (lam ["y", "k"] (call (ref "k") [ref "y"])) $
-  let_ "lp" (lam ["a", "n", "k"]
-             -- if
-             (call (ref "k") [ref "y"])) $  
----------------------------------------------------------
--- (letrec ((id (lambda (x) x))
---          (blur (lambda (y) y))
---          (lp (lambda (a n)
---                (if (<= n 1)
---                    (id a)
---                    (let* ((r ((blur id) #t))
---                           (s ((blur id) #f)))
---                      (not ((blur lp) s (- n 1))))))))
---   (lp #f 2))
-#endif
 
 ------------------------------------------------------------------------------------------
 

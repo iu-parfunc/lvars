@@ -18,12 +18,9 @@ import Debug.Trace
 import Text.PrettyPrint as PP
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 
---------------------------------------------------------------------------------
+import CFA_Common
 
-type Var = String
-type Label = Int
-data Exp = Halt | Ref Var | Lam Label [Var] Call deriving (Eq, Ord, Show, Generic)
-data Call = Call Label Exp [Exp]                 deriving (Eq, Ord, Show, Generic)
+--------------------------------------------------------------------------------
 
 -- Abstract state space
 data State = State Call BEnv Store Time          deriving (Eq, Ord, Show, Generic)
@@ -49,10 +46,8 @@ data Bind = Binding Var Time                   deriving (Eq, Ord, Show, Generic)
 -- the program has traversed.
 type Time = [Label]
 
-instance Out Call
 -- instance Out BEnv
 -- instance Out Store
-instance Out Exp
 instance Out Clo
 instance Out Bind
 
@@ -177,55 +172,7 @@ fvsExp Halt         = S.empty
 fvsExp (Ref x)      = S.singleton x
 fvsExp (Lam _ xs c) = fvsCall c S.\\ S.fromList xs
 
--- Helper functions for constructing syntax trees
-
-type UniqM = State.State Int
-
-newLabel :: UniqM Int
-newLabel = State.state (\i -> (i, i + 1))
-
-runUniqM :: UniqM a -> a
-runUniqM = fst . flip State.runState 0
-
-
-ref :: Var -> UniqM Exp
-ref = return . Ref
-
-lam :: [Var] -> UniqM Call -> UniqM Exp
-lam xs c = liftA2 (flip Lam xs) newLabel c
-
-call :: UniqM Exp -> [UniqM Exp] -> UniqM Call
-call e es = liftA3 Call newLabel e (sequence es)
-
-let_ :: Var -> UniqM Exp -> UniqM Call -> UniqM Call
-let_ x e c = call (lam [x] c) [e]
-
-halt :: UniqM Exp -> UniqM Call
-halt e = call (return Halt) [e]
-
--- The Standard Example
---
--- In direct style:
---
--- let id = \x -> x
---     a = id (\z -> halt z)
---     b = id (\y -> halt y)
--- in halt b
-standardExample :: UniqM Call
-standardExample = 
-  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
-  call (ref "id") [lam ["z"] (halt (ref "z")),
-                   lam ["a"] (call (ref "id") [lam ["y"] (halt (ref "y")),
-                                               lam ["b"] (halt (ref "b"))])]
-
--- Example with free varibles (showing escapes):
-fvExample :: UniqM Call
-fvExample = 
-  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
-  call (ref "id") [lam ["z"] (call (ref "escape") [ref "z"]),
-                   lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
-                                               lam ["b"] (call (ref "escape") [ref "b"])])]
-
+------------------------------------------------------------------------------------------
 
 main = forM_ [fvExample, standardExample] $ \example -> do
 -- main = forM_ [standardExample] $ \example -> do

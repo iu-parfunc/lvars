@@ -11,7 +11,7 @@ fullrun: build
 	./run_benchmarks.exe --trials=3 --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
 
 basic: build
-	./run_benchmarks.exe
+	QUICK=1 ./run_benchmarks.exe
 
 # -threaded is important here:
 build:
