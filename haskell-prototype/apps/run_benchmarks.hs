@@ -80,8 +80,10 @@ varyThreads conf = And [ conf, Or (map fn threadSelection) ]
 threadSelection :: [Int]
 threadSelection = unsafePerformIO $ do
   p   <- getNumProcessors
-  return [1 .. p]
-  
+  return$
+    if p <= 4  then [1..p] else
+    if p <= 16 then 1: [2,4 .. p]
+    else            1:2:[4,8 .. p]
 
 --------------------------------------------------------------------------------
 
