@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
 module Control.LVish.Internal
@@ -9,7 +10,8 @@ module Control.LVish.Internal
     unWrapPar,
     Determinism(..), 
     unsafeConvert, state,
-    liftIO
+    liftIO,
+    for_
   )
   where
 
@@ -52,3 +54,14 @@ instance MonadIO (Par d s) where
 
 instance MonadToss (Par d s) where
   toss = WrapPar L.toss
+
+-- My own forM for numeric ranges (not requiring deforestation optimizations).
+-- Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) _fn | start > end = error "for_: start is greater than end"
+for_ (start, end) fn = loop start
+  where
+  loop !i | i == end  = return ()
+          | otherwise = do fn i; loop (i+1)
+  

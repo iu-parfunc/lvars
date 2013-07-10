@@ -591,6 +591,41 @@ i9i = runParIO$ do
   NA.put arr 0 0
   NA.get arr 0
 
+--------------------------------------------------------------------------------
+-- Looping constructs
+--------------------------------------------------------------------------------
+
+case_lp01 :: Assertion
+case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
+lp01 = runParIO$ do
+  logStrLn " [lp01] Starting parForSimple loop..."
+  x <- IV.new 
+  parForSimple (0,10) $ \ ix -> do
+    logStrLn$ " [lp01]  iter "++show ix
+    when (ix == 9)$ IV.put x "done"
+  IV.get x
+
+case_lp02 :: Assertion
+case_lp02 = assertEqual "parForL test" "done" =<< lp02
+lp02 = runParIO$ do
+  logStrLn " [lp02] Starting parForL loop..."
+  x <- IV.new 
+  parForL (0,10) $ \ ix -> do
+    logStrLn$ " [lp02]  iter "++show ix
+    when (ix == 9)$ IV.put x "done"
+  logStrLn$ " [lp02] after loop..."
+  IV.get x
+
+case_lp03 :: Assertion
+case_lp03 = assertEqual "parForTree test" "done" =<< lp03
+lp03 = runParIO$ do
+  logStrLn " [lp03] Starting parForTree loop..."
+  x <- IV.new 
+  parForTree (0,10) $ \ ix -> do
+    logStrLn$ " [lp03]  iter "++show ix
+    when (ix == 9)$ IV.put x "done"
+  logStrLn$ " [lp03] after loop..."
+  IV.get x
 
 
 --------------------------------------------------------------------------------

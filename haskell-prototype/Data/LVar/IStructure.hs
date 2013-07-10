@@ -61,7 +61,7 @@ instance LVarData1 IStructure where
   freeze = unsafeConvert . fmap IStructSnap . freezeIStructure
   -- newBottom :: Par d s (IStructSnap s a)
   -- newBottom = error "makes no sense for an IStructure, need size"
-  -- traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+  -- traverseSnap f (IStructSnap m) = fmap IVarSnap $ traverse f m
 
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
@@ -99,7 +99,7 @@ forEachHP :: (Eq a) =>
           -> Par d s ()
 forEachHP hp (IStructure vec) callb =
   -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
-  for_ 0 (V.length vec) $ \ ix ->
+  for_ (0, V.length vec) $ \ ix ->
     IV.addHandler hp (V.unsafeIndex vec ix) (callb ix)
 
 {-
@@ -124,15 +124,6 @@ forEach :: (Num a, Storable a, Eq a) =>
 forEach = forEachHP Nothing
 -}
 
--- My own forM for numeric ranges (not requiring deforestation optimizations).
--- Inclusive start, exclusive end.
-{-# INLINE for_ #-}
-for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
-for_ start end _fn | start > end = error "for_: start is greater than end"
-for_ start end fn = loop start
-  where
-   loop !i | i == end  = return ()
-	   | otherwise = do fn i; loop (i+1)
 
 
 

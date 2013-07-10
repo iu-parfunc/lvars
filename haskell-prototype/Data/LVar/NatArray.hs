@@ -203,6 +203,28 @@ get (NatArray (WrapLVar lv)) !ix  = WrapPar $
                          | otherwise = return Nothing 
 
 
+-- | A sequential for-loop with a catch.  The body of the loop gets access to a
+-- special get function.  This getter will not block subsequent iterations of the
+-- loop.  Parallelism will be introduced minimally, only as neccessary to avoid
+-- blocking.
+seqLoopNonblocking :: Int -> Int ->
+                     ((NatArray s elt -> Int -> Par d s elt) -> Int -> Par d s ()) ->
+                     Par d s ()
+seqLoopNonblocking start end fn = do
+  error "TODO - FINISHME: seqLoopNonblocking optimization"
+  where
+    par =
+      L.Par $ \k -> L.ClosedPar $ \q -> do
+        -- tripped <- globalThresh state False
+--        case tripped of
+  --        Just b -> exec (k b) q -- already past the threshold; invoke the
+-- forkHP mh child = mkPar $ \k q -> do
+--   closed <- closeInPool mh child
+--   Sched.pushWork q (k ()) -- "Work-first" policy.
+-- --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
+--   exec closed q  
+      undefined
+
 {-
 parFor :: (ParFuture iv p) => InclusiveRange -> (Int -> p ()) -> p ()
 parFor (InclusiveRange start end) body =

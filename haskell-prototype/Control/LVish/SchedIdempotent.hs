@@ -20,7 +20,8 @@
 module Control.LVish.SchedIdempotent
   (
     -- * Basic types and accessors:
-    LVar(), state, HandlerPool(), Par(), 
+    LVar(), state, HandlerPool(),
+    Par(..), ClosedPar(..),
     
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
@@ -110,7 +111,13 @@ printLogThread = do
                         printLog
                         putStrLn " [dbg-log-printer] Shutting down."
                       )
-  return (killThread tid)
+  return (do killThread tid
+             let wait = do
+                   stat <- threadStatus tid
+                   case stat of
+                     ThreadRunning -> threadDelay 1000 >> wait
+                     _             -> return ()
+             wait)
  where
    loop = do
      -- Flush the log at 5Hz:

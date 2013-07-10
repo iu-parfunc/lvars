@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
 -- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- | A module that reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
@@ -28,6 +29,9 @@ module Control.LVish
     -- * Interfaces for generic operations
     LVarData1(..), DeepFreeze(..),
 
+    -- * Generally useful combinators
+    parForL, parForSimple, parForTree,
+    
     -- * Debug facilities
     logStrLn
   ) where
@@ -201,3 +205,49 @@ instance LVarData1 f => DeepFreeze (f s a) (Snapshot f a) where
   type Session (f s a) = s
   deepFreeze = unsafeConvert . freeze
 
+--------------------------------------------------------------------------------
+-- Extras
+--------------------------------------------------------------------------------
+
+{-# INLINE parForL #-}
+-- | Left-biased parallel for loop.  As worker threads beyond the first are added,
+-- this hews closer to the sequential iteration order than an unbiased parallel loop.
+--
+-- Takes a range as inclusive-start, exclusive-end.
+parForL :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForL (start,end) body | start > end = error$"parForL: start is greater than end: "++show (start,end)
+parForL (start,end) body = do
+  -- logStrLn$ " initial iters: "++show (end-start)
+  loop 0 (end - start) 1
+ where
+   loop offset remain chunk
+     | remain <= 0     = return () 
+     | remain <= chunk = parForSimple (offset, offset+remain) body
+     | otherwise       = do
+         let nxtstrt = offset+chunk
+         -- logStrLn$ "loop:  .. "++show (offset, remain, chunk)
+         fork$ parForSimple (offset, nxtstrt) body
+         loop nxtstrt (remain-chunk) (2*chunk)
+
+{-# INLINE parForSimple #-}
+-- | The least-sophisticated form of parallel loop.  Fork iterations one at a time.
+parForSimple :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForSimple range fn = do
+  -- logStrLn$ " simple loop .. "++show range
+  -- for_ range fn
+  for_ range $ \i -> fork (fn i) 
+  
+
+-- | Divide the iteration space recursively, but ultimately run every iteration in
+-- parallel.  That is, the loop body is permitted to block on other iterations.
+parForTree :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTree (start,end) body | start > end = error$"parForTree: start is greater than end: "++show (start,end)
+parForTree (start,end) body = do
+  loop 0 (end - start)
+ where
+   loop offset remain 
+     | remain == 1     = body offset
+     | otherwise       = do
+         let (half,rem) = remain `quotRem` 2
+         fork$ loop offset half
+         loop (offset+half) (half+rem)

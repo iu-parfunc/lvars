@@ -19,7 +19,11 @@ import System.Mem (performGC)
 import System.Environment (getArgs)
 import System.Directory
 import System.Process
-  
+
+-- define DEBUG_CHECKS
+
+--------------------------------------------------------------------------------
+
 #if 1
 import Data.LVar.Set as S
 #else
@@ -205,12 +209,11 @@ maximalIndependentSet gr@(AdjacencyGraph vvec evec) = do
         where
           thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
                          NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
-  -- FIXME: Need a front-biased traversal strategy.
-  -- parFor (InclusiveRange 0 (numVerts-1)) $ \ ndIx -> do
-  lameFor 0 numVerts $ \ ndIx -> do          
-    let nds = nbrs gr (fromIntegral ndIx)
-    logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
-    loop (U.length nds) nds ndIx  0
+  parForL
+    (0,numVerts) $ \ ndIx -> do          
+      let nds = nbrs gr (fromIntegral ndIx)
+      logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      loop (U.length nds) nds ndIx  0
   return flagsArr
 
   
@@ -232,17 +235,8 @@ forVec vec fn = loop 0
            | otherwise = fn (U.unsafeIndex vec i) >>
                          loop (i+1)
 
--- My own forM for numeric ranges (not requiring deforestation optimizations).
--- Inclusive start, exclusive end.
-{-# INLINE for_ #-}
-for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
-for_ start end _fn | start > end = error "for_: start is greater than end"
-for_ start end fn = loop start
-  where
-   loop !i | i == end  = return ()
-	   | otherwise = do fn i; loop (i+1)
 
-lameFor start end fn = for_ start end $ \i -> fork (fn i)
+lameFor (start,end) fn = for_ (start,end) $ \i -> fork (fn i)
 
 
 --------------------------------------------------------------------------------
@@ -339,12 +333,12 @@ main = do
     5 -> do putStrLn " ! Version 4: MIS only, with NatArrays "
             let par :: Par d0 s0 (NatArray s0 Word8)
                 par = maximalIndependentSet gr
-#if 1                
-            _ <- runParIO_ par
-#else                 
+#ifdef DEBUG_CHECKS
             NatArraySnap (x :: UV.Vector Word8) <- runParThenFreezeIO par
-            putStrLn$"MIS: result: "++x
-            putStrLn$"MIS: number of vertices in result: "++show (UV.sum (UV.filter (==1) x))
+            putStrLn$ "MIS: result prefix: "++show (UV.take 100 x)
+            putStrLn$ "MIS: number of vertices in result: "++show (UV.sum (UV.filter (==1) x))
+#else
+            _ <- runParIO_ par
 #endif
             return ()
 
