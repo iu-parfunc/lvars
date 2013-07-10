@@ -229,14 +229,15 @@ parForL (start,end) body = do
          fork$ parForSimple (offset, nxtstrt) body
          loop nxtstrt (remain-chunk) (2*chunk)
 
+   -- forSlice = parForSimple
+   -- forSlice = parForTree
+   forSlice = parForL
+
 {-# INLINE parForSimple #-}
 -- | The least-sophisticated form of parallel loop.  Fork iterations one at a time.
 parForSimple :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
 parForSimple range fn = do
-  -- logStrLn$ " simple loop .. "++show range
-  -- for_ range fn
   for_ range $ \i -> fork (fn i) 
-  
 
 -- | Divide the iteration space recursively, but ultimately run every iteration in
 -- parallel.  That is, the loop body is permitted to block on other iterations.
