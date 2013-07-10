@@ -128,11 +128,12 @@ storeInsert a v s = IM.modify s a (IS.putInSet v)
 
 -- k-CFA parameters
 
-k :: Int
-k = 1
+k_param :: Int
+k_param = 1
+-- k_param = 10
 
 tick :: Label -> Time -> Time
-tick l t = take k (l:t)
+tick l t = take k_param (l:t)
 
 -- k-CFA abstract interpreter
 
@@ -261,7 +262,7 @@ summarize states = do
 monovariantStore :: Store s -> Par d s (IM.IMap Var s (IS.ISet s Exp))
 monovariantStore store = do 
   mp <- newEmptyMap
-  IM.forEach store $ \ (Binding vr _) d -> do
+  IM.forEach store $ \ (Binding vr _throwaway) d -> do
     IS.forEach d $ \ elm -> do
       let elm' = monovariantValue elm
       IM.modify mp vr (IS.putInSet elm')
@@ -402,7 +403,7 @@ runExample example = do
   mp <- analyse (runUniqM example)
   let res = M.toList mp
   len <- evaluate (length res)
-  putStrLn$ "===== #results = "++show len
+  putStrLn$ "===== #results = "++show len ++ ",  K is "++show k_param
 --  forM_ res $ \(x, ISetSnap es) -> do
   forM_ res $ \(x, es) -> do
     putStrLn (x ++ ":")

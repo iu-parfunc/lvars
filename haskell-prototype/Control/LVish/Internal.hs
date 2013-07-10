@@ -7,7 +7,7 @@
 module Control.LVish.Internal
   (
     Par(..), LVar(..),
-    unWrapPar,
+    unWrapPar, unsafeRunPar,
     Determinism(..), 
     unsafeConvert, state,
     liftIO,
@@ -41,6 +41,9 @@ newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 
 unWrapPar :: Par d s a -> L.Par a
 unWrapPar (WrapPar p) = p 
+
+unsafeRunPar :: Par d s a -> a
+unsafeRunPar p = L.runPar (unWrapPar p)
 
 state :: LVar s a d -> a
 state = L.state . unWrapLVar
