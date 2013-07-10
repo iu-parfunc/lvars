@@ -30,6 +30,12 @@ import  Data.LVar.Map as IM
 import Text.PrettyPrint as PP
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Test.HUnit (Test(..))
+
+-- define INPLACE
+
 --------------------------------------------------------------------------------
 
 type Var = String
@@ -169,6 +175,7 @@ next seen st0@(State (Call l fun args) benv store time)
 
             -- Hmm... we need to create a new store for the extended bindings
 #ifdef INPLACE
+#warning "Activating INPLACE LVar joining of stores."
             let store' = store
 #else
             store' <- IM.copy store -- Simply REMOVE this to implicitly STOREJOIN
@@ -333,6 +340,10 @@ let_ x e c = call (lam [x] c) [e]
 halt :: UniqM Exp -> UniqM Call
 halt e = call (return Halt) [e]
 
+--------------------------------------------------------------------------------
+-- Input Programs for Analysis
+--------------------------------------------------------------------------------
+
 -- The Standard Example
 --
 -- In direct style:
@@ -356,8 +367,36 @@ fvExample =
                    lam ["a"] (call (ref "id") [lam ["y"] (call (ref "escape") [ref "y"]),
                                                lam ["b"] (call (ref "escape") [ref "b"])])]
 
-main = forM_ [fvExample, standardExample] runExample
--- main = runExample standardExample
+-- Look here for more:
+-- https://github.com/ilyasergey/reachability/tree/master/benchmarks/gcfa2
+
+#if 0
+blur :: UniqM Call
+blur =
+  let_ "id" (lam ["x", "k"] (call (ref "k") [ref "x"])) $
+  let_ "blur" (lam ["y", "k"] (call (ref "k") [ref "y"])) $
+  let_ "lp" (lam ["a", "n", "k"]
+             -- if
+             (call (ref "k") [ref "y"])) $  
+---------------------------------------------------------
+-- (letrec ((id (lambda (x) x))
+--          (blur (lambda (y) y))
+--          (lp (lambda (a n)
+--                (if (<= n 1)
+--                    (id a)
+--                    (let* ((r ((blur id) #t))
+--                           (s ((blur id) #f)))
+--                      (not ((blur lp) s (- n 1))))))))
+--   (lp #f 2))
+#endif
+
+------------------------------------------------------------------------------------------
+
+main = defaultMain$ hUnitTestToTests$ TestList
+  [ TestLabel "fvExample"       $ TestCase (runExample fvExample)
+  , TestLabel "standardExample" $ TestCase (runExample standardExample)
+  ]
+
 
 runExample example = do
   mp <- analyse (runUniqM example)
