@@ -13,9 +13,10 @@ import Control.Monad.ST
 import Control.Exception
 
 import Data.Word
+import Data.Maybe
 import Data.LVar.MaxCounter as C
-import Data.Traversable as T
 import Data.Time.Clock
+import qualified Data.Traversable as T
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.Vector.Storable as UV
@@ -314,12 +315,21 @@ main = do
                          [n]   -> (read n, 1000)
                          _     -> (3,1000)
 
-  let root = "../../../pbbs/breadthFirstSearch/graphData/data/"
-      file = "3Dgrid_J_"++show size
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_500000"    -- ~6sec
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000" -- ~1sec on 1core
-  -- let file = "../../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_1000"
+      existD d = do b <- doesDirectoryExist d
+                    return$ if b then (Just d) else Nothing
+  -- Here's a silly hack:
+  pbbsdirs <- fmap catMaybes $ mapM existD [ "../pbbs"
+                                           , "../../pbbs"
+                                           , "../../../pbbs"
+                                           , "../../../../pbbs"]
+  let pbbsroot = case pbbsdirs of
+                   [] -> error "PBBS dir not found!  Is the submodule checked out?"
+                   hd:_ -> hd
+      root = pbbsroot++"/breadthFirstSearch/graphData/data/"
+
+
+  -- Run JUST on the grid topology for now.  TODO! VaryME!
+  let file = "3Dgrid_J_"++show size
 
   origdir <- getCurrentDirectory
   setCurrentDirectory root  

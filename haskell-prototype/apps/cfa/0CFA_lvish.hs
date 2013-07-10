@@ -92,6 +92,8 @@ instance Ord (State s) where
       if s1 == s2
       then EQ
       else error "Ord State: states are equivalent except for Store... FINISHME"
+  -- ERROR: Ord State: states are equivalent except for Store... FINISHME
+  
 
 andthen :: Ordering -> Ordering -> Ordering 
 andthen EQ b = b

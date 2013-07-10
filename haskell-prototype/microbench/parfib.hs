@@ -204,11 +204,13 @@ case of the perversely nested parfib!!!
 
 On the same WestMere, mentioned above.
 This version has extra overhead:
-  
-  fib(38) 1 thread : 
-  fib(38) 2 thread : 
-  fib(38) 4 threads: 
 
+
+And on my laptop:
+
+  fib(35) 1 thread : 5.8s   (95% prod, 218MB copied)
+  fib(35) 2 thread : 3.2    (70% prod)
+  fib(35) 4 threads: 1.93s  (40% prod)
 
 
 -}

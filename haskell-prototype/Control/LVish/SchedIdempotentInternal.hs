@@ -17,7 +17,7 @@ import GHC.Conc
 import System.Random (StdGen, mkStdGen)
 
 #ifdef CHASE_LEV
-#warning "Compling with Chase-Lev work-stealing deque"
+#warning "Compiling with Chase-Lev work-stealing deque"
 
 import Data.Concurrent.Deque.ChaseLev as CL
 
