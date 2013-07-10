@@ -16,7 +16,7 @@ type Bag a   = IORef (M.Map UID a)
 
 -- Return the old value.  Could replace with a true atomic op.
 atomicIncr :: IORef Int -> IO Int
-atomicIncr cntr = atomicModifyIORef cntr (\c -> (c+1,c))
+atomicIncr cntr = atomicModifyIORef' cntr (\c -> (c+1,c))
 
 uidCntr :: IORef UID
 uidCntr = unsafePerformIO (newIORef 0)
@@ -33,7 +33,7 @@ new = newIORef (M.empty)
 put :: Bag a -> a -> IO (Token a)
 put b x = do
   uid <- getUID
-  atomicModifyIORef b $ \m -> (M.insert uid x m, ())  
+  atomicModifyIORef' b $ \m -> (M.insert uid x m, ())  
   return (b, uid)
 
 -- | foreach b f will traverse b (concurrently with updates), applying f to each
@@ -48,4 +48,4 @@ foreach b f = do
 -- | Remove the element associated with a given token.  Repeated removals are
 -- permitted.
 remove :: Token a -> IO ()
-remove (b, uid) = atomicModifyIORef b $ \m -> (M.delete uid m, ())
+remove (b, uid) = atomicModifyIORef' b $ \m -> (M.delete uid m, ())
