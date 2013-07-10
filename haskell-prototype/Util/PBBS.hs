@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, TemplateHaskell, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables, CPP #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
@@ -18,7 +18,8 @@ module Util.PBBS
          readNumFile, parReadNats,
                       
          -- * Testing
-         t0,t1,t2,t3,t3B,t4,t5
+         t0,t1,t2,t3,t3B,t4,t5,
+         unitTests
        ) where 
 
 import Control.DeepSeq
@@ -56,7 +57,6 @@ import System.IO.Posix.MMap (unsafeMMapFile)
 
 import Test.HUnit
 import Test.Framework.Providers.HUnit
-import Test.Framework.TH (defaultMainGenerator)
 
 --------------------------------------------------------------------------------
 -- PBBS specific:
@@ -338,24 +338,26 @@ readNatsPartial bs
 -- Unit Tests
 --------------------------------------------------------------------------------
 
-case_t1 :: IO ()
-case_t1 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
-          readNatsPartial (S.take 4 "123 4")
-case_t2 = assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] (Just (LeftFrag 4))) =<<
-          readNatsPartial (S.take 5 "123 4")
-case_t3 = assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
-          readNatsPartial (S.take 3 "123")
-case_t4 = assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
-          readNatsPartial (S.take 2 "123")
-case_t5 = assertEqual "t5" (Compound Nothing [] (Just (LeftFrag (12::Word32)))) =<<
-          readNatsPartial (S.take 3 " 123")
+unitTests =
+  [ TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
+              readNatsPartial (S.take 4 "123 4")
+  , TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] (Just (LeftFrag 4))) =<<
+              readNatsPartial (S.take 5 "123 4")
+  , TestCase$ assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
+              readNatsPartial (S.take 3 "123")
+  , TestCase$ assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
+              readNatsPartial (S.take 2 "123")
+  , TestCase$ assertEqual "t5" (Compound Nothing [] (Just (LeftFrag (12::Word32)))) =<<
+              readNatsPartial (S.take 3 " 123")
 
-case_t6 = assertEqual "t6"
-          (Compound (Just (RightFrag 3 23)) [U.fromList [456]] (Just (LeftFrag (78::Word64)))) =<<
-          readNatsPartial (S.take 10 "023 456 789")
+  , TestCase$ assertEqual "t6"
+              (Compound (Just (RightFrag 3 23)) [U.fromList [456]] (Just (LeftFrag (78::Word64)))) =<<
+              readNatsPartial (S.take 10 "023 456 789")
+  ]
 
-runTests = $(defaultMainGenerator)
-
+---------------------------
+-- Bigger, temporary tests:
+---------------------------
 
 t0 :: IO [U.Vector Word]
 -- t0 = testReadNumFile "/tmp/grid_1000"

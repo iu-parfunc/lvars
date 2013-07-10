@@ -16,8 +16,8 @@ benches =
   ]
   ++
   [ Benchmark "graphs/bfs_lvish.hs" (words args) withthreads
-  | args <- [ "foo bfsN  grid 500000"
-            , "foo misI3 grid 100000" ]
+  | args <- [ "bfsN  grid 500000"
+            , "misI3 grid 100000" ]
   ]
 
 --------------------------------------------------------------------------------
