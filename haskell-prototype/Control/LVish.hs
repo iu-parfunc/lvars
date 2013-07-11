@@ -31,7 +31,7 @@ module Control.LVish
     LVarData1(..), DeepFreeze(..),
 
     -- * Generally useful combinators
-    parForL, parForSimple, parForTree, parForTiled,
+    parForL, parForSimple, parForTree, parForTiled, for_,
     
     -- * Debug facilities
     logStrLn
