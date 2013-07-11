@@ -14,6 +14,6 @@ prof:
 	ghc -prof -fprof-auto -fforce-recomp -rtsopts -threaded -O2 0CFA.hs -o 0CFA_prof.exe
 
 three:
-	ghc -DINPLACE -fforce-recomp -rtsopts -threaded -O2 0CFA_lvish.hs -o 0CFA_lvish_inplace.exe
+	ghc -DINPLACE -DNONSCALABLE -fforce-recomp -rtsopts -threaded -O2 0CFA_lvish.hs -o 0CFA_lvish_inplace.exe
 	ghc -DINPLACE -DLOCKFREE -fforce-recomp -rtsopts -threaded -O2 0CFA_lvish.hs -o 0CFA_lockfree_inplace.exe
 	ghc -DINPLACE -DHYBRID -fforce-recomp -rtsopts -threaded -O2 0CFA_lvish.hs -o 0CFA_hybrid_inplace.exe
