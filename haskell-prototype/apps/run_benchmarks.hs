@@ -73,8 +73,8 @@ benches =
 
 -- | For a target number of seconds and work-per-vertex, compute the number of
 -- vertices we should process.
-target_seconds :: Double -> Double -> Double
-target_seconds secs workTarget =
+target_seconds :: Double -> Double -> Int
+target_seconds secs workTarget = round $
   -- v * w  + 10v = secs * 1M
   (secs * 1000*1000) / (workTarget + 10)
 
