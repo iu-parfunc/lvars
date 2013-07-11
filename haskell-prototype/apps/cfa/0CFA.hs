@@ -93,13 +93,15 @@ atomEval benv store Halt    = S.singleton HaltClosure
 atomEval benv store (Ref x) = case M.lookup x benv of
     Nothing   -> error $ "Variable unbound in BEnv: " ++ show x
     Just t -> case M.lookup (Binding x t) store of
-        Nothing -> error $ "Address unbound in Store: " ++ show (Binding x t)
+--        Nothing -> error $ "Address unbound in Store: " ++ show (Binding x t)
+-- RRN: Looking at Matt Might's version, I think this was wrong ^^
+        Nothing -> S.empty
         Just d  -> d
 atomEval benv _     (Lam l v c) = S.singleton (Closure (l, v, c) benv)
 
 next :: State -> S.Set State -- Next states
 next s@(State (Call l fun args) benv store time)
-  = if  (dbgLvl >= 4) 
+  = if  (dbgLvl >= 5) 
     then trace ("next " ++ show (doc s)) result
     else if (dbgLvl >= 1)
          then trace "next " result
@@ -192,7 +194,9 @@ runExample example = do
   let prog = runUniqM example
       res = analyse prog
       len = (length (M.toList res))
-  -- putStrLn$"Input program:\n"++show(doc prog)
+  when (dbgLvl >= 4) $ do
+    putStrLn$"================================================================================\n"
+    putStrLn$"Input program:\n"++show(doc prog)
   evaluate (rnf res)
   putStrLn$"===== res length "++ show (M.size res) -- len
   when (dbgLvl >= 1) $ 

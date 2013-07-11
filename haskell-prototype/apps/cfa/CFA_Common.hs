@@ -7,16 +7,13 @@ module CFA_Common where
 import Control.DeepSeq
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
--- import Control.Monad
--- import Control.Exception (evaluate)
--- import Control.Concurrent
--- import           System.IO.Unsafe (unsafePerformIO)
--- import           System.Mem.StableName (makeStableName, hashStableName)
 
--- import qualified Data.Map as M
--- import qualified Data.Set as S
--- import Data.List ((\\))
--- import Debug.Trace
+import           System.IO.Unsafe (unsafePerformIO)
+import           System.Environment (getEnvironment)
+import           System.Mem.StableName (makeStableName, hashStableName)
+
+import Debug.Trace
+import Data.Time.Clock
 
 -- import Control.LVish
 -- import Control.LVish.Internal (liftIO)
@@ -24,6 +21,7 @@ import qualified Control.Monad.State as State
 -- import  Data.LVar.Map as IM
 -- import Text.PrettyPrint as PP
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
+import System.Random
 
 import Test.Framework
 import Test.Framework.Providers.HUnit
@@ -32,7 +30,11 @@ import Test.HUnit (Test(..))
 -- k-CFA parameters
 
 k_param :: Int
-k_param = 2
+k_param = 
+  case lookup "KPARAM" theEnv of
+    Just n  -> trace ("Setting K for K-CFA to: "++n) $
+               read n
+    Nothing -> 2
 
 --------------------------------------------------------------------------------
 -- Expressions
@@ -185,6 +187,23 @@ standardBig n =
                        lam [a] (loop (n-1) a)]
         
 
+-- boolScramble 0 k = k
+boolScramble 0 k = halt k
+boolScramble 1 k = halt (ref "freeVr")
+boolScramble n k = do 
+  x <- newVar "x"
+  y <- newVar "y"
+  k1 <- newVar "kA"
+  k2 <- newVar "kB"
+  let (half,rst) = n `quotRem` 2      
+      l = lam[x,k1]$ boolScramble half       (ref k1)
+      r = lam[y,k2]$ boolScramble (half+rst) (ref k2)
+  if n `rem` 2 == 0
+  then call false [l,r,k]
+  else call true  [l,r,k]
+
+-- randFrom :: Int -> Int
+-- randFrom n = fst$ next$ mkStdGen n
   
 -- Look here for more:
 -- https://github.com/ilyasergey/reachability/tree/master/benchmarks/gcfa2
@@ -239,6 +258,7 @@ blur =
 
 
 -- mj09
+--------------------------------------------------------------------------------
 -- (let ((h (lambda (b)
 -- 	   (let ((g (lambda (z) z)))
 -- 	     (let ((f (lambda (k)
@@ -256,7 +276,7 @@ blur =
 --------------------------------------------------------------------------------
 
 makeMain :: (UniqM Call -> IO ()) -> IO ()
-makeMain runExample = defaultMain$ hUnitTestToTests$ TestList
+makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   [ TestLabel "fvExample"       $ TestCase (runExample fvExample)
   , TestLabel "standardExample" $ TestCase (runExample standardExample)
   , TestLabel "scale1" $ TestCase (runExample$ scaleExample 80 fvExample)
@@ -272,7 +292,10 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList
     
   , TestLabel "omega" $ TestCase $ runExample$
     let_ "f" (lam ["x"] (call (ref "x") [ref "x"])) $
-    call (ref "f") [ref "f"]
-
+    call (ref "f") [ref "f"]    
+  ] ++
+  [ TestLabel ("boolScramble"++show n) $ TestCase $ runExample $ boolScramble n (ref "freeVr")
+  | n <- [0..30] ++ [100,200]
   ]
 
+theEnv = unsafePerformIO $ getEnvironment
