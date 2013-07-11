@@ -4,11 +4,15 @@
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
-module Main where
+-- module Main where
 
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
 import Control.Monad
+import Control.DeepSeq
+import Control.Exception (evaluate)
+import           System.IO.Unsafe (unsafePerformIO)
+import           System.Mem.StableName (makeStableName, hashStableName)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -17,6 +21,12 @@ import Data.List ((\\))
 import Debug.Trace
 import Text.PrettyPrint as PP
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
+
+import Control.LVish.SchedIdempotent (dbgLvl)
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Test.HUnit (Test(..))
+
 
 import CFA_Common
 
@@ -73,13 +83,8 @@ storeInsert a v s = M.insertWith S.union a (S.singleton v) s
 storeJoin :: Store -> Store -> Store
 storeJoin = M.unionWith S.union
 
--- k-CFA parameters
-
-k :: Int
-k = 1
-
 tick :: Label -> Time -> Time
-tick l t = take k (l:t)
+tick l t = take k_param (l:t)
 
 -- k-CFA abstract interpreter
 
@@ -94,7 +99,13 @@ atomEval benv _     (Lam l v c) = S.singleton (Closure (l, v, c) benv)
 
 next :: State -> S.Set State -- Next states
 next s@(State (Call l fun args) benv store time)
-  = trace ("next " ++ show (doc s)) $
+  = if  (dbgLvl >= 4) 
+    then trace ("next " ++ show (doc s)) result
+    else if (dbgLvl >= 1)
+         then trace "next " result
+         else result
+  where
+   result = 
     S.fromList [ state'
                | clo <- S.toList procs
                , state' <- case clo of
@@ -112,9 +123,9 @@ next s@(State (Call l fun args) benv store time)
                          , Just state' <- [escape param store]
                          ]
                ]
-  where time' = tick l time
-        procs  = atomEval benv store fun
-        paramss = map (atomEval benv store) args
+   time' = tick l time
+   procs  = atomEval benv store fun
+   paramss = map (atomEval benv store) args
 
 -- Extension of my own design to allow CFA in the presence of arbitrary values.
 -- Similar to "sub-0CFA" where locations are inferred to either have either a single
@@ -174,9 +185,26 @@ fvsExp (Lam _ xs c) = fvsCall c S.\\ S.fromList xs
 
 ------------------------------------------------------------------------------------------
 
-main = forM_ [fvExample, standardExample] $ \example -> do
--- main = forM_ [standardExample] $ \example -> do
-         putStrLn "====="
-         forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
-           putStrLn (x ++ ":")
-           mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
+main = makeMain runExample
+
+runExample :: UniqM Call -> IO ()
+runExample example = do
+  let prog = runUniqM example
+      res = analyse prog
+      len = (length (M.toList res))
+  -- putStrLn$"Input program:\n"++show(doc prog)
+  evaluate (rnf res)
+  putStrLn$"===== res length "++ show (M.size res) -- len
+  when (dbgLvl >= 1) $ 
+    forM_ (M.toList res) $ \(x, es) -> do
+      putStrLn (x ++ ":")
+      when (dbgLvl >= 3) $ 
+        mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
+
+
+{-# NOINLINE unsafeName #-}
+unsafeName :: a -> Int
+unsafeName x = unsafePerformIO $ do 
+   sn <- makeStableName x
+   return (hashStableName sn)
+

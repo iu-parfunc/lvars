@@ -25,6 +25,7 @@ import Debug.Trace
 
 import Control.LVish
 import Control.LVish.Internal (liftIO)
+import Control.LVish.SchedIdempotent (dbgLvl)
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
 import Text.PrettyPrint as PP
@@ -123,10 +124,6 @@ storeInsert :: Addr -> Value -> Store s -> Par d s ()
 storeInsert a v s = IM.modify s a (IS.putInSet v)
   
 -- k-CFA parameters
-
-k_param :: Int
-k_param = 1
--- k_param = 10
 
 tick :: Label -> Time -> Time
 tick l t = take k_param (l:t)
@@ -314,21 +311,25 @@ fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
 ------------------------------------------------------------------------------------------
 
-main = defaultMain$ hUnitTestToTests$ TestList
-  [ TestLabel "fvExample"       $ TestCase (runExample fvExample)
-  , TestLabel "standardExample" $ TestCase (runExample standardExample)
-  ]
+-- main = defaultMain$ hUnitTestToTests$ TestList
+--   [ TestLabel "fvExample"       $ TestCase (runExample fvExample)
+--   , TestLabel "standardExample" $ TestCase (runExample standardExample)
+--   , TestLabel "scaled_fv" $ TestCase (runExample$ scaleExample 100 fvExample) 
+--   ]
 
+main = makeMain runExample
 
+runExample :: UniqM Call -> IO ()
 runExample example = do
   mp <- analyse (runUniqM example)
   let res = M.toList mp
   len <- evaluate (length res)
   putStrLn$ "===== #results = "++show len ++ ",  K is "++show k_param
---  forM_ res $ \(x, ISetSnap es) -> do
-  forM_ res $ \(x, es) -> do
-    putStrLn (x ++ ":")
-    mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
+  when (dbgLvl >= 1) $ 
+  --  forM_ res $ \(x, ISetSnap es) -> do
+    forM_ res $ \(x, es) -> do
+      putStrLn (x ++ ":")
+      mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
          -- forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
          --   putStrLn (x ++ ":")
