@@ -32,7 +32,7 @@ import Test.HUnit (Test(..))
 -- k-CFA parameters
 
 k_param :: Int
-k_param = 3
+k_param = 2
 
 --------------------------------------------------------------------------------
 -- Expressions
