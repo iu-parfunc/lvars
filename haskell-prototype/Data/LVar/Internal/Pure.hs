@@ -76,11 +76,10 @@ instance LVarData1 PureLVar where
   freeze :: PureLVar s a -> Par QuasiDet s (Snapshot PureLVar a)
   freeze = unsafeConvert . fmap PureSnap . freezePureLVar
 
---newBottom :: forall (d :: Determinism) s1 a. Par d s1 (IVar s a)
-  newBottom :: -- BoundedJoinSemiLattice a =>
-               Par d s (PureLVar s a)
-  newBottom = error "Pure.hs - FINISHME"  -- newPureLVar bottom
-  -- FIXME -- constraint kinds...
+  -- newBottom :: -- BoundedJoinSemiLattice a =>
+  --              Par d s (PureLVar s a)
+  -- newBottom = error "Pure.hs - FINISHME"  -- newPureLVar bottom
+  -- -- FIXME -- constraint kinds...
   
   traverseSnap f (PureSnap x) = fmap PureSnap (f x)
 

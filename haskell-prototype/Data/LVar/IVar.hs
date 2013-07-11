@@ -45,8 +45,7 @@ instance LVarData1 IVar where
   freeze :: IVar s a -> Par QuasiDet s (Snapshot IVar a)
   freeze = unsafeConvert . fmap IVarSnap . freezeIVar
 
---newBottom :: forall (d :: Determinism) s1 a. Par d s1 (IVar s a)
-  newBottom :: Par d s (IVar s a)
+  -- newBottom :: Par d s (IVar s a)
   newBottom = new
   
   traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m

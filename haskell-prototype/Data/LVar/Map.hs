@@ -151,7 +151,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
-modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key) =>
+modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
           IMap key s (f s a) -> key -> (f s a -> Par d s b) -> Par d s b
 modify (IMap lv) key fn = WrapPar $ do 
   let ref = state lv      

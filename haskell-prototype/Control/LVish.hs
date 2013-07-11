@@ -158,7 +158,7 @@ class LVarData1 (f :: * -> * -> *) where
 
   freeze :: -- LVCtxt f s a =>
             f s a -> Par QuasiDet s (Snapshot f a)
-  newBottom :: Par d s (f s a)
+  newBottom :: Ord a => Par d s (f s a)
 
   -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
   -- I don't know of a good way, so instead we expose this:
