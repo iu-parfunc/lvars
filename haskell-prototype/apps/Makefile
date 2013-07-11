@@ -4,11 +4,13 @@
 TABLEID=1YxEmNpeUoGCBptDK0ddtomC_oK2IVH1f2M89IIA
 CREDENTIALS= --clientid=905767673358.apps.googleusercontent.com --clientsecret=2a2H57dBggubW1_rqglC7jtK
 
+BENCHARGS= --trials=3 --runid=d005_1373532273 --skipto=106
+
 run: build
 	./run_benchmarks.exe --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
 
 fullrun: build
-	./run_benchmarks.exe --trials=3 --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) 0000
+	./run_benchmarks.exe $(BENCHARGS) --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) 0000
 
 basic: build
 	QUICK=1 ./run_benchmarks.exe
