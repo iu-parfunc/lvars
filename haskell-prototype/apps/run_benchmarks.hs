@@ -32,25 +32,31 @@ benches =
   ++
   [ Benchmark "graphs/bfs_lvish.hs" (words args) withthreads
   | args <- [
-              "bfsI  grid 1000" ++ scale
-            , "bfsI  rmat 1000" ++ scale
-            , "bfsI  rand 1000" ++ scale
-            , "bfsN  grid 1000" ++ scale
-            , "bfsN  rmat 1000" ++ scale
-            , "bfsN  rand 1000" ++ scale
+            --   "bfsI  grid 1000" ++ scale
+            -- , "bfsI  rmat 1000" ++ scale
+            -- , "bfsI  rand 1000" ++ scale
+            -- , "bfsN  grid 1000" ++ scale
+            -- , "bfsN  rmat 1000" ++ scale
+            -- , "bfsN  rand 1000" ++ scale
               
-            , "misN3 grid 500" ++ scale 
-            , "misI3 grid 2000" ++ scale
-            , "misI3 rmat 2000" ++ scale
-            , "misI3 rand 2000" ++ scale
+            -- , "misN3 grid 500" ++ scale 
+            -- , "misI3 grid 2000" ++ scale
+            -- , "misI3 rmat 2000" ++ scale
+            -- , "misI3 rand 2000" ++ scale
 
-            , "bfsN_misI grid 500" ++ scale
-            , "bfsN_misI rmat 500" ++ scale
-            , "bfsN_misI rand 500" ++ scale
+            -- , "bfsN_misI grid 500" ++ scale
+            -- , "bfsN_misI rmat 500" ++ scale
+            -- , "bfsN_misI rand 500" ++ scale
               
-            , "bfsN_misI_deg grid 500" ++ scale
-            , "bfsN_misI_deg rmat 500" ++ scale
-            , "bfsN_misI_deg rand 500" ++ scale              
+            -- , "bfsN_misI_deg grid 500" ++ scale
+            -- , "bfsN_misI_deg rmat 500" ++ scale
+            -- , "bfsN_misI_deg rand 500" ++ scale
+            ] ++
+            [ bench++" "++topo++" "++ show verts ++" "++ show wrk              
+            | bench <- ["bfsN_work", "bfsN_barrier_work"]
+            , wrk  <- [1,2,5,10,15,20,25]
+            , topo <- ["rmat", "grid"]
+            , let verts = target_seconds 6 wrk
             ]
   ]
   ++
@@ -59,6 +65,18 @@ benches =
             , "bfsS  grid 500" ++ scale
             ]
   ]
+
+-- Work vs. graph size relationship...
+--  For bfsN, 100K verts takes about 0.85s. (-N1)
+--  So each vertex is about 8.5-10 microseconds (eek, >20K cycles)
+-- The rmat and rand graph topologies are 50-100% slower though!
+
+-- | For a target number of seconds and work-per-vertex, compute the number of
+-- vertices we should process.
+target_seconds :: Double -> Double -> Double
+target_seconds secs workTarget =
+  -- v * w  + 10v = secs * 1M
+  (secs * 1000*1000) / (workTarget + 10)
 
 -- Multiply by one thousand.  TODO: make changeable.
 scale =
