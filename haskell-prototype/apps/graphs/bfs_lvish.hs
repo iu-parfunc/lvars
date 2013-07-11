@@ -18,6 +18,7 @@ import Data.Maybe
 import Data.LVar.MaxCounter as C
 import Data.Time.Clock
 import qualified Data.Traversable as T
+import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.Vector.Storable as UV
@@ -243,6 +244,27 @@ workEachVec clocks vec = do
   --   when (flg == 1) $ do
   --     liftIO$ wait_clocks clocks
   --     return ()
+
+
+workEachNodeI :: Word64 -> (IStructure s Word8) -> Par d s ()
+workEachNodeI clocks component = do
+  ISt.forEachHP Nothing component $ \ nd flg ->
+    when (flg == 1) $ do
+      liftIO$ wait_clocks clocks
+      return ()
+
+-- After freezing... this is a parallel loop, but doesn't use any monotonic data.
+workEachVecMayb :: Word64 -> V.Vector (Maybe Word8) -> Par d s ()
+workEachVecMayb clocks vec = do
+  np <- liftIO$ getNumCapabilities
+  -- for_ (0,UV.length vec) $ \ ix ->    
+  -- parForTiled (np*4) (0,UV.length vec) $ \ ix ->
+  -- parForSimple (0,UV.length vec) $ \ ix ->
+  parForTree (0, V.length vec) $ \ ix ->  
+    let flg = vec V.! ix in
+    when (flg == Just 1) $ do
+      liftIO$ wait_clocks clocks
+      return ()
 
 
 ------------------------------------------------------------------------------------------
@@ -600,6 +622,26 @@ main = do
               NatArraySnap vec <- runParThenFreezeIO par
               runParIO_ $ workEachVec amountWork vec
               return ()
+
+
+      ----------------------------------------
+      "misI_work" -> do
+              putStrLn " ! Version 14: MIS and per-vertex work"
+              let par :: Par d0 s0 ()
+                  par = do istrct <- maximalIndependentSet2 parForL gr
+                           workEachNodeI amountWork istrct
+              _ <- runParIO_ par
+              return ()
+
+      ----------------------------------------
+      "misI_barrier_work" -> do
+              putStrLn " ! Version 13: BFS, barrier, and per-vertex work"
+              let -- par :: Par d0 s0 ()
+                  par = maximalIndependentSet2 parForL gr 
+              IStructSnap vec <- runParThenFreezeIO par
+              runParIO_ $ workEachVecMayb amountWork vec
+              return ()
+
 
 
       ----------------------------------------

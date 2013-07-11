@@ -36,12 +36,12 @@ benches =
             -- , "bfsI  rmat 1000" ++ scale
             -- , "bfsI  rand 1000" ++ scale
             -- , "bfsN  grid 1000" ++ scale
-            -- , "bfsN  rmat 1000" ++ scale
+              "bfsN  rmat 600" ++ scale
             -- , "bfsN  rand 1000" ++ scale
               
             -- , "misN3 grid 500" ++ scale 
             -- , "misI3 grid 2000" ++ scale
-            -- , "misI3 rmat 2000" ++ scale
+            , "misI3 rmat 2000" ++ scale
             -- , "misI3 rand 2000" ++ scale
 
             -- , "bfsN_misI grid 500" ++ scale
@@ -53,7 +53,8 @@ benches =
             -- , "bfsN_misI_deg rand 500" ++ scale
             ] ++
             [ bench++" "++topo++" "++ show verts ++" "++ show wrk              
-            | bench <- ["bfsN_work", "bfsN_barrier_work"]
+            | bench <- ["misI_work", "misI_barrier_work"]
+--                      ["bfsN_work", "bfsN_barrier_work"]
             , wrk  <- [0,1,2,5,10,15,20,25]
             , topo <- ["rmat", "grid"]
             , let verts = target_seconds 6 wrk

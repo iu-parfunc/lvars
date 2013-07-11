@@ -8,7 +8,7 @@ run: build
 	./run_benchmarks.exe --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
 
 fullrun: build
-	./run_benchmarks.exe --trials=3 --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) bfs
+	./run_benchmarks.exe --trials=3 --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) 0000
 
 basic: build
 	QUICK=1 ./run_benchmarks.exe

@@ -16,7 +16,7 @@ module Data.LVar.IStructure
        (
          -- * Basic operations
          IStructure,
-         -- Snapshot(IStructSnap),
+         Snapshot(IStructSnap),
          
          newIStructure, newIStructureWithCallback,
          put, put_, get, getLength,
@@ -82,6 +82,7 @@ newIStructureWithCallback len fn =
       IV.addHandler Nothing iv (fn ix)
       return iv
 
+-- | O(N) rather than O(1), unfortunately.
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) =
   V.mapM IV.freezeIVar vec
