@@ -627,6 +627,17 @@ lp03 = runParIO$ do
   logStrLn$ " [lp03] after loop..."
   IV.get x
 
+case_lp04 :: Assertion
+case_lp04 = assertEqual "parForTree test" "done" =<< lp04
+lp04 = runParIO$ do
+  logStrLn " [lp04] Starting parForTiled loop..."
+  x <- IV.new 
+  parForTiled 16 (0,10) $ \ ix -> do
+    logStrLn$ " [lp04]  iter "++show ix
+    when (ix == 9)$ IV.put x "done"
+  logStrLn$ " [lp04] after loop..."
+  IV.get x
+
 
 --------------------------------------------------------------------------------
 -- TESTS FOR SNZI  

@@ -11,6 +11,7 @@ import Control.Monad
 import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
 import Control.Monad.ST
 import Control.Exception
+import GHC.Conc
 
 import Data.Word
 import Data.Maybe
@@ -223,6 +224,26 @@ workEachNode clocks component = do
     when (flg == 1) $ do
       liftIO$ wait_clocks clocks
       return ()
+
+-- After freezing... this is a parallel loop, but doesn't use any monotonic data.
+workEachVec :: Word64 -> UV.Vector Word8 -> Par d s ()
+workEachVec clocks vec = do
+  np <- liftIO$ getNumCapabilities
+  -- for_ (0,UV.length vec) $ \ ix ->    
+  -- parForTiled (np*4) (0,UV.length vec) $ \ ix ->
+  -- parForSimple (0,UV.length vec) $ \ ix ->
+  parForTree (0,UV.length vec) $ \ ix ->  
+    let flg = vec UV.! ix in
+    when (flg == 1) $ do
+      liftIO$ wait_clocks clocks
+      return ()
+
+  -- Sequential version:  
+  -- UV.forM_ vec $ \ flg ->
+  --   when (flg == 1) $ do
+  --     liftIO$ wait_clocks clocks
+  --     return ()
+
 
 ------------------------------------------------------------------------------------------
 -- Maximal Independent Set
@@ -457,8 +478,10 @@ main = do
   performGC
   -- writeFile "/tmp/debug" (show gr)
   -- putStrLn$ "Dumped parsed graph to /tmp/debug"  
-  
+
+
   runAndReport $ \ clocks_per_micro ->
+    let amountWork = (round (wrksize * clocks_per_micro)) in
     case version of
       ----------------------------------------
       "bfsS" -> do 
@@ -565,19 +588,18 @@ main = do
               putStrLn " ! Version 12: BFS and per-vertex work"
               let par :: Par d0 s0 ()
                   par = do natarr <- bfs_async_arr2 gr 0
-                           workEachNode (round (wrksize * clocks_per_micro)) natarr
+                           workEachNode amountWork natarr
               _ <- runParIO_ par
               return ()
 
       ----------------------------------------
-      -- "bfsN_barrier_work" -> do
-      --         putStrLn " ! Version 13: BFS, barrier, and per-vertex work"
-      --         let par :: Par d0 s0 ()
-      --             par = do natarr <- bfs_async_arr2 gr 0
-      --                      workEachNode (round (32 * clocks_per_micro)) natarr
-      --         _ <- runParIO_ par
-      --         return ()
-
+      "bfsN_barrier_work" -> do
+              putStrLn " ! Version 13: BFS, barrier, and per-vertex work"
+              let -- par :: Par d0 s0 ()
+                  par = bfs_async_arr2 gr 0
+              NatArraySnap vec <- runParThenFreezeIO par
+              runParIO_ $ workEachVec amountWork vec
+              return ()
 
       ----------------------------------------
       "?" -> do

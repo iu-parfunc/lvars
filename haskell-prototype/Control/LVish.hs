@@ -31,7 +31,7 @@ module Control.LVish
     LVarData1(..), DeepFreeze(..),
 
     -- * Generally useful combinators
-    parForL, parForSimple, parForTree,
+    parForL, parForSimple, parForTree, parForTiled,
     
     -- * Debug facilities
     logStrLn
@@ -261,3 +261,18 @@ parForTree (start,end) body = do
          let (half,rem) = remain `quotRem` 2
          fork$ loop offset half
          loop (offset+half) (half+rem)
+
+
+-- | Split the work into a number of tiles, and fork it in a tree topology.
+parForTiled :: Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTiled tiles (start,end) body = do 
+  loop 0 (end - start) tiles
+ where
+   loop offset remain tiles
+     | remain == 1     = body offset
+     | tiles  == 1     = for_ (offset,offset+remain) body
+     | otherwise       = do
+         let (half,rem)   = remain `quotRem` 2
+             (halfT,remT) = tiles `quotRem` 2
+         fork$ loop offset half halfT
+         loop (offset+half) (half+rem) (halfT+remT)
