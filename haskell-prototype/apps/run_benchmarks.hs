@@ -53,8 +53,8 @@ benches =
             -- , "bfsN_misI_deg rand 500" ++ scale
             ] ++
             [ bench++" "++topo++" "++ show verts ++" "++ show wrk              
-            | bench <- -- ["bfsN_misI_work", "bfsN_barrier_misI_work"]
-                       -- ["misI_work", "misI_barrier_work"]
+            | bench <- ["bfsN_misI_work", "bfsN_barrier_misI_work"]
+                       ["misI_work", "misI_barrier_work"]
                        ["bfsN_work", "bfsN_barrier_work"]
             , wrk  <- [0,1,2,5,10,15,20,25]
             , topo <- ["rmat", "grid"]
