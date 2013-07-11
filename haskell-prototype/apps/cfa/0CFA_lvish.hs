@@ -26,8 +26,13 @@ import Debug.Trace
 import Control.LVish
 import Control.LVish.Internal (liftIO)
 import Control.LVish.SchedIdempotent (dbgLvl)
+#if 0
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
+#else
+import  Data.LVar.SLSet as IS
+import  Data.LVar.SLMap as IM
+#endif
 import Text.PrettyPrint as PP
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 

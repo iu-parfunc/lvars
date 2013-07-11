@@ -8,6 +8,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 
 module Data.LVar.SLMap
        (
@@ -50,24 +51,20 @@ type QPar = Par QuasiDet
 ------------------------------------------------------------------------------
 
 -- | We only have one mutable location here, so this is not a scalable implementation.
-newtype IMap k s v = IMap (LVar s (SLM.SLMap k v) (k,v))
+data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
--- Need LVarData2:
-
--- AJT: killed for now
-#if 0
 instance LVarData1 (IMap k) where
   newtype Snapshot (IMap k) a = IMapSnap (M.Map k a)
       deriving (Show,Ord,Read,Eq)
-  freeze    = fmap IMapSnap . freezeMap
-  newBottom = newEmptyMap
+  freeze m@(IMap v) = fmap IMapSnap $ freezeMap m
+  
+  -- newBottom = newEmptyMap  -- Ergh, this has problems... let's just remove it from the API.
 
   traverseSnap fn (IMapSnap mp) = 
     fmap IMapSnap $ T.traverse fn mp 
-#endif
 
 --------------------------------------------------------------------------------
 
@@ -76,12 +73,12 @@ defaultLevels :: Int
 defaultLevels = 8
 
 -- | Create a fresh map with nothing in it.
-newEmptyMap :: Par d s (IMap k s v)
+newEmptyMap :: Ord k => Par d s (IMap k s v)
 newEmptyMap = newEmptyMap_ defaultLevels
 
 -- | Create a fresh map with nothing in it, with the given number of skiplist
 -- levels.
-newEmptyMap_ :: Int -> Par d s (IMap k s v)
+newEmptyMap_ :: Ord k => Int -> Par d s (IMap k s v)
 newEmptyMap_ n = fmap (IMap . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new map populated with initial elements.

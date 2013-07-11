@@ -104,7 +104,7 @@ runPar (WrapPar p) = L.runPar p
 
 -- | This allows Deterministic Par computations to return LVars (which normally
 -- cannot escape), and it implicitly does a deepFreeze on them on their way out.
-runParThenFreeze :: (DeepFreeze (f s a) b, LVarData1 f) =>
+runParThenFreeze :: forall f s a b . (DeepFreeze (f s a) b, LVarData1 f) =>
                     Par Det s (f s a) -> b
 runParThenFreeze p = unsafePerformIO$ runParThenFreezeIO p
 
