@@ -215,7 +215,9 @@ fvStuff xs store = do
     IM.modify store (Binding x []) $ putInSet Arbitrary
   return (M.fromList [(x, []) | x <- xs], store)
 
+--------------------------------------------------------------------------------
 -- State-space exploration
+--------------------------------------------------------------------------------
 
 -- | Kick off the state space exploration by setting up a handler.
 explore :: State s -> Par d s (IS.ISet s (State s))
@@ -234,8 +236,10 @@ explore initial = do
  -- of the seen ones then we can just loop. Otherwise, union the new store onto a global
  -- "widening" store, update the global store with this one, and do abstract evalution on the state with the new sotre.
 
+--------------------------------------------------------------------------------
 -- User interface
-
+--------------------------------------------------------------------------------
+  
 -- summarize :: S.Set State -> Par Store
 summarize :: IS.ISet s (State s) -> Par d s (Store s)
 summarize states = do
@@ -247,7 +251,6 @@ summarize states = do
         IM.modify storeFin key $ \ st -> do
            putInSet elem st
   return storeFin
---    S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
   
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
 monovariantStore :: Store s -> Par d s (IM.IMap Var s (IS.ISet s Exp))
@@ -311,12 +314,6 @@ fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
 ------------------------------------------------------------------------------------------
 
--- main = defaultMain$ hUnitTestToTests$ TestList
---   [ TestLabel "fvExample"       $ TestCase (runExample fvExample)
---   , TestLabel "standardExample" $ TestCase (runExample standardExample)
---   , TestLabel "scaled_fv" $ TestCase (runExample$ scaleExample 100 fvExample) 
---   ]
-
 main = makeMain runExample
 
 runExample :: UniqM Call -> IO ()
@@ -330,10 +327,6 @@ runExample example = do
     forM_ res $ \(x, es) -> do
       putStrLn (x ++ ":")
       mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
-
-         -- forM_ (M.toList (analyse (runUniqM example))) $ \(x, es) -> do
-         --   putStrLn (x ++ ":")
-         --   mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
