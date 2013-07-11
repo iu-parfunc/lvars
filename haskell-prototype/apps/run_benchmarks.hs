@@ -11,11 +11,23 @@ import GHC.Conc           (getNumProcessors)
 
 --------------------------------------------------------------------------------
 
+cfaArgs = [ "-t blur1",
+            "-t blur2",
+            "-t blurN_3",
+            "-t blurN_4",
+            "-t blurN_5",
+            "-t blurN_6",
+            "-t notChain300" ]
+
 benches = 
-  [ Benchmark "cfa/0CFA_lvish.hs" (words args) withthreads
-  | args <- [ "-t fvExample"
-            , "-t standardExample"
-            ]    
+  [ Benchmark "cfa/0CFA_lvish.hs" (words args)
+    (And [withthreads, Or [none,
+                           Set (Variant "inplace") (CompileParam "-DINPLACE")]])
+  | args <- cfaArgs
+  ]
+  ++
+  [ Benchmark "cfa/0CFA.hs" (words args) nothreads
+  | args <- cfaArgs
   ]
   ++
   [ Benchmark "graphs/bfs_lvish.hs" (words args) withthreads
@@ -63,7 +75,7 @@ main = do
   putStrLn$ "Automatic thread selection: "++show threadSelection
   defaultMainModifyConfig $ \ conf ->
     conf{ benchlist  = benches
-        , runTimeOut = Just 20 }
+        , runTimeOut = Just 60 }
 
 nothreads = defaultHSSettings none
 withthreads = defaultHSSettings$ varyThreads none

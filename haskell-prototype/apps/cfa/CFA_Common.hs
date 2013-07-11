@@ -14,12 +14,8 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 
 import Debug.Trace
 import Data.Time.Clock
-
--- import Control.LVish
--- import Control.LVish.Internal (liftIO)
--- import  Data.LVar.Set as IS
--- import  Data.LVar.Map as IM
--- import Text.PrettyPrint as PP
+import Control.Applicative
+import qualified Data.Map as M
 import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
 import System.Random
 
@@ -31,7 +27,7 @@ import Test.HUnit (Test(..))
 
 k_param :: Int
 k_param = 
-  case lookup "KPARAM" theEnv of
+  case Prelude.lookup "KPARAM" theEnv of
     Just n  -> trace ("Setting K for K-CFA to: "++n) $
                read n
     Nothing -> 2
@@ -68,6 +64,20 @@ newLabel = State.state (\i -> (i, i + 1))
 newVar :: String -> UniqM String
 newVar s = do n <- newLabel
               return (s ++ show n)
+
+freshenNames :: UniqM Call -> UniqM Call
+freshenNames act = act >>= loop M.empty
+ where
+   loop  env (Call lab e1 els) = Call lab <$> loop2 env e1 <*> mapM (loop2 env) els
+   loop2 env Halt    = return Halt
+   loop2 env (Ref v) = case M.lookup v env of
+                         Nothing -> return (Ref v)
+                         Just v2 -> return (Ref v2)
+   loop2 env (Lam l vs call) =
+     do suffs <- mapM (\_ -> newLabel) vs
+        let prs = zipWith (\ v suff -> (v, "fresh_"++v++"_"++show suff)) vs suffs
+            env' = M.union (M.fromList prs) env
+        Lam l (map snd prs) <$> loop env' call
 
 runUniqM :: UniqM a -> a
 runUniqM = fst . flip State.runState 0
@@ -212,8 +222,17 @@ notChain n k = do
 -- Look here for more:
 -- https://github.com/ilyasergey/reachability/tree/master/benchmarks/gcfa2
 
-blur :: UniqM Call
-blur =
+blur = mkBlur (lam["fin"] (halt (ref "fin")))
+
+blur2 = mkBlur $ lam["k0"] $
+          freshenNames blur 
+
+blurN 1 = blur
+blurN n = mkBlur $ lam["k0_"++show n] $
+            freshenNames (blurN (n-1))
+
+mkBlur :: UniqM Exp -> UniqM Call
+mkBlur kont =
   let_ "id"   (lam ["x","k1"]  (call' "k1" ["x"])) $
   let_ "blur" (lam ["y", "k2"] (call' "k2" ["y"])) $
   let_ "lp" (lam ["lp0","a", "n", "k0"]
@@ -227,7 +246,7 @@ blur =
               ])) $ 
     (call (ref "lp")
      [ref "lp", false, ref "two",
-      lam["fin"] (halt (ref "fin"))])
+      kont])
  where
    body = (call (ref "blur")
            [ref "id",  lam ["rr"] $ 
@@ -245,8 +264,8 @@ blur =
                      ]]])
                 ]])
              ]])
---   _HACK = "k0" -- This is getting an error (unbound in store)
-   _HACK = "k99" -- hack for now... Hmm, the lvish/inplace one avoids the error.
+   _HACK = "k0" -- This is getting an error (unbound in store)
+--   _HACK = "k99" -- hack for now... Hmm, the lvish/inplace one avoids the error.
 ---------------------------------------------------------
 -- (letrec ((id (lambda (x) x))
 --          (blur (lambda (y) y))
@@ -285,7 +304,8 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   , TestLabel "standardExample" $ TestCase (runExample standardExample)
   , TestLabel "scale1" $ TestCase (runExample$ scaleExample 80 fvExample)
   , TestLabel "scale2" $ TestCase (runExample$ standardBig 4)
-  , TestLabel "blur"   $ TestCase (runExample blur)
+  , TestLabel "blur1"   $ TestCase (runExample blur)
+  , TestLabel "blur2"  $ TestCase (runExample blur2)
     
   , TestLabel "simple" $ TestCase $ runExample$
     let_ "fst" (lam ["x","y","k"] (call (ref "k") [ref "x"])) $ 
@@ -303,6 +323,9 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   ]++
   [ TestLabel ("notChain"++show n) $ TestCase $ runExample $ call (notChain n (ref "k0")) [ref "k1"]
   | n <- [300] 
+  ]++
+  [ TestLabel ("blurN_"++show n) $ TestCase (runExample$ blurN n)
+  | n <- [2..8]
   ]
 
 
