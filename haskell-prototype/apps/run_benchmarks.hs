@@ -54,7 +54,7 @@ benches =
             ] ++
             [ bench++" "++topo++" "++ show verts ++" "++ show wrk              
             | bench <- ["bfsN_work", "bfsN_barrier_work"]
-            , wrk  <- [1,2,5,10,15,20,25]
+            , wrk  <- [0,1,2,5,10,15,20,25]
             , topo <- ["rmat", "grid"]
             , let verts = target_seconds 6 wrk
             ]
