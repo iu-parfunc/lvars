@@ -17,6 +17,8 @@ cfaArgs = [ "-t blur1",
             "-t blurN_4",
             "-t blurN_5",
             "-t blurN_6",
+            "-t blurN_7",
+            "-t blurN_8", 
             "-t notChain300" ]
 
 benches = 
