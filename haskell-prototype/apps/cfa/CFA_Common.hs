@@ -122,12 +122,9 @@ false = do a <- newVar "left"
 
 not_ :: UniqM Exp -> UniqM Exp -> UniqM Call
 not_ bool k1 = do
---      bool <- newVar "bool"
---      k1   <- newVar "kontA"
-      k2   <- newVar "kontB"          
+      k2 <- newVar "kontB"          
       a <- newVar "left"
       b <- newVar "right"
---      lam [bool,k1] $
       call (k1)
         [lam [a,b,k2] $ 
          (call (bool)
@@ -202,6 +199,13 @@ boolScramble n k = do
   then call false [l,r,k]
   else call true  [l,r,k]
 
+notChain :: Int -> UniqM Exp -> UniqM Exp
+notChain 0 k = k -- call k [ref "freeV"]
+notChain n k = do
+  nxt <- newVar "nxt"
+  notChain (n-1) $ lam[nxt] $
+   not_ (ref nxt) k
+  
 -- randFrom :: Int -> Int
 -- randFrom n = fst$ next$ mkStdGen n
   
@@ -296,6 +300,10 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   ] ++
   [ TestLabel ("boolScramble"++show n) $ TestCase $ runExample $ boolScramble n (ref "freeVr")
   | n <- [0..30] ++ [100,200]
+  ]++
+  [ TestLabel ("notChain"++show n) $ TestCase $ runExample $ call (notChain n (ref "k0")) [ref "k1"]
+  | n <- [300] 
   ]
+
 
 theEnv = unsafePerformIO $ getEnvironment
