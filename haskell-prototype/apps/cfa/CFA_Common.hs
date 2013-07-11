@@ -100,10 +100,38 @@ halt e = call (return Halt) [e]
 --            k <- newVar "kont"
 --            lam [a,b,k] $ (call (ref k) [ref b])
 
-
+#if 0 
 true  = ref "true"
 false = ref "false"
 not_ ls = call (ref "not") ls
+#else
+
+true :: UniqM Exp
+true = do a <- newVar "left"
+          b <- newVar "right"
+          k <- newVar "kont"
+          lam [a,b,k] $ (call (ref a) [ref k])
+
+false :: UniqM Exp
+false = do a <- newVar "left"
+           b <- newVar "right"
+           k <- newVar "kont"
+           lam [a,b,k] $ (call (ref b) [ref k])
+
+not_ :: UniqM Exp -> UniqM Exp -> UniqM Call
+not_ bool k1 = do
+--      bool <- newVar "bool"
+--      k1   <- newVar "kontA"
+      k2   <- newVar "kontB"          
+      a <- newVar "left"
+      b <- newVar "right"
+--      lam [bool,k1] $
+      call (k1)
+        [lam [a,b,k2] $ 
+         (call (bool)
+          [ref b, ref a, ref k2])]
+#endif
+
 
 --------------------------------------------------------------------------------
 -- Input Programs for Analysis
@@ -190,12 +218,12 @@ blur =
                   lam["n2"]$ 
                    call (ref "anon") [ref "s", ref "n2",
                     lam ["n3"] $
-                     not_ [ref "n3", ref "k4"]
+                     not_ (ref "n3") (ref "k4")
                      ]]])
                 ]])
              ]])
 --   _HACK = "k0" -- This is getting an error (unbound in store)
-   _HACK = "k99" -- hack for now...
+   _HACK = "k99" -- hack for now... Hmm, the lvish/inplace one avoids the error.
 ---------------------------------------------------------
 -- (letrec ((id (lambda (x) x))
 --          (blur (lambda (y) y))
