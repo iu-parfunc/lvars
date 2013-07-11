@@ -22,6 +22,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.Vector.Storable as UV
+import qualified Data.Vector.Storable.Mutable as MV
 import System.Mem (performGC)
 import System.Environment (getArgs)
 import System.Directory
@@ -375,6 +376,32 @@ maximalIndependentSet3 gr@(AdjacencyGraph vvec evec) = U.create $ do
       loop (U.length nds) nds ndIx 0
   return flagsArr
 
+-- | Sequential version on NatArray...
+maximalIndependentSet3B :: AdjacencyGraph -> (UV.Vector Word8) -> (UV.Vector Word8)
+maximalIndependentSet3B gr@(AdjacencyGraph vvec evec) vec = UV.create $ do
+  let numVerts = U.length vvec
+  flagsArr <- MV.replicate numVerts 0
+  let loop !numNbrs !nbrs !selfInd !i 
+        | i == numNbrs = thisNodeWins
+        | otherwise = do
+          let nbrInd   = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
+              selfInd' = fromIntegral selfInd
+          if nbrInd > selfInd
+            then thisNodeWins
+            else do
+              nbrFlag <- MV.read flagsArr (fromIntegral nbrInd)
+              if nbrFlag == flag_CHOSEN
+                then MV.write flagsArr selfInd' flag_NBRCHOSEN
+                else loop numNbrs nbrs selfInd (i+1)
+        where
+          thisNodeWins = MV.write flagsArr (fromIntegral selfInd) flag_CHOSEN
+  for_ (0,numVerts) $ \ ndIx -> 
+      when (vec UV.! ndIx == 1) $ do 
+        let nds = nbrs gr (fromIntegral ndIx)
+        loop (U.length nds) nds ndIx 0
+  return flagsArr
+
+
 -- MIS over a preexisting, filtered subgraph
 ------------------------------------------------------------
 -- Right now this uses an IStructure because it's (temporarily) better at blocking gets:
@@ -635,14 +662,31 @@ main = do
 
       ----------------------------------------
       "misI_barrier_work" -> do
-              putStrLn " ! Version 13: BFS, barrier, and per-vertex work"
+              putStrLn " ! Version 15: "
               let -- par :: Par d0 s0 ()
                   par = maximalIndependentSet2 parForL gr 
               IStructSnap vec <- runParThenFreezeIO par
               runParIO_ $ workEachVecMayb amountWork vec
               return ()
 
+      ----------------------------------------
+      "bfsN_misI_work" -> do
+              putStrLn " ! Version 16: "
+              let par :: Par d0 s0 ()
+                  par = do natarr <- bfs_async_arr2 gr 0
+                           istrct <- maximalIndependentSet4 gr natarr
+                           workEachNodeI amountWork istrct
+              _ <- runParIO_ par
+              return ()
 
+      ----------------------------------------
+      "bfsN_barrier_misI_work" -> do
+              putStrLn " ! Version 17: "
+              let par = bfs_async_arr2 gr 0
+              NatArraySnap vec <- runParThenFreezeIO par
+              let vec2 = maximalIndependentSet3B gr vec -- Sequential
+              runParIO_ $ workEachVec amountWork vec2
+              return ()
 
       ----------------------------------------
       "?" -> do
