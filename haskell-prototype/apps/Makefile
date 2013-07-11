@@ -12,7 +12,7 @@ run: build
 	./run_benchmarks.exe --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS)
 
 fullrun: build
-	./run_benchmarks.exe $(BENCHARGS) --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) 0000
+	./run_benchmarks.exe $(BENCHARGS) --fusion-upload=$(TABLEID) --name=LVish $(CREDENTIALS) CFA
 
 basic: build
 	QUICK=1 ./run_benchmarks.exe

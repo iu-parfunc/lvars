@@ -22,7 +22,9 @@ cfaArgs = [ "-t blur1",
 benches = 
   [ Benchmark "cfa/0CFA_lvish.hs" (words args)
     (And [withthreads, Or [none,
-                           Set (Variant "inplace") (CompileParam "-DINPLACE")]])
+                           Set (Variant "inplace_lockfree") (CompileParam "-DINPLACE -DLOCKFREE"),
+                           Set (Variant "inplace")          (CompileParam "-DINPLACE -DNONSCALABLE")
+                          ]])
   | args <- cfaArgs
   ]
   ++
