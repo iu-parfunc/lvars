@@ -253,12 +253,10 @@ unionHP mh m1 m2 = do
   forEachHP mh m2 (\ k v -> insert k v os)
   return os
 
+
 --------------------------------------------------------------------------------
 -- Map specific DeepFreeze instances:
 --------------------------------------------------------------------------------
-
--- AJT: killed this for now
-#if 0
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IMap k s a) (M.Map k a) where
@@ -276,11 +274,3 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
           fn k elm acc = do elm' <- deepFreeze elm
                             return (M.insert k elm' acc)
       T.traverse deepFreeze x
-
-{-# NOINLINE unsafeName #-}
-unsafeName :: a -> Int
-unsafeName x = unsafePerformIO $ do 
-   sn <- makeStableName x
-   return (hashStableName sn)
-
-#endif

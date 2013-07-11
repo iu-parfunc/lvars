@@ -158,8 +158,6 @@ next seen st0@(State (Call l fun args) benv store time)
     procs   <- atomEval benv store fun
     paramss <- mapM (atomEval benv store) args
 
-    -- Construct a graph of the state space as an adjacency map:
-    graph <- newEmptyMap
     let time' = tick l time
 
     -- This applies to all elements evr added to the set object:

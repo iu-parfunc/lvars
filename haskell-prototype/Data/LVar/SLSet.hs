@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Data.LVar.SLSet
        (
@@ -47,7 +48,7 @@ import qualified Control.LVish.SchedIdempotent as L
 -- ISets implemented via SkipListMap
 ------------------------------------------------------------------------------
 
-newtype ISet s a = ISet (LVar s (SLM.SLMap a ()) a)
+data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
 
 unISet (ISet lv) = lv
 
@@ -55,19 +56,16 @@ unISet (ISet lv) = lv
 instance Eq (ISet s v) where
   ISet slm1 == ISet slm2 = state slm1 == state slm2
   
--- AJT: I'm not sure what to do with the following, given that freezeSet needs
--- an Ord contraint...
-
--- RRN: We can add the constraint.  But also, in order to make freeze an O(1)
--- operation, ideally the Snapshot type function would basically just be a cast from
--- the mutable to the immutable form of the data structure.
+-- In order to make freeze an O(1) operation, ideally the Snapshot type function
+-- would basically just be a cast from the mutable to the immutable form of the data
+-- structure.
 
 instance LVarData1 ISet where
   newtype Snapshot ISet a = ISetSnap (S.Set a)
       deriving (Show,Ord,Read,Eq)
-  -- freeze    = fmap ISetSnap . freezeSet
-  newBottom = newEmptySet
-
+  freeze s@(ISet _) = fmap ISetSnap $ freezeSet s
+  -- newBottom = newEmptySet -- ARGH!
+  
   -- TODO: traverseSnap
 
 -- | The default number of skiplist levels
@@ -75,12 +73,12 @@ defaultLevels :: Int
 defaultLevels = 8
 
 -- | Create a new, empty, monotonically growing 'ISet'.
-newEmptySet :: Par d s (ISet s a)
+newEmptySet :: Ord a => Par d s (ISet s a)
 newEmptySet = newEmptySet_ defaultLevels
 
 -- | Create a new, empty, monotonically growing 'ISet', with the given number of
 -- skiplist levels.
-newEmptySet_ :: Int -> Par d s (ISet s a)
+newEmptySet_ :: Ord a => Int -> Par d s (ISet s a)
 newEmptySet_ n = fmap (ISet . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new set populated with initial elements.
@@ -324,9 +322,6 @@ cartesianProdsHP mh ls = do
 -- Set specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
--- AJT: killed this for now
-#if 0
-
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 
 instance DeepFreeze (ISet s a) (S.Set a) where
@@ -337,7 +332,7 @@ instance DeepFreeze (ISet s a) (S.Set a) where
 ------------------------------------------------------------
 -- Compromise to avoid overlap
 ------------------------------------------------------------
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
+instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord (f s0 a)) =>
          DeepFreeze (ISet s0 (f s0 a)) (S.Set b)  where
     type Session (ISet s0 (f s0 a)) = s0
     deepFreeze from = do
@@ -347,5 +342,3 @@ instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
                           return (S.insert elm' acc)
       y <- F.foldrM fn S.empty x 
       return y      
-
-#endif
