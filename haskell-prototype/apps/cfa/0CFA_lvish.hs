@@ -177,7 +177,6 @@ next seen st0@(State (Call l fun args) benv store time)
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
             let newST = State call' benv'' store' time'
-            -- IM.modify graph st0 (putInSet newST)
             putInSet newST seen -- Extending the seen set should spawn more work.
             return ()
           return ()

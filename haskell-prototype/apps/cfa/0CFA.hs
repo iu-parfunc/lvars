@@ -27,6 +27,8 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit (Test(..))
 
+-- import qualified Control.Parallel.Strategies as Strat
+import Control.Parallel.Strategies 
 
 import CFA_Common
 
@@ -77,6 +79,22 @@ instance Out State where
 --                   <+> doc str
                    <+> doc time
 
+instance NFData State where
+  rnf (State call benv str tm) =
+    rnf call `seq`
+    rnf benv `seq`
+    rnf str  `seq`
+    rnf tm
+    
+instance NFData Clo where
+  rnf (Closure tup env) = rnf tup `seq` rnf env
+  rnf HaltClosure = ()
+  rnf Arbitrary   = ()
+
+instance NFData Bind where
+  rnf (Binding v t) = rnf v `seq` rnf t
+
+
 storeInsert :: Addr -> Value -> Store -> Store
 storeInsert a v s = M.insertWith S.union a (S.singleton v) s
 
@@ -108,7 +126,10 @@ next s@(State (Call l fun args) benv store time)
          else result
   where
    result = 
-    S.fromList [ state'
+    S.fromList $
+--    withStrategy (parBuffer 8 rseq) $  -- These are 100% DUD sparks.
+--    withStrategy (parBuffer 8 rdeepseq) $  -- These get converted (238/5000) but no speedup.
+               [ state'
                | clo <- S.toList procs
                , state' <- case clo of
                     HaltClosure -> []
@@ -162,7 +183,9 @@ explore seen (todo:todos)
 -- User interface
 
 summarize :: S.Set State -> Store
-summarize states = S.fold (\(State _ _ store' _) store -> store `storeJoin` store') M.empty states
+summarize states = S.fold (\(State _ _ store' _) store ->
+                            store `storeJoin` store')
+                   M.empty states
 
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
 monovariantStore :: Store -> M.Map Var (S.Set Exp)
