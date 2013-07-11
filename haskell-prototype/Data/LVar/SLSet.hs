@@ -64,7 +64,7 @@ instance LVarData1 ISet where
   newtype Snapshot ISet a = ISetSnap (S.Set a)
       deriving (Show,Ord,Read,Eq)
   freeze s@(ISet _) = fmap ISetSnap $ freezeSet s
-  -- newBottom = newEmptySet -- ARGH!
+  newBottom = newEmptySet -- ARGH!
   
   -- TODO: traverseSnap
 

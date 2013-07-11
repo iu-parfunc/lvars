@@ -26,10 +26,15 @@ import Debug.Trace
 import Control.LVish
 import Control.LVish.Internal (liftIO)
 import Control.LVish.SchedIdempotent (dbgLvl)
-#if 0
+#ifdef NONSCALABLE
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
+#elif defined(HYBRID)
+#warning "Using lockfree map with plain set"
+import  Data.LVar.Set as IS
+import  Data.LVar.SLMap as IM
 #else
+#warning "Building with genuine lock-free structures."
 import  Data.LVar.SLSet as IS
 import  Data.LVar.SLMap as IM
 #endif
