@@ -8,6 +8,8 @@
 -- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
+{-# LANGUAGE GADTs #-} -- DeepFreezable
+
 -- | A module that reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 
@@ -29,6 +31,7 @@ module Control.LVish
     
     -- * Interfaces for generic operations
     LVarData1(..), DeepFreeze(..),
+    DeepFreezable(..),runDeepFreezable, -- TEMPORARY
 
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
@@ -104,18 +107,44 @@ runPar (WrapPar p) = L.runPar p
 
 -- | This allows Deterministic Par computations to return LVars (which normally
 -- cannot escape), and it implicitly does a deepFreeze on them on their way out.
-runParThenFreeze :: forall f s a b . (DeepFreeze (f s a) b, LVarData1 f) =>
+#ifdef EXPERIMENT
+runParThenFreeze ::
+  forall f a b . LVarData1 f => 
+    (forall s . (DeepFreeze (f s a) b) =>  Par Det s (f s a))
+    -> b
+#else
+runParThenFreeze :: (DeepFreeze (f s a) b, LVarData1 f) =>
                     Par Det s (f s a) -> b
+#endif
 runParThenFreeze p = unsafePerformIO$ runParThenFreezeIO p
+
+
+  -- forall f a b .
+  -- (forall s . (DeepFreeze (f s a) b, LVarData1 f) =>  Par Det s (f s a))
+  -- -> b
+
+data DeepFreezable f a b = forall s . (DeepFreeze (f s a) b, LVarData1 f) =>
+                           DeepFreezable !(Par Det s (f s a))
+
+runDeepFreezable :: DeepFreezable f a b -> b
+runDeepFreezable (DeepFreezable p) = runParThenFreeze p
+
 
 -- | This version works for quasi-deterministic computations as well.  Such
 --   computations may also do freezes internally, but this function has an advantage
 --   vs. doing your own freeze at the end of your computation.  Namely, when you use
 --   `runParThenFreeze`, there is an implicit barrier before the final freeze.
+#ifdef EXPERIMENT
+runParThenFreezeIO ::
+    forall f a b . LVarData1 f =>
+      (forall s . (DeepFreeze (f s a) b) =>  Par Det s (f s a))
+       -> IO b
+#else
 runParThenFreezeIO :: (DeepFreeze (f s a) b, LVarData1 f) =>
-                    Par d s (f s a) -> IO b
-runParThenFreezeIO par@(WrapPar pi) = do 
-  res <- L.runParIO pi
+                       Par d s (f s a) -> IO b
+#endif
+runParThenFreezeIO par = do 
+  res <- L.runParIO (unWrapPar par)
   runParIO (unsafeConvert $ deepFreeze res) -- Inefficient! TODO: run without worker threads.
 
 -- | If DeepFreeze were flexible enough, this should not be necessary.
@@ -191,8 +220,6 @@ class DeepFreeze (from :: *) (to :: *) where
   type Session from 
   deepFreeze :: from -> Par QuasiDet (Session from) to
 
--- class DeepFreeze (from :: * -> * -> *) (to :: * -> * -> *) where
---   deepFreeze :: from s a -> Par QuasiDet s (to s a)
 
 instance forall f g a s .
          (LVarData1 f, LVarData1 g) =>

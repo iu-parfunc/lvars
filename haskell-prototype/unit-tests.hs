@@ -144,11 +144,17 @@ case_v2c :: Assertion
 case_v2c = assertEqual "t2 with spawn instead of fork"
              (S.fromList [1..10] :: S.Set Int) v2c
 v2c :: S.Set Int
-v2c = runParThenFreeze $
+v2c =
+    -- runParThenFreeze par
+    runDeepFreezable x
+  where
+    par = 
      do s   <- IS.newEmptySet 
         ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10::Int]
         mapM_ IV.get ivs -- Join point.
         return s
+
+    x = DeepFreezable par :: DeepFreezable IS.ISet Int (S.Set Int)
 
 
 -- | Simple callback test.
@@ -900,7 +906,7 @@ case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
 
 dftest0 :: IO String
 dftest0 = runParIO $ do
-  iv1 <- newBottom -- :: Par d s (IV.IVar s (IV.IVar s String))
+  iv1 <- IV.new
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
@@ -913,7 +919,7 @@ case_dftest1 = assertEqual "deefreeze double ivar" (Just (Just "hello")) =<< dft
 -- | Should return (Just (Just "hello"))
 dftest1 :: IO(Maybe (Maybe String))
 dftest1 = runParIO $ do
-  iv1 <- newBottom -- :: Par QuasiDet s (IV.IVar (IV.IVar String))
+  iv1 <- IV.new
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
@@ -925,7 +931,7 @@ case_dftest2 = assertEqual "deefreeze double ivar"
 -- | This uses the more generic lifting... but it's more annoying to unpack:
 dftest2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
 dftest2 = runParIO $ do
-  iv1 <- newBottom --- :: Par (IV.IVar s (IV.IVar s String))
+  iv1 <- IV.new 
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
