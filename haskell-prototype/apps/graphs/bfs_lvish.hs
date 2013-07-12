@@ -456,7 +456,7 @@ type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
   
 main = do
   putStrLn "USAGE: ./bfs_lvish <version> <topo> <graphSize>"
-  putStrLn "USAGE:   Topo must be one of: grid rmat rand chains"
+  putStrLn "USAGE:   Topo must be one of: grid rmat rand chain"
   putStrLn "USAGE:   Version must be one of: "
   putStrLn "USAGE:      bfsS bfsN bfsI"
   putStrLn "USAGE:      misN1 misN2 misN3 misI3 misSeq" 
@@ -467,8 +467,8 @@ main = do
         case args of
           [ver,tp,s,w] -> (ver, tp, read s, read w)
           [ver,tp,s]   -> (ver, tp, read s, 0)
-          [ver,tp]     -> (ver, tp, 1000, 0)
-          [ver]        -> (ver, "grid", 1000, 0) 
+          [ver,tp]     -> (ver, tp,      1000, 0)
+          [ver]        -> (ver, "grid",  1000, 0) 
           []           -> ("bfsN","grid",1000, 0)
           oth          -> error "Too many command line args!"
       existD d = do b <- doesDirectoryExist d
@@ -505,7 +505,15 @@ main = do
            "rand" -> do let f = "randLocalGraph_J_5_"++show size
                         buildPBBSdat f
                         return (datroot ++ f)
-           "chains" -> error "TODO: finish generating graph topology for chains!"
+           "chain" ->  do let f = "chain_"++show size
+                              p = datroot ++ f
+                          b <- doesFileExist p
+                          unless b $ do
+                            putStrLn$"Generating chain graph in "++p
+                            system "ghc -threaded gen_chains_graph.hs -o ./gen_chains_graph.exe"
+                            system$ "./gen_chains_graph.exe "++show size++" > "++p
+                            return ()
+                          return p                          
            _        -> error$"Unknown graph topology: "++topo
            
   putStrLn$"Running config: "++show(version,topo,size)

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module Util where
 -- module Main where
@@ -11,7 +12,7 @@ import           Data.List as L
 import           Data.List.Split (chunksOf)
 import qualified Data.IntSet as IS
 import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Time.Clock (getCurrentTime, diffUTCTime)
+import           Data.Time.Clock (getCurrentTime, diffUTCTime, UTCTime)
 import           Text.Printf (printf)
 import           System.Mem (performGC)
 import           System.IO.Unsafe (unsafePerformIO)
@@ -28,6 +29,8 @@ type WorkRet = (Float)
 type WorkFn = (Node -> WorkRet)
 type Node = Int
 
+#define FIRSTHIT_RDTSC
+
 runAndReport act =
   do (clocks_per_micro,freq) <- calibrate
      startT <- rdtsc
@@ -40,12 +43,18 @@ runAndReport act =
      putStrLn $ "SELFTIMED " ++ show (diffUTCTime t1 t0) ++ "\n"
 
      first <- readIORef first_hit
+#ifdef FIRSTHIT_RDTSC
      let first' = first - startT
      putStrLn$"Start time in cycles: "++commaint startT      
      putStrLn $ "First hit in raw clock cycles was " ++ commaint first'
      let nanos = ((1000 * 1000 * 1000 * (fromIntegral first')) `quot` (fromIntegral freq :: Integer))
      putStrLn $ " In nanoseconds: "++commaint nanos
-     putStrLn $ "FIRSTHIT " ++ show nanos
+     putStrLn $ "FIRSTHIT " ++ show nanos         
+#else         
+--     putStrLn$"Start time: "++show t0
+--     putStrLn $ "First hit time: " ++ show first
+     putStrLn $ "FIRSTHIT " ++ show (diffUTCTime first t0)
+#endif         
 
 
 calibrate :: IO (Double, Word64)
@@ -80,14 +89,25 @@ calibrate = do
 
 ------------------------------------------------------------------------------------------
 
+#ifdef FIRSTHIT_RDTSC
 first_hit :: IORef Word64
 first_hit = unsafePerformIO$ newIORef maxBound
+#else
+first_hit :: IORef UTCTime
+-- UH: this is the wrong initial setting!
+first_hit = unsafePerformIO$ newIORef =<< getCurrentTime
+#endif
 
 -- | Busy-wait for a certain number of clock cycles.
 wait_clocks :: Word64 -> IO Double -- (Float,Double)
 wait_clocks clocks = do
   myT <- rdtsc
+#ifdef FIRSTHIT_RDTSC
   atomicModifyIORef' first_hit (\ t -> (min t myT,()))
+#else
+  myTime <- getCurrentTime
+  atomicModifyIORef' first_hit (\ t -> (min t myTime,()))
+#endif  
   let loop !n = do
         now <- rdtsc
         if now - myT >= clocks
