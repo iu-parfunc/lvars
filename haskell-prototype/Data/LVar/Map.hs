@@ -135,7 +135,7 @@ forEach = forEachHP Nothing
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
-  where putter ref  = atomicModifyIORef ref update
+  where putter ref  = atomicModifyIORef' ref update
         update mp =
           let mp' = M.insertWith fn key elm mp
               fn v1 v2 | v1 == v2  = v1
@@ -162,7 +162,7 @@ modify (IMap lv) key fn = WrapPar $ do
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
       L.logStrLn$ " [Map.modify] allocated new inner "++show(unsafeName bot)
-      let putter _ = L.liftIO$ atomicModifyIORef ref $ \ mp2 ->
+      let putter _ = L.liftIO$ atomicModifyIORef' ref $ \ mp2 ->
             case M.lookup key mp2 of
               Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
               Nothing  -> (M.insert key bot mp2,

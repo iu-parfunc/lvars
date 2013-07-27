@@ -13,7 +13,7 @@
 module Data.LVar.SLMap
        (
          IMap, 
---         Snapshot(IMapSnap), -- AJT: killed for now
+         Snapshot(IMapSnap), -- AJT: killed for now
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
