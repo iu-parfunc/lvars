@@ -26,7 +26,10 @@ module Data.LVar.SLMap
          copy, traverseMap, traverseMap_, 
          
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         traverseMapHP, traverseMapHP_, unionHP
+         traverseMapHP, traverseMapHP_, unionHP,
+         
+         -- * Frozen IMaps
+         Map(), lookup, toStdMap
        ) where
 
 import           Data.Concurrent.SkipListMap as SLM
@@ -34,6 +37,7 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
+import qualified Data.Foldable    as F
 
 import           Control.Monad
 import           Control.LVish
@@ -41,8 +45,10 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
+
+import Prelude hiding (lookup)
 
 type QPar = Par QuasiDet 
 
@@ -53,19 +59,23 @@ type QPar = Par QuasiDet
 -- | We only have one mutable location here, so this is not a scalable implementation.
 data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 
+-- | A frozen version of an IMap is a pure value.  These are effectively equivalent
+-- to the standard Data.Map data structure.
+newtype Map k v = FrzMap (SLM.SLMap k v)
+
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
 instance LVarData1 (IMap k) where
-  newtype Snapshot (IMap k) a = IMapSnap (M.Map k a)
-      deriving (Show,Ord,Read,Eq)
+  newtype Snapshot (IMap k) a = IMapSnap (Map k a)
+      deriving (Show,Ord,Eq)
   freeze m@(IMap v) = fmap IMapSnap $ freezeMap m
   
   -- newBottom = newEmptyMap  -- Ergh, this has problems... let's just remove it from the API.
-
+{-  
   traverseSnap fn (IMapSnap mp) = 
     fmap IMapSnap $ T.traverse fn mp 
-
+-}
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels
@@ -194,10 +204,13 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeMap :: Ord k => IMap k s v -> QPar s (M.Map k v)
+--
+-- This is an O(1) operation that doesn't copy the in-memory representation of the
+-- IMap.
+freezeMap :: Ord k => IMap k s v -> QPar s (Map k v)
 freezeMap (IMap (WrapLVar lv)) = WrapPar $ do
   freezeLV lv
-  L.liftIO $ SLM.foldlWithKey (\m k v -> return $ M.insert k v m) M.empty (L.state lv)
+  return (FrzMap (L.state lv))
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.
@@ -259,18 +272,68 @@ unionHP mh m1 m2 = do
 --------------------------------------------------------------------------------
 
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-instance DeepFreeze (IMap k s a) (M.Map k a) where
+instance DeepFreeze (IMap k s a) (Map k a) where
   type Session (IMap k s a) = s
   deepFreeze iv = do IMapSnap m <- freeze iv
                      return m
-
+{-
 instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
          DeepFreeze (IMap key s0 (f s0 a))
                     (M.Map key b)  where
     type Session (IMap key s0 (f s0 a)) = s0
     deepFreeze from = do
-      x <- freezeMap from
+      x@(FrzMap slm) <- freezeMap from
       let fn :: key -> f s0 a -> M.Map key b -> QPar s0 (M.Map key b)
           fn k elm acc = do elm' <- deepFreeze elm
                             return (M.insert k elm' acc)
-      T.traverse deepFreeze x
+--      T.traverse deepFreeze x
+      -- T.traverse deepFreeze x
+      foldWithKey (\ acc k v -> do y <- deepFreeze v
+--                                  return $! M.insert k ()
+                                   undefined
+                   ) M.empty x
+      undefined
+-}
+
+--------------------------------------------------------------------------------
+-- Operations on frozen Maps
+--------------------------------------------------------------------------------
+
+-- | Look up an entry in a frozen map.
+lookup :: Ord k => k -> Map k a -> Maybe a
+lookup k (FrzMap slm) = unsafeDupablePerformIO (SLM.find slm k)
+
+-- | Convert to the standard Map data structure.  /O(N)/
+toStdMap :: Ord k => Map k a -> M.Map k a
+toStdMap (FrzMap slm) = unsafeDupablePerformIO $ 
+   SLM.foldlWithKey (\m k v -> return $! M.insert k v m) M.empty slm
+
+foldWithKey :: (a -> k -> v -> IO a) -> a -> Map k v -> IO a
+foldWithKey fn init (FrzMap slm) = 
+   SLM.foldlWithKey (\m k v -> fn m k v) init slm
+
+
+instance (Ord k, Show k, Show a) => Show (Map k a) where
+  show mp = show (toStdMap mp)
+
+instance (Ord k, Eq k, Eq a) => Eq (Map k a) where
+  m1 == m2 = (toStdMap m1) == (toStdMap m2)
+
+instance (Ord k, Ord a) => Ord (Map k a) where
+  compare m1 m2 = compare (toStdMap m1) (toStdMap m2)
+
+-- Note: making these strict for now:
+instance F.Foldable (Map k) where
+  foldr fn init (FrzMap slm) = unsafeDupablePerformIO$
+    SLM.foldlWithKey (\ acc _ v -> return $! fn v acc) init slm
+  
+-- Traversals
+----------------------------------------
+-- Here we have a choice.  We could traverse the skip list representation and produce
+-- a Data.Map as output, but then we would need to make our frozen Map a sum type.
+
+{-
+instance Functor (Map k) where
+
+instance T.Traversable (Map k) where
+-}
