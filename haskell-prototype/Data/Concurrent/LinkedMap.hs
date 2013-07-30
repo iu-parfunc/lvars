@@ -1,4 +1,4 @@
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 
 -- | A concurrent finite map represented as a single linked list.  
 --
@@ -16,7 +16,8 @@
 -- data structures, e.g. SkipListMap.
 
 module Data.Concurrent.LinkedMap (
-  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert, foldlWithKey)
+  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert,
+  foldlWithKey, map, reverse)
 where
   
 import Data.IORef
@@ -24,6 +25,7 @@ import Data.Atomics
 import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                        -- to use it.
 import Control.Monad.IO.Class
+import Prelude hiding (reverse, map)
 
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
@@ -87,3 +89,29 @@ foldlWithKey f a m = do
     Node k v next -> do
       a' <- f a k v
       foldlWithKey f a' next
+
+
+-- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
+-- not be included.  This does not affect keys, so the physical structure remains the
+-- same.
+map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
+map fn mp = do 
+ tmp <- foldlWithKey (\ acc k v -> do
+                      r <- liftIO (newIORef acc)
+                      return$! Node k (fn v) r)
+                     Empty mp
+ tmp' <- liftIO (newIORef tmp)
+ -- Here we suffer a reverse to avoid blowing the stack. 
+ reverse tmp'
+
+-- | Create a new linked map that is the reverse order from the input.
+reverse :: MonadIO m => LMap k v -> m (LMap k v)
+reverse mp = liftIO . newIORef =<< loop Empty mp
+  where
+    loop !acc mp = do
+      n <- liftIO$ readIORef mp
+      case n of
+        Empty -> return acc
+        Node k v next -> do
+          r <- liftIO (newIORef acc)
+          loop (Node k v r) next

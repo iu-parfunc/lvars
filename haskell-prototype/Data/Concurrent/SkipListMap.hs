@@ -24,21 +24,27 @@ module Data.Concurrent.SkipListMap (
 where
   
 import System.Random  
-  
+
+import Control.Applicative ((<$>))
 import Control.Monad  
 import Control.Monad.IO.Class
 import Control.LVish.MonadToss
+import Control.LVish (Par)
   
 import Data.IORef
 import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
+import Prelude hiding (map)
+
 
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
 -- level in the skip list.
 data SLMap_ k v t where
   Bottom :: LM.LMap k v -> SLMap_ k v (LM.LMap k v)
   Index  :: LM.LMap k (t, v) -> SLMap_ k v t -> SLMap_ k v (LM.LMap k (t, v))
-  
+
+-- The complete multi-level SLMap always keeps a pointer to the bottom level (the
+-- second field).
 data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
 
 -- | Physical identity
@@ -87,6 +93,8 @@ find_ (Index m slm) shortcut k = do
       
 data PutResult v = Added v | Found v
 
+{-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par d s v -> Par d s (PutResult v)  #-}
+
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
 putIfAbsent :: (Ord k, MonadIO m, MonadToss m) => 
@@ -96,7 +104,10 @@ putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
                m (PutResult v)
 putIfAbsent (SLMap slm _) k vc = 
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
-                                          
+
+{-# SPECIALIZE  putIfAbsentToss :: (Ord k) => 
+     SLMap k v -> k -> Par d s v -> Par d s Bool -> Par d s (PutResult v)  #-}
+
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
 putIfAbsentToss :: (Ord k, MonadIO m) => 
@@ -161,6 +172,21 @@ putIfAbsent_ (Index m slm) shortcut k vc coin install = do
 -- not be included in the fold.
 foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> SLMap k v -> m a
 foldlWithKey f a (SLMap _ lm) = LM.foldlWithKey f a lm
+
+-- | Create an identical copy of an (unchanging) SLMap with the keys unchanged and
+-- the values replaced by the result of applying the provided function.
+-- map :: MonadIO m => (a -> b) -> SLMap k a -> m (SLMap k b)
+map :: MonadIO m => (a -> a) -> SLMap k a -> m (SLMap k a)
+map fn (SLMap (Bottom lm) lm2) = do
+  lm'  <- LM.map fn lm
+  return$! SLMap (Bottom lm') lm'
+
+map fn (SLMap (Index lm slm) lmbot) = do
+  SLMap slm2 bot2 <- map fn (SLMap slm lmbot)
+  lm2  <- LM.map (\(t,a) -> (t,fn a)) lm
+  error "FINISHME"
+--  return$! SLMap (Index lm2 slm2) bot2
+
 
 -- | Returns the sizes of the skiplist levels; for performance debugging.
 counts :: SLMap k v -> IO [Int]

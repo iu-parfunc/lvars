@@ -11,3 +11,4 @@ class Monad m => MonadToss m where
   
 instance MonadToss IO where  
   toss = randomIO
+  -- TODO: FIXME: probably use mwc-random here instead...

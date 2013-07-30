@@ -29,7 +29,7 @@ module Data.LVar.SLMap
          traverseMapHP, traverseMapHP_, unionHP,
          
          -- * Frozen IMaps
-         Map(), lookup, toStdMap
+         Map(), lookup, toStdMap, foldWithKeyM, traverseFrzn
        ) where
 
 import           Data.Concurrent.SkipListMap as SLM
@@ -40,11 +40,13 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable    as F
 
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.LVish
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
+import           System.Random (randomIO)
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
@@ -61,7 +63,7 @@ data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 
 -- | A frozen version of an IMap is a pure value.  These are effectively equivalent
 -- to the standard Data.Map data structure.
-newtype Map k v = FrzMap (SLM.SLMap k v)
+data Map k v = Ord k => FrzMap !(SLM.SLMap k v)
 
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
@@ -72,10 +74,9 @@ instance LVarData1 (IMap k) where
   freeze m@(IMap v) = fmap IMapSnap $ freezeMap m
   
   -- newBottom = newEmptyMap  -- Ergh, this has problems... let's just remove it from the API.
-{-  
-  traverseSnap fn (IMapSnap mp) = 
-    fmap IMapSnap $ T.traverse fn mp 
--}
+  traverseSnap fn (IMapSnap mp@(FrzMap _)) = 
+    fmap IMapSnap $ traverseFrzn fn mp
+
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels
@@ -308,9 +309,15 @@ toStdMap :: Ord k => Map k a -> M.Map k a
 toStdMap (FrzMap slm) = unsafeDupablePerformIO $ 
    SLM.foldlWithKey (\m k v -> return $! M.insert k v m) M.empty slm
 
-foldWithKey :: (a -> k -> v -> IO a) -> a -> Map k v -> IO a
-foldWithKey fn init (FrzMap slm) = 
+foldWithKeyM :: MonadIO m => (a -> k -> v -> m a) -> a -> Map k v -> m a
+foldWithKeyM fn init (FrzMap slm) = 
    SLM.foldlWithKey (\m k v -> fn m k v) init slm
+-- TODO!  Need parallel version!
+
+-- foldWithKeyIO :: (a -> k -> v -> IO a) -> a -> Map k v -> IO a
+-- foldWithKeyIO fn init (FrzMap slm) = 
+--    SLM.foldlWithKey (\m k v -> fn m k v) init slm
+
 
 
 instance (Ord k, Show k, Show a) => Show (Map k a) where
@@ -332,8 +339,30 @@ instance F.Foldable (Map k) where
 -- Here we have a choice.  We could traverse the skip list representation and produce
 -- a Data.Map as output, but then we would need to make our frozen Map a sum type.
 
-{-
-instance Functor (Map k) where
+-- Yet if we want instances of the standard classes, we have to produce a (mutable)
+-- Map as output.
 
+traverseFrzn :: (MonadIO m, Ord k) => (a -> m b) -> Map k a -> m (Map k b)
+traverseFrzn fn (FrzMap slm) = do
+  mp <- LI.liftIO (SLM.newSLMap defaultLevels)
+  SLM.foldlWithKey (\() k v -> do
+                     putRes <- SLM.putIfAbsentToss mp k (fn v) (LI.liftIO randomIO)
+                     case putRes of
+                       Added _ -> return ()
+                       Found _ -> error "Multiple puts to one entry in a frozen IMap!")
+     () slm
+  return (FrzMap mp)
+
+
+{-  
+instance Functor (Map k) where
+  fmap fn (FrzMap slm) = unsafeDupablePerformIO$ do
+    mp <- SLM.map fn slm
+    return (FrzMap mp)
+-}
+
+{-  -}
+  
+  {-
 instance T.Traversable (Map k) where
 -}
