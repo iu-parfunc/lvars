@@ -10,37 +10,25 @@ name:                lattice-par
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.0
+version:             0.2.0.0
 
--- A short (one-line) description of the package.
+-- Changelog:
+-- 0.2 -- switch SLMap over to O(1) freeze
+
+
 synopsis:  LVar data structures and infrastructure to build more.
 
--- A longer description of the package.
 -- description:         
 
--- The license under which the package is released.
 license:             BSD3
-
--- The file containing the license text.
 license-file:        LICENSE
-
--- The package author(s).
 author:              Aaron Turon, Lindsey Kuper, Ryan Newton
-
--- An email address to which users can send suggestions, bug reports, and 
--- patches.
 maintainer:          lkuper@indiana.edu
-
--- A copyright notice.
--- copyright:           
-
 category:            Concurrency
-
 build-type:          Simple
 
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.8
-
 
 flag debug
   description: Activate additional debug assertions, and printed output 
