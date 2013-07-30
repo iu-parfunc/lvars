@@ -26,13 +26,15 @@ module Data.LVar.Map
          traverseMapHP, traverseMapHP_, unionHP
        ) where
 
+import           Control.Monad (void)
+import           Control.Applicative (Applicative, (*>), pure, getConst, Const(Const))
+import           Data.Monoid (Monoid(..))
 import           Data.IORef
 import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
 
-import           Control.Monad (void)
 import           Control.LVish 
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
@@ -101,11 +103,7 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
       -- or by the delta-callback:
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ do 
-        -- Data.Foldable should give us a non-copying way to iterate:
-        -- But it's actually insufficient because it only exposes the values:
-        -- FIXME: we need traverseWithKey_
-        mapM_ (\(k,v) -> forkHP (Just hp)$ callback k v) (M.toList mp)
-        
+        traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) mp
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
@@ -123,8 +121,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
     globalCB ref = do
       mp <- readIORef ref -- Snapshot
       return $ Just $ unWrapPar $ 
-        -- FIXME: need traverseWithKey_ to be added to 'containers':
-        mapM_ (\(k,v) -> forkHP mh$ callb k v) (M.toList mp)
+        traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map
@@ -306,3 +303,19 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
+
+--------------------------------------------------------------------------------
+-- Version of traverseWithKey_ from Shachaf Ben-Kiki
+
+newtype Traverse_ f = Traverse_ { runTraverse_ :: f () }
+instance Applicative f => Monoid (Traverse_ f) where
+  mempty = Traverse_ (pure ())
+  Traverse_ a `mappend` Traverse_ b = Traverse_ (a *> b)
+-- Since the Applicative used is Const (newtype Const m a = Const m), the
+-- structure is never built up.
+--(b) You can derive traverseWithKey_ from foldMapWithKey, e.g. as follows:
+traverseWithKey_ :: Applicative f => (k -> a -> f ()) -> M.Map k a -> f ()
+traverseWithKey_ f = runTraverse_ .
+                     foldMapWithKey (\k x -> Traverse_ (void (f k x)))
+foldMapWithKey :: Monoid r => (k -> a -> r) -> M.Map k a -> r
+foldMapWithKey f = getConst . M.traverseWithKey (\k x -> Const (f k x))
