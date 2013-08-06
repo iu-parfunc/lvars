@@ -32,9 +32,8 @@ module Control.LVish
     
     -- * Interfaces for generic operations
     LVarData1(..), DeepFreeze(..),
-    DeepFreezable(..),runDeepFreezable, 
-
-    DeepFreezable2(..), FreezableTuple(..), -- TEMPORARY!
+    DeepFreezable(..), DeepFreezable2(..), DeepFreezable3(..), 
+    runDeepFreezable, runDeepFreezable2, runDeepFreezable3,
     
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
@@ -126,101 +125,36 @@ data DeepFreezable2 f a1 b1  g a2 b2 =
               DeepFreeze (g s a2) b2, LVarData1 g) =>
   DeepFreezable2 !(Par Det s (f s a1, g s a2))
 
--- Can we avoid DeepFreezable2 and reuse DeepFreezable?
-data FreezableTuple s a where
-    -- forall f g . (LVarData1 f, LVarData1 g) =>
-    -- -- We really need two different 'a's... but that means having a
-    -- -- type level Fst and Snd.
-    -- FreezableTuple2 (f s (Fst a)) (g s (Snd a))
 
-    FreezableTuple2 :: 
-     forall f g s a b . (LVarData1 f, LVarData1 g) =>
-     (f s a) -> (g s b) -> FreezableTuple s (f s a, g s b)
-
-    FreezableTuple3 :: 
-     forall s  f g h   a b c . (LVarData1 f, LVarData1 g) =>
-     (f s a) -> (g s b) -> (h s c) -> FreezableTuple s (f s a, g s b, h s c)
-
-instance LVarData1 FreezableTuple where
-  newtype Snapshot FreezableTuple a = TupleSnap a
-  freeze ft = case ft of
-                FreezableTuple2 fa gb    -> return (TupleSnap (fa,gb))
-                FreezableTuple3 fa gb hc -> return (TupleSnap (fa,gb,hc))
-  traverseSnap fn (TupleSnap a) = TupleSnap <$> fn a
-
-
-instance (DeepFreeze (f s a1) b1, LVarData1 f,
-          DeepFreeze (g s a2) b2, LVarData1 g) =>
-         DeepFreeze (FreezableTuple s (f s a1, g s a2)) (b1,b2) where
-  type Session (FreezableTuple s (f s a1, g s a2)) = s
-
-  deepFreeze :: FreezableTuple s (f s a1, g s a2) -> 
-                Par QuasiDet (Session (FreezableTuple s (f s a1, g s a2))) (b1, b2)
-#if 0
-  deepFreeze ft@(FreezableTuple2 (fa) (ga)) =
-    case (ft :: FreezableTuple s (f s a1, g s a2)) of
-      FreezableTuple2 (fa :: f s a1) (ga) -> undefined
-#elif 1
-  deepFreeze (ft :: FreezableTuple s (f s a1, g s a2)) =
-    case ft of
-      --
-      FreezableTuple2 fa ga ->
---      FreezableTuple2 (fa :: f s a) (ga) ->
-    -- Could not deduce (f1 ~ f)
-    -- from the context (DeepFreeze (f s a1) b1,
-    --                   LVarData1 f,
-    --                   DeepFreeze (g s a2) b2,
-    --                   LVarData1 g)
-   -- or from ((f s a1, g s a2) ~ (f1 s a, g1 s b),
-   --           LVarData1 f1,
-   --           LVarData1 g1)
-    
-        (error "Finishme")
-#else
-  deepFreeze (FreezableTuple2 (fa :: f s a1) (ga :: g s a2)) =
-    unsafeConvert $ do 
-      x1 <- deepFreeze fa
-      x2 <- deepFreeze ga
-      return (x1,x2)
-#endif
-
--- type family TupleType :: * -> *
--- newtype instance TupleType Int = Float
-
--- type family Fst :: * -> *
-type family Fst ty
-type instance Fst (a,b) = a
-type instance Fst (a,b,c) = a
-type instance Fst (a,b,c,d) = a
-type instance Fst (a,b,c,d,e) = a
-type instance Fst (a,b,c,d,e,f) = a
-type instance Fst (a,b,c,d,e,f,g) = a
-
-type family Snd ty
-type instance Snd (a,b) = b
-type instance Snd (a,b,c) = b
-type instance Snd (a,b,c,d) = b
-type instance Snd (a,b,c,d,e) = b
-type instance Snd (a,b,c,d,e,f) = b
-type instance Snd (a,b,c,d,e,f,g) = b
-
--- Example:
-x :: Fst (Int,Float)
-x = 3
-
-y :: Snd (Int,Float,Char)
-y = 3.3
+-- | Ditto for THREE freezable values.
+data DeepFreezable3 f a1 b1   g a2 b2   h a3 b3 =
+  forall s . (DeepFreeze (f s a1) b1, LVarData1 f,
+              DeepFreeze (g s a2) b2, LVarData1 g,
+              DeepFreeze (h s a3) b3, LVarData1 h) =>
+  DeepFreezable3 !(Par Det s (f s a1, g s a2, h s a3))
 
 
 -- | This allows Deterministic Par computations to return LVars (which normally
 -- cannot escape), and it implicitly does a deepFreeze on them on their way out.
 runDeepFreezable :: DeepFreezable f a b -> b
-
-
 runDeepFreezable (DeepFreezable p) = unsafeRunThenFreeze p
 
+-- | Ditto for a parallel computation with TWO freezable result values.
+runDeepFreezable2 :: DeepFreezable2 f a1 b1  g a2 b2 -> (b1,b2)
+runDeepFreezable2 (DeepFreezable2 p) =
+  unsafePerformIO $ runParThenFreezeIO2 p
+
+-- | Ditto for a parallel computation with THREE freezable result values.
+runDeepFreezable3 :: DeepFreezable3 f a1 b1  g a2 b2   h a3 b3 -> (b1,b2,b3)
+runDeepFreezable3 (DeepFreezable3 p@(WrapPar pi)) = unsafePerformIO$ do
+  (res1,res2,res3) <- L.runParIO pi
+  v1 <- runParIO (unsafeConvert $ deepFreeze res1) -- Inefficient! TODO: run without worker threads.
+  v2 <- runParIO (unsafeConvert $ deepFreeze res2) -- Inefficient! TODO: run without worker threads.
+  v3 <- runParIO (unsafeConvert $ deepFreeze res3) -- Inefficient! TODO: run without worker threads.
+  return (v1,v2,v3)
+
 ----------------------------------------------------------------
--- DISABLING these.  You can use quiesceAll and freeze yourself:
+-- HIDING these (not exporting).  You can use quiesceAll and freeze yourself:
 ----------------------------------------------------------------
 -- | This version works for quasi-deterministic computations as well.  Such
 --   computations may also do freezes internally, but this function has an advantage

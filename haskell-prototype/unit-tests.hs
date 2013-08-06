@@ -336,6 +336,8 @@ v7a = runParIO $ IM.freezeMap =<<
      IM.waitSize 5 mp
      return mp
 
+-- [2013.08.05] RRN: Observing nondeterministic blocked-indefinitely
+-- exception here.
 case_i7b :: Assertion
 case_i7b = do 
   allowSomeExceptions ["Multiple puts"] $ 
@@ -535,7 +537,12 @@ v9d = runParIO$ do
 
 -- WARNING: I'm seeing some livelocks here that depend on the number of threads
 -- (e.g. at -N4 but not -N2).  When deadlocked on -N4 it burns 250% cpu.
+-- 
+-- [2013.08.05] Update... it can pass 100 iterations at -N4 BY ITSELF,
+-- but fails much more rapidly when run together with other 'v9'
+-- tests.
 case_v9e :: Assertion
+
 case_v9e = assertEqual "Scale up a bit" 5000050000 =<< v9e
 v9e :: IO Word64
 v9e = runParIO$ do
@@ -555,6 +562,8 @@ v9e = runParIO$ do
 -- | Here's the same test with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
 case_v9f :: Assertion
+-- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
+-- thread-blocked-indefinitely problem here.
 case_v9f = assertEqual "Array of ivars, compare effficiency:" 5000050000 =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
@@ -622,6 +631,11 @@ lp02 = runParIO$ do
   logStrLn$ " [lp02] after loop..."
   IV.get x
 
+-- [2013.08.05] RRN: I'm seeing this hang sometimes.  It live-locks
+-- burning CPU.  (But only 170% CPU with -N4.)  Hmm, I can't get it to
+-- freeze running BY ITSELF, however.  In fact I can't get the problem
+-- while running just the "lp" tests.  I can get the problem running
+-- just 'v' tests and even just 'v9' tests.
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParIO$ do
