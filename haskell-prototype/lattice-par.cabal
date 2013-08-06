@@ -53,6 +53,7 @@ library
   -- Modules exported by the library.
   exposed-modules:
                     Control.LVish
+                    Control.LVish.DeepFreeze
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
                     Data.LVar.IVar

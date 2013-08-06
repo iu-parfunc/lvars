@@ -41,6 +41,7 @@ import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
+import Control.LVish.DeepFreeze
 import qualified Control.LVish.Internal as I
 import Control.LVish.SchedIdempotent (liftIO, dbgLvl)
 import qualified Control.LVish.SchedIdempotent as L

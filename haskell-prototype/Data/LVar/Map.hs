@@ -35,7 +35,8 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
 
-import           Control.LVish 
+import           Control.LVish
+import           Control.LVish.DeepFreeze
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)

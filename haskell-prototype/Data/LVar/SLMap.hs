@@ -42,6 +42,7 @@ import qualified Data.Foldable    as F
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.LVish
+import           Control.LVish.DeepFreeze
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)

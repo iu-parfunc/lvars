@@ -21,6 +21,7 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish as LV
+import           Control.LVish.DeepFreeze as LV
 import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 

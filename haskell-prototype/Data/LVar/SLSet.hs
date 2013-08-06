@@ -39,6 +39,7 @@ import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Control.Monad
 import           Control.LVish as LV
+import           Control.LVish.DeepFreeze as LV
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)

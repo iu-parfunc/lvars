@@ -12,6 +12,7 @@ module Data.LVar.Internal.Pure
        ) where
 
 import Control.LVish
+import Control.LVish.DeepFreeze
 import Control.LVish.Internal
 import Data.IORef
 import qualified Control.LVish.SchedIdempotent as LI 
