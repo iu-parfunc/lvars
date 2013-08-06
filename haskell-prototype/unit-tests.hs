@@ -899,7 +899,7 @@ case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" Tru
 
 
 --------------------------------------------------------------------------------
--- Unit Tests
+-- Freeze-related tests:
 --------------------------------------------------------------------------------
 
 case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
@@ -963,6 +963,13 @@ case_dftest4b = assertEqual "freeze polymorphic 2" (Just 3) =<< dftest4b
 dftest4b :: IO (Maybe Int)
 dftest4b = runParIO dftest4_
 
+
+
+
+
+
+------------------------------------------------------------------------------------------
+-- Misc Helpers
 ------------------------------------------------------------------------------------------
 
 -- | Ensure that executing an action returns an exception

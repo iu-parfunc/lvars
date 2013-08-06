@@ -360,8 +360,6 @@ instance Functor (Map k) where
     mp <- SLM.map fn slm
     return (FrzMap mp)
 -}
-
-{-  -}
   
   {-
 instance T.Traversable (Map k) where

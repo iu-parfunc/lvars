@@ -4,6 +4,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
 -- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
@@ -22,8 +24,7 @@ module Control.LVish
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
     runPar, runParIO, runParIO_, runParLogged,
-    runParThenFreeze, runParThenFreezeIO,
-    runParThenFreezeIO2,
+--    unsafeRunThenFreeze, runParThenFreezeIO, runParThenFreezeIO2,
     withNewPool, withNewPool_,
     
     -- * Quasi-deterministic operations:
@@ -31,8 +32,10 @@ module Control.LVish
     
     -- * Interfaces for generic operations
     LVarData1(..), DeepFreeze(..),
-    DeepFreezable(..),runDeepFreezable, -- TEMPORARY
+    DeepFreezable(..),runDeepFreezable, 
 
+    DeepFreezable2(..), FreezableTuple(..), -- TEMPORARY!
+    
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
     
@@ -105,44 +108,126 @@ runParLogged (WrapPar p) = L.runParLogged p
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 
 
--- | This allows Deterministic Par computations to return LVars (which normally
--- cannot escape), and it implicitly does a deepFreeze on them on their way out.
-#ifdef EXPERIMENT
-runParThenFreeze ::
-  forall f a b . LVarData1 f => 
-    (forall s . (DeepFreeze (f s a) b) =>  Par Det s (f s a))
-    -> b
-#else
-runParThenFreeze :: (DeepFreeze (f s a) b, LVarData1 f) =>
+-- | This version is internal/unsafe because it does not seal up the
+-- 's' parameter.
+unsafeRunThenFreeze :: (DeepFreeze (f s a) b, LVarData1 f) =>
                     Par Det s (f s a) -> b
-#endif
-runParThenFreeze p = unsafePerformIO$ runParThenFreezeIO p
+unsafeRunThenFreeze p = unsafePerformIO$ runParThenFreezeIO p
 
-
-  -- forall f a b .
-  -- (forall s . (DeepFreeze (f s a) b, LVarData1 f) =>  Par Det s (f s a))
-  -- -> b
-
+-- | This datatype exists to allow the user to package computations with
+-- freezable results so that they may be run, discharging the 's' parameter.
 data DeepFreezable f a b = forall s . (DeepFreeze (f s a) b, LVarData1 f) =>
                            DeepFreezable !(Par Det s (f s a))
 
+-- | The same trick, but allows TWO freezable values to be returned
+-- from the computation.
+data DeepFreezable2 f a1 b1  g a2 b2 =
+  forall s . (DeepFreeze (f s a1) b1, LVarData1 f,
+              DeepFreeze (g s a2) b2, LVarData1 g) =>
+  DeepFreezable2 !(Par Det s (f s a1, g s a2))
+
+-- Can we avoid DeepFreezable2 and reuse DeepFreezable?
+data FreezableTuple s a where
+    -- forall f g . (LVarData1 f, LVarData1 g) =>
+    -- -- We really need two different 'a's... but that means having a
+    -- -- type level Fst and Snd.
+    -- FreezableTuple2 (f s (Fst a)) (g s (Snd a))
+
+    FreezableTuple2 :: 
+     forall f g s a b . (LVarData1 f, LVarData1 g) =>
+     (f s a) -> (g s b) -> FreezableTuple s (f s a, g s b)
+
+    FreezableTuple3 :: 
+     forall s  f g h   a b c . (LVarData1 f, LVarData1 g) =>
+     (f s a) -> (g s b) -> (h s c) -> FreezableTuple s (f s a, g s b, h s c)
+
+instance LVarData1 FreezableTuple where
+  newtype Snapshot FreezableTuple a = TupleSnap a
+  freeze ft = case ft of
+                FreezableTuple2 fa gb    -> return (TupleSnap (fa,gb))
+                FreezableTuple3 fa gb hc -> return (TupleSnap (fa,gb,hc))
+  traverseSnap fn (TupleSnap a) = TupleSnap <$> fn a
+
+
+instance (DeepFreeze (f s a1) b1, LVarData1 f,
+          DeepFreeze (g s a2) b2, LVarData1 g) =>
+         DeepFreeze (FreezableTuple s (f s a1, g s a2)) (b1,b2) where
+  type Session (FreezableTuple s (f s a1, g s a2)) = s
+
+  deepFreeze :: FreezableTuple s (f s a1, g s a2) -> 
+                Par QuasiDet (Session (FreezableTuple s (f s a1, g s a2))) (b1, b2)
+#if 0
+  deepFreeze ft@(FreezableTuple2 (fa) (ga)) =
+    case (ft :: FreezableTuple s (f s a1, g s a2)) of
+      FreezableTuple2 (fa :: f s a1) (ga) -> undefined
+#elif 1
+  deepFreeze (ft :: FreezableTuple s (f s a1, g s a2)) =
+    case ft of
+      --
+      FreezableTuple2 fa ga ->
+--      FreezableTuple2 (fa :: f s a) (ga) ->
+    -- Could not deduce (f1 ~ f)
+    -- from the context (DeepFreeze (f s a1) b1,
+    --                   LVarData1 f,
+    --                   DeepFreeze (g s a2) b2,
+    --                   LVarData1 g)
+   -- or from ((f s a1, g s a2) ~ (f1 s a, g1 s b),
+   --           LVarData1 f1,
+   --           LVarData1 g1)
+    
+        (error "Finishme")
+#else
+  deepFreeze (FreezableTuple2 (fa :: f s a1) (ga :: g s a2)) =
+    unsafeConvert $ do 
+      x1 <- deepFreeze fa
+      x2 <- deepFreeze ga
+      return (x1,x2)
+#endif
+
+-- type family TupleType :: * -> *
+-- newtype instance TupleType Int = Float
+
+-- type family Fst :: * -> *
+type family Fst ty
+type instance Fst (a,b) = a
+type instance Fst (a,b,c) = a
+type instance Fst (a,b,c,d) = a
+type instance Fst (a,b,c,d,e) = a
+type instance Fst (a,b,c,d,e,f) = a
+type instance Fst (a,b,c,d,e,f,g) = a
+
+type family Snd ty
+type instance Snd (a,b) = b
+type instance Snd (a,b,c) = b
+type instance Snd (a,b,c,d) = b
+type instance Snd (a,b,c,d,e) = b
+type instance Snd (a,b,c,d,e,f) = b
+type instance Snd (a,b,c,d,e,f,g) = b
+
+-- Example:
+x :: Fst (Int,Float)
+x = 3
+
+y :: Snd (Int,Float,Char)
+y = 3.3
+
+
+-- | This allows Deterministic Par computations to return LVars (which normally
+-- cannot escape), and it implicitly does a deepFreeze on them on their way out.
 runDeepFreezable :: DeepFreezable f a b -> b
-runDeepFreezable (DeepFreezable p) = runParThenFreeze p
 
 
+runDeepFreezable (DeepFreezable p) = unsafeRunThenFreeze p
+
+----------------------------------------------------------------
+-- DISABLING these.  You can use quiesceAll and freeze yourself:
+----------------------------------------------------------------
 -- | This version works for quasi-deterministic computations as well.  Such
 --   computations may also do freezes internally, but this function has an advantage
 --   vs. doing your own freeze at the end of your computation.  Namely, when you use
---   `runParThenFreeze`, there is an implicit barrier before the final freeze.
-#ifdef EXPERIMENT
-runParThenFreezeIO ::
-    forall f a b . LVarData1 f =>
-      (forall s . (DeepFreeze (f s a) b) =>  Par Det s (f s a))
-       -> IO b
-#else
+--   `runParThenFreezeIO`, there is an implicit barrier before the final freeze.
 runParThenFreezeIO :: (DeepFreeze (f s a) b, LVarData1 f) =>
                        Par d s (f s a) -> IO b
-#endif
 runParThenFreezeIO par = do 
   res <- L.runParIO (unWrapPar par)
   runParIO (unsafeConvert $ deepFreeze res) -- Inefficient! TODO: run without worker threads.
@@ -156,7 +241,7 @@ runParThenFreezeIO2 par@(WrapPar pi) = do
   v1 <- runParIO (unsafeConvert $ deepFreeze res1) -- Inefficient! TODO: run without worker threads.
   v2 <- runParIO (unsafeConvert $ deepFreeze res2) -- Inefficient! TODO: run without worker threads.
   return (v1,v2)
-  
+----------------------------------------------------------------
 
 
 logStrLn :: String -> Par d s ()
@@ -176,7 +261,10 @@ logStrLn _  = return ()
 
 -- class Traversable f => LVarData1 (f :: * -> *) where
 
--- | TODO: if there is a Par class, it needs to be a superclass of this.
+-- | A class representing monotonic data types that take one type
+-- parameter as well as an `s` parameter for session safety.
+-- 
+--   TODO: if there is a Par class, it needs to be a superclass of this.
 class LVarData1 (f :: * -> * -> *) where
   -- | This associated type models a picture of the "complete" contents of the data:
   -- e.g. a whole set instead of one element, or the full/empty information for an
@@ -184,6 +272,7 @@ class LVarData1 (f :: * -> * -> *) where
   -- type Snapshot f a :: *
   data Snapshot f :: * -> *
   -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
+  --  I was not able to get abstracting over the constraints to work.
 
   freeze :: -- LVCtxt f s a =>
             f s a -> Par QuasiDet s (Snapshot f a)
@@ -191,6 +280,8 @@ class LVarData1 (f :: * -> * -> *) where
 
   -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
   -- I don't know of a good way, so instead we expose this:
+
+  -- | 
   traverseSnap :: (a -> Par d s b) -> Snapshot f a -> Par d s (Snapshot f b)
   -- TODO: use constraint kinds to constrain 'b'.
 
@@ -199,7 +290,10 @@ class LVarData1 (f :: * -> * -> *) where
   -- What else?
   -- Merge op?
 
+
 -- This gets messy if we try to handle several Kinds:
+
+-- | Just like LVarData1 but for type constructors of kind `*`.
 class LVarData0 (t :: *) where
   -- | This associated type models a picture of the "complete" contents of the data:
   -- e.g. a whole set instead of one element, or the full/empty information for an
