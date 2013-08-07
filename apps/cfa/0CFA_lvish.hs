@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 -- module Apps.CFA.KCFA_LVish
@@ -24,8 +25,10 @@ import Data.List ((\\))
 import Debug.Trace
 
 import Control.LVish
+import Control.LVish.DeepFreeze
 import Control.LVish.Internal (liftIO)
 import Control.LVish.SchedIdempotent (dbgLvl)
+#define NONSCALABLE
 #ifdef NONSCALABLE
 import  Data.LVar.Set as IS
 import  Data.LVar.Map as IM
@@ -279,15 +282,19 @@ monovariantStore store = do
 -- | Perform a complete, monovariant analysis.
 analyse :: Call -> IO (M.Map Var (S.Set Exp))
 -- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
-analyse e = do 
---  IMapSnap m <- runParThenFreezeIO par
---  return m
-  runParThenFreezeIO par
-  -- do x <- runParThenFreezeIO par
-  --    putStrLn (show$ doc x)
-  --    return undefined
+analyse e = runParIO $ do
+  ms <- par
+  IMapSnap ms' <- freeze ms
+  IMapSnap ms'' <- traverseSnap (deSnap . freeze) (IMapSnap ms')
+  return ms''
  where
-   par :: Par d s (IM.IMap Var s (IS.ISet s Exp))
+   deSnap m = m >>= \ (ISetSnap s) -> return s
+   
+   -- res :: (M.Map Var (S.Set Exp))
+   -- res = runDeepFreezable df 
+   -- df = DeepFreezable par
+   
+   par :: forall d s . Par d s (IM.IMap Var s (IS.ISet s Exp))
    -- par :: Par d s (Store s)
    par = do
      logStrLn " [kcfa] Starting program..."

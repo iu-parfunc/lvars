@@ -54,8 +54,6 @@ library
   exposed-modules:
                     Control.LVish
                     Control.LVish.DeepFreeze
-                    Control.LVish.SchedIdempotent
-                    Control.LVish.Internal
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set
@@ -66,8 +64,11 @@ library
                     Data.LVar.IStructure                    
                     Data.LVar.MaxCounter
                     Data.LVar.Internal.Pure
-                    Util.PBBS
-  
+
+                    -- Don't use these:
+                    Control.LVish.SchedIdempotent
+                    Control.LVish.Internal
+                    
   -- Modules included in this library but not exported.
   other-modules:    Old.Common
                     Data.Concurrent.Bag
