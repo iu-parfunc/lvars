@@ -4,9 +4,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE CPP #-} 
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE MagicHash #-} 
 module Data.LVar.IVar
-       (IVar, Snapshot(IVarSnap),
+       (IVar, 
         new, get, put, put_,
         spawn, spawn_, spawnP,
         freezeIVar, addHandler)
@@ -21,11 +22,12 @@ import           System.IO.Unsafe      (unsafePerformIO)
 import           Data.Traversable (traverse)
 
 import           Control.LVish as LV
-import           Control.LVish.DeepFreeze as LV
+import           Control.LVish.DeepFrz (Frzn)
 import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.Traversable (traverse)
+import           GHC.Prim (unsafeCoerce#)
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -38,22 +40,15 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
-instance LVarData1 IVar where
-  -- type Snapshot IVar a = Maybe a
-  newtype Snapshot IVar a = IVarSnap (Maybe a)
-    deriving (Show,Ord,Read,Eq)
-  
-  freeze :: IVar s a -> Par QuasiDet s (Snapshot IVar a)
-  freeze = unsafeConvert . fmap IVarSnap . freezeIVar
+instance LVarData1 IVar where  
+  freeze :: IVar s a -> Par QuasiDet s (IVar Frzn a)
+  freeze = freezeIVar
 
   -- newBottom :: Par d s (IVar s a)
   newBottom = new
   
-  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+--  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
   
-
-unSnap :: Snapshot IVar a -> Maybe a
-unSnap (IVarSnap m) = m
 
 --------------------------------------
 
@@ -87,14 +82,10 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
         update Nothing  = (Just x, Just x)
 
 
-freezeIVar :: IVar s a -> LV.Par QuasiDet s (Maybe a)
-freezeIVar (IVar (WrapLVar lv)) = WrapPar$ 
+freezeIVar :: IVar s a -> LV.Par QuasiDet s (IVar Frzn a)
+freezeIVar orig@(IVar (WrapLVar lv)) = WrapPar$ 
   do freezeLV lv
-     getLV lv globalThresh deltaThresh
-  where
-    globalThresh _  False = return Nothing
-    globalThresh ref True = fmap Just $ readIORef ref
-    deltaThresh _ = return Nothing
+     return (unsafeCoerce# orig)
 
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool -> IVar s elt -> (elt -> Par d s ()) -> Par d s ()
@@ -141,37 +132,3 @@ instance PC.ParIVar (IVar s) (Par d s) where
 #endif
 #endif
 
---------------------------------------------------------------------------------
--- IVar specific DeepFreeze instances:
---------------------------------------------------------------------------------
-
-
--- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-instance DeepFreeze (IVar s a) (Maybe a) where
-  type Session (IVar s a) = s 
-  deepFreeze iv = 
-      do IVarSnap m <- freeze iv
-         return m
-
-instance DeepFreeze (IVar s a) b =>
-         DeepFreeze (IVar s (IVar s a)) (Maybe b)
-  where
-    type Session (IVar s (IVar s a)) = s 
-    deepFreeze from = do
-      x <- freezeIVar from       -- :: Par QuasiDet s (Maybe (IVar s a))
-      y <- traverse deepFreeze x -- :: Par QuasiDet s (Maybe b)
-      return y
-
-{-
--- [2013.07.06] Good, this errors post refactoring:
-test :: IO Int
-test = runParIO $ do
-  v <- new
-  logStrLn $ "First, put to the lvar..."
-  put_ v 3
-  logStrLn $ show $ unsafePerformIO$  runParIO $
-    do
-       (x::Maybe Int) <- deepFreeze v
-       return x
-  get v
--}

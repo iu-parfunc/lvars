@@ -41,6 +41,7 @@ module Control.LVish
 
 import           Control.Applicative
 import           Control.LVish.Internal
+import           Control.LVish.DeepFrz.Internal (Frzn)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -125,23 +126,22 @@ logStrLn _  = return ()
 -- 
 --   TODO: if there is a Par class, it needs to be a superclass of this.
 class LVarData1 (f :: * -> * -> *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  -- type Snapshot f a :: *
-  data Snapshot f :: * -> *
+  -- | The a frozen LVar provides a complete picture of the contents:
+  -- e.g. a whole set instead of one element, or the full/empty
+  -- information for an IVar, instead of just the payload.
+  
   -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
   --  I was not able to get abstracting over the constraints to work.
 
   freeze :: -- LVCtxt f s a =>
-            f s a -> Par QuasiDet s (Snapshot f a)
+            f s a -> Par QuasiDet s (f Frzn a)
   newBottom :: Ord a => Par d s (f s a)
 
-  -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
-  -- I don't know of a good way, so instead we expose this:
+  -- NOTE: there is currently no way to assert any constraints on the
+  -- RANGE of a type function:
 
   -- | 
-  traverseSnap :: (a -> Par d s b) -> Snapshot f a -> Par d s (Snapshot f b)
+  traverseSnap :: (a -> Par d s b) -> f Frzn a -> Par d s (f Frzn b)
   -- TODO: use constraint kinds to constrain 'b'.
 
   -- foldSnap :: (a -> b -> Par d s b) -> b -> f s a -> Par d s b
