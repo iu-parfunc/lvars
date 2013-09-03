@@ -3,11 +3,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
+{-# LANGUAGE MagicHash #-}
 
 module Control.LVish.Internal
   (
-    Par(..), LVar(..),
-    unWrapPar, unsafeRunPar,
+    Par(..), LVar(..), LVarData1(..),
+    unWrapPar, unsafeRunPar, unsafeCoerceLVar,
     Determinism(..), 
     unsafeConvert, state,
     liftIO,
@@ -19,6 +20,9 @@ import           Control.Monad.IO.Class
 import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
+import qualified Data.Foldable    as F
+import           GHC.Prim (unsafeCoerce#)
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}
@@ -68,3 +72,44 @@ for_ (start, end) fn = loop start
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
   
+
+
+------------------------------------------------------------------------------
+-- Interface for generic LVar handling
+------------------------------------------------------------------------------
+
+-- | A class representing monotonic data types that take one type
+-- parameter as well as an `s` parameter for session safety.
+-- 
+class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
+     --   TODO: if there is a Par to generalize LVar Par monads, then
+     --   it needs to be a superclass of this.
+     where
+  -- | The a frozen LVar provides a complete picture of the contents:
+  -- e.g. a whole set instead of one element, or the full/empty
+  -- information for an IVar, instead of just the payload.
+  
+  -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
+  --  I was not able to get abstracting over the constraints to work.
+
+  freeze :: -- LVCtxt f s a =>
+            f s a -> Par QuasiDet s (f Frzn a)
+            
+  newBottom :: Ord a => Par d s (f s a)
+
+  addHandler :: Maybe L.HandlerPool -> f s elt -> (elt -> Par d s ()) -> Par d s ()
+
+{- 
+-- | Just like LVarData1 but for type constructors of kind `*`.
+class LVarData0 (t :: *) where
+  -- | This associated type models a picture of the "complete" contents of the data:
+  -- e.g. a whole set instead of one element, or the full/empty information for an
+  -- IVar, instead of just the payload.
+  type Snapshot0 t
+  freeze0 :: t -> Par QuasiDet s (Snapshot0 t)
+  newBottom0 :: Par d s t
+-}
+
+-- | A safer version of `unsafeCoerce#` for LVars.
+unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 a
+unsafeCoerceLVar = unsafeCoerce#

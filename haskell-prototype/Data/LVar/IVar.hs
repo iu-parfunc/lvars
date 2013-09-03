@@ -10,24 +10,27 @@ module Data.LVar.IVar
        (IVar, 
         new, get, put, put_,
         spawn, spawn_, spawnP,
-        freezeIVar, addHandler)
+        freezeIVar, Data.LVar.IVar.addHandler)
        where
 
 import           Data.IORef
 import           Control.DeepSeq
 import qualified Control.Monad.Par.Class as PC
 import           System.Mem.StableName (makeStableName, hashStableName)
-import           System.IO.Unsafe      (unsafePerformIO)
+import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 
 import           Data.Traversable (traverse)
+import qualified Data.Traversable as T
+import qualified Data.Foldable    as F
 
-import           Control.LVish as LV
-import           Control.LVish.DeepFrz (Frzn)
+import           Control.LVish as LV 
+import           Control.LVish.DeepFrz (Frzn, Trvrsbl)
 import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.Traversable (traverse)
 import           GHC.Prim (unsafeCoerce#)
+
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -46,9 +49,20 @@ instance LVarData1 IVar where
 
   -- newBottom :: Par d s (IVar s a)
   newBottom = new
-  
+
 --  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
+
+-- instance T.Traversable (IVar Frzn) where
+-- FINISHME 
   
+-- instance Functor (IVar Frzn) where
+  
+instance F.Foldable (IVar Trvrsbl) where
+  foldr fn zer (IVar lv) =
+    case unsafeDupablePerformIO$ readIORef (state lv) of
+      Just x  -> fn x zer
+      Nothing -> zer 
+      
 
 --------------------------------------
 

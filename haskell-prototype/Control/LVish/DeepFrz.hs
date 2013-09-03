@@ -6,7 +6,7 @@
 module Control.LVish.DeepFrz
        (
          DeepFrz(), FrzType,
-         Frzn,
+         Frzn, Trvrsbl 
        ) where
 
 import Data.Int
@@ -100,4 +100,3 @@ instance (DeepFrz a, DeepFrz b, DeepFrz c, DeepFrz d, DeepFrz e,
   type FrzType (a,b,c,d,e,f,g,h,i) = (FrzType a, FrzType b, FrzType c, FrzType d, FrzType e,
                                       FrzType f, FrzType g, FrzType h, FrzType i)
   frz = unsafeCoerce#
-
