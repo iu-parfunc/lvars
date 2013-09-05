@@ -1,14 +1,13 @@
 # A prototype Haskell implementation of LVish
 
-_LVish_ is a quasi-deterministic [0] parallel programming model that
-extends LVars [1] to incorporate _freezing_ and _event handlers_.
-This directory contains an implementation of LVish as a monadic
-Haskell library based on the Par monad [2] [3].
+_LVish_ is a [quasi-deterministic] parallel programming model that
+extends [LVars] to incorporate _freezing_ and _event handlers_.  This
+directory contains an implementation of LVish as a monadic Haskell
+library based on [monad-par].
 
-[0]: http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf
-[1]: https://www.cs.indiana.edu/~lkuper/papers/lvars-fhpc13.pdf
-[2]: http://research.microsoft.com/en-us/um/people/simonpj/papers/parallel/monad-par.pdf
-[3]: http://hackage.haskell.org/package/monad-par
+[quasi-deterministic]: http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf
+[LVars]: https://www.cs.indiana.edu/~lkuper/papers/lvars-fhpc13.pdf
+[monad-par]: http://hackage.haskell.org/package/monad-par
 
 ## Applications for LVish
 
