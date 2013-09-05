@@ -19,14 +19,14 @@ class DeepFrz a where
   -- frozen ones.  It should be idempotent.
   type FrzType a :: *
 
-  -- | Private: not exported from this module:
+  -- | Private: not exported from this module.
   frz :: a -> FrzType a
 
-  -- | However, user's can opt-in to this class and take advantage of
-  -- the default instance.
+  -- | While `frz` is not exported, users may opt-in to the `DeepFrz`
+  -- class for their datatypes and take advantage of the default instance.
+  -- Doing so requires that `type FrzType a = a`.
   default frz :: a -> a 
   frz a = a 
-
 
 -- | An uninhabited type that signals an LVar has been frozen.
 --   LVars should use this inplace of their `s` parameter.

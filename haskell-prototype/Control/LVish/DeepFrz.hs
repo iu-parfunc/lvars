@@ -15,6 +15,7 @@ import GHC.Prim (unsafeCoerce#)
 
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal
+import Control.LVish.Internal (unsafeCoerceLVar)
 --------------------------------------------------------------------------------
 
 {-

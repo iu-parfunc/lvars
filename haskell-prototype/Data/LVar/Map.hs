@@ -10,7 +10,7 @@
 
 module Data.LVar.Map
        (
-         IMap, Snapshot(IMapSnap),
+         IMap, 
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
@@ -27,21 +27,22 @@ module Data.LVar.Map
        ) where
 
 import           Control.Monad (void)
-import           Control.Applicative (Applicative, (*>), pure, getConst, Const(Const))
+import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
 import           Data.Monoid (Monoid(..))
 import           Data.IORef
 import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
+import qualified Data.Foldable as F
 
+import           Control.LVish.DeepFrz  as DF
 import           Control.LVish
-import           Control.LVish.DeepFreeze
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
 type QPar = Par QuasiDet 
@@ -59,13 +60,18 @@ instance Eq (IMap k s v) where
 -- Need LVarData2:
 
 instance LVarData1 (IMap k) where
-  newtype Snapshot (IMap k) a = IMapSnap (M.Map k a)
-      deriving (Show,Ord,Read,Eq)
-  freeze    = fmap IMapSnap . freezeMap
+  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)  
   newBottom = newEmptyMap
+  sortFreeze is = AFoldable <$> freezeMap is 
+  -- addHandler
 
-  traverseSnap fn (IMapSnap mp) = 
-    fmap IMapSnap $ T.traverse fn mp 
+instance OrderedLVarData1 (IMap k) where
+  snapFreeze is = unsafeCoerceLVar <$> freeze is
+
+instance F.Foldable (IMap k Trvrsbl) where
+  foldr fn zer (IMap lv) =
+    let set = unsafeDupablePerformIO (readIORef (state lv)) in
+    F.foldr fn zer set 
 
 --------------------------------------------------------------------------------
 
@@ -115,7 +121,7 @@ forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> (k -> v -> Par d s ())      -- ^ callback
           -> Par d s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
-    addHandler mh lv globalCB deltaCB
+    L.addHandler mh lv globalCB deltaCB
     return ()
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
@@ -155,7 +161,8 @@ modify (IMap lv) key fn = WrapPar $ do
   let ref = state lv      
   mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
-    Just lv2 -> do L.logStrLn$ " [Map.modify] key already present: "++show key++" adding to inner "++show(unsafeName lv2)
+    Just lv2 -> do L.logStrLn$ " [Map.modify] key already present: "++show key++
+                               " adding to inner "++show(unsafeName lv2)
                    unWrapPar$ fn lv2
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
@@ -215,6 +222,11 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
+--
+-- This Data.Map based LVar has the property that you can
+-- retrieve the full set without any IO, and without nondeterminism
+-- leaking.  (This is because the internal order is fixed for the
+-- tree-based Data.Set.)    
 freezeMap :: IMap k s v -> QPar s (M.Map k v)
 freezeMap (IMap (WrapLVar lv)) = WrapPar $
    do freezeLV lv
@@ -277,27 +289,6 @@ unionHP mh m1 m2 = do
   forEachHP mh m1 (\ k v -> insert k v os)
   forEachHP mh m2 (\ k v -> insert k v os)
   return os
-
---------------------------------------------------------------------------------
--- Map specific DeepFreeze instances:
---------------------------------------------------------------------------------
-
--- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-instance DeepFreeze (IMap k s a) (M.Map k a) where
-  type Session (IMap k s a) = s
-  deepFreeze iv = do IMapSnap m <- freeze iv
-                     return m
-
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
-         DeepFreeze (IMap key s0 (f s0 a))
-                    (M.Map key b)  where
-    type Session (IMap key s0 (f s0 a)) = s0
-    deepFreeze from = do
-      x <- freezeMap from
-      let fn :: key -> f s0 a -> M.Map key b -> QPar s0 (M.Map key b)
-          fn k elm acc = do elm' <- deepFreeze elm
-                            return (M.insert k elm' acc)
-      T.traverse deepFreeze x
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int

@@ -33,6 +33,7 @@ module Data.LVar.Set
        ) where
 
 import           Control.Monad (void)
+import           Control.Applicative ((<$>))
 import           Data.IORef
 import           Data.Maybe (fromMaybe)
 import qualified Data.Set as S
@@ -64,8 +65,12 @@ instance Eq (ISet s v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 instance LVarData1 ISet where
+  newBottom = newEmptySet  
   freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-  newBottom = newEmptySet
+  sortFreeze is = AFoldable <$> freezeSet is 
+
+instance OrderedLVarData1 ISet where
+  snapFreeze is = unsafeCoerceLVar <$> freeze is
 
 instance F.Foldable (ISet Trvrsbl) where
   foldr fn zer (ISet lv) =

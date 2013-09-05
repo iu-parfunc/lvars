@@ -30,7 +30,7 @@ module Control.LVish
     quiesce, quiesceAll,
     
     -- * Interfaces for generic operations
-    LVarData1(..),
+    LVarData1(..), OrderedLVarData1(..),
     
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
