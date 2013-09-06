@@ -1,6 +1,20 @@
 # LVish implementation TODOs
 
   * Do Hackage release as soon as possible
+
+  * (Ryan) Factor out Data.LVar.Generic.
+  * (Ryan) Finish providing instances/methods for LVarData1.
+  * (Ryan) Use modern HSBencher.
+
+  * Finish hacking out the old implementation.
+  * Turn on Safe Haskell for real.
+  * (Lindsey) Finish porting LVars (those not done) to the shiny new
+    DeepFrz method (use IVar as an example):
+      * Set 
+      * Map
+      * SLSet      
+      * SLMap 
+      * IStructure ... 
   
   * New monad-par release with necessary tweaks
 

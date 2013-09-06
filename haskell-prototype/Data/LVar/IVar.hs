@@ -95,7 +95,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
                                error$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")"
         update Nothing  = (Just x, Just x)
 
-
+-- FIXME: documentation:
 freezeIVar :: IVar s a -> LV.Par QuasiDet s (IVar Frzn a)
 freezeIVar orig@(IVar (WrapLVar lv)) = WrapPar$ 
   do freezeLV lv

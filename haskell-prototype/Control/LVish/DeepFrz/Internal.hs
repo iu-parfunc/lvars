@@ -1,3 +1,5 @@
+-- I am an UNSAFE module.
+
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
 
@@ -19,7 +21,7 @@ class DeepFrz a where
   -- frozen ones.  It should be idempotent.
   type FrzType a :: *
 
-  -- | Private: not exported from this module.
+  -- | Private: not exported to the end user.
   frz :: a -> FrzType a
 
   -- | While `frz` is not exported, users may opt-in to the `DeepFrz`

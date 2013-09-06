@@ -59,7 +59,7 @@ import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
 
-import           Old.Common (forkWithExceptions)
+-- import           Old.Common (forkWithExceptions)
 
 -- import Control.Compose ((:.), unO)
 import Data.Traversable 
@@ -679,3 +679,27 @@ hpId_ (HandlerPool cnt bag) = do
   c   <- readIORef cnt
   return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
            " transient cnt "++show c
+
+
+-- | Exceptions that walk up the fork tree of threads:
+forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
+forkWithExceptions forkit descr action = do 
+   parent <- myThreadId
+   forkit $ do
+      tid <- myThreadId
+      E.catch action
+	 (\ e -> 
+           case E.fromException e of 
+             Just E.ThreadKilled -> do
+-- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
+#ifdef DEBUG_LVAR               
+               printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
+#endif
+               return ()
+	     _  -> do
+#ifdef DEBUG_LVAR               
+                      printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
+#endif
+                      E.throwTo parent (e :: E.SomeException)
+	 )
+
