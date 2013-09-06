@@ -8,6 +8,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
 -- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
+{-# LANGUAGE MagicHash #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 
@@ -23,14 +24,13 @@ module Control.LVish
     -- * Safe, deterministic operations:
     yield, newPool, fork, forkHP,
     runPar, runParIO, runParIO_, runParLogged,
---    unsafeRunThenFreeze, runParThenFreezeIO, runParThenFreezeIO2,
     withNewPool, withNewPool_,
     
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
     
     -- * Interfaces for generic operations
-    LVarData1(..),
+    LVarData1(..), OrderedLVarData1(..),
     
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
@@ -39,10 +39,13 @@ module Control.LVish
     logStrLn
   ) where
 
+import           Data.Traversable (Traversable)
+import qualified Data.Foldable    as F 
 import           Control.Applicative
 import           Control.LVish.Internal
+import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 
 -- import GHC.Exts (Constraint)
 
@@ -113,53 +116,24 @@ logStrLn _  = return ()
 {-# INLINE logStrLn #-}
 #endif
 
-
 ------------------------------------------------------------------------------
--- Interface for generic LVar handling
+-- Dealing with frozen LVars.
 ------------------------------------------------------------------------------
 
--- class Traversable f => LVarData1 (f :: * -> *) where
+-- | Here we pay the piper with an IO action, gaining permission to
+-- expose the non-deterministic internal structure of an LVar: namely,
+-- the order in which elements occur.
+mkTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
+mkTraversable x = return (unsafeCoerceLVar x) 
 
--- | A class representing monotonic data types that take one type
--- parameter as well as an `s` parameter for session safety.
--- 
---   TODO: if there is a Par class, it needs to be a superclass of this.
-class LVarData1 (f :: * -> * -> *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  -- type Snapshot f a :: *
-  data Snapshot f :: * -> *
-  -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
-  --  I was not able to get abstracting over the constraints to work.
-
-  freeze :: -- LVCtxt f s a =>
-            f s a -> Par QuasiDet s (Snapshot f a)
-  newBottom :: Ord a => Par d s (f s a)
-
-  -- QUESTION: Is there any way to assert that the snapshot is still Traversable?
-  -- I don't know of a good way, so instead we expose this:
-
-  -- | 
-  traverseSnap :: (a -> Par d s b) -> Snapshot f a -> Par d s (Snapshot f b)
-  -- TODO: use constraint kinds to constrain 'b'.
-
-  -- foldSnap :: (a -> b -> Par d s b) -> b -> f s a -> Par d s b
-
-  -- What else?
-  -- Merge op?
-
-
--- This gets messy if we try to handle several Kinds:
-
--- | Just like LVarData1 but for type constructors of kind `*`.
-class LVarData0 (t :: *) where
-  -- | This associated type models a picture of the "complete" contents of the data:
-  -- e.g. a whole set instead of one element, or the full/empty information for an
-  -- IVar, instead of just the payload.
-  type Snapshot0 t
-  freeze0 :: t -> Par QuasiDet s (Snapshot0 t)
-  newBottom0 :: Par d s t
+-- | LVish Par actions must commute, therefore one safe way to consume
+-- a frozen LVar, *even in another runPar session*, is to run a par
+-- computation for each element.
+forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
+forFrzn fzn fn =
+  F.foldrM (\ a () -> fn a) () $ 
+    unsafeDupablePerformIO $ -- ASSUME idempotence.
+    mkTraversable fzn
 
 
 --------------------------------------------------------------------------------

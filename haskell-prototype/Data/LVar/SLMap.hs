@@ -9,11 +9,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MagicHash #-}
 
 module Data.LVar.SLMap
        (
-         IMap, 
-         Snapshot(IMapSnap), -- AJT: killed for now
+         IMap,
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, freezeMap,
@@ -42,7 +42,7 @@ import qualified Data.Foldable    as F
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.LVish
-import           Control.LVish.DeepFreeze
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
@@ -50,6 +50,8 @@ import qualified Control.LVish.SchedIdempotent as L
 import           System.Random (randomIO)
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
+
+import GHC.Prim (unsafeCoerce#)
 
 import Prelude hiding (lookup)
 
@@ -69,6 +71,8 @@ data Map k v = Ord k => FrzMap !(SLM.SLMap k v)
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
+
+{- 
 instance LVarData1 (IMap k) where
   newtype Snapshot (IMap k) a = IMapSnap (Map k a)
       deriving (Show,Ord,Eq)
@@ -77,6 +81,7 @@ instance LVarData1 (IMap k) where
   -- newBottom = newEmptyMap  -- Ergh, this has problems... let's just remove it from the API.
   traverseSnap fn (IMapSnap mp@(FrzMap _)) = 
     fmap IMapSnap $ traverseFrzn fn mp
+-}
 
 --------------------------------------------------------------------------------
 
@@ -95,7 +100,7 @@ newEmptyMap_ n = fmap (IMap . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new map populated with initial elements.
 newMap :: M.Map k v -> Par d s (IMap k s v)
-newMap m = error "TODO"
+newMap m = error "TODO - newMap"
 
 -- | Create a new 'IMap' drawing initial elements from an existing list.
 newFromList :: (Ord k, Eq v) =>
@@ -209,10 +214,24 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 --
 -- This is an O(1) operation that doesn't copy the in-memory representation of the
 -- IMap.
-freezeMap :: Ord k => IMap k s v -> QPar s (Map k v)
-freezeMap (IMap (WrapLVar lv)) = WrapPar $ do
+freezeMap :: Ord k => IMap k s v -> QPar s (IMap k Frzn v)
+-- freezeMap (IMap (WrapLVar lv)) = return (IMap (WrapLVar lv))
+-- OR we can just do this:
+
+freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   freezeLV lv
-  return (FrzMap (L.state lv))
+  -- For the final deepFreeze at the end of a runpar we can actually skip
+  -- the freezeLV part....  
+  return (unsafeCoerce# x)
+
+instance DeepFrz a => DeepFrz (IMap k s a) where
+  type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
+  frz = unsafeCoerce#
+
+-- freezeMap :: Ord k => IMap k s v -> QPar s (Map k v)
+-- freezeMap (IMap (WrapLVar lv)) = WrapPar $ do
+--   freezeLV lv
+--   return (FrzMap (L.state lv))
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.
@@ -273,29 +292,14 @@ unionHP mh m1 m2 = do
 -- Map specific DeepFreeze instances:
 --------------------------------------------------------------------------------
 
+{-
 -- Teach it how to freeze WITHOUT the annoying snapshot constructor:
 instance DeepFreeze (IMap k s a) (Map k a) where
   type Session (IMap k s a) = s
   deepFreeze iv = do IMapSnap m <- freeze iv
                      return m
-{-
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord key) =>
-         DeepFreeze (IMap key s0 (f s0 a))
-                    (M.Map key b)  where
-    type Session (IMap key s0 (f s0 a)) = s0
-    deepFreeze from = do
-      x@(FrzMap slm) <- freezeMap from
-      let fn :: key -> f s0 a -> M.Map key b -> QPar s0 (M.Map key b)
-          fn k elm acc = do elm' <- deepFreeze elm
-                            return (M.insert k elm' acc)
---      T.traverse deepFreeze x
-      -- T.traverse deepFreeze x
-      foldWithKey (\ acc k v -> do y <- deepFreeze v
---                                  return $! M.insert k ()
-                                   undefined
-                   ) M.empty x
-      undefined
 -}
+
 
 --------------------------------------------------------------------------------
 -- Operations on frozen Maps

@@ -8,11 +8,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE MagicHash #-}
 
 module Data.LVar.Set
        (
          -- * Basic operations
-         ISet, Snapshot(ISetSnap),
+         ISet, 
          newEmptySet, newSet, newFromList,
          putInSet, waitElem, waitSize, 
 
@@ -32,6 +33,7 @@ module Data.LVar.Set
        ) where
 
 import           Control.Monad (void)
+import           Control.Applicative ((<$>))
 import           Data.IORef
 import           Data.Maybe (fromMaybe)
 import qualified Data.Set as S
@@ -40,11 +42,13 @@ import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 
 import           Control.LVish as LV
-import           Control.LVish.DeepFreeze as LV 
+import           Control.LVish.DeepFrz  as DF
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
+import           GHC.Prim (unsafeCoerce#)
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
@@ -61,10 +65,17 @@ instance Eq (ISet s v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 instance LVarData1 ISet where
-  newtype Snapshot ISet a = ISetSnap (S.Set a)
-      deriving (Show,Ord,Read,Eq)
-  freeze    = fmap ISetSnap . freezeSet
-  newBottom = newEmptySet
+  newBottom = newEmptySet  
+  freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+  sortFreeze is = AFoldable <$> freezeSet is 
+
+instance OrderedLVarData1 ISet where
+  snapFreeze is = unsafeCoerceLVar <$> freeze is
+
+instance F.Foldable (ISet Trvrsbl) where
+  foldr fn zer (ISet lv) =
+    let set = unsafeDupablePerformIO (readIORef (state lv)) in
+    F.foldr fn zer set 
 
   -- TODO: traverseSnap
 
@@ -125,6 +136,11 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
+--
+-- This Data.Set based LVar has the special property that you can
+-- retrieve the full set without any IO, and without nondeterminism
+-- leaking.  (This is because the internal order is fixed for the
+-- tree-based Data.Set.)
 freezeSet :: ISet s a -> QPar s (S.Set a)
 freezeSet (ISet (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
@@ -143,7 +159,7 @@ forEachHP :: Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> (a -> Par d s ())           -- ^ callback
           -> Par d s ()
 forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
-    addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
+    L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
     return ()
   where
     globalCB ref = do
@@ -325,50 +341,4 @@ cartesianProdsHP mh ls = do
 #endif
 
 
---------------------------------------------------------------------------------
--- Set specific DeepFreeze instances:
---------------------------------------------------------------------------------
-
--- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-
-instance DeepFreeze (ISet s a) (S.Set a) where
-  type Session (ISet s a) = s
-  deepFreeze iv = do ISetSnap m <- freeze iv
-                     return m
-
-#if 0
-------------------------------------------------------------
--- Most general, but causes overlapping instances
-------------------------------------------------------------    
-instance (DeepFreeze a b, Ord b, Session a ~ s0) =>
-         DeepFreeze (ISet s0 a) (S.Set b)
-  where
-    type Session (ISet s0 a) = s0
-    deepFreeze = freezer     
-      
-freezer :: forall a b s0 . (DeepFreeze a b, Ord b, Session a ~ s0) =>
-           (ISet s0 a) -> Par QuasiDet s0 (S.Set b)
-freezer from = do
-      x <- freezeSet from
-      let fn :: a -> S.Set b -> QPar s0 (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x
-      return y
-
-#else
-------------------------------------------------------------
--- Compromise to avoid overlap
-------------------------------------------------------------
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b) =>
-         DeepFreeze (ISet s0 (f s0 a)) (S.Set b)  where
-    type Session (ISet s0 (f s0 a)) = s0
-    deepFreeze from = do
-      x <- freezeSet from
-      let fn :: f s0 a -> S.Set b -> QPar s0 (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x 
-      return y      
-#endif
 
