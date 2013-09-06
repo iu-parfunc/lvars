@@ -65,7 +65,8 @@ library
                     Data.LVar.MaxCounter
                     Data.LVar.Internal.Pure
 
-                    -- Don't use these:
+                    -- End users should NOT USE THESE.  These are only for developing
+                    -- new LVars:
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
                     
