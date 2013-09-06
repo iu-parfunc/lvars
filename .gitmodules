@@ -2,6 +2,3 @@
 	path = pbbs
 	url = https://github.com/iu-parfunc/pbbs.git
 	ignore = untracked
-[submodule "HSBenchScaling"]
-	path = HSBenchScaling
-	url = https://github.com/rrnewton/HSBenchScaling.git

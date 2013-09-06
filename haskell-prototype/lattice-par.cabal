@@ -70,7 +70,7 @@ library
                     Control.LVish.Internal
                     
   -- Modules included in this library but not exported.
-  other-modules:    Old.Common
+  other-modules:
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
@@ -82,6 +82,7 @@ library
                     Control.LVish.MonadToss
                     
                     -- These versions are out of date:
+                    Old.Common                    
                     Old.LVarTracePure, Old.LVarTraceIO, Old.LVarTraceScalable, 
                     Old.Data.LVar.SetScalable, Old.Data.LVar.SetIO, Old.Data.LVar.SetPure, 
                     Old.Data.LVar.PairScalable, Old.Data.LVar.PairPure, Old.Data.LVar.PairIO                    
