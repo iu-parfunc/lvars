@@ -15,7 +15,6 @@ module Data.LVar.IVar
 
 import           Data.IORef
 import           Control.DeepSeq
-import qualified Control.Monad.Par.Class as PC
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 
@@ -31,6 +30,9 @@ import qualified Control.LVish.SchedIdempotent as LI
 import           Data.Traversable (traverse)
 import           GHC.Prim (unsafeCoerce#)
 
+#ifdef USE_ABSTRACT_PAR
+import qualified Control.Monad.Par.Class as PC
+#endif
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -131,8 +133,7 @@ spawnP a = spawn (return a)
 put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 
-#ifdef VERSION_abstract_par
-#if 1
+#ifdef USE_ABSTRACT_PAR
   -- MIN_VERSION_abstract_par(0,4,0)
 #warning "Using the latest version of abstract par to activate ParFuture/IVar instances."
 instance PC.ParFuture (IVar s) (Par d s) where
@@ -143,6 +144,5 @@ instance PC.ParIVar (IVar s) (Par d s) where
   fork = fork  
   put_ = put_
   new = new
-#endif
 #endif
 

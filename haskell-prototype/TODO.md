@@ -4,10 +4,10 @@
 
   * (Ryan) Factor out Data.LVar.Generic.
   * (Ryan) Finish providing instances/methods for LVarData1.
-  * (Ryan) Use modern HSBencher.
+  * (Ryan) Use modern (released) HSBencher.
 
-  * Finish hacking out the old implementation.
-  * Turn on Safe Haskell for real.
+  * (Lindsey) Finish factoring out the old implementation into its own cabal pkg.
+  * (Lindsey) Turn on Safe Haskell for real.
   * (Lindsey) Finish porting LVars (those not done) to the shiny new
     DeepFrz method (use IVar as an example):
       * Set 

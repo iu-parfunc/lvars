@@ -13,7 +13,7 @@
 module Data.LVar.SLSet
        (
          -- * Basic operations
-         ISet, Snapshot(ISetSnap),
+         ISet, 
          newEmptySet, newSet, newFromList,
          putInSet, waitElem, waitSize, 
 
@@ -21,7 +21,7 @@ module Data.LVar.SLSet
          forEach, forEachHP,
 
          -- * Quasi-deterministic operations
-         freezeSetAfter, withCallbacksThenFreeze, freezeSet,
+         freezeSetAfter, withCallbacksThenFreeze, 
 
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
@@ -39,17 +39,20 @@ import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Control.Monad
 import           Control.LVish as LV
-import           Control.LVish.DeepFreeze as LV
+import           Control.LVish.DeepFrz  as DF
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
 import qualified Control.LVish.SchedIdempotent as L
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- ISets implemented via SkipListMap
 ------------------------------------------------------------------------------
 
+
 data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
+-- TODO: Address the possible inefficiency of carrying Ord dictionaries at runtime.
 
 unISet (ISet lv) = lv
 
@@ -62,12 +65,31 @@ instance Eq (ISet s v) where
 -- structure.
 
 instance LVarData1 ISet where
-  newtype Snapshot ISet a = ISetSnap (S.Set a)
-      deriving (Show,Ord,Read,Eq)
-  freeze s@(ISet _) = fmap ISetSnap $ freezeSet s
   newBottom = newEmptySet -- ARGH!
-  
-  -- TODO: traverseSnap
+
+  freeze orig@(ISet (WrapLVar lv)) =
+    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+
+  -- | Get the exact contents of the set.  Using this may cause your
+  -- program to exhibit a limited form of nondeterminism: it will never
+  -- return the wrong answer, but it may include synchronization bugs
+  -- that can (nondeterministically) cause exceptions.
+  sortFreeze (ISet (WrapLVar lv)) = WrapPar $ do
+    -- freezeSet :: Ord a => ISet s a -> QPar s (ISet Frzn a)    
+    freezeLV lv
+    set <- L.liftIO $ SLM.foldlWithKey
+             (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
+    return (AFoldable set)
+
+-- TODO: add member
+member :: a -> ISet Frzn a -> Bool
+member = error "FINISHME: SLSet member"
+
+instance F.Foldable (ISet Trvrsbl) where
+  foldr fn zer (ISet (WrapLVar lv)) =
+    unsafeDupablePerformIO $
+    SLM.foldlWithKey (\ a k _v -> return (fn k a))
+                           zer (L.state lv)
 
 -- | The default number of skiplist levels
 defaultLevels :: Int
@@ -129,21 +151,13 @@ withCallbacksThenFreeze (ISet lv) callback action = do
           SLM.foldlWithKey (\() v () -> forkHP (Just hp) $ callback v) () slm
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
-  WrapPar $ addHandler (Just hp) (unWrapLVar lv) initCB deltCB
+  WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
   
   -- We additionally have to quiesce here because we fork the inital set of
   -- callbacks on their own threads:
   quiesce hp
   IV.get res
 
--- | Get the exact contents of the set.  Using this may cause your
--- program to exhibit a limited form of nondeterminism: it will never
--- return the wrong answer, but it may include synchronization bugs
--- that can (nondeterministically) cause exceptions.
-freezeSet :: Ord a => ISet s a -> QPar s (S.Set a)
-freezeSet (ISet (WrapLVar lv)) = WrapPar $ do
-  freezeLV lv
-  L.liftIO $ SLM.foldlWithKey (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
 
 --------------------------------------------------------------------------------
 
@@ -154,7 +168,7 @@ forEachHP :: Maybe HandlerPool            -- ^ optional pool to enroll in
            -> (a -> Par d s ())           -- ^ callback
            -> Par d s ()
 forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ 
-    addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
+    L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
   where
     globalCB slm = 
       return $ Just $ unWrapPar $
@@ -319,27 +333,3 @@ cartesianProdsHP mh ls = do
     return undefined
 #endif
 
---------------------------------------------------------------------------------
--- Set specific DeepFreeze instances:
---------------------------------------------------------------------------------
-
--- Teach it how to freeze WITHOUT the annoying snapshot constructor:
-
-instance DeepFreeze (ISet s a) (S.Set a) where
-  type Session (ISet s a) = s
-  deepFreeze iv = do ISetSnap m <- freeze iv
-                     return m
-
-------------------------------------------------------------
--- Compromise to avoid overlap
-------------------------------------------------------------
-instance (LVarData1 f, DeepFreeze (f s0 a) b, Ord b, Ord (f s0 a)) =>
-         DeepFreeze (ISet s0 (f s0 a)) (S.Set b)  where
-    type Session (ISet s0 (f s0 a)) = s0
-    deepFreeze from = do
-      x <- freezeSet from
-      let fn :: f s0 a -> S.Set b -> QPar s0 (S.Set b)
-          fn elm acc = do elm' <- deepFreeze elm
-                          return (S.insert elm' acc)
-      y <- F.foldrM fn S.empty x 
-      return y      

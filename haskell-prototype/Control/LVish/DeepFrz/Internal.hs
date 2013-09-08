@@ -2,6 +2,7 @@
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE EmptyDataDecls #-}
 
 -- | This module is NOT Safe-Haskell, but it must be used to create
 -- new LVar types.
