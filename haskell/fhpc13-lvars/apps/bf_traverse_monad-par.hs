@@ -1,6 +1,22 @@
-{-# LANGUAGE CPP #-}
-#define PAR
-#include "Runner.hs"
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DoAndIfThenElse #-}
+
+module Main where
+
+import           Control.Monad (when)
+import qualified Data.Set as Set
+import qualified Data.IntSet as IS
+import qualified Data.Vector as V
+import           GHC.Conc (numCapabilities)
+
+import           Control.Monad.Par (Par, runParIO)
+import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
+import           Debug.Trace (trace)
+
+import Runner
+
+prnt :: String -> Par ()
+prnt str = trace str $ return ()
 
 -- This version of bf_traverse is based on monad-par, but it doesn't
 -- accumulate results in an LVar while traversing the graph, as
@@ -54,3 +70,5 @@ start_traverse k !g startNode f = do
         prnt $ " * Done parMap(f)..."
         prnt $ "  * Set size: " ++ show (Set.size set2)
         prnt $ "  * Set sum: " ++ show (Set.fold (\(x,_) y -> x+y) 0 set2)
+
+main = makeMain start_traverse

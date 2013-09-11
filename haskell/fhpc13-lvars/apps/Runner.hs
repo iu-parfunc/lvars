@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 
 module Runner where 
 
@@ -54,12 +55,7 @@ import qualified Control.Parallel.Strategies as Strat
 
 #ifdef PAR
 #warning "Using the Par-only version"
-import           Control.Monad.Par (Par, runParIO)
-import           Control.Monad.Par.Combinator (parMap, parMapM, parFor, InclusiveRange(..))
-import           Debug.Trace (trace)
 
-prnt :: String -> Par ()
-prnt str = trace str $ return ()
 #endif
 -}
 
