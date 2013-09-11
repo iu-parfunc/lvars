@@ -5,8 +5,8 @@ name:                lvish-apps
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
-license:             BSD3
-license-file:        LICENSE
+-- license:             BSD3
+-- license-file:        LICENSE
 author:              Ryan Newton
 maintainer:          rrnewton@gmail.com
 -- copyright:           
