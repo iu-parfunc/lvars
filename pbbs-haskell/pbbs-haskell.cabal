@@ -20,8 +20,10 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Util.PBBS
+  exposed-modules:     Util
   -- other-modules:       
+
+  hs-source-dirs:      benchmarks/graphs
 
   other-extensions:    CPP, BangPatterns, OverloadedStrings, ScopedTypeVariables, NamedFieldPuns
 
