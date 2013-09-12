@@ -1,35 +1,18 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE DoAndIfThenElse #-}
+
+module Main where
 
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Exception (evaluate)
-import           Control.Monad (forM_, when)
-import           Data.Word
-import           Data.IORef
 import qualified Data.Set as Set
-import           Data.List as L
-import           Data.List.Split (chunksOf)
 import qualified Data.IntSet as IS
-import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Time.Clock (getCurrentTime, diffUTCTime)
-import           Text.Printf (printf)
-import           System.Mem (performGC)
-import           System.IO.Unsafe (unsafePerformIO)
-import           System.Environment (getEnvironment,getArgs)
-import           System.CPUTime.Rdtsc (rdtsc)
--- import           Data.Time.Clock (getCurrentTime)
-import           System.CPUTime  (getCPUTime)
-
--- For representing graphs
 import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as MV
 
-
-import           Control.DeepSeq (deepseq)
+import           Data.Time.Clock (getCurrentTime, diffUTCTime)
 import qualified Control.Parallel.Strategies as Strat
 
 import Runner
-
---------------------------------------------------------------------------------
 
 bf_pure :: Int             -- iteration counter
            -> Graph2       -- graph
@@ -94,6 +77,5 @@ start_traverse k !g startNode f = do
 
 --    putStrLn$ " * Full set2 "++show set2
     putStrLn$ " * Set sum: " ++ show (Set.fold (\(_,x) y -> x+y) 0 set2)
-
 
 main = makeMain start_traverse
