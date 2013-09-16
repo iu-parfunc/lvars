@@ -50,8 +50,6 @@ import qualified Data.Concurrent.SNZI as SNZI
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
-import Old.Common
-
 import TestHelpers as T
 
 --------------------------------------------------------------------------------
