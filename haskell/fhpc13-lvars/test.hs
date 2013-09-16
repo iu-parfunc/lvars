@@ -7,19 +7,19 @@ module Main where
 
 #if defined(LVARPURE)
 #warning "Using the LVar Pure version"
-import Old.LVarTracePure
-import Old.Data.LVar.PairPure
-import Old.Data.LVar.SetPure
+import LVarTracePure
+import Data.LVar.PairPure
+import Data.LVar.SetPure
 #elif defined(LVARIO)
 #warning "Using the LVar IO version"
-import Old.LVarTraceIO
-import Old.Data.LVar.PairIO
-import Old.Data.LVar.SetIO
+import LVarTraceIO
+import Data.LVar.PairIO
+import Data.LVar.SetIO
 #elif defined(LVARSCALABLE)
 #warning "Using the LVar Scalable version"
-import Old.LVarTraceScalable
-import Old.Data.LVar.PairScalable
-import Old.Data.LVar.SetScalable
+import LVarTraceScalable
+import Data.LVar.PairScalable
+import Data.LVar.SetScalable
 #endif
 
 import Prelude hiding (catch)
