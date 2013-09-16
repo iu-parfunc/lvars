@@ -1,6 +1,6 @@
-# LK: Restored this old file while I figure stuff out...
-
-src = LVarTraceIO.hs LVarTracePure.hs LVarTraceScalable.hs apps/bf_traverse_LVar.hs apps/bf_traverse_monad-par.hs apps/bf_traverse_Strategies.hs apps/Runner.hs Common.hs
+# A Makefile for generating the input data we use for benchmarks.
+# It's easier to use this instead of just building everything with
+# cabal.
 
 GRID_DATABIG    = /tmp/grid_125000
 GRID_DATAMEDIUM = /tmp/grid_8000
@@ -8,49 +8,39 @@ GRID_DATASMALL  = /tmp/grid_1000
 
 RAND_DATA       = /tmp/rand
 
-PBBSDIR = ../pbbs/testData/graphData
+PBBSDIR = ../../../pbbs/testData/graphData
 
-ifeq ($(GHC),)
- GHC=ghc
-endif
-
-default: l1 l2 s
-
-%: %.hs
-	$(GHC) -O2 -threaded -rtsopts --make $< -o $@
-
-#--------------------------------------------------------------------------------
-# Input data generation:
-
-gendata: grid_data rand_data
+gen_data: grid_data rand_data
 
 grid_data: $(GRID_DATABIG) $(GRID_DATAMEDIUM) $(GRID_DATASMALL)
 
 rand_data: $(RAND_DATA)
 
-# Generate test data using PBBS.
+clean_data:
+	-rm -f /tmp/grid* /tmp/rand*
 
-# 3D grids.
-$(GRID_DATABIG):
+# Generate 3D grid graphs with one of [1,000, 8,000, 125,000]
+# vertices.  (We aren't actually using these for anything at the
+# moment.)
+
+$(GRID_DATASMALL):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 125000 $(GRID_DATABIG) # 50^3
+	$(PBBSDIR)/gridGraph -d 3 1000 $(GRID_DATASMALL) # 10^3
 
 $(GRID_DATAMEDIUM):
 	(cd $(PBBSDIR); make gridGraph)
 	$(PBBSDIR)/gridGraph -d 3 8000 $(GRID_DATAMEDIUM) # 20^3
 
-$(GRID_DATASMALL):
+$(GRID_DATABIG):
 	(cd $(PBBSDIR); make gridGraph)
-	$(PBBSDIR)/gridGraph -d 3 1000 $(GRID_DATASMALL) # 10^3
+	$(PBBSDIR)/gridGraph -d 3 125000 $(GRID_DATABIG) # 50^3
 
 # Generate random local graphs with one of [10,000; 20,000; 40,000]
 # vertices and one of [40,000; 80,000; 160,000] edges, and dimension
 # 5.  The graph is generated so that the probability of each edge out
 # of a vertex is biased to nearby vertices.  Overall, a graph with,
 # say, 20,000 vertices and 80,000 edges will have an *average* degree
-# of 4.
-
-# We should produce 9 graphs in all.
+# of 4. (The only one of these we're using at the moment is the one
 
 # Naming convention: /tmp/rand_E_V where E is the number of edges and
 # V is the number of vertices.
@@ -70,34 +60,3 @@ $(RAND_DATA):
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 20000 $(RAND_DATA)_160000_20000
 	$(PBBSDIR)/randLocalGraph -m 160000 -d 5 40000 $(RAND_DATA)_160000_40000
 	$(PBBSDIR)/randLocalGraph -m 320000 -d 5 40000 $(RAND_DATA)_320000_40000
-
-deps:
-	cabal install rdtsc parallel monad-par lattices
-
-#--------------------------------------------------------------------------------
-
-l1: lvar_io.exe
-lvar_io.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
-
-l2: lvar_pure.exe
-lvar_pure.exe: $(src)
-	$(GHC) -DPURE -O2 -threaded -rtsopts --make BFS_LVar.hs -o $@
-
-s: strategies.exe
-strategies.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_Strategies.hs -o $@
-
-p: par-monad.exe
-par-monad.exe: $(src)
-	$(GHC) -O2 -threaded -rtsopts --make BFS_monadpar.hs -o $@
-
-benchmark.run:
-	ghc --make benchmark.hs -o benchmark.run
-
-clean:
-	-rm -f *.hi *.o *.html *.eventlog *.exe *.run $(all) 
-# /tmp/grid* /tmp/rand*
-
-wipelogs:
-	-rm -rf *.log *.bak *.dat bin/ build/ runs/ *.out
