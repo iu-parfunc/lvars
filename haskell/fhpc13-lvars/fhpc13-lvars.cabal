@@ -60,20 +60,20 @@ library
 test-suite test-lvarpure
     type:       exitcode-stdio-1.0
     main-is:    test.hs
-    ghc-options: -O2 -threaded -rtsopts
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
     cpp-options: -DLVARPURE
 
 test-suite test-lvario
     type:       exitcode-stdio-1.0
     main-is:    test.hs
-    ghc-options: -O2 -threaded -rtsopts
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
     cpp-options: -DLVARIO
 
 test-suite test-lvarscalable
     type:       exitcode-stdio-1.0
     main-is:    test.hs
-    ghc-options: -O2 -threaded -rtsopts
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
     cpp-options: -DLVARSCALABLE
