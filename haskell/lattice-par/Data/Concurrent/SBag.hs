@@ -1,11 +1,9 @@
-module Data.Concurrent.SBag(SBag, new, put, tryGet) where
-
--- imports
+module Data.Concurrent.SBag(SBag, new, insert, tryGetAny) where
 
 import Data.Array.IO
 import GHC.Conc
 
--- end imports
+blockSize = 4
 
 type Array a = IOUArray Int a
 
@@ -33,5 +31,5 @@ data Block e =
           blockPtr :: BlockPtr e }
 
 new = 120
-put = 120
-tryGet = 120
+insert = 120
+tryGetAny = 120
