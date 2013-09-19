@@ -117,3 +117,15 @@ forFrzn fzn fn =
     unsafeDupablePerformIO $ -- ASSUME idempotence.
     mkTraversable fzn
 
+
+-- | For any LVar, we have a generic way to freeze it in a `runParThenFreeze`.
+-- instance (DeepFrz a, LVarData1 f) => DeepFrz (f s a) where
+--   type FrzType (f s a) = f Frzn a 
+--   frz = unsafeCoerceLVar
+
+-- ^^^
+
+-- Note that this doesn't work because it CONFLICTS with the other DeepFrz instances.
+-- There's no way that we can prove to GHC that pure data will NEVER be ans instance
+-- of LVarData1, and therefore will never actually cause a conflict with e above
+-- instance.

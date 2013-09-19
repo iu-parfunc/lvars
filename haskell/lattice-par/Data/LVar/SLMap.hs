@@ -73,7 +73,10 @@ instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
 
-{- 
+-- TODO: New LVarData1 instance:
+
+{-
+-- Old one:
 instance LVarData1 (IMap k) where
   newtype Snapshot (IMap k) a = IMapSnap (Map k a)
       deriving (Show,Ord,Eq)
@@ -83,6 +86,12 @@ instance LVarData1 (IMap k) where
   traverseSnap fn (IMapSnap mp@(FrzMap _)) = 
     fmap IMapSnap $ traverseFrzn fn mp
 -}
+
+-- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
+-- instance DeepFrz a => DeepFrz (IMap k s a) where
+--   type FrzType (IMap k s a) = IMap k Frzn a 
+--   frz = unsafeCoerceLVar
+
 
 --------------------------------------------------------------------------------
 

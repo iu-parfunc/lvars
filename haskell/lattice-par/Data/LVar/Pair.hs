@@ -49,3 +49,5 @@ getSnd (WrapLVar lv) = WrapPar $ getLV lv globalThresh deltaThresh
         deltaThresh (Left _)   = return Nothing        
         deltaThresh (Right x)  = return $ Just x
 
+-- TODO: LVarData2 instance??
+

@@ -43,7 +43,7 @@ import qualified Data.Traversable as T
 import           Data.LVar.Generic
 
 import           Control.LVish as LV
-import           Control.LVish.DeepFrz  as DF
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
@@ -79,6 +79,10 @@ instance F.Foldable (ISet Trvrsbl) where
     F.foldr fn zer set 
 
   -- TODO: traverseSnap
+
+instance DeepFrz a => DeepFrz (ISet s a) where
+  type FrzType (ISet s a) = ISet Frzn a 
+  frz = unsafeCoerceLVar
 
 -- | Create a new, empty, monotonically growing 'ISet'.
 newEmptySet :: Par d s (ISet s a)

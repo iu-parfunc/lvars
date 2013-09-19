@@ -40,7 +40,7 @@ import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic
 import           Control.Monad
 import           Control.LVish as LV
-import           Control.LVish.DeepFrz  as DF
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO, addHandler)
@@ -81,6 +81,10 @@ instance LVarData1 ISet where
     set <- L.liftIO $ SLM.foldlWithKey
              (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
     return (AFoldable set)
+
+instance DeepFrz a => DeepFrz (ISet s a) where
+  type FrzType (ISet s a) = ISet Frzn a 
+  frz = unsafeCoerceLVar
 
 -- TODO: add member
 member :: a -> ISet Frzn a -> Bool

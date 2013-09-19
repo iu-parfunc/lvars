@@ -37,7 +37,7 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 import           Data.LVar.Generic
 
-import           Control.LVish.DeepFrz  as DF
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
@@ -73,6 +73,10 @@ instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer (IMap lv) =
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
     F.foldr fn zer set 
+
+instance DeepFrz a => DeepFrz (IMap k s a) where
+  type FrzType (IMap k s a) = IMap k Frzn a 
+  frz = unsafeCoerceLVar
 
 --------------------------------------------------------------------------------
 

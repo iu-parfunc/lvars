@@ -23,7 +23,7 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable    as F
 
 import           Control.LVish as LV 
-import           Control.LVish.DeepFrz (Frzn, Trvrsbl)
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
@@ -53,6 +53,11 @@ instance LVarData1 IVar where
 
   -- newBottom :: Par d s (IVar s a)
   newBottom = new
+
+-- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
+instance DeepFrz a => DeepFrz (IVar s a) where
+  type FrzType (IVar s a) = IVar Frzn a 
+  frz = unsafeCoerceLVar
 
 --  traverseSnap f (IVarSnap m) = fmap IVarSnap $ traverse f m
 
