@@ -15,6 +15,8 @@
       * SLSet      
       * SLMap 
       * IStructure ... 
+      
+    [LK: I'm confused about exactly what this entails.  I can replace `import Control.LVish.DeepFreeze` with `import Control.LVish.DeepFrz`, but what other changes are necessary?]
   
   * New monad-par release with necessary tweaks
 
