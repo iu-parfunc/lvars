@@ -54,18 +54,26 @@ library
   
   -- Other library packages from which modules are imported.
   build-depends:       base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, async ==2.0.*, lattices ==1.2.*, split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, parallel ==3.2.*, abstract-par ==0.3.*
-  
 
 --------------------------------------------------------------------------------
 
 test-suite test-lvarpure
     type:       exitcode-stdio-1.0
-    main-is:    test-old.hs
-    ghc-options: -O2 -threaded -rtsopts
-    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th
-    -- DUPLICATED:
-    build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, abstract-par >=0.3, lattices ==1.2.*, 
-                   split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                   monad-par-extras >=0.4, parallel ==3.2.*, async ==2.0.*,
-                   atomic-primops, hashable, transformers, random, primitive, bits-atomic, missing-foreign
+    main-is:    test.hs
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
+    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
     cpp-options: -DLVARPURE
+
+test-suite test-lvario
+    type:       exitcode-stdio-1.0
+    main-is:    test.hs
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
+    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
+    cpp-options: -DLVARIO
+
+test-suite test-lvarscalable
+    type:       exitcode-stdio-1.0
+    main-is:    test.hs
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
+    build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th, base ==4.6.*, deepseq == 1.3.*, containers ==0.5.*, abstract-par >= 0.3, lattices ==1.2.*, async ==2.0.*
+    cpp-options: -DLVARSCALABLE

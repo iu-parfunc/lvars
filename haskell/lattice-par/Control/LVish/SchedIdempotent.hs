@@ -59,8 +59,6 @@ import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
 
--- import           Old.Common (forkWithExceptions)
-
 -- import Control.Compose ((:.), unO)
 import Data.Traversable 
 

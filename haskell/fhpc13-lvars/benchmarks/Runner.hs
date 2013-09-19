@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 
@@ -28,38 +27,11 @@ import           System.Mem (performGC)
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment (getEnvironment,getArgs)
 import           System.CPUTime.Rdtsc (rdtsc)
--- import           Data.Time.Clock (getCurrentTime)
 import           System.CPUTime  (getCPUTime)
 
 -- For representing graphs
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
-
--- This is a hacky attempt at only importing the stuff that every
--- version needs.  We could just have everything import everything,
--- but we want to make it very obvious that, for instance, the
--- Strategies version doesn't use Par, and vice versa.
-
-
-{-
-#ifdef LVARPURE
-#warning "Using the LVar Pure version"
-
-#endif
-
-#ifdef STRATEGIES
-#warning "Using the Strategies version"
-import           Control.DeepSeq (deepseq)
-import qualified Control.Parallel.Strategies as Strat
-#endif
-
-#ifdef PAR
-#warning "Using the Par-only version"
-
-#endif
--}
-
---------------------------------------------------------------------------------
 
 -- Vector representation of graphs: the list (or set) at index k is
 -- node k's neighbors.
@@ -135,7 +107,6 @@ verbose = checkEnv "VERBOSE" False
 dbg :: Bool
 -- dbg = checkEnv "DEBUG" False
 dbg = False -- Let it inline, DCE.
-
 
 type Starter = Int       -- iteration counter
                -> Graph2 -- graph
@@ -274,7 +245,6 @@ measureFreq = do
 
   return$ fromIntegral (fromIntegral scale * (t2 - t1))
 
-
 wait_sins :: Word64 -> Node -> IO WorkRet
 wait_sins num node = do
   myT <- rdtsc
@@ -290,7 +260,6 @@ measureSin n = do
   t1 <- rdtsc  
   return$ t1-t0
 
-
 -- Readable large integer printing:
 commaint :: (Show a, Integral a) => a -> String
 commaint n = 
@@ -298,4 +267,3 @@ commaint n =
    intersperse "," $ 
    chunksOf 3 $ 
    reverse (show n)
-
