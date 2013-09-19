@@ -5,9 +5,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-
-{-# LANGUAGE FlexibleInstances, TypeFamilies #-} -- For the generic DeepFrz instance...
-
 -- | A generic interface that abstracting certain operations that work on all LVars.
 
 module Data.LVar.Generic
@@ -23,13 +20,12 @@ import           Control.Monad.IO.Class
 import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort)
 
 import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
-
-import           Control.LVish.DeepFrz.Internal
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling
@@ -121,9 +117,3 @@ forFrzn fzn fn =
     unsafeDupablePerformIO $ -- ASSUME idempotence.
     mkTraversable fzn
 
-------------------------------------------------------------------------------
-
--- | For any LVar, we have a generic way to freeze it in a `runParThenFreeze`.
-instance (DeepFrz a, LVarData1 f) => DeepFrz (f s a) where
-  type FrzType (f s a) = f Frzn a 
-  frz = unsafeCoerceLVar
