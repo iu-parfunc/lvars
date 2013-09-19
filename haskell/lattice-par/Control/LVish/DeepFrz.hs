@@ -40,6 +40,10 @@ import Control.LVish (Par, runPar, runParIO)
 -- The result of a `runParThenFreeze` depends on the type-level function `FrzType`,
 -- whose only purpose is to toggle the `s` parameters of all IVars to the `Frzn`
 -- state.
+--
+-- Significantly, the freeze at the end of `runParThenFreeze` has NO runtime cost, in
+-- spite of the fact that it enables a DEEP (recursive) freeze of the value returned
+-- by the `Par` computation.
 runParThenFreeze :: DeepFrz a => (forall s . Par Det s a) -> FrzType a
 runParThenFreeze p = frz $ runPar p
 

@@ -22,6 +22,7 @@ module Data.LVar.Set
 
          -- * Quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, freezeSet,
+         fromISet,
 
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
@@ -111,7 +112,7 @@ type QPar = Par QuasiDet
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
 freezeSetAfter :: ISet s a -> (a -> QPar s ()) -> QPar s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
-  
+
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
@@ -154,6 +155,13 @@ freezeSet (ISet (WrapLVar lv)) = WrapPar $
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
+
+-- | Convert from an `ISet` to a plain `Data.Set`.
+--   This is only permitted when the `ISet` has already been frozen.
+fromISet :: ISet Frzn a -> S.Set a 
+-- Alternate names? -- toPure? toSet? fromFrzn??
+fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))
+
 
 --------------------------------------------------------------------------------
 
