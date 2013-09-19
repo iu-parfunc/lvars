@@ -49,7 +49,9 @@ instance Eq (IVar s a) where
 
 instance LVarData1 IVar where  
   freeze :: IVar s a -> Par QuasiDet s (IVar Frzn a)
-  freeze = freezeIVar
+  freeze orig@(IVar (WrapLVar lv)) = WrapPar $ do
+    freezeLV lv
+    return (unsafeCoerce# orig)
 
   -- newBottom :: Par d s (IVar s a)
   newBottom = new
@@ -105,10 +107,10 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
         update Nothing  = (Just x, Just x)
 
 -- FIXME: documentation:
-freezeIVar :: IVar s a -> LV.Par QuasiDet s (IVar Frzn a)
-freezeIVar orig@(IVar (WrapLVar lv)) = WrapPar$ 
-  do freezeLV lv
-     return (unsafeCoerce# orig)
+freezeIVar :: IVar s a -> LV.Par QuasiDet s (Maybe a)
+freezeIVar (IVar lv) = liftIO $ do
+  x <- readIORef (state lv)
+  return x
 
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool -> IVar s elt -> (elt -> Par d s ()) -> Par d s ()

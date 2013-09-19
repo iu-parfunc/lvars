@@ -18,7 +18,7 @@
 module Data.LVar.NatArray
        (
          -- * Basic operations
-         NatArray, Snapshot(NatArraySnap),
+         NatArray,
          
          newNatArray, put, get,
 
@@ -60,7 +60,7 @@ import qualified Data.Traversable as T
 import           Data.LVar.Generic
 
 import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.DeepFreeze as LV
+import           Control.LVish.DeepFrz as LV
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
@@ -86,23 +86,6 @@ unNatArray (NatArray lv) = lv
 -- instance Eq (NatArray s v) where
 --   NatArray lv1 == NatArray lv2 = state lv1 == state lv2 
 
-instance LVarData1 NatArray where
-  newtype Snapshot NatArray a = NatArraySnap (U.Vector a)
-    deriving (Show,Ord,Read,Eq)
-
-  -- Here we use the data constructor to carry the Storable instance for us:
-  freeze :: NatArray s a -> LV.Par QuasiDet s (Snapshot NatArray a)  
-  freeze (NatArray lv) = unsafeConvert $ fmap NatArraySnap $ freezeNatArray (NatArray lv)
-  -- newBottom :: Par d s (NatArraySnap s a)
-  -- newBottom = error "makes no sense for an NatArray, need size"
-  -- traverseSnap f (NatArraySnap m) = fmap IVarSnap $ traverse f m
-
-instance DeepFreeze (NatArray s a) (U.Vector a) where
-  type Session (NatArray s a) = s 
-  deepFreeze iv = 
-      do NatArraySnap m <- LV.freeze iv
-         return m
-
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
 newNatArray :: forall elt d s . (Storable elt, Num elt) =>
@@ -118,8 +101,7 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 #endif
 
 freezeNatArray :: Storable a => NatArray s a -> LV.Par QuasiDet s (U.Vector a)
-freezeNatArray (NatArray lv) = LI.liftIO$ U.unsafeFreeze (LI.state lv)
-
+freezeNatArray (NatArray lv) = LI.liftIO $ U.unsafeFreeze (LI.state lv)
 
 --------------------------------------------------------------------------------
 

@@ -27,7 +27,8 @@ module Control.LVish.SchedIdempotent
     yield, newPool, fork, forkHP,
     runPar, runParIO, runParLogged,
     withNewPool, withNewPool_,
-        
+    forkWithExceptions,
+    
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
 

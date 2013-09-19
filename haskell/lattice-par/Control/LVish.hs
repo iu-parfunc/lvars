@@ -53,7 +53,7 @@ import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 {-# INLINE newPool #-}
 {-# INLINE runParIO #-}
 {-# INLINE runPar #-}
--- {-# INLINE runParThenFreeze #-}
+--{-# INLINE runParThenFreeze #-}
 {-# INLINE fork #-}
 {-# INLINE quiesce #-}
 --------------------------------------------------------------------------------

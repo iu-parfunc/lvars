@@ -33,6 +33,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 import Data.Word
 
+import Data.LVar.Generic (newBottom)
 import qualified Data.LVar.NatArray as NA
 import Data.LVar.Set as IS
 import Data.LVar.Map as IM
@@ -41,9 +42,9 @@ import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
--- import Control.LVish.DeepFreeze
+import Control.LVish.DeepFrz (DeepFrz(..), Frzn, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl)
+import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import qualified Control.LVish.SchedIdempotent as L
 
 import qualified Data.Concurrent.SNZI as SNZI
@@ -138,27 +139,19 @@ v2b = runParIO $
         mapM_ IV.get ivs -- Join point.
         IS.freezeSet s
 
-
--- FIXME:TODO - needs to be updated for the new deepfreezable.
-{- 
-
 -- | This version uses deep freeze.        
 case_v2c :: Assertion
 case_v2c = assertEqual "t2 with spawn instead of fork"
              (S.fromList [1..10] :: S.Set Int) v2c
-v2c :: S.Set Int
+v2c :: IS.ISet Frzn Int
 v2c =
-    -- runParThenFreeze par
-    runDeepFreezable x
+    runParThenFreeze par
   where
     par = 
      do s   <- IS.newEmptySet 
         ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10::Int]
         mapM_ IV.get ivs -- Join point.
         return s
-
-    x = DeepFreezable par :: DeepFreezable IS.ISet Int (S.Set Int)
--}
 
 -- | Simple callback test.
 -- case_v3a :: Assertion
@@ -927,58 +920,54 @@ dftest0 = runParIO $ do
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  IV.IVarSnap m <- freeze iv1
+  m <- IV.freezeIVar iv1
   case m of
     Just i -> IV.get i
 
 case_dftest1 = assertEqual "deefreeze double ivar" (Just (Just "hello")) =<< dftest1
 
 -- | Should return (Just (Just "hello"))
-dftest1 :: IO(Maybe (Maybe String))
+dftest1 :: IO (Maybe (Maybe String))
 dftest1 = runParIO $ do
   iv1 <- IV.new
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  deepFreeze iv1
+  IV.freezeIVar iv1
 
 case_dftest2 = assertEqual "deefreeze double ivar"
-                 (IV.IVarSnap (Just (IV.IVarSnap (Just "hello")))) =<< dftest2
+                 (Just (Just "hello")) =<< dftest2
 
 -- | This uses the more generic lifting... but it's more annoying to unpack:
-dftest2 :: IO (Snapshot IV.IVar (Snapshot IV.IVar String))
-dftest2 = runParIO $ do
+dftest2 :: IO (Maybe (Maybe String))
+dftest2 = runParThenFreezeIO $ do
   iv1 <- IV.new 
   iv2 <- newBottom
   IV.put_ iv1 iv2
   IV.put_ iv2 "hello"
-  deepFreeze iv1
+  return iv1
 
 case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
 dftest3 :: IO (Maybe Int)
 dftest3 = runParIO $ do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
-  deepFreeze iv1 
+  IV.freezeIVar iv1 
 
--- | Polymorphic version of previous.  DeepFreeze is more flexible than regular
+-- | Polymorphic version of previous.  DeepFrz is more flexible than regular
 -- freeze, because we can pick multiple return types for the same code.  But we must
 -- be very careful with this kind of thing due to the 's' type variables.
-dftest4_ :: DeepFreeze (IV.IVar s1 Int) b =>
+dftest4_ :: DeepFrz (IV.IVar s1 Int) =>
             Par QuasiDet s1 b
 dftest4_ = do
   iv1 <- newBottom 
   IV.put_ iv1 (3::Int)
-  res <- deepFreeze iv1 
+  res <- IV.freezeIVar iv1 
   return res
 
-case_dftest4a = assertEqual "freeze polymorphic 1" (IV.IVarSnap (Just 3)) =<< dftest4a
-dftest4a :: IO (Snapshot IV.IVar Int)
+case_dftest4a = assertEqual "freeze polymorphic 1" (Just 3) =<< dftest4a
+dftest4a :: IO (Maybe Int)
 dftest4a = runParIO dftest4_
-
-case_dftest4b = assertEqual "freeze polymorphic 2" (Just 3) =<< dftest4b
-dftest4b :: IO (Maybe Int)
-dftest4b = runParIO dftest4_
 
 
 

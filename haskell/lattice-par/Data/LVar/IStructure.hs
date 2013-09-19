@@ -17,7 +17,6 @@ module Data.LVar.IStructure
        (
          -- * Basic operations
          IStructure,
-         Snapshot(IStructSnap),
          
          newIStructure, newIStructureWithCallback,
          put, put_, get, getLength,
@@ -38,7 +37,7 @@ import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 
 import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.DeepFreeze as LV 
+import           Control.LVish.DeepFrz (Frzn, Trvrsbl)
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
@@ -60,16 +59,6 @@ getLength (IStructure vec) = return $! V.length vec
 -- instance Eq (IStructure s v) where
 --   IStructure lv1 == IStructure lv2 = state lv1 == state lv2 
 
-instance LVarData1 IStructure where
-  newtype Snapshot IStructure a = IStructSnap (V.Vector (Maybe a))
-    deriving (Show,Ord,Read,Eq)
-  freeze :: IStructure s a -> LV.Par QuasiDet s (Snapshot IStructure a)  
-  freeze = unsafeConvert . fmap IStructSnap . freezeIStructure
-  -- newBottom :: Par d s (IStructSnap s a)
-  -- newBottom = error "makes no sense for an IStructure, need size"
-  -- traverseSnap f (IStructSnap m) = fmap IVarSnap $ traverse f m
-
-
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
 newIStructure :: Int -> Par d s (IStructure s elt)
@@ -87,14 +76,9 @@ newIStructureWithCallback len fn =
 
 -- | O(N) rather than O(1), unfortunately.
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
-freezeIStructure (IStructure vec) =
-  V.mapM IV.freezeIVar vec
-
-instance DeepFreeze (IStructure s a) (V.Vector (Maybe a)) where
-  type Session (IStructure s a) = s 
-  deepFreeze iv = 
-      do IStructSnap m <- LV.freeze iv
-         return m
+freezeIStructure (IStructure vec) = do
+  v <- V.mapM IV.freezeIVar vec
+  return v
 
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
@@ -147,4 +131,3 @@ put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 -- | Wait for the indexed entry to contain a value.
 get :: Eq elt => IStructure s elt -> Int -> Par d s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)
-

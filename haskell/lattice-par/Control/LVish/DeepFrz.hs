@@ -12,9 +12,11 @@ module Control.LVish.DeepFrz
        (
          -- Reexporting, but hiding some things:
          DeepFrz(), FrzType,
-         Frzn, Trvrsbl
+         Frzn, Trvrsbl,
 
-         -- runParThenFreeze should go here...
+         runParThenFreeze,
+         runParThenFreezeIO,
+         
        ) where
 
 import Data.Int
