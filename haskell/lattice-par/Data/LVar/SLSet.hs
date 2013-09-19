@@ -37,6 +37,7 @@ import           Data.Concurrent.SkipListMap as SLM
 import           Data.Maybe
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
+import           Data.LVar.Generic
 import           Control.Monad
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz  as DF

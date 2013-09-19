@@ -27,7 +27,7 @@ class DeepFrz a where
 
   -- | While `frz` is not exported, users may opt-in to the `DeepFrz`
   -- class for their datatypes and take advantage of the default instance.
-  -- Doing so requires that `type FrzType a = a`.
+  -- Doing so REQUIRES that `type FrzType a = a`.
   default frz :: a -> a 
   frz a = a 
 

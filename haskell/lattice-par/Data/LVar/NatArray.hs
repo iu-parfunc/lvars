@@ -57,6 +57,7 @@ import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
 import qualified Data.Traversable as T
+import           Data.LVar.Generic
 
 import           Control.LVish as LV hiding (addHandler)
 import           Control.LVish.DeepFreeze as LV

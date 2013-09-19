@@ -10,6 +10,7 @@
 
 module Control.LVish.DeepFrz
        (
+         -- Reexporting, but hiding some things:
          DeepFrz(), FrzType,
          Frzn, Trvrsbl
 
@@ -22,7 +23,7 @@ import GHC.Prim (unsafeCoerce#)
 
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), Frzn, Trvrsbl)
-import Control.LVish.Internal (unsafeCoerceLVar, Determinism(..))
+import Control.LVish.Internal (Determinism(..))
 import Control.LVish (Par, runPar, runParIO)
 --------------------------------------------------------------------------------
 

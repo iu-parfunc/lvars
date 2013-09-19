@@ -38,6 +38,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Traversable as T
 import qualified Data.Foldable    as F
+import           Data.LVar.Generic
 
 import           Control.Monad
 import           Control.Monad.IO.Class

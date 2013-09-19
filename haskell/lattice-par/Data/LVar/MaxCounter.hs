@@ -12,6 +12,7 @@ module Data.LVar.MaxCounter
 
 import Control.LVish hiding (freeze)
 import Control.LVish.DeepFreeze
+import Data.LVar.Generic
 import Data.LVar.Internal.Pure as P
 import Algebra.Lattice
 

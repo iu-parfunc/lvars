@@ -43,6 +43,7 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
+import           Data.LVar.Generic
 
 ------------------------------------------------------------------------------
 

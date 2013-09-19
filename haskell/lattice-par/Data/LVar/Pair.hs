@@ -9,6 +9,7 @@ import Control.LVish
 import Control.LVish.Internal
 import Control.LVish.SchedIdempotent (newLV, putLV, getLV)
 import qualified Control.LVish.SchedIdempotent as L
+import           Data.LVar.Generic
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of (the idempotent implementation of) LVars:

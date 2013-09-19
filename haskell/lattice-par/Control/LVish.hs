@@ -28,10 +28,7 @@ module Control.LVish
     
     -- * Quasi-deterministic operations:
     quiesce, quiesceAll,
-    
-    -- * Interfaces for generic operations
-    LVarData1(..), OrderedLVarData1(..),
-    
+        
     -- * Generally useful combinators
     parForL, parForSimple, parForTree, parForTiled, for_,
     
@@ -116,24 +113,6 @@ logStrLn _  = return ()
 {-# INLINE logStrLn #-}
 #endif
 
-------------------------------------------------------------------------------
--- Dealing with frozen LVars.
-------------------------------------------------------------------------------
-
--- | Here we pay the piper with an IO action, gaining permission to
--- expose the non-deterministic internal structure of an LVar: namely,
--- the order in which elements occur.
-mkTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
-mkTraversable x = return (unsafeCoerceLVar x) 
-
--- | LVish Par actions must commute, therefore one safe way to consume
--- a frozen LVar, *even in another runPar session*, is to run a par
--- computation for each element.
-forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
-forFrzn fzn fn =
-  F.foldrM (\ a () -> fn a) () $ 
-    unsafeDupablePerformIO $ -- ASSUME idempotence.
-    mkTraversable fzn
 
 
 --------------------------------------------------------------------------------

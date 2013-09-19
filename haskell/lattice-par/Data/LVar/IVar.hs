@@ -30,6 +30,8 @@ import qualified Control.LVish.SchedIdempotent as LI
 import           Data.Traversable (traverse)
 import           GHC.Prim (unsafeCoerce#)
 
+import           Data.LVar.Generic
+
 #ifdef USE_ABSTRACT_PAR
 import qualified Control.Monad.Par.Class as PC
 #endif
