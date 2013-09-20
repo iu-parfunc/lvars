@@ -30,55 +30,48 @@ main = do
 allSettings = varyThreads defaultSettings
 
 stratSet = (And [allSettings,
-                 Set NoMeaning (CompileParam "bf_traverse_Strategies")])
+                 Set NoMeaning (CompileParam "bf-traverse-Strategies")])
+
+monadparSet = (And [allSettings,
+                    Set NoMeaning (CompileParam "bf-traverse-monad-par")])
+
+lvarSet = (And [allSettings,
+                Set NoMeaning (CompileParam "bf-traverse-monad-par")])
 
 bls :: [Benchmark DefaultParamMeaning]
 bls =
- ------------------------------------------------------------  
+
+  -- # Arguments:
+  -- #  - filename of graph
+  -- #  - number of hops to take from node 0
+  -- #  - microseconds of work to be done by function applied to each node
+
+  ------------------------------------------------------------  
  -- Desktop configuration:
  ------------------------------------------------------------  
- [ Benchmark "fhpc13-lvars-benchmarks.cabal" ["none","/tmp/rand_320000_40000","10","1"] stratSet
- , Benchmark "fhpc13-lvars-benchmarks.cabal" ["none","/tmp/rand_320000_40000","10","2"] stratSet
- , Benchmark "fhpc13-lvars-benchmarks.cabal" ["none","/tmp/rand_320000_40000","10","4"] stratSet
+ [ Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] stratSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] stratSet
 
--- # Arguments to bf_traverse_*:
--- #  - filename of graph
--- #  - number of hops to take from node 0
--- #  - microseconds of work to be done by function applied to each node
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] monadparSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] monadparSet
 
--- # This set of configurations should be run once for each number of
--- # cores we want to test.
-
--- 
--- bf_traverse_Strategies none /tmp/rand_320000_40000 10 2
--- bf_traverse_Strategies none /tmp/rand_320000_40000 10 4 
--- bf_traverse_Strategies none /tmp/rand_320000_40000 10 8
--- bf_traverse_Strategies none /tmp/rand_320000_40000 10 16
--- bf_traverse_Strategies none /tmp/rand_320000_40000 10 32
- 
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 1
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 2
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 4 
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 8
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 16
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 32
--- bf_traverse_LVarPure none /tmp/rand_320000_40000 10 64
-
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 1
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 2
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 4 
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 8
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 16
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 32
--- bf_traverse_LVarIO none /tmp/rand_320000_40000 10 64
-
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 1
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 2
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 4 
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 8
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 16
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 32
--- bf_traverse_monad-par none /tmp/rand_320000_40000 10 64
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] lvarSet
+ , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] lvarSet
  ]
 
 --------------------------------------------------------------------------------
