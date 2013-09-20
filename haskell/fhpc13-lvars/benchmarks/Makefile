@@ -17,11 +17,21 @@ PBBSDIR    = ../../../pbbs/testData/graphData
 # The resulting file ends up in /tmp/rand_E_V where E is the number of
 # edges and V is the number of vertices.
 
-default: rand_data
+default: rand_data run_benches
 
 rand_data:
 	(cd $(PBBSDIR); make randLocalGraph)
 	$(PBBSDIR)/randLocalGraph -m $(EDGES) -d 5 $(VERTICES) $(RAND_DATA)_$(EDGES)_$(VERTICES)
 
+benchmark.run: benchmark.hs
+	cabal install hsbencher
+	ghc -threaded benchmark.hs -o benchmark.run
+
+run_benches: benchmark.run
+	./benchmark.run
+
 clean_data:
 	-rm -f /tmp/rand*
+
+clean: 
+	rm -f benchmark.run
