@@ -10,7 +10,8 @@ module Data.LVar.IVar
        (IVar, 
         new, get, put, put_,
         spawn, spawn_, spawnP,
-        freezeIVar, Data.LVar.IVar.addHandler)
+        freezeIVar, fromIVar,
+        Data.LVar.IVar.addHandler)
        where
 
 import           Data.IORef
@@ -108,9 +109,11 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
 
 -- FIXME: documentation:
 freezeIVar :: IVar s a -> LV.Par QuasiDet s (Maybe a)
-freezeIVar (IVar lv) = liftIO $ do
-  x <- readIORef (state lv)
-  return x
+freezeIVar (IVar lv) = liftIO $ readIORef (state lv)
+
+-- 
+fromIVar :: IVar Frzn a -> Maybe a
+fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (state lv)
 
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool -> IVar s elt -> (elt -> Par d s ()) -> Par d s ()

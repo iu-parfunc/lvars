@@ -59,6 +59,7 @@ library
                     Control.LVish
                     Control.LVish.DeepFrz
                     Control.LVish.DeepFrz.Internal
+                    Data.LVar.Generic
                     Data.LVar.IVar
                     Data.LVar.Pair
                     Data.LVar.Set
