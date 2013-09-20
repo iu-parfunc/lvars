@@ -36,7 +36,7 @@ monadparSet = (And [allSettings,
                     Set NoMeaning (CompileParam "bf-traverse-monad-par")])
 
 lvarSet = (And [allSettings,
-                Set NoMeaning (CompileParam "bf-traverse-monad-par")])
+                Set NoMeaning (CompileParam "bf-traverse-LVar")])
 
 bls :: [Benchmark DefaultParamMeaning]
 bls =
