@@ -8,15 +8,13 @@
 
   * ~~(Lindsey) Finish factoring out the old implementation into its own cabal pkg.~~ [LK: done 9/16/2013]
   * (Lindsey) Turn on Safe Haskell for real. [LK: I need help figuring out how to do this]
-  * (Lindsey) Finish porting LVars (those not done) to the shiny new
+  * ~~(Lindsey) Finish porting LVars (those not done) to the shiny new
     DeepFrz method (use IVar as an example):
       * Set 
       * Map
       * SLSet      
       * SLMap 
-      * IStructure ... 
-      
-    [LK: I'm confused about exactly what this entails.  I can replace `import Control.LVish.DeepFreeze` with `import Control.LVish.DeepFrz`, but what other changes are necessary?]
+      * IStructure ...~~ [LK: done 9/20/2013]
   
   * New monad-par release with necessary tweaks
 
