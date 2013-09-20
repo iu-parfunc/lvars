@@ -24,10 +24,11 @@ three = do
 
 data Baz a = Baz (IOVector (Maybe a))
 
-
-{-
-four = do arr <- replicate 2 (5 :: Int)
-          arr
--}
+four :: Maybe Int -> Int
+four x = case x of
+  Just n -> n
+  Nothing -> 120
+    
+              
           
           

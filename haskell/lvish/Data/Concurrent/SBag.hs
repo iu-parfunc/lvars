@@ -74,14 +74,24 @@ insert bag value = do
   threadHead <- V.read (threadHead bag) id 
   head <- return $ threadHead - 1
   blockOpt <- V.read (threadBlock bag) id
+  
+  let ho :: Maybe (Block a) -> Maybe a
+      ho (Just b) =
+        V.read (array b) head
+      ho Nothing = Nothing
+  
   let loop = (\x -> do
-               headOpt <- (case blockOpt of
+{-               headOpt <- (case blockOpt of
                                Nothing -> do 
                                  return Nothing
                                Just block -> do
                                  res <- V.read (array block) head
                                  return res
-                          )
+                          ) :: (Int -> IO (Maybe (Block a)))
+-}
+--               headOpt <- fmap (\x ->  do 
+--                                   V.read (array x) head) 
+--                          blockOpt
                if (head == blockSize)
                then
                  do
@@ -89,7 +99,7 @@ insert bag value = do
 --                 else if (V.read (array block) head) == Nothing then do
                else 
                  do
-                   if (isNothing headOpt)
+                   if (isNothing $ ho blockOpt)
                      then
                        do 
                          return 5
