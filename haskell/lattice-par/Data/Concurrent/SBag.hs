@@ -9,7 +9,7 @@ blockSize = 4
 type Array a = V.IOVector (Maybe a)
 
 data SBag e = 
-  SBag { globalHeadBlock :: (V.IOVector (Maybe (Block e))),
+  SBag { globalHeadBlock :: Array (Block e),
          numThreads :: Int,
          initializedThreads :: (V.IOVector Bool),
          threadBlock :: Array (Block e),
@@ -61,6 +61,20 @@ initThread bag = do
   id <- currentCap
   hb <- V.read (globalHeadBlock bag) id
   V.write (threadBlock bag) id hb
+  V.write (threadHead bag) id (Just blockSize)
+  V.write (stealIndex bag) id (Just 0)
+  V.write (stealHead bag) id (Just blockSize)
+  V.write (initializedThreads bag) id True
+  
+insert :: SBag a -> a -> IO ()
+insert bag value = do
+  id <- currentCap
+  threadHead <- V.read (threadHead bag) id 
+  head <- threadHead - 1
+  block <- V.read (threadBlock bag) id
+  if head == blockSize {
+    let oldBlock = block
+        
 
 insert = 120
 tryGetAny = 120
@@ -72,3 +86,4 @@ currentCap = do
   id <- myThreadId
   res <- threadCapability id
   return $ fst res
+
