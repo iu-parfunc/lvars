@@ -3,7 +3,9 @@ module Data.Concurrent.SBag(SBag, new, insert, tryGetAny) where
 import qualified Data.Vector.Mutable as V
 import qualified Data.Vector as IV
 import GHC.Conc
+import Data.Maybe
 
+blockSize :: Int
 blockSize = 4
 
 type Array a = V.IOVector (Maybe a)
@@ -16,9 +18,9 @@ data SBag e =
          stealBlock :: Array (Block e),
          stealPrev :: Array (Block e),
          foundAdd :: Array Bool,
-         threadHead :: Array Int,
-         stealHead :: Array Int,
-         stealIndex :: Array Int
+         threadHead :: V.IOVector Int,
+         stealHead :: V.IOVector Int,
+         stealIndex :: V.IOVector Int
        }
   
 data BlockPtr e =
@@ -28,7 +30,7 @@ data BlockPtr e =
   NullBlockPtr
 
 data Block e = 
-  Block { array :: Array e, 
+  Block { array :: V.IOVector (Maybe e), 
           notifyAdd :: Array Bool,
           blockPtr :: BlockPtr e }
 
@@ -41,9 +43,9 @@ new = do
   stealBlock <- V.replicate n Nothing
   stealPrev <- V.replicate n Nothing
   foundAdd <- V.replicate n Nothing
-  threadHead <- V.replicate n Nothing
-  stealHead <- V.replicate n Nothing
-  stealIndex <- V.replicate n Nothing
+  threadHead <- V.replicate n blockSize
+  stealHead <- V.replicate n blockSize
+  stealIndex <- V.replicate n 0
   return SBag {
     globalHeadBlock = globalHeadBlock,
     numThreads = n,
@@ -61,22 +63,41 @@ initThread bag = do
   id <- currentCap
   hb <- V.read (globalHeadBlock bag) id
   V.write (threadBlock bag) id hb
-  V.write (threadHead bag) id (Just blockSize)
-  V.write (stealIndex bag) id (Just 0)
-  V.write (stealHead bag) id (Just blockSize)
+--  V.write (threadHead bag) id blockSize
+--  V.write (stealIndex bag) id 0
+--  V.write (stealHead bag) id blockSize
   V.write (initializedThreads bag) id True
   
 insert :: SBag a -> a -> IO ()
 insert bag value = do
   id <- currentCap
   threadHead <- V.read (threadHead bag) id 
-  head <- threadHead - 1
-  block <- V.read (threadBlock bag) id
-  if head == blockSize {
-    let oldBlock = block
-        
-
-insert = 120
+  head <- return $ threadHead - 1
+  blockOpt <- V.read (threadBlock bag) id
+  let loop = (\x -> do
+               headOpt <- (case blockOpt of
+                               Nothing -> do 
+                                 return Nothing
+                               Just block -> do
+                                 res <- V.read (array block) head
+                                 return res
+                          )
+               if (head == blockSize)
+               then
+                 do
+                   return 120
+--                 else if (V.read (array block) head) == Nothing then do
+               else 
+                 do
+                   if (isNothing headOpt)
+                     then
+                       do 
+                         return 5
+                     else 
+                       do
+                         return 120)
+  return ()
+                         
 tryGetAny = 120
 
 numCap = numCapabilities
