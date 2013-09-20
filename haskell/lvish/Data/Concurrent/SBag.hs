@@ -79,7 +79,7 @@ insert bag value = do
       ho (Just b) = V.read (array b) head
       ho Nothing  = return Nothing
   
-  let loop = (\x -> do
+  let loop = (do
 {-               headOpt <- (case blockOpt of
                                Nothing -> do 
                                  return Nothing
@@ -91,20 +91,15 @@ insert bag value = do
 --               headOpt <- fmap (\x ->  do 
 --                                   V.read (array x) head) 
 --                          blockOpt
-               if (head == blockSize)
-                then
-                 do
-                   return 120 :: IO Int
+        if (head == blockSize) then do
+            return 120 :: IO Int
 --                 else if (V.read (array block) head) == Nothing then do
-                else 
-                 do xx <- ho blockOpt
-                    if (isNothing xx)
-                     then
-                       do 
-                         return 5
-                     else 
-                       do
-                         return 120)
+         else do 
+            xx <- ho blockOpt
+            if (isNothing xx)
+             then return 5
+             else return 120
+        loop) 
   return ()
                          
 tryGetAny :: Int
