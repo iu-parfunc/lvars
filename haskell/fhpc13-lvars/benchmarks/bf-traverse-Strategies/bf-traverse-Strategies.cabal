@@ -1,0 +1,15 @@
+name:                bf-traverse-Strategies
+version:             0.1.0.0
+synopsis:            Cabal file for building the bf-traverse-Strategies benchmark executable. A part of the benchmarking infrastructure for the fhpc13-lvars library.
+author:              Lindsey Kuper and Ryan Newton
+maintainer:          lkuper@cs.indiana.edu
+category:            Concurrency
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable bf-traverse-Strategies
+  main-is:          bf-traverse-Strategies.hs
+  ghc-options:		-O2 -threaded -rtsopts
+  hs-source-dirs: 	.., .
+  -- Notes: the `deepseq` and `parallel` packages are specific to this executable.
+  build-depends:    base ==4.6.*, split ==0.2.*, containers ==0.5.*, bytestring ==0.10.*, time==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, deepseq ==1.3.*, parallel ==3.2.*
