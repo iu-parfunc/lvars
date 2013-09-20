@@ -34,4 +34,4 @@ clean_data:
 	-rm -f /tmp/rand*
 
 clean: 
-	rm -f benchmark.run
+	rm -f benchmark.run *.hi *.o
