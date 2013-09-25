@@ -8,7 +8,7 @@
 --  * It is probably a better strategy to shift the slices around to match number
 --    boundaries than it is to deal with this whole fragments business.  Try that.
 
-module Util.PBBS
+module PBBS.FileReader
        (
          -- * PBBS specific
          readAdjacencyGraph, parseAdjacencyGraph,
@@ -26,9 +26,8 @@ import Control.DeepSeq
 import Control.Exception (evaluate)
 import Control.Monad (unless)
 
-import Control.Monad.Par.Class
+-- import Control.Monad.Par.Class
 -- import Control.Monad.Par.IO
-import Control.Monad.Par.Combinator
 import Control.LVish as LV
 -- import qualified Control.LVish.Internal as LI
 import Control.LVish.Internal (liftIO)
@@ -57,6 +56,9 @@ import System.IO.Posix.MMap (unsafeMMapFile)
 
 import Test.HUnit
 import Test.Framework.Providers.HUnit
+
+import GHC.Conc (numCapabilities)
+import Control.Monad (foldM)
 
 --------------------------------------------------------------------------------
 -- PBBS specific:
@@ -175,9 +177,7 @@ parReadNats chunks bs = par
     reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
 
     par :: LV.Par d s [PartialNums nty]
-    par = do _ <- if False
-                  then new    -- Fix IVar type, ugh.
-                  else I.new  -- Should be a better way...
+    par = do _ <- I.new
              parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
                                   mapper reducer []              
 
@@ -515,4 +515,81 @@ number of threads, I actually see quite nice parallel performance.
 -}
 
 --------------------------------------------------------------------------------
+-- DUPLICATION: coping some of monad-par-extras
+--------------------------------------------------------------------------------
+
+-- | \"Auto-partitioning\" version of 'parMapReduceRangeThresh' that chooses the threshold based on
+--    the size of the range and the number of processors..
+
+-- parMapReduceRange :: (NFData a, ParFuture iv p) => 
+-- 		     InclusiveRange -> (Int -> p a) -> (a -> a -> p a) -> a -> p a
+
+parMapReduceRange :: (NFData a, Eq a) => 
+		     InclusiveRange ->
+                     (Int -> LV.Par d s a) ->
+                     (a -> a -> LV.Par d s a) -> a -> LV.Par d s a
+parMapReduceRange (InclusiveRange start end) fn binop init =
+   loop (length segs) segs
+ where
+  segs = splitInclusiveRange (auto_partition_factor * numCapabilities) (start,end)
+  loop 1 [(st,en)] =
+     let mapred a b = do x <- fn b;
+			 result <- a `binop` x
+			 return result
+     in foldM mapred init [st..en]
+  loop n segs =
+     let half = n `quot` 2
+	 (left,right) = splitAt half segs in
+     do l  <- I.spawn$ loop half left
+        r  <- loop (n-half) right
+	l' <- I.get l
+	l' `binop` r
+
+parMapReduceRangeThresh
+   :: (NFData a, Eq a)
+      => Int                            -- ^ threshold
+      -> InclusiveRange                 -- ^ range over which to calculate
+      -> (Int -> Par d s a)                 -- ^ compute one result
+      -> (a -> a -> Par d s a)              -- ^ combine two results (associative)
+      -> a                              -- ^ initial result
+      -> Par d s a
+      
+parMapReduceRangeThresh threshold (InclusiveRange min max) fn binop init
+ = loop min max
+ where
+  loop min max
+    | max - min <= threshold =
+	let mapred a b = do x <- fn b;
+			    result <- a `binop` x
+			    return result
+	in foldM mapred init [min..max]
+
+    | otherwise  = do
+	let mid = min + ((max - min) `quot` 2)
+	rght <- I.spawn $ loop (mid+1) max
+	l  <- loop  min    mid
+	r  <- I.get rght
+	l `binop` r
+
+
+splitInclusiveRange :: Int -> (Int, Int) -> [(Int, Int)]
+splitInclusiveRange pieces (start,end) =
+  map largepiece [0..remain-1] ++
+  map smallpiece [remain..pieces-1]
+ where
+   len = end - start + 1 -- inclusive [start,end]
+   (portion, remain) = len `quotRem` pieces
+   largepiece i =
+       let offset = start + (i * (portion + 1))
+       in (offset, offset + portion)
+   smallpiece i =
+       let offset = start + (i * portion) + remain
+       in (offset, offset + portion - 1)
+
+-- How many tasks per process should we aim for?  Higher numbers
+-- improve load balance but put more pressure on the scheduler.
+auto_partition_factor :: Int
+auto_partition_factor = 4
+
+data InclusiveRange = InclusiveRange Int Int
 

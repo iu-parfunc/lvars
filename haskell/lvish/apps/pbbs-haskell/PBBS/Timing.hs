@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 
-module Util where
+module PBBS.Timing (runAndReport, calibrate, measureFreq, commaint) where
 -- module Main where
 
 import           Control.Exception (evaluate)
@@ -153,4 +153,5 @@ commaint n =
    intersperse "," $ 
    chunksOf 3 $ 
    reverse (show n)
+
 
