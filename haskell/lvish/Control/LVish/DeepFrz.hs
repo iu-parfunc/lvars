@@ -25,8 +25,8 @@ import GHC.Prim (unsafeCoerce#)
 
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), Frzn, Trvrsbl)
-import Control.LVish.Internal (Determinism(..))
-import Control.LVish (Par, runPar, runParIO)
+import Control.LVish.Internal (Determinism(..), Par(WrapPar))
+import Control.LVish.SchedIdempotent (runPar, runParIO)
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation makes a `Par` computation
@@ -44,8 +44,8 @@ import Control.LVish (Par, runPar, runParIO)
 -- Significantly, the freeze at the end of `runParThenFreeze` has NO runtime cost, in
 -- spite of the fact that it enables a DEEP (recursive) freeze of the value returned
 -- by the `Par` computation.
-runParThenFreeze :: DeepFrz a => (forall s . Par Det s a) -> FrzType a
-runParThenFreeze p = frz $ runPar p
+runParThenFreeze :: DeepFrz a => Par Det s a -> FrzType a
+runParThenFreeze (WrapPar p) = frz $ runPar p
 
 -- | This version works for non-deterministic computations as well.
 -- 
@@ -53,8 +53,8 @@ runParThenFreeze p = frz $ runPar p
 -- advantage vs. doing your own freeze at the end of your computation.  Namely, when
 -- you use `runParThenFreezeIO`, there is an implicit barrier before the final
 -- freeze.  Further, DeepFrz has no runtime overhead, whereas regular freezing has a cost.
-runParThenFreezeIO :: DeepFrz a => (forall s. Par d s a) -> IO (FrzType a)
-runParThenFreezeIO p = do
+runParThenFreezeIO :: DeepFrz a => Par d s a -> IO (FrzType a)
+runParThenFreezeIO (WrapPar p) = do
   x <- runParIO p
   return $ frz x
 
