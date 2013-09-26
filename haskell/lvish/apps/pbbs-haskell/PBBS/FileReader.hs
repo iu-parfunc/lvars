@@ -22,43 +22,28 @@ module PBBS.FileReader
          unitTests
        ) where 
 
-import Control.DeepSeq
+import Control.Monad   (foldM)
+import Control.DeepSeq (NFData,rnf)
 import Control.Exception (evaluate)
 import Control.Monad (unless)
-
--- import Control.Monad.Par.Class
--- import Control.Monad.Par.IO
+import Control.Concurrent (getNumCapabilities)
 import Control.LVish as LV
--- import qualified Control.LVish.Internal as LI
 import Control.LVish.Internal (liftIO)
-
 import qualified Data.LVar.IVar as I
 
--- import Control.Monad.IO.Class (liftIO)
-import Control.Concurrent (getNumCapabilities)
 import Data.Word
 import Data.Char (isSpace)
-import Data.Maybe (fromJust, maybeToList)
+import Data.Maybe (fromJust)
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
-
 import Data.Time.Clock
-import Control.Concurrent.Async
-import Debug.Trace
-
--- import qualified Data.ByteString.Word8      as S
--- import qualified Data.ByteString.Lazy.Word8 as L
 
 import System.IO.Posix.MMap (unsafeMMapFile)
-
 import Test.HUnit
-import Test.Framework.Providers.HUnit
-
-import GHC.Conc (numCapabilities)
-import Control.Monad (foldM)
+import Prelude hiding (min,max,fst,last)
 
 --------------------------------------------------------------------------------
 -- PBBS specific:
@@ -110,12 +95,11 @@ parseAdjacencyGraph chunks bs =
 
 --------------------------------------------------------------------------------
 
--- How many words shoud go in each continuously allocated vector?
-chunkSize :: Int
-chunkSize = 32768
+
 
 -- | How much should we partition a loop beyond what is necessary to have one task
 -- per processor core.
+overPartition :: Int
 overPartition = 4
 -- Overpartitioning definitely makes it faster... over 2X faster.
 -- 8 doesn't gain anything over 4 however.. but it may reduce variance.
@@ -220,11 +204,11 @@ instance NFData (PartialNums n) where
 
 {-# INLINE sewEnds #-}
 -- Sew up a list of ragged-edged fragments into a list of normal vector chunks.
-sewEnds :: (U.Unbox nty, Integral nty, Eq nty) => [PartialNums nty] -> [U.Vector nty]
+sewEnds :: forall nty . (U.Unbox nty, Integral nty, Eq nty) => [PartialNums nty] -> [U.Vector nty]
 sewEnds [] = []
 sewEnds origls = loop Nothing origls
  where
-   loop mleft []     = error "Internal error."
+   loop _mleft []     = error "Internal error."
    loop mleft [last] = 
      case last of
        Single _                  -> error "sewEnds: Got a MiddleFrag at the END!"
@@ -248,7 +232,7 @@ sewEnds origls = loop Nothing origls
        (Nothing, Just (RightFrag _ m))            -> U.singleton m   : ls 
        (Nothing, Nothing)                         ->                   ls 
 
-   shiftCombine n m nd = n * (10 ^ fromIntegral nd) + m
+   shiftCombine n m nd = n * (10 ^ (fromIntegral nd :: nty)) + m
 
 
 --------------------------------------------------------------------------------
@@ -281,7 +265,6 @@ readNatsPartial bs
   if digit hd then
     (let first = U.head $ head vs -- The first (possibly partial) number parsed.
          rest  = U.tail (head vs) : tail vs
-         pref  = U.take total (head vs) -- This is usually smaller than total!
          -- If we start in the middle of a number, then the RightFrag goes till the first whitespace:
          rfrag = Just (RightFrag (fromJust$ S.findIndex (not . digit) bs) first) in
      if total == 0 
@@ -338,6 +321,7 @@ readNatsPartial bs
 -- Unit Tests
 --------------------------------------------------------------------------------
 
+unitTests :: [Test]
 unitTests =
   [ TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
               readNatsPartial (S.take 4 "123 4")
@@ -369,14 +353,15 @@ t1 :: IO [U.Vector Word]
 t1 = testReadNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_125000"
 
 t2 :: IO ()
-t2 = do t0 <- getCurrentTime
+t2 = do t0_ <- getCurrentTime
         ls <- readNumFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-        t1 <- getCurrentTime
+        t1_ <- getCurrentTime
         let v :: U.Vector Word
             v = U.concat ls
         putStrLn$ "Resulting vector has length: "++show (U.length v)
-        t2 <- getCurrentTime
-        putStrLn$ "Time parsing/reading "++show (diffUTCTime t1 t0)++" and coalescing "++show(diffUTCTime t2 t1)
+        t2_ <- getCurrentTime
+        putStrLn$ "Time parsing/reading "++show (diffUTCTime t1_ t0_)++
+                  " and coalescing "++show(diffUTCTime t2_ t1_)
         
 -- This one is fast... but WHY?  It should be the same as the hacked 1-chunk parallel versions.
 t3 :: IO [PartialNums Word]
@@ -388,10 +373,10 @@ t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgri
 -- | Try it with readFile...
 t3B :: IO [PartialNums Word]
 t3B = do putStrLn "Sequential version + readFile"
-         t0 <- getCurrentTime
+         t0_ <- getCurrentTime
          bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-         t1 <- getCurrentTime
-         putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
+         t1_ <- getCurrentTime
+         putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1_ t0_)
          pn <- readNatsPartial bs
          consume [pn]
          return [pn]
@@ -399,33 +384,31 @@ t3B = do putStrLn "Sequential version + readFile"
 
 t4 :: IO [PartialNums Word]
 t4 = do putStrLn$ "Using parReadNats + readFile"
-        t0 <- getCurrentTime
+        t0_ <- getCurrentTime
         bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-        t1 <- getCurrentTime
-        putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1 t0)
+        t1_ <- getCurrentTime
+        putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1_ t0_)
         pns <- runParIO $ parReadNats 4 bs
         consume pns
         return pns
 
 t5 :: IO ()
-t5 = do t0 <- getCurrentTime
+t5 = do t0_ <- getCurrentTime
         AdjacencyGraph v1 v2 <- readAdjacencyGraph "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
-        t1 <- getCurrentTime
-        putStrLn$ "Read adjacency graph in: "++show (diffUTCTime t1 t0)
+        t1_ <- getCurrentTime
+        putStrLn$ "Read adjacency graph in: "++show (diffUTCTime t1_ t0_)
         putStrLn$ " Edges and Verts: "++show (U.length v1, U.length v2)
         return ()
 
 -- Make sure everything is forced
 consume :: (Show n, M.Unbox n) => [PartialNums n] -> IO ()
-consume x = do
-    evaluate (rnf x)
-    putStrLn$ "Result: "++show (length x)++" segments of output"
-    mapM_ fn x
+consume ox = do
+    evaluate (rnf ox)
+    putStrLn$ "Result: "++show (length ox)++" segments of output"
+    mapM_ fn ox
   where
   fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
   fn (Compound r uvs l) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++", ends "++show(r,l)++">"
-
-main = t4
 
 --------------------------------------------------------------------------------
 -- DEVELOPMENT NOTES
@@ -521,30 +504,6 @@ number of threads, I actually see quite nice parallel performance.
 -- | \"Auto-partitioning\" version of 'parMapReduceRangeThresh' that chooses the threshold based on
 --    the size of the range and the number of processors..
 
--- parMapReduceRange :: (NFData a, ParFuture iv p) => 
--- 		     InclusiveRange -> (Int -> p a) -> (a -> a -> p a) -> a -> p a
-
-parMapReduceRange :: (NFData a, Eq a) => 
-		     InclusiveRange ->
-                     (Int -> LV.Par d s a) ->
-                     (a -> a -> LV.Par d s a) -> a -> LV.Par d s a
-parMapReduceRange (InclusiveRange start end) fn binop init =
-   loop (length segs) segs
- where
-  segs = splitInclusiveRange (auto_partition_factor * numCapabilities) (start,end)
-  loop 1 [(st,en)] =
-     let mapred a b = do x <- fn b;
-			 result <- a `binop` x
-			 return result
-     in foldM mapred init [st..en]
-  loop n segs =
-     let half = n `quot` 2
-	 (left,right) = splitAt half segs in
-     do l  <- I.spawn$ loop half left
-        r  <- loop (n-half) right
-	l' <- I.get l
-	l' `binop` r
-
 parMapReduceRangeThresh
    :: (NFData a, Eq a)
       => Int                            -- ^ threshold
@@ -553,7 +512,6 @@ parMapReduceRangeThresh
       -> (a -> a -> Par d s a)              -- ^ combine two results (associative)
       -> a                              -- ^ initial result
       -> Par d s a
-      
 parMapReduceRangeThresh threshold (InclusiveRange min max) fn binop init
  = loop min max
  where
@@ -570,21 +528,6 @@ parMapReduceRangeThresh threshold (InclusiveRange min max) fn binop init
 	l  <- loop  min    mid
 	r  <- I.get rght
 	l `binop` r
-
-
-splitInclusiveRange :: Int -> (Int, Int) -> [(Int, Int)]
-splitInclusiveRange pieces (start,end) =
-  map largepiece [0..remain-1] ++
-  map smallpiece [remain..pieces-1]
- where
-   len = end - start + 1 -- inclusive [start,end]
-   (portion, remain) = len `quotRem` pieces
-   largepiece i =
-       let offset = start + (i * (portion + 1))
-       in (offset, offset + portion)
-   smallpiece i =
-       let offset = start + (i * portion) + remain
-       in (offset, offset + portion - 1)
 
 -- How many tasks per process should we aim for?  Higher numbers
 -- improve load balance but put more pressure on the scheduler.

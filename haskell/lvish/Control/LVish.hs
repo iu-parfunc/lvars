@@ -36,14 +36,13 @@ module Control.LVish
     logStrLn
   ) where
 
-import           Data.Traversable (Traversable)
 import qualified Data.Foldable    as F 
-import           Control.Applicative
 import           Control.LVish.Internal
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 
+import           Prelude hiding (rem)
 -- import GHC.Exts (Constraint)
 
 --------------------------------------------------------------------------------
@@ -125,7 +124,7 @@ logStrLn _  = return ()
 --
 -- Takes a range as inclusive-start, exclusive-end.
 parForL :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
-parForL (start,end) body | start > end = error$"parForL: start is greater than end: "++show (start,end)
+parForL (start,end) _ | start > end = error$"parForL: start is greater than end: "++show (start,end)
 parForL (start,end) body = do
   -- logStrLn$ " initial iters: "++show (end-start)
   loop 0 (end - start) 1
@@ -139,10 +138,6 @@ parForL (start,end) body = do
          fork$ parForSimple (offset, nxtstrt) body
          loop nxtstrt (remain-chunk) (2*chunk)
 
-   -- forSlice = parForSimple
-   -- forSlice = parForTree
-   forSlice = parForL
-
 {-# INLINE parForSimple #-}
 -- | The least-sophisticated form of parallel loop.  Fork iterations one at a time.
 parForSimple :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
@@ -152,7 +147,8 @@ parForSimple range fn = do
 -- | Divide the iteration space recursively, but ultimately run every iteration in
 -- parallel.  That is, the loop body is permitted to block on other iterations.
 parForTree :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
-parForTree (start,end) body | start > end = error$"parForTree: start is greater than end: "++show (start,end)
+parForTree (start,end) _
+  | start > end = error$"parForTree: start is greater than end: "++show (start,end)
 parForTree (start,end) body = do
   loop 0 (end - start)
  where
@@ -166,8 +162,8 @@ parForTree (start,end) body = do
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
 parForTiled :: Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
-parForTiled tiles (start,end) body = do 
-  loop 0 (end - start) tiles
+parForTiled otiles (start,end) body = do 
+  loop 0 (end - start) otiles
  where
    loop offset remain tiles
      | remain == 1     = body offset
