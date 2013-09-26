@@ -10,6 +10,13 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
+{-|
+
+  This module provides sets that only grow.  It is based on a concurrent-skip-list
+  implementation of sets.
+
+ -}
+
 module Data.LVar.SLSet
        (
          -- * Basic operations

@@ -10,7 +10,17 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MagicHash #-}
 
-module Data.LVar.Set
+{-|
+
+  This module provides sets that only grow.  It is based on the popular `Data.Set`
+  balanced-tree representation of sets.  Thus scalability is not good for this
+  implementation.  However, there are some interoperability benefits.  For exmaple,
+  after running a parallel computation with a set result, this module can produce a
+  `Data.Set` in /O(1)/ without copying, which may be useful downstream.
+
+ -}
+
+module Data.LVar.PureSet
        (
          -- * Basic operations
          ISet, 

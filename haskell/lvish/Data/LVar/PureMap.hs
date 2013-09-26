@@ -8,7 +8,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.LVar.Map
+{-|
+
+  This module provides finite maps that only grow.  It is based on the popular `Data.Map`
+  balanced-tree representation of maps.  Thus scalability is /not/ good for this
+  implementation.  However, there are some interoperability benefits.  For exmaple,
+  after running a parallel computation with a map result, this module can produce a
+  `Data.Map` in /O(1)/ without copying, which may be useful downstream.
+
+ -}
+
+module Data.LVar.PureMap
        (
          IMap, 
          newEmptyMap, newMap, newFromList,

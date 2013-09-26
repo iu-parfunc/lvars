@@ -11,10 +11,19 @@
 {-# LANGUAGE MagicHash #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
+{-|
 
--- | A module that reexports the default LVish scheduler, adding some type-level
+  The @lvish@ package provides a parallel programming model based on monotonically
+  growing data structures.
+
+  This module provides the core scheduler and basic control flow operations.  Note
+  that to do anythin guseful you will need to import one of the data structure modules
+  (@Data.LVar.*@).
+
+ -}
+
+-- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
-
 module Control.LVish
   (
     -- * Basic types and accessors:

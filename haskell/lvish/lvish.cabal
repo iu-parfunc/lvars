@@ -18,7 +18,10 @@ version:             0.2.0.0
 
 synopsis:  LVar data structures and infrastructure to build more.
 
--- description:         
+description: 
+
+  .
+  As a starting point, look at "Control.LVish".
 
 license:             BSD3
 license-file:        LICENSE
@@ -61,8 +64,8 @@ library
                     Control.LVish.DeepFrz.Internal
                     Data.LVar.Generic
                     Data.LVar.IVar
-                    Data.LVar.Set
-                    Data.LVar.Map
+                    Data.LVar.PureSet
+                    Data.LVar.PureMap
                     Data.LVar.SLSet
 -- TEMP: DISABLED UNTIL THEY ARE PORTED TO THE NEW DEEPFRZ: [2013.09.08]
 --                    Data.LVar.SLMap
