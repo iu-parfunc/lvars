@@ -61,7 +61,6 @@ library
                     Control.LVish.DeepFrz.Internal
                     Data.LVar.Generic
                     Data.LVar.IVar
-                    Data.LVar.Pair
                     Data.LVar.Set
                     Data.LVar.Map
                     Data.LVar.SLSet
@@ -79,6 +78,7 @@ library
                     
   -- Modules included in this library but not exported.
   other-modules:
+                    Data.LVar.Pair 
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI

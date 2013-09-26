@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
+-- | Just for demonstration purposes.  It's probably simpler to use a pair of IVars.
+
 module Data.LVar.Pair (
   IPair, newPair, putFst, putSnd, getFst, getSnd
   ) where

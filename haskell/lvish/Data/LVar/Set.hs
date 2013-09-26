@@ -18,38 +18,33 @@ module Data.LVar.Set
          putInSet, waitElem, waitSize, 
 
          -- * Iteration and callbacks
-         forEach, forEachHP,
+         forEach, forEachHP, 
 
          -- * Quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, freezeSet,
          fromISet,
-
+         
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
          cartesianProd, cartesianProds, 
 
          -- * Alternate versions of derived ops that expose HandlerPools they create.
-         traverseSetHP, traverseSetHP_,
+         traverseSetHP, traverseSetHP_, unionHP, intersectionHP,
          cartesianProdHP, cartesianProdsHP
        ) where
 
 import           Control.Monad (void)
 import           Control.Applicative ((<$>))
 import           Data.IORef
-import           Data.Maybe (fromMaybe)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
-import qualified Data.Traversable as T
 import           Data.LVar.Generic
-
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO, addHandler)
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
 import qualified Control.LVish.SchedIdempotent as L
-import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
@@ -60,25 +55,24 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
 newtype ISet s a = ISet (LVar s (IORef (S.Set a)) a)
 
-unISet (ISet lv) = lv
-
 -- | Physical identity, just as with IORefs.
 instance Eq (ISet s v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 instance LVarData1 ISet where
   freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-  sortFreeze is = AFoldable <$> freezeSet is 
+  sortFreeze is = AFoldable <$> freezeSet is
+  addHandler = forEachHP
 
 instance OrderedLVarData1 ISet where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
+-- | Required for all LVar containers.
 instance F.Foldable (ISet Trvrsbl) where
   foldr fn zer (ISet lv) =
+    -- It's not changing at this point, no problem if duped:
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
     F.foldr fn zer set 
-
-  -- TODO: traverseSnap
 
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn a 
@@ -247,28 +241,11 @@ traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
 union :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
-union s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (`putInSet` os)
-  forEach s2 (`putInSet` os)
-  return os
+union = unionHP Nothing
 
 -- | Build a new set which will contain the intersection of the two input sets.
 intersection :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
--- Can we do intersection with only the public interface?  It should be monotonic.
--- Well, for now we cheat and use liftIO:
-intersection s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (fn os s2)
-  forEach s2 (fn os s1)
-  return os
- where  
-  fn outSet other@(ISet lv) elm = do
-    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
-    peek <- LI.liftIO$ readIORef (state lv)
-    if S.member elm peek 
-      then putInSet elm outSet
-      else return ()
+intersection = intersectionHP Nothing
 
 -- | Cartesian product of two sets.
 cartesianProd :: (Ord a, Ord b) => ISet s a -> ISet s b -> Par d s (ISet s (a,b))
@@ -281,8 +258,6 @@ cartesianProds ls = cartesianProdsHP Nothing ls
 --------------------------------------------------------------------------------
 -- Alternate versions of functions that EXPOSE the HandlerPools
 --------------------------------------------------------------------------------
-
--- TODO: unionHP, intersectionHP...
 
 -- | Variant that optionally ties the handlers to a pool.
 traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
@@ -300,6 +275,33 @@ traverseSetHP_ mh fn set os = do
     x' <- fn x
     putInSet x' os
 
+-- | Variant that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
+unionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+unionHP mh s1 s2 = do
+  os <- newEmptySet
+  forEachHP mh s1 (`putInSet` os)
+  forEachHP mh s2 (`putInSet` os)
+  return os
+
+-- | Variant that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
+intersectionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+-- Can we do intersection with only the public interface?  It should be monotonic.
+-- Well, for now we cheat and use liftIO:
+intersectionHP mh s1 s2 = do
+  os <- newEmptySet
+  forEachHP mh s1 (fn os s2)
+  forEachHP mh s2 (fn os s1)
+  return os
+ where  
+  fn outSet (ISet lv) elm = do
+    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
+    peek <- LI.liftIO$ readIORef (state lv)
+    if S.member elm peek 
+      then putInSet elm outSet
+      else return ()
+
 -- | Variant of 'cartesianProd' that optionally ties the handlers to a pool.
 cartesianProdHP :: (Ord a, Ord b) => Maybe HandlerPool -> ISet s a -> ISet s b ->
                    Par d s (ISet s (a,b))
@@ -311,19 +313,15 @@ cartesianProdHP mh s1 s2 = do
   return os
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
-  fn outSet other@(ISet lv) cmbn elm1 = do
+  fn outSet (ISet lv) cmbn elm1 = do
     peek <- LI.liftIO$ readIORef (state lv)
---    liftIO $ putStrLn " ! Cartesian prod handler running..."
     F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
 
--- cartesian :: S.Set t -> S.Set (t, t)
--- cartesian x = S.fromDistinctAscList [(i,j) | i <- xs, j <- xs]
---     where xs = S.toAscList x
 
 -- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
 cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
                     Par d s (ISet s [a])
-cartesianProdsHP mh [] = newEmptySet
+cartesianProdsHP _ [] = newEmptySet
 cartesianProdsHP mh ls = do
 #if 1
   -- Case 1: recursive definition in terms of pairwise products:
@@ -352,6 +350,4 @@ cartesianProdsHP mh ls = do
 --    F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
     return undefined
 #endif
-
-
 
