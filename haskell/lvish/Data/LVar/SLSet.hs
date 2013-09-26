@@ -66,8 +66,6 @@ instance Eq (ISet s v) where
 -- structure.
 
 instance LVarData1 ISet where
-  newBottom = newEmptySet -- ARGH!
-
   freeze orig@(ISet (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
 
@@ -104,8 +102,8 @@ defaultLevels = 8
 newEmptySet :: Ord a => Par d s (ISet s a)
 newEmptySet = newEmptySet_ defaultLevels
 
--- | Create a new, empty, monotonically growing 'ISet', with the given number of
--- skiplist levels.
+-- | Tuning: Create a new, empty, monotonically growing 'ISet', with the given number
+-- of skiplist levels.
 newEmptySet_ :: Ord a => Int -> Par d s (ISet s a)
 newEmptySet_ n = fmap (ISet . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 

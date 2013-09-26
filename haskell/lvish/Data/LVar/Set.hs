@@ -67,7 +67,6 @@ instance Eq (ISet s v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
 instance LVarData1 ISet where
-  newBottom = newEmptySet  
   freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   sortFreeze is = AFoldable <$> freezeSet is 
 
@@ -103,6 +102,7 @@ newFromList ls = newSet (S.fromList ls)
 -- Quasi-deterministic ops:
 --------------------------------------------------------------------------------
 
+-- Just a shorthand for below:
 type QPar = Par QuasiDet 
 
 -- | Freeze an 'ISet' after a specified callback/handler is done running.  This

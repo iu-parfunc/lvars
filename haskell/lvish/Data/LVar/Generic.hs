@@ -11,19 +11,16 @@ module Data.LVar.Generic
        (
          LVarData1(..), OrderedLVarData1(..), AFoldable(..),
          unsafeCoerceLVar,
-         mkTraversable, forFrzn
+         unsafeTraversable,
+         castFrzn, forFrzn
        )
        where
 
 import           Control.LVish
-import           Control.Monad.IO.Class
-import           Control.LVish.MonadToss
-import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort)
-
 import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
@@ -38,15 +35,9 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
      --   TODO: if there is a Par class to generalize LVar Par monads, then
      --   it needs to be a superclass of this.
-     where
-  -- | The a frozen LVar provides a complete picture of the contents:
-  -- e.g. a whole set instead of one element, or the full/empty
-  -- information for an IVar, instead of just the payload.
-  
+     where  
   -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
   --  I was not able to get abstracting over the constraints to work.
-
-  newBottom :: Ord a => Par d s (f s a)
 
   -- | Add a handler function which is called whenever an element is
   -- added to the LVar.
@@ -54,15 +45,21 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
 
   -- | An /O(1)/ operation that atomically switches the LVar into a
   -- frozen state.  Any threads waiting on the freeze are woken.
+  --
+  -- The frozen LVar provides a complete picture of the contents:
+  -- e.g. a whole set instead of one element, or the full/empty
+  -- information for an IVar, instead of just the payload.
+  --
+  -- However, note that `Frzn` LVars cannot be folded, because they may have
+  -- nondeterministic ordering after being frozen.  See `sortFreeze`.
   freeze :: -- LVCtxt f s a =>
             f s a -> Par QuasiDet s (f Frzn a)
 
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.
-  -- The result is fully accessible (Foldable).
+  -- The result is fully accessible to the user (`Foldable`).
   sortFreeze :: forall a s . Ord a => f s a -> Par QuasiDet s (AFoldable a)
-  -- sortFreeze :: forall a s . Ord a => f s a -> Par QuasiDet s [a]
-  sortFreeze lv = do 
+  sortFreeze lv = do
     lv2 <- freeze lv
     let lv3 :: f Trvrsbl a
         lv3 = unsafeCoerceLVar lv2
@@ -72,10 +69,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     -- version of the LVar contents with its original type:
     return (AFoldable ls')
 
--- | Carries a Foldable type, but you don't know which one.
-data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
-
--- | Some LVar datatypes are stored in an internally ordered way so
+-- | /Some/ LVar datatypes are stored in an /internally/ ordered way so
 -- that it is then possible to take frozen snapshots and consume them
 -- inexpensively in a deterministic order.
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
@@ -94,7 +88,12 @@ class LVarData0 (t :: *) where
   newBottom0 :: Par d s t
 -}
 
--- | A safer version of `unsafeCoerce#` for LVars.
+-- | Carries a Foldable type, but you don't get to know which one.
+--   The purpose of this type is that `sortFreeze` should not have
+--   to impose a particular memory representation.
+data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
+
+-- | A safer version of `unsafeCoerce#` for LVars only.
 unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 a
 unsafeCoerceLVar = unsafeCoerce#
 
@@ -102,11 +101,16 @@ unsafeCoerceLVar = unsafeCoerce#
 -- Dealing with frozen LVars.
 ------------------------------------------------------------------------------
 
--- | Here we pay the piper with an IO action, gaining permission to
--- expose the non-deterministic internal structure of an LVar: namely,
--- the order in which elements occur.
-mkTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
-mkTraversable x = return (unsafeCoerceLVar x) 
+-- | Here we gain permission to expose the non-deterministic internal structure of an
+-- LVar: namely, the order in which elements occur.  We pay the piper with an IO
+-- action.
+unsafeTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
+unsafeTraversable x = return (unsafeCoerceLVar x) 
+
+-- | `Trvrsbl` is a stronger property than `Frzn` so it is always ok to "upcast" to
+-- the weaker version.
+castFrzn :: LVarData1 f => f Trvrsbl a -> f Frzn a
+castFrzn x = unsafeCoerceLVar x
 
 -- | LVish Par actions must commute, therefore one safe way to consume a frozen (but
 -- unordered) LVar, *even in another runPar session*, is to run a par computation for
@@ -115,7 +119,7 @@ forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
 forFrzn fzn fn =
   F.foldrM (\ a () -> fn a) () $ 
     unsafeDupablePerformIO $ -- ASSUME idempotence.
-    mkTraversable fzn
+    unsafeTraversable fzn
 
 
 -- | For any LVar, we have a generic way to freeze it in a `runParThenFreeze`.
@@ -126,6 +130,6 @@ forFrzn fzn fn =
 -- ^^^
 
 -- Note that this doesn't work because it CONFLICTS with the other DeepFrz instances.
--- There's no way that we can prove to GHC that pure data will NEVER be ans instance
+-- There's no way that we can prove to GHC that pure data will NEVER be an instance
 -- of LVarData1, and therefore will never actually cause a conflict with e above
 -- instance.

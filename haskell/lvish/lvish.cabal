@@ -45,7 +45,7 @@ flag quick
 
 flag abstract-par
   description: If enabled, provide instances for generic par operations using the establish type classes.
-  default: True
+  default: False
 
 flag getonce
   description: Ensure that continuations of get run at most once 
