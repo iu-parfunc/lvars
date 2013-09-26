@@ -85,8 +85,8 @@ depart (Child cnt parent) =
     case tellParent of
       No  -> return ()
       Yes -> depart parent
-      Err -> do putStrLn "BUG: departs outnumber arrives"
-                error "BUG: departs outnumber arrives"
+      Err -> do putStrLn "SNZI BUG: departs outnumber arrives"
+                error "SNZI BUG: departs outnumber arrives"
     
 -- Helper function to generate a tree of SNZI values.
 makeTree :: Int -> [SNZI] -> [SNZI] -> IO [SNZI]

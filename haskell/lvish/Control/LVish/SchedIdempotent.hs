@@ -14,8 +14,8 @@
 
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
--- | This (experimental) module generalizes the Par monad to allow
--- arbitrary LVars (lattice variables), not just IVars.
+-- | This is an internal module that provides the core parallel scheduler.
+--   It is NOT for end-users.
 
 module Control.LVish.SchedIdempotent
   (

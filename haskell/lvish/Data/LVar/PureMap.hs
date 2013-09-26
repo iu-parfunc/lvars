@@ -22,7 +22,7 @@ module Data.LVar.PureMap
        (
          -- * Basic operations
          IMap, 
-         newEmptyMap, newMap, -- newFromList,
+         newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, 
 
@@ -101,11 +101,11 @@ newEmptyMap = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef M.empty
 newMap :: M.Map k v -> Par d s (IMap k s v)
 newMap m = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef m
 
--- -- | Create a new 'IMap' drawing initial elements from an existing list.
--- newFromList :: (Ord k, Eq v) =>
---                [(k,v)] -> Par d s (IMap k s v)
--- newFromList ls = newMap (M.fromList ls)
-
+-- | A convenience function that is equivalent to calling `Data.Map.fromList`
+-- followed by `newMap`.
+newFromList :: (Ord k, Eq v) =>
+               [(k,v)] -> Par d s (IMap k s v)
+newFromList = newMap . M.fromList
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final

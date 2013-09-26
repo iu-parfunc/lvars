@@ -118,8 +118,10 @@ setTestThreads nm tst = loop False tst
                        setNumCapabilities n
                        act)
 
--- | Repeate a group of tests while varying the number of OS threads used.  Also,
+-- | Repeat a group of tests while varying the number of OS threads used.  Also,
 -- read configuration info.
+--
+-- WARNING: uses setNumCapabilities.
 stdTestHarness :: (IO Test) -> IO ()
 stdTestHarness genTests = do 
   numAgents <- getNumAgents 

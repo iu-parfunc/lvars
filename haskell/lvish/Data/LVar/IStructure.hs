@@ -71,7 +71,7 @@ newIStructureWithCallback len fn =
   fmap IStructure $
    V.generateM len $ \ix -> do 
       iv <- IV.new
-      IV.addHandler Nothing iv (fn ix)
+      IV.whenFull Nothing iv (fn ix)
       return iv
 
 -- | O(N) rather than O(1), unfortunately.
@@ -91,7 +91,7 @@ forEachHP :: (Eq a) =>
 forEachHP hp (IStructure vec) callb =
   -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
   for_ (0, V.length vec) $ \ ix ->
-    IV.addHandler hp (V.unsafeIndex vec ix) (callb ix)
+    IV.whenFull hp (V.unsafeIndex vec ix) (callb ix)
 
 {-
 

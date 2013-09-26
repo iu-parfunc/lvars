@@ -10,12 +10,13 @@
 
 module Control.LVish.DeepFrz
        (
-         -- Reexporting, but hiding some things:
-         DeepFrz(), FrzType,
-         Frzn, Trvrsbl,
-
+         -- * The functions you'll want to use
          runParThenFreeze,
          runParThenFreezeIO,
+
+         -- * Some supporting types
+         DeepFrz(), FrzType,
+         Frzn, Trvrsbl,
          
        ) where
 
