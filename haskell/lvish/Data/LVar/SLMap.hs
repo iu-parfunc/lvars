@@ -11,6 +11,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
 
+{-|
+
+  This module provides finite maps that only grow.  It is based on a concurrent-skip-list
+  implementation of maps.
+
+  Note that this module provides almost the same interface as "Data.LVar.PureMap",
+  but this module is usually more efficient.  However, it's always good to test muliple
+  data structures if you have a performance-critical use case.
+
+ -}
+
+
 module Data.LVar.SLMap
        (
          IMap,
@@ -62,7 +74,14 @@ type QPar = Par QuasiDet
 -- IMaps implemented vis SkipListMap
 ------------------------------------------------------------------------------
 
--- | We only have one mutable location here, so this is not a scalable implementation.
+-- | The map datatype itself.  Like all other LVars, it has an @s@ parameter (think
+--  `STRef`) in addition to the @a@ parameter that describes the type of elements
+-- in the set.
+--
+-- Performance note: this data structure reduces contention between parallel
+-- computations inserting into the map, but all /blocking/ computations are not as
+-- scalable.  All continuations waiting for not-yet-present elements will currently
+-- share a single queue [2013.09.26].
 data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 
 -- | A frozen version of an IMap is a pure value.  These are effectively equivalent

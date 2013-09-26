@@ -69,9 +69,11 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     -- version of the LVar contents with its original type:
     return (AFoldable ls')
 
--- | /Some/ LVar datatypes are stored in an /internally/ ordered way so
--- that it is then possible to take frozen snapshots and consume them
+-- |/Some LVar datatypes are stored in an /internally/ ordered way so
+-- that it is then possible to take /O(1)/ frozen snapshots and consume them
 -- inexpensively in a deterministic order.
+--
+-- LVars with this additional property provide this class as well as `LVarData1`.
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
   -- completely available and Foldable.  Guaranteed /O(1)/.
@@ -107,13 +109,13 @@ unsafeCoerceLVar = unsafeCoerce#
 unsafeTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
 unsafeTraversable x = return (unsafeCoerceLVar x) 
 
--- | `Trvrsbl` is a stronger property than `Frzn` so it is always ok to "upcast" to
+-- | `Trvrsbl` is a stronger property than `Frzn` so it is always ok to \"upcast\" to
 -- the weaker version.
 castFrzn :: LVarData1 f => f Trvrsbl a -> f Frzn a
 castFrzn x = unsafeCoerceLVar x
 
 -- | LVish Par actions must commute, therefore one safe way to consume a frozen (but
--- unordered) LVar, *even in another runPar session*, is to run a par computation for
+-- unordered) LVar, /even in another runPar session/, is to run a par computation for
 -- each element.
 forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
 forFrzn fzn fn =

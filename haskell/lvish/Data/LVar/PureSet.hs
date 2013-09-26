@@ -61,8 +61,12 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- ISets and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
 
--- | We only have one mutable location here, so this is not a scalable implementation.
--- newtype ISet a = ISet (LVar (IORef (S.Set a))) a
+-- | The set datatype itself.  Like all other LVars, it has an @s@ parameter (like
+-- an `STRef`) in addition to the @a@ parameter that describes the type of elements
+-- in the set.
+--
+-- Performance note: There is only ONE mutable location in this implementation.  Thus
+-- it is not a scalable implementation.
 newtype ISet s a = ISet (LVar s (IORef (S.Set a)) a)
 
 -- | Physical identity, just as with IORefs.

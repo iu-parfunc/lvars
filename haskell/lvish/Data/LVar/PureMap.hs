@@ -12,7 +12,7 @@
 
   This module provides finite maps that only grow.  It is based on the popular `Data.Map`
   balanced-tree representation of maps.  Thus scalability is /not/ good for this
-  implementation.  However, there are some interoperability benefits.  For exmaple,
+  implementation.  However, there are some interoperability benefits.  For example,
   after running a parallel computation with a map result, this module can produce a
   `Data.Map` in /O(1)/ without copying, which may be useful downstream.
 
@@ -62,7 +62,12 @@ type QPar = Par QuasiDet  -- Shorthand.
 -- IMaps implemented on top of LVars:
 ------------------------------------------------------------------------------
 
--- | We only have one mutable location here, so this is not a scalable implementation.
+-- | The map datatype itself.  Like all other LVars, it has an @s@ parameter (think
+--  `STRef`) in addition to the @a@ parameter that describes the type of elements
+-- in the set.
+-- 
+-- Performance note: There is only ONE mutable location in this implementation.  Thus
+-- it is not a scalable implementation.
 newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 
 instance Eq (IMap k s v) where

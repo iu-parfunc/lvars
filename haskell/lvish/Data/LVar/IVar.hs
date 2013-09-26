@@ -9,7 +9,8 @@
 
 {-|
 
-  `IVar`s are the very simplest form of `LVar`s.  They only contain
+  `IVar`s are the very simplest form of `LVar`s.  They are either empty, or full, and
+  contain only at most a single value.
 
   Also see the [@monad-par@ package](http://hackage.haskell.org/package/monad-par)
   and papers on

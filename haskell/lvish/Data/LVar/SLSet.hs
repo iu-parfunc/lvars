@@ -15,6 +15,10 @@
   This module provides sets that only grow.  It is based on a concurrent-skip-list
   implementation of sets.
 
+  Note that this module provides almost the same interface as "Data.LVar.PureSet",
+  but this module is usually more efficient.  However, it's always good to test muliple
+  data structures if you have a performance-critical use case.
+
  -}
 
 module Data.LVar.SLSet
@@ -56,7 +60,14 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- ISets implemented via SkipListMap
 ------------------------------------------------------------------------------
 
-
+-- | The set datatype itself.  Like all other LVars, it has an @s@ parameter (think
+-- `STRef`) in addition to the @a@ parameter that describes the type of elements
+-- in the set.
+--
+-- Performance note: this data structure reduces contention between parallel
+-- computations inserting into the map, but all /blocking/ computations are not as
+-- scalable.  All continuations waiting for not-yet-present elements will currently
+-- share a single queue [2013.09.26].
 data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
 -- TODO: Address the possible inefficiency of carrying Ord dictionaries at runtime.
 
