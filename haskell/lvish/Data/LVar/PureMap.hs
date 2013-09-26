@@ -20,17 +20,21 @@
 
 module Data.LVar.PureMap
        (
+         -- * Basic operations
          IMap, 
-         newEmptyMap, newMap, newFromList,
+         newEmptyMap, newMap, -- newFromList,
          insert, 
-         getKey, waitValue, waitSize, modify, freezeMap,
+         getKey, waitValue, waitSize, modify, 
 
+         -- * Freezing results (Quasi-determinism) 
+         freezeMap,
+         
          -- * Iteration and callbacks
          forEach, forEachHP,
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy, traverseMap, traverseMap_, 
+         copy, traverseMap, traverseMap_,  union,
          
          -- * Alternate versions of derived ops that expose HandlerPools they create.
          traverseMapHP, traverseMapHP_, unionHP
@@ -40,23 +44,19 @@ import           Control.Monad (void)
 import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
 import           Data.Monoid (Monoid(..))
 import           Data.IORef
-import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
-import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 import           Data.LVar.Generic
-
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
-                                                freezeLVAfter, liftIO, addHandler)
+import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
-type QPar = Par QuasiDet 
+type QPar = Par QuasiDet  -- Shorthand.
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -68,12 +68,11 @@ newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
--- Need LVarData2:
-
 instance LVarData1 (IMap k) where
   freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)  
-  sortFreeze is = AFoldable <$> freezeMap is 
-  -- addHandler
+  sortFreeze is = AFoldable <$> freezeMap is
+  -- Unlike the Map-specific forEach variants, this takes only values, not keys.
+  addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
 
 instance OrderedLVarData1 (IMap k) where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
@@ -97,10 +96,10 @@ newEmptyMap = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef M.empty
 newMap :: M.Map k v -> Par d s (IMap k s v)
 newMap m = WrapPar$ fmap (IMap . WrapLVar) $ newLV$ newIORef m
 
--- | Create a new 'IMap' drawing initial elements from an existing list.
-newFromList :: (Ord k, Eq v) =>
-               [(k,v)] -> Par d s (IMap k s v)
-newFromList ls = newMap (M.fromList ls)
+-- -- | Create a new 'IMap' drawing initial elements from an existing list.
+-- newFromList :: (Ord k, Eq v) =>
+--                [(k,v)] -> Par d s (IMap k s v)
+-- newFromList ls = newMap (M.fromList ls)
 
 
 -- | Register a per-element callback, then run an action in this context, and freeze
@@ -149,7 +148,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
 forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing 
 
--- | Put a single entry into the map.  (WHNF) Strict in the key and value.
+-- | Put a single entry into the map.  Strict (WHNF) in the key and value.
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
@@ -270,6 +269,14 @@ traverseMap_ :: (Ord k, Eq b) =>
                 (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
 traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
+-- | Return a new map which will (ultimately) contain everything in either input
+-- map.  Conflicting entries will result in a multiple put exception.
+-- Optionally ties the handlers to a pool.
+union :: (Ord k, Eq a) => IMap k s a -> IMap k s a -> Par d s (IMap k s a)
+union = unionHP Nothing
+
+-- TODO: Intersection
+
 --------------------------------------------------------------------------------
 -- Alternate versions of functions that EXPOSE the HandlerPools
 --------------------------------------------------------------------------------
@@ -297,9 +304,8 @@ traverseMapHP_ mh fn set os = do
     x' <- fn k x
     insert k x' os
 
--- | Return a new map which will (ultimately) contain everything in either input
--- map.  Conflicting entries will result in a multiple put exception.
--- Optionally ties the handlers to a pool.
+-- | Variant that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
 unionHP :: (Ord k, Eq a) => Maybe HandlerPool ->
            IMap k s a -> IMap k s a -> Par d s (IMap k s a)
 unionHP mh m1 m2 = do
@@ -316,6 +322,8 @@ unsafeName x = unsafePerformIO $ do
 
 --------------------------------------------------------------------------------
 -- Version of traverseWithKey_ from Shachaf Ben-Kiki
+-- (See thread on Haskell-cafe.)
+-- Avoids O(N) allocation when traversing for side-effect.
 
 newtype Traverse_ f = Traverse_ { runTraverse_ :: f () }
 instance Applicative f => Monoid (Traverse_ f) where
