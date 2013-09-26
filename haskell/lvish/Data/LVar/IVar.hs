@@ -6,6 +6,20 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-} 
+
+{-|
+
+  `IVar`s are the very simplest form of `LVar`s.  They only contain
+
+  Also see the [@monad-par@ package](http://hackage.haskell.org/package/monad-par)
+  and papers on
+     [monad-par](http://www.cs.indiana.edu/~rrnewton/papers/haskell2011_monad-par.pdf)
+  and
+     [meta-par](www.cs.indiana.edu/~rrnewton/papers/2012-ICFP_meta-par.pdf‎)
+  for more explanation of using `IVar`s in Haskell.
+
+ -}
+
 module Data.LVar.IVar
        (
          IVar,

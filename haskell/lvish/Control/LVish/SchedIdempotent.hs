@@ -274,7 +274,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   -- tradeoff: we fastpath the case where the LVar is already beyond the
   -- threshhold by polling *before* enrolling the callback.  The price is
   -- that, if we are not currently above the threshhold, we will have to poll
-  -- *again* after enrolling the callback.  This race may also result in the
+  -- /again/ after enrolling the callback.  This race may also result in the
   -- continuation being executed twice, which is permitted by idempotence.
 
   curStatus <- readIORef status
@@ -291,7 +291,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
         Just b -> exec (k b) q -- already past the threshold; invoke the
                                -- continuation immediately        
 
-        Nothing -> do          -- *transiently* not past the threshhold; block        
+        Nothing -> do          -- /transiently/ not past the threshhold; block        
           
 #if GET_ONCE
           execFlag <- newIORef False

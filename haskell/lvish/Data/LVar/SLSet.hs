@@ -41,7 +41,6 @@ module Data.LVar.SLSet
 
 import qualified Data.Foldable as F
 import           Data.Concurrent.SkipListMap as SLM
-import           Data.Maybe
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic
@@ -49,8 +48,7 @@ import           Control.Monad
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                freezeLVAfter, liftIO, addHandler)
+import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
@@ -242,29 +240,11 @@ traverseSet_ f s o = traverseSetHP_ Nothing f s o
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
 union :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
-union s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (`putInSet` os)
-  forEach s2 (`putInSet` os)
-  return os
+union = unionHP Nothing
 
 -- | Build a new set which will contain the intersection of the two input sets.
 intersection :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
--- Can we do intersection with only the public interface?  It should be monotonic.
---   AJT: You could do it using cartesian product...
--- Well, for now we cheat and use liftIO:
-intersection s1 s2 = do
-  os <- newEmptySet
-  forEach s1 (fn os s2)
-  forEach s2 (fn os s1)
-  return os
- where  
-  fn outSet other@(ISet lv) elm = do
-    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
-    peek <- LI.liftIO $ SLM.find (state lv) elm
-    case peek of
-      Just _  -> putInSet elm outSet
-      Nothing -> return ()
+intersection = intersectionHP Nothing
 
 -- | Cartesian product of two sets.
 cartesianProd :: (Ord a, Ord b) => ISet s a -> ISet s b -> Par d s (ISet s (a,b))
@@ -277,8 +257,6 @@ cartesianProds ls = cartesianProdsHP Nothing ls
 --------------------------------------------------------------------------------
 -- Alternate versions of functions that EXPOSE the HandlerPools
 --------------------------------------------------------------------------------
-
--- TODO: unionHP, intersectionHP...
 
 -- | Variant that optionally ties the handlers to a pool.
 traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
@@ -295,6 +273,34 @@ traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
     x' <- fn x
     putInSet x' os
+
+-- | Variant that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
+unionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+unionHP mh s1 s2 = do
+  os <- newEmptySet
+  forEachHP mh s1 (`putInSet` os)
+  forEachHP mh s2 (`putInSet` os)
+  return os
+
+-- | Variant that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
+intersectionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+-- Can we do intersection with only the public interface?  It should be monotonic.
+--   AJT: You could do it using cartesian product...
+-- Well, for now we cheat and use liftIO:
+intersectionHP mh s1 s2 = do
+  os <- newEmptySet
+  forEachHP mh s1 (fn os s2)
+  forEachHP mh s2 (fn os s1)
+  return os
+ where  
+  fn outSet other@(ISet lv) elm = do
+    -- At this point 'elm' has ALREADY been added to "us", we check "them":    
+    peek <- LI.liftIO $ SLM.find (state lv) elm
+    case peek of
+      Just _  -> putInSet elm outSet
+      Nothing -> return ()
 
 -- | Variant of 'cartesianProd' that optionally ties the handlers to a pool.
 cartesianProdHP :: (Ord a, Ord b) => Maybe HandlerPool -> ISet s a -> ISet s b ->

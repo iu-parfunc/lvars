@@ -98,10 +98,10 @@ data PutResult v = Added v | Found v
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
 putIfAbsent :: (Ord k, MonadIO m, MonadToss m) => 
-               SLMap k v ->     -- ^ The map
-               k ->             -- ^ The key to lookup/insert
-               m v ->           -- ^ A computation of the value to insert
-               m (PutResult v)
+               SLMap k v         -- ^ The map
+               -> k              -- ^ The key to lookup/insert
+               -> m v            -- ^ A computation of the value to insert
+               -> m (PutResult v)
 putIfAbsent (SLMap slm _) k vc = 
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
 
@@ -110,25 +110,24 @@ putIfAbsent (SLMap slm _) k vc =
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
-putIfAbsentToss :: (Ord k, MonadIO m) => 
-                   SLMap k v ->     -- ^ The map
-                   k ->             -- ^ The key to lookup/insert
-                   m v ->           -- ^ A computation of the value to insert
-                   m Bool ->        -- ^ An explicit, thread-local coin to toss
-                   m (PutResult v)
+putIfAbsentToss :: (Ord k, MonadIO m) =>  SLMap k v -- ^ The map
+                -> k             -- ^ The key to lookup/insert
+                -> m v           -- ^ A computation of the value to insert
+                -> m Bool        -- ^ An explicit, thread-local coin to toss
+                -> m (PutResult v)
 putIfAbsentToss (SLMap slm _) k vc coin = 
   putIfAbsent_ slm Nothing k vc coin $ \_ _ -> return () 
                                                
 -- Helper for putIfAbsent
 putIfAbsent_ :: (Ord k, MonadIO m) => 
-                SLMap_ k v t -> -- ^ The map    
-                Maybe t ->      -- ^ A shortcut into this skiplist level
-                k ->            -- ^ The key to lookup/insert
-                m v ->          -- ^ A computation of the value to insert
-                m Bool ->       -- ^ A (thread-local) coin tosser
-                (t -> v -> m ()) ->    -- A thunk for inserting into the higher
-                                       -- levels of the skiplist
-                m (PutResult v)
+                SLMap_ k v t    -- ^ The map    
+                -> Maybe t      -- ^ A shortcut into this skiplist level
+                -> k             -- ^ The key to lookup/insert
+                -> m v           -- ^ A computation of the value to insert
+                -> m Bool        -- ^ A (thread-local) coin tosser
+                -> (t -> v -> m ())  -- ^ A thunk for inserting into the higher
+                                     -- levels of the skiplist
+                -> m (PutResult v)
                 
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap

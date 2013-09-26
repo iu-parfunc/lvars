@@ -321,6 +321,9 @@ unsafeName x = unsafePerformIO $ do
    return (hashStableName sn)
 
 --------------------------------------------------------------------------------
+-- Helper code.
+--------------------------------------------------------------------------------
+   
 -- Version of traverseWithKey_ from Shachaf Ben-Kiki
 -- (See thread on Haskell-cafe.)
 -- Avoids O(N) allocation when traversing for side-effect.

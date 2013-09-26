@@ -5,7 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | A generic interface that abstracting certain operations that work on all LVars.
+-- | A generic interface providing operations that work on ALL LVars.
 
 module Data.LVar.Generic
        (
