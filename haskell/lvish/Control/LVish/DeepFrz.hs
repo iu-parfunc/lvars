@@ -5,8 +5,27 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DataKinds #-}
 
--- | Provides a way to return arbitrarily complex data-structures containing LVars
--- from `Par` computations.
+{-|
+
+Provides a way to return arbitrarily complex data-structures containing LVars
+from `Par` computations.
+
+The important thing to know is that to use `runParThenFreeze` you must make sure that
+all types you return from the parallel computation have `DeepFrz` instances.  This
+means if you introduce custom (non-LVar) datatypes, you will need to include a bit of
+boilerplate to give them `DeepFrz` instances.  Here is a complete example:
+
+> {-# LANGUAGE TypeFamilies #-}
+> import Control.LVish.DeepFrz
+> 
+> data MyData = MyData Int deriving Show
+> 
+> instance DeepFrz MyData where
+>   type FrzType MyData = MyData
+> 
+> main = print (runParThenFreeze (return (MyData 3)))
+
+-}
 
 module Control.LVish.DeepFrz
        (

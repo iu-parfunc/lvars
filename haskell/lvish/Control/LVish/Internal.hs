@@ -7,7 +7,7 @@
 
 {-|
 
-This module is note @SafeHaskell@, as an end-user you shouldn't ever need to import it.
+This module is note @SafeHaskell@; as an end-user, you shouldn't ever need to import it.
 
 It is exposed only because it is necessary for writing /new/ LVars that live in their
 own, separate packages.
