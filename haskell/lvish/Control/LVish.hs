@@ -16,8 +16,8 @@
   The @lvish@ package provides a parallel programming model based on monotonically
   growing data structures.
 
-  This module provides the core scheduler and basic control flow operations.  Note
-  that to do anythin guseful you will need to import one of the data structure modules
+  This module provides the core scheduler and basic control flow operations.  
+  But to do anything useful you will need to import one of the data structure modules
   (@Data.LVar.*@).
 
  -}
@@ -25,24 +25,32 @@
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
-  (
-    -- * Basic types and accessors:
-    LVar(), state, L.HandlerPool(), Par(), 
-    Determinism(..), liftQ,
+  (    
+    -- * Basic control flow
+    fork,
+    yield, 
+    runPar, runParIO,
+--    runParIO_, runParLogged,
+--    quiesceAll,
+
+    -- * Par computations and their parameters
+    Par(), 
+    Determinism(..), liftQD,
     
-    -- * Safe, deterministic operations:
-    yield, newPool, fork, forkHP,
-    runPar, runParIO, runParIO_, runParLogged,
-    withNewPool, withNewPool_,
-    
-    -- * Quasi-deterministic operations:
-    quiesce, quiesceAll,
-        
-    -- * Generally useful combinators
+    -- * Various loop constructs
     parForL, parForSimple, parForTree, parForTiled, for_,
+
+    -- * Synchronizing with handler pools
+    L.HandlerPool(),    
+    newPool, 
+    withNewPool, withNewPool_, 
+    quiesce, 
     
-    -- * Debug facilities
-    logStrLn
+    forkHP,
+    
+    -- * Debug facilities and internal bits
+    logStrLn,
+    LVar()
   ) where
 
 import qualified Data.Foldable    as F 
@@ -56,7 +64,7 @@ import           Prelude hiding (rem)
 
 --------------------------------------------------------------------------------
 -- Inline *everything*, because these are just wrappers:
-{-# INLINE liftQ #-}
+{-# INLINE liftQD #-}
 {-# INLINE yield #-}
 {-# INLINE newPool #-}
 {-# INLINE runParIO #-}
@@ -67,36 +75,57 @@ import           Prelude hiding (rem)
 --------------------------------------------------------------------------------
 
 -- | It is always safe to lift a deterministic computation to a quasi-determinism one.
-liftQ :: Par Det s a -> Par QuasiDet s a
-liftQ (WrapPar p) = (WrapPar p)
+liftQD :: Par Det s a -> Par QuasiDet s a
+liftQD (WrapPar p) = (WrapPar p)
 
+-- | Cooperatively schedule other threads
 yield :: Par d s ()
 yield = WrapPar L.yield
 
+-- | Block until a handler pool is quiescent, i.e. all associated parallel
+-- computations have completed.
 quiesce :: L.HandlerPool -> Par d s ()
 quiesce = WrapPar . L.quiesce
 
--- | A global barrier.
+-- | A global barrier.  Wait for all unblocked, active threads of work in the system
+-- to complete, and then proceed after that point.
 quiesceAll :: Par d s ()
 quiesceAll = WrapPar L.quiesceAll
 
+-- | Execute a computation in parallel.
 fork :: Par d s () -> Par d s ()
 fork (WrapPar f) = WrapPar$ L.fork f
 
+-- | A version of `fork` that also allows the forked computation to be tracked in a
+-- `HandlerPool`, that enables the programmer to synchronize on the completion of the
+-- child computation.  But be careful; this does not automatically wait for
+-- all downstream forked computations (transitively).
 forkHP :: Maybe L.HandlerPool -> Par d s () -> Par d s ()
 forkHP mh (WrapPar f) = WrapPar$ L.forkHP mh f
 
+-- | Create a new pool that can be used to synchronize on the completion of all
+-- parallel computations associated with the pool.
 newPool :: Par d s L.HandlerPool
 newPool = WrapPar L.newPool
 
+-- | Execute a Par computation in the context of a fresh handler pool
 withNewPool :: (L.HandlerPool -> Par d s a) -> Par d s (a, L.HandlerPool)
 withNewPool f = WrapPar $ L.withNewPool $ unWrapPar . f
 
+-- | Execute a Par computation in the context of a fresh handler pool, while
+-- ignoring the result of the computation
 withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
--- | If the input computation is quasi-deterministic, this may throw
--- 'NonDeterminismExn' on the thread that calls it.
+-- | If the input computation is quasi-deterministic (`QuasiDet`), then this may
+-- throw 'NonDeterminismExn' on the thread that calls it, but if it returns without
+-- exception then it always returns the same answer.
+--
+-- If the input computation is deterministic (`Det`), then @runParIO@ will return the
+-- same result as `runPar`.  However, it is still conceivably useful for avoiding an
+-- extra `unsafePerformIO` required inside the implementation of `runPar`.
+-- 
+-- In the future, full non-determinism may be allowed as a third setting.
 runParIO :: (forall s . Par d s a) -> IO a
 runParIO (WrapPar p) = L.runParIO p 
 
@@ -109,10 +138,17 @@ runParIO_ (WrapPar p) = L.runParIO p >> return ()
 runParLogged :: (forall s . Par d s a) -> IO ([String],a)
 runParLogged (WrapPar p) = L.runParLogged p 
 
+-- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargable
+-- effect.  This function will create new worker threads and do the work in parallel,
+-- returning the final result.
+--
+-- (For now there is no sharing of workers with repeated invocations; so
+-- keep in mind that @runPar@ is an expensive operation. [2013.09.27])
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 
 
-
+-- | This is only used when compiled in debugging mode.  It atomically adds a string
+-- onto an in-memory log.
 logStrLn :: String -> Par d s ()
 #ifdef DEBUG_LVAR
 logStrLn = WrapPar . L.logStrLn

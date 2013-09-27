@@ -174,12 +174,12 @@ data LVar a d = LVar {
 type LVarID = IORef ()
 newLVID = newIORef ()
 
--- a global ID that is *not* the name of any LVar.  Makes it possible to
+-- | a global ID that is *not* the name of any LVar.  Makes it possible to
 -- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation.
 noName :: LVarID
 noName = unsafePerformIO $ newLVID
 
--- The frozen bit of an LVar is tied together with the bag of waiting listeners,
+-- | The frozen bit of an LVar is tied together with the bag of waiting listeners,
 -- which allows the entire bag to become garbage immediately after freezing.
 -- (Note, however, that outstanding @put@s that occurred just before freezing
 -- may still reference the bag, which is necessary to ensure that all listeners
@@ -188,7 +188,7 @@ data Status d
   = Frozen                       -- further changes to the state are forbidden
   | Active (B.Bag (Listener d))  -- bag of blocked threshold reads and handlers
 
--- A listener for an LVar is informed of each change to the LVar's lattice value
+-- | A listener for an LVar is informed of each change to the LVar's lattice value
 -- (represented as a delta) and the event of the LVar freezing.  The listener is
 -- given access to a bag token, allowing it to remove itself from the bag of
 -- listeners, after unblocking a threshold read, for example.  It is also given
@@ -199,6 +199,9 @@ data Listener d = Listener {
   onFreeze ::      B.Token (Listener d) -> SchedState -> IO ()
 }
 
+-- | A HandlerPool contains a way to count outstanding parallel computations that
+-- are affiliated with the pool.  It detects the condition where all such threads
+-- have completeed.
 data HandlerPool = HandlerPool {
   numHandlers      :: C.Counter,   -- How many handler callbacks are currently
                                    -- running?
@@ -381,15 +384,15 @@ newPool = mkPar $ \k q -> do
   hpMsg " [dbg-lvish] Created new pool" hp
   exec (k hp) q
   
--- | Execute a Par computation in the context of a fresh handler pool
+-- | Convenience function.  Execute a Par computation in the context of a fresh handler pool
 withNewPool :: (HandlerPool -> Par a) -> Par (a, HandlerPool)
 withNewPool f = do
   hp <- newPool
   a  <- f hp
   return (a, hp)
   
--- | Execute a Par computation in the context of a fresh handler pool, while
--- ignoring the result of the computation
+-- | Convenience function.  Execute a Par computation in the context of a fresh
+-- handler pool, while ignoring the result of the computation
 withNewPool_ :: (HandlerPool -> Par ()) -> Par HandlerPool
 withNewPool_ f = do
   hp <- newPool

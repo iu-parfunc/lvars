@@ -12,22 +12,24 @@
   `IVar`s are the very simplest form of `LVar`s.  They are either empty, or full, and
   contain only at most a single value.
 
-  Also see the [@monad-par@ package](http://hackage.haskell.org/package/monad-par)
-  and papers on
-     [monad-par](http://www.cs.indiana.edu/~rrnewton/papers/haskell2011_monad-par.pdf)
-  and
-     [meta-par](www.cs.indiana.edu/~rrnewton/papers/2012-ICFP_meta-par.pdf‎)
-  for more explanation of using `IVar`s in Haskell.
+  For more explanation of using IVars in Haskell, see the @monad-par@ and
+  @meta-par@ packages and papers:
+
+    * <http://hackage.haskell.org/package/monad-par>
+
+    * <http://www.cs.indiana.edu/~rrnewton/papers/haskell2011_monad-par.pdf>
+
+    * <http://www.cs.indiana.edu/~rrnewton/papers/2012-ICFP_meta-par.pdf>
 
  -}
 
 module Data.LVar.IVar
        (
          IVar,
-         -- * Basic IVar operations, same as `monad-par`
+         -- * Basic IVar operations, same as in monad-par
          new, get, put, put_,
          
-         -- * Derived IVar operations, same as `monad-par`
+         -- * Derived IVar operations, same as in monad-par
         spawn, spawn_, spawnP,
 
         -- * LVar style operations

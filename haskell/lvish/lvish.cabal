@@ -19,9 +19,15 @@ version:             0.2.0.0
 synopsis:  LVar data structures and infrastructure to build more.
 
 description: 
-
   .
-  As a starting point, look at "Control.LVish".
+  A programming model based on monotonically growing concurrent data structures.
+  .
+  As a starting point, look at "Control.LVish", as well as one of these papers:
+  .
+    * <http://www.cs.indiana.edu/~rrnewton/papers/2013-FHPC_LVars.pdf>
+  .
+    * <http://www.cs.indiana.edu/~rrnewton/papers/2013_07_LVish_quasiDet_working_draft.pdf>
+
 
 license:             BSD3
 license-file:        LICENSE

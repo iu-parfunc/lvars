@@ -43,17 +43,17 @@ import           Data.List (sort)
 {-# INLINE unWrapPar #-}
 --------------------------------------------------------------------------------
 
--- | This datatype is promoted to type-level and used to indicate whether a `Par`
+-- | This datatype is promoted to type-level (@DataKinds@ extension) and used to indicate whether a `Par`
 -- computation is guaranteed-deterministic, or only quasi-deterministic (i.e. might throw NonDeterminismExn).
 data Determinism = Det | QuasiDet
   deriving Show
 
--- | The type of parallel computations.  They may or may not be deterministic based
--- on the type arguments to `Par`.
+-- | The type of parallel computations.  A computation @Par d s a@ may or may not be
+-- deterministic based on the setting of the `d` parameter (of kind `Determinism`).
+-- The `s` parameter is for preventing the escape of @LVar@s from @Par@ computations
+-- (just like the @ST@ monad).  
 -- 
--- Implementation note: This is a wrapper around the internal `Par` type, only with more type parameters.  Here
--- we @DataKinds@ promotion to constrain the phantom type argument to be what we
--- want.
+-- Implementation note: This is a wrapper around the internal `Par` type, only with more type parameters.  
 newtype Par :: Determinism -> * -> * -> * where
   WrapPar :: L.Par a -> Par d s a
   deriving (Monad, Functor, Applicative)
@@ -87,8 +87,8 @@ instance MonadIO (Par d s) where
 instance MonadToss (Par d s) where
   toss = WrapPar L.toss
 
--- My own forM for numeric ranges (not requiring deforestation optimizations).
--- Inclusive start, exclusive end.
+-- | A simple for loop for numeric ranges (not requiring deforestation
+-- optimizations like `forM`).  Inclusive start, exclusive end.
 {-# INLINE for_ #-}
 for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
 for_ (start, end) _fn | start > end = error "for_: start is greater than end"
