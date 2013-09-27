@@ -174,13 +174,9 @@ tryGetAny bag = do
                           writeIORef i 0
                           iLoop
                           else do
-                            fa <- readIORef (foundAdd localData)
-                            if fa then do
-                              old <- readIORef i
-                              writeIORef i (old + 1)
-                              iLoop
-                            else
-                              iLoop
+                            ifM (readIORef (foundAdd localData))
+                                (do { incr i; iLoop })
+                                iLoop
           let rLoop = do
                 r <- readIORef round
                 let newR = r + 1
@@ -270,6 +266,18 @@ tryStealBlock bag id round = do
       
 nextStealBlock :: Maybe (Block a) -> IO (Block a)
 nextStealBlock = undefined
+
+incr :: Num a => IORef a -> IO ()
+-- incr i = do { old <- readIORef i;
+--               let old' = old + 1
+--               evaluate old' 
+--               writeIORef i old' }
+incr i = do { old <- readIORef i; writeIORef i $! old + 1 }
+
+-- | Convenience function: a monadic conditional.
+ifM :: IO Bool -> IO a -> IO a -> IO a
+ifM t a b = do x <- t
+               if x then a else b
 
 notifyStart :: Maybe (Block a) -> Int -> IO ()
 notifyStart = undefined
