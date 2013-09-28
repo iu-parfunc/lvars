@@ -129,7 +129,6 @@ newEmptySet_ n = fmap (ISet . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 newSet :: Ord a => S.Set a -> Par d s (ISet s a)
 newSet set = 
  fmap (ISet . WrapLVar) $ WrapPar $ newLV $ do
-  -- (ISet (WrapLVar lv)) 
   slm <- SLM.newSLMap defaultLevels
   F.foldlM (\ () elm -> do
               SLM.Added _ <- SLM.putIfAbsent slm elm (return ())

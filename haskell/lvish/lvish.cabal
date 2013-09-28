@@ -74,7 +74,7 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
 -- TEMP: DISABLED UNTIL THEY ARE PORTED TO THE NEW DEEPFRZ: [2013.09.08]
---                    Data.LVar.SLMap
+                    Data.LVar.SLMap
 --                    Data.LVar.NatArray
 --                    Data.LVar.IStructure                    
 --                    Data.LVar.MaxCounter
@@ -87,6 +87,7 @@ library
                     
   -- Modules included in this library but not exported.
   other-modules:
+                    Data.UtilInternal
                     Data.LVar.Pair 
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter

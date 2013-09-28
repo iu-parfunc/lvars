@@ -45,26 +45,21 @@ module Data.LVar.SLMap
        ) where
 
 import           Data.Concurrent.SkipListMap as SLM
-import           Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
-import qualified Data.Traversable as T
 import qualified Data.Foldable    as F
-import           Data.LVar.Generic
-
+import           Data.UtilInternal (traverseWithKey_)
+import           Data.LVar.Generic 
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV,
-                                                freezeLVAfter, liftIO, addHandler)
+import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.Random (randomIO)
-import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
-import           System.Mem.StableName (makeStableName, hashStableName)
-
-import           GHC.Prim (unsafeCoerce#)
+import           System.IO.Unsafe  (unsafeDupablePerformIO)
+import           GHC.Prim          (unsafeCoerce#)
 import           Prelude hiding (lookup)
 
 type QPar = Par QuasiDet -- Shorthand used below.
@@ -90,20 +85,28 @@ data Map k v = Ord k => FrzMap !(SLM.SLMap k v)
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
-instance LVarData1 ISet where
-  freeze orig@(ISet (WrapLVar lv)) =
+instance LVarData1 (IMap k) where
+  freeze orig@(IMap (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
 
-  -- | Get the exact contents of the set.  Using this may cause your
+  -- | Get the exact contents of the map.  Using this may cause your
   -- program to exhibit a limited form of nondeterminism: it will never
   -- return the wrong answer, but it may include synchronization bugs
   -- that can (nondeterministically) cause exceptions.
-  sortFreeze (ISet (WrapLVar lv)) = WrapPar $ do
-    -- freezeSet :: Ord a => ISet s a -> QPar s (ISet Frzn a)    
+  sortFreeze (IMap (WrapLVar lv)) = WrapPar $ do
     freezeLV lv
-    set <- L.liftIO $ SLM.foldlWithKey
-             (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
-    return (AFoldable set)
+    ls <- L.liftIO $ SLM.foldlWithKey
+             (\acc _key elm -> return $! elm:acc) [] (L.state lv)
+    return (AFoldable ls)
+
+  -- | This generic version has the disadvantage that it does not observe the KEY,
+  -- only the value.
+  addHandler mh (IMap (WrapLVar lv)) callb = WrapPar $ 
+    L.addHandler mh lv globalCB (\(_k,v) -> return$ Just$ unWrapPar$ callb v)
+    where
+      globalCB slm = 
+        return $ Just $ unWrapPar $
+          SLM.foldlWithKey (\() _k v -> forkHP mh $ callb v) () slm
 
 
 -- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
@@ -128,8 +131,14 @@ newEmptyMap_ :: Ord k => Int -> Par d s (IMap k s v)
 newEmptyMap_ n = fmap (IMap . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new map populated with initial elements.
-newMap :: M.Map k v -> Par d s (IMap k s v)
-newMap m = error "TODO - newMap"
+newMap :: Ord k => M.Map k v -> Par d s (IMap k s v)
+newMap mp =
+ fmap (IMap . WrapLVar) $ WrapPar $ newLV $ do
+  slm <- SLM.newSLMap defaultLevels  
+  traverseWithKey_ (\ k v -> do Added _ <- SLM.putIfAbsent slm k  (return v)
+                                return ()
+                   ) mp
+  return slm
 
 -- | Create a new 'IMap' drawing initial elements from an existing list.
 newFromList :: (Ord k, Eq v) =>
@@ -160,7 +169,7 @@ withCallbacksThenFreeze (IMap lv) callback action = do
           SLM.foldlWithKey (\() k v -> forkHP (Just hp) $ callback k v) () slm
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
-  WrapPar $ addHandler (Just hp) (unWrapLVar lv) initCB deltCB
+  WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
   
   -- We additionally have to quiesce here because we fork the inital set of
   -- callbacks on their own threads:
@@ -174,7 +183,7 @@ forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> (k -> v -> Par d s ())      -- ^ callback
           -> Par d s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
-    addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
+    L.addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
     globalCB slm = 
       return $ Just $ unWrapPar $
@@ -199,9 +208,14 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a "bottom" element if there is no existing entry for the key.
+--
 modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
-          IMap key s (f s a) -> key -> (f s a -> Par d s b) -> Par d s b
-modify (IMap (WrapLVar lv)) key fn = do
+          IMap key s (f s a)
+          -> key                  -- ^ The key to lookup.
+          -> (Par d s (f s a))    -- ^ Create a new "bottom" element whenever an entry is not present.
+          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand-side of the keyed entry.
+          -> Par d s b
+modify (IMap (WrapLVar lv)) key newBottom fn = do
     act <- WrapPar $ putLV_ lv putter
     act
   where putter slm = do
@@ -252,10 +266,6 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   -- For the final deepFreeze at the end of a runpar we can actually skip
   -- the freezeLV part....  
   return (unsafeCoerce# x)
-
-instance DeepFrz a => DeepFrz (IMap k s a) where
-  type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
-  frz = unsafeCoerce#
 
 -- freezeMap :: Ord k => IMap k s v -> QPar s (Map k v)
 -- freezeMap (IMap (WrapLVar lv)) = WrapPar $ do
@@ -364,9 +374,14 @@ instance (Ord k, Ord a) => Ord (Map k a) where
   compare m1 m2 = compare (toStdMap m1) (toStdMap m2)
 
 -- Note: making these strict for now:
-instance F.Foldable (Map k) where
-  foldr fn init (FrzMap slm) = unsafeDupablePerformIO$
-    SLM.foldlWithKey (\ acc _ v -> return $! fn v acc) init slm
+instance F.Foldable (IMap k Trvrsbl) where
+  foldr fn zer (IMap (WrapLVar lv)) =
+    unsafeDupablePerformIO $
+    SLM.foldlWithKey (\ a _k v -> return (fn v a))
+                     zer (L.state lv)
+
+  -- foldr fn init (FrzMap slm) = unsafeDupablePerformIO$
+  --   SLM.foldlWithKey (\ acc _ v -> return $! fn v acc) init slm
   
 -- Traversals
 ----------------------------------------
