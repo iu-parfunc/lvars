@@ -27,7 +27,8 @@ module Data.LVar.SLSet
          ISet, 
          newEmptySet, newSet, newFromList,
          putInSet, waitElem, waitSize, 
-
+         member,
+         
          -- * Iteration and callbacks
          forEach, forEachHP,
 
@@ -71,17 +72,13 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
 -- TODO: Address the possible inefficiency of carrying Ord dictionaries at runtime.
 
-unISet (ISet lv) = lv
-
 -- | Physical identity, just as with IORefs.
 instance Eq (ISet s v) where
   ISet slm1 == ISet slm2 = state slm1 == state slm2
   
--- In order to make freeze an O(1) operation, ideally the Snapshot type function
--- would basically just be a cast from the mutable to the immutable form of the data
--- structure.
-
 instance LVarData1 ISet where
+  -- In order to make freeze an O(1) operation, freeze is just a cast from the
+  -- mutable to the immutable form of the data structure.
   freeze orig@(ISet (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
 
@@ -96,13 +93,18 @@ instance LVarData1 ISet where
              (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
     return (AFoldable set)
 
+  addHandler = forEachHP
+
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn a 
   frz = unsafeCoerceLVar
 
--- TODO: add member
+-- | Test whether an element is in a frozen image of a set.
 member :: a -> ISet Frzn a -> Bool
-member = error "FINISHME: SLSet member"
+member elm (ISet (WrapLVar lv)) =
+  case unsafeDupablePerformIO (SLM.find (L.state lv) elm) of
+    Just () -> True
+    Nothing -> False
 
 instance F.Foldable (ISet Trvrsbl) where
   foldr fn zer (ISet (WrapLVar lv)) =
@@ -124,10 +126,18 @@ newEmptySet_ :: Ord a => Int -> Par d s (ISet s a)
 newEmptySet_ n = fmap (ISet . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new set populated with initial elements.
-newSet :: S.Set a -> Par d s (ISet s a)
-newSet s = error "TODO"
+newSet :: Ord a => S.Set a -> Par d s (ISet s a)
+newSet set = 
+ fmap (ISet . WrapLVar) $ WrapPar $ newLV $ do
+  -- (ISet (WrapLVar lv)) 
+  slm <- SLM.newSLMap defaultLevels
+  F.foldlM (\ () elm -> do
+              SLM.Added _ <- SLM.putIfAbsent slm elm (return ())
+              return ()
+           ) () set
+  return slm
 
--- | Create a new 'ISet' drawing initial elements from an existing list.
+-- | A simple convenience function.   Create a new 'ISet' drawing initial elements from an existing list.
 newFromList :: Ord a => [a] -> Par d s (ISet s a)
 newFromList ls = newFromList_ ls defaultLevels
 
@@ -136,7 +146,8 @@ newFromList ls = newFromList_ ls defaultLevels
 newFromList_ :: Ord a => [a] -> Int -> Par d s (ISet s a)
 newFromList_ ls n = do  
   s@(ISet lv) <- newEmptySet_ n
-  forM_ ls $ \x -> LI.liftIO $ SLM.putIfAbsent (state lv) x $ return ()
+  LI.liftIO $ forM_ ls $ \x ->
+    SLM.putIfAbsent (state lv) x $ return ()
   return s
 
 -- (Todo: in production you might want even more ... like going from a Vector)

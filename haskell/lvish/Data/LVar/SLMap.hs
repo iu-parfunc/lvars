@@ -64,11 +64,10 @@ import           System.Random (randomIO)
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
-import GHC.Prim (unsafeCoerce#)
+import           GHC.Prim (unsafeCoerce#)
+import           Prelude hiding (lookup)
 
-import Prelude hiding (lookup)
-
-type QPar = Par QuasiDet 
+type QPar = Par QuasiDet -- Shorthand used below.
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -91,25 +90,26 @@ data Map k v = Ord k => FrzMap !(SLM.SLMap k v)
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
+instance LVarData1 ISet where
+  freeze orig@(ISet (WrapLVar lv)) =
+    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
 
--- TODO: New LVarData1 instance:
+  -- | Get the exact contents of the set.  Using this may cause your
+  -- program to exhibit a limited form of nondeterminism: it will never
+  -- return the wrong answer, but it may include synchronization bugs
+  -- that can (nondeterministically) cause exceptions.
+  sortFreeze (ISet (WrapLVar lv)) = WrapPar $ do
+    -- freezeSet :: Ord a => ISet s a -> QPar s (ISet Frzn a)    
+    freezeLV lv
+    set <- L.liftIO $ SLM.foldlWithKey
+             (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
+    return (AFoldable set)
 
-{-
--- Old one:
-instance LVarData1 (IMap k) where
-  newtype Snapshot (IMap k) a = IMapSnap (Map k a)
-      deriving (Show,Ord,Eq)
-  freeze m@(IMap v) = fmap IMapSnap $ freezeMap m
-  
-  -- newBottom = newEmptyMap  -- Ergh, this has problems... let's just remove it from the API.
-  traverseSnap fn (IMapSnap mp@(FrzMap _)) = 
-    fmap IMapSnap $ traverseFrzn fn mp
--}
 
 -- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
--- instance DeepFrz a => DeepFrz (IMap k s a) where
---   type FrzType (IMap k s a) = IMap k Frzn a 
---   frz = unsafeCoerceLVar
+instance DeepFrz a => DeepFrz (IMap k s a) where
+  type FrzType (IMap k s a) = IMap k Frzn a 
+  frz = unsafeCoerceLVar
 
 
 --------------------------------------------------------------------------------
