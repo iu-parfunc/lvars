@@ -95,6 +95,7 @@ class LVarData0 (t :: *) where
 --   to impose a particular memory representation.
 data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
 
+{-# INLINE unsafeCoerceLVar #-}
 -- | A safer version of `unsafeCoerce#` for LVars only.
 unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 a
 unsafeCoerceLVar = unsafeCoerce#

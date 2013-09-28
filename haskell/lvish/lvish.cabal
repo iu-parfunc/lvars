@@ -74,13 +74,11 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
--- TEMP: DISABLED UNTIL THEY ARE PORTED TO THE NEW DEEPFRZ: [2013.09.08]                    
                     Data.LVar.IStructure                    
---                    Data.LVar.MaxCounter
---                    Data.LVar.Internal.Pure
-
-                    -- End users should NOT USE THESE.  These are only for developing
-                    -- new LVars:
+                    Data.LVar.MaxCounter
+                    Data.LVar.Internal.Pure
+                    -- End users should NOT USE THESE.
+                    -- These are only for developing new LVars:
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
                     

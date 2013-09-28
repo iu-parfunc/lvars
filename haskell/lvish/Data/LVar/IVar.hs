@@ -66,11 +66,14 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
+-- | An @IVar@ can be treated as a generic container LVar which happens to
+-- contain at most one value!  Note, however, that the polymorphic operations are
+-- less useful than the monomorphic ones exposed by this module.
 instance LVarData1 IVar where  
   freeze :: IVar s a -> Par QuasiDet s (IVar Frzn a)
   freeze orig@(IVar (WrapLVar lv)) = WrapPar $ do
     freezeLV lv
-    return (unsafeCoerce# orig)
+    return (unsafeCoerceLVar orig)
   addHandler = whenFull
 
 -- | DeepFrz is just a type-coercion.  No bits flipped at runtime:

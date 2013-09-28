@@ -1,12 +1,20 @@
 {-# LANGUAGE DataKinds, BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE InstanceSigs, MagicHash #-}
 
 {-|
 
-This is not an end-user datatype.  This is for building new LVar types in a
-comparatively easy way: by putting a pure value in a mutable container, and
-defining a LUB operation as a pure function.
+This is NOT a datatype for the end-user.
+
+Rather, this module is for building /new/ LVar types in a comparatively easy way: by
+putting a pure value in a mutable container, and defining a LUB operation as a pure
+function.
+
+The proof-obligation for the library-writer who uses this module is that they must
+guarantee that their LUB is a /true least-upper-bound/, obeying the appropriate laws
+for a join-semilattice:
+
+ * <http://en.wikipedia.org/wiki/Semilattice>
 
 -}
 
@@ -16,12 +24,16 @@ module Data.LVar.Internal.Pure
        ) where
 
 import Control.LVish
-import Control.LVish.DeepFreeze
+import Control.LVish.DeepFrz.Internal
 import Control.LVish.Internal
 import Data.IORef
 import qualified Control.LVish.SchedIdempotent as LI 
 import Algebra.Lattice
+import           GHC.Prim (unsafeCoerce#)
 
+--------------------------------------------------------------------------------
+
+-- | An LVar which consists merely of an immutable, pure value inside a mutable box.
 newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 
 -- data PureLVar s t = BoundedJoinSemiLattice t => PureLVar (LVar s (IORef t) t)
@@ -70,21 +82,41 @@ freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
 
 ------------------------------------------------------------
 
-instance DeepFreeze (PureLVar s a) a where
-  type Session (PureLVar s a) = s 
-  deepFreeze = freezePureLVar
 
-instance LVarData1 PureLVar where
-  newtype Snapshot PureLVar a = PureSnap a
-    deriving (Show,Ord,Read,Eq)
-  
-  freeze :: PureLVar s a -> Par QuasiDet s (Snapshot PureLVar a)
-  freeze = unsafeConvert . fmap PureSnap . freezePureLVar
+-- | Physical identity, just as with IORefs.
+instance Eq (PureLVar s v) where
+  PureLVar lv1 == PureLVar lv2 = state lv1 == state lv2 
 
-  -- newBottom :: -- BoundedJoinSemiLattice a =>
-  --              Par d s (PureLVar s a)
-  -- newBottom = error "Pure.hs - FINISHME"  -- newPureLVar bottom
-  -- -- FIXME -- constraint kinds...
+-- | A `PureLVar` can be treated as a generic container LVar which happens to
+-- contain exactly one value!
   
-  traverseSnap f (PureSnap x) = fmap PureSnap (f x)
+-- instance LVarData1 PureLVar where
+--   freeze orig@(PureLVar (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+--   sortFreeze is = AFoldable <$> freezeSet is
+--   addHandler = forEachHP
+
+-- -- | The `PureLVar`s in this module also have the special property that they support an
+-- -- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- -- (`snapFreeze`).
+-- instance OrderedLVarData1 PureLVar where
+--   snapFreeze is = unsafeCoerceLVar <$> freeze is
+
+-- -- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- -- this `PureLVar` implementation, it need only be `Frzn`, not `Trvrsbl`.
+-- instance F.Foldable (PureLVar Frzn) where
+--   foldr fn zer (PureLVar lv) =
+--     -- It's not changing at this point, no problem if duped:
+--     let set = unsafeDupablePerformIO (readIORef (state lv)) in
+--     F.foldr fn zer set 
+
+-- -- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+-- instance F.Foldable (PureLVar Trvrsbl) where
+--   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+-- | `PureLVar` values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
+instance DeepFrz a => DeepFrz (PureLVar s a) where
+  type FrzType (PureLVar s a) = PureLVar Frzn a -- No recursion, the contents are pure.
+  frz = unsafeCoerce#
 
