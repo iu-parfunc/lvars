@@ -2,22 +2,19 @@
 
   * Do Hackage release as soon as possible
 
-  * Make sure there are SHOW instances.  
-  * XX (Ryan) Factor out Data.LVar.Generic.
-  * XX (Ryan) Finish providing instances/methods for LVarData1.
-  * (Ryan) Use modern (released) HSBencher.
-
-  * ~~(Lindsey) Finish factoring out the old implementation into its own cabal pkg.~~ [LK: done 9/16/2013]
-  * (Lindsey) Turn on Safe Haskell for real. [LK: I need help figuring out how to do this]
-  * ~~(Lindsey) Finish porting LVars (those not done) to the shiny new
-    DeepFrz method (use IVar as an example):
-      * Set 
-      * Map
-      * SLSet      
-      * SLMap 
-      * IStructure ...~~ [LK: done 9/20/2013]
+  * (?) Make sure there are SHOW instances.  
+  * (Ryan) Use modern (released) HSBencher.  
   
-  * New monad-par release with necessary tweaks
+  * ~~  (Ryan) Factor out Data.LVar.Generic.
+  * ~~  (Ryan) Finish providing instances/methods for LVarData1.
+  * ~~   (Lindsey) Turn on Safe Haskell for real. [LK: I need help figuring out how to do this]
+  * ~~ (Lindsey) Finish factoring out the old implementation into its own cabal pkg.~~ [LK: done 9/16/2013]
+  * ~~ (Lindsey) Finish porting LVars (those not done) to the shiny new
+    DeepFrz method (use IVar as an example):
+      * Set, Structure, etc ...~~ [LK: done 9/20/2013]
+  
+  * (NOT DOING) New monad-par release with necessary tweaks 
+
 
 ## Scheduler and data-structure layer concerns
  
