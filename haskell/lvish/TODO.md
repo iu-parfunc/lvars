@@ -2,8 +2,9 @@
 
   * Do Hackage release as soon as possible
 
-  * (Ryan) Factor out Data.LVar.Generic.
-  * (Ryan) Finish providing instances/methods for LVarData1.
+  * Make sure there are SHOW instances.  
+  * XX (Ryan) Factor out Data.LVar.Generic.
+  * XX (Ryan) Finish providing instances/methods for LVarData1.
   * (Ryan) Use modern (released) HSBencher.
 
   * ~~(Lindsey) Finish factoring out the old implementation into its own cabal pkg.~~ [LK: done 9/16/2013]

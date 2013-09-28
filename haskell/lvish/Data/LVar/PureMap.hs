@@ -71,23 +71,38 @@ type QPar = Par QuasiDet  -- Shorthand.
 -- it is not a scalable implementation.
 newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 
+-- | Equality is physical equality, as with @IORef@s.
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
+-- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
+-- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
   freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)  
   sortFreeze is = AFoldable <$> freezeMap is
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
   addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
 
+-- | The `IMap`s in this module also have the special property that they support an
+-- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- (`snapFreeze`).
 instance OrderedLVarData1 (IMap k) where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
-instance F.Foldable (IMap k Trvrsbl) where
+-- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- this `IMap` implementation, it need only be `Frzn`, not `Trvrsbl`.
+instance F.Foldable (IMap k Frzn) where
   foldr fn zer (IMap lv) =
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
     F.foldr fn zer set 
 
+-- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+instance F.Foldable (IMap k Trvrsbl) where
+  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+-- | `IMap` values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn a 
   frz = unsafeCoerceLVar

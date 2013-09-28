@@ -54,6 +54,9 @@ newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 instance Eq (IStructure s v) where
   IStructure vec1 == IStructure vec2 = vec1 == vec2
 
+-- | An @IStructure@ can be treated as a generic container LVar.  However, the
+-- polymorphic operations are less useful than the monomorphic ones exposed by this
+-- module (e.g. @forEachHP@ vs. @addHandler@).
 instance LVarData1 IStructure where
   freeze orig@(IStructure vec) = WrapPar$ do
     -- No new alloc here, just time:
@@ -65,18 +68,30 @@ instance LVarData1 IStructure where
   -- Unlike the IStructure-specific forEach, this takes only values, not indices.
   addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)
 
--- No extra work here...
+-- | The @IStructure@s in this module also have the special property that they
+-- support a freeze operation which immediately yields a `Foldable` container
+-- without any sorting (see `snapFreeze`).
 instance OrderedLVarData1 IStructure where
+  -- No extra work here...  
   snapFreeze is = unsafeCoerceLVar <$> G.freeze is
 
-instance F.Foldable (IStructure Trvrsbl) where
+-- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- this @IStructure@ implementation, it need only be `Frzn`, not `Trvrsbl`.
+instance F.Foldable (IStructure Frzn) where
   foldr fn zer (IStructure vec) = 
     F.foldr (\ iv acc ->
-              case IV.fromIVar (castFrzn iv) of
+              case IV.fromIVar iv of
                 Nothing -> acc
                 Just x  -> fn x acc)
              zer vec
 
+-- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+instance F.Foldable (IStructure Trvrsbl) where
+  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+-- | @IStructure@ values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IStructure s a) where
   type FrzType (IStructure s a) = IStructure Frzn a 
   frz = unsafeCoerceLVar

@@ -73,21 +73,35 @@ newtype ISet s a = ISet (LVar s (IORef (S.Set a)) a)
 instance Eq (ISet s v) where
   ISet lv1 == ISet lv2 = state lv1 == state lv2 
 
+-- | An `ISet` can be treated as a generic container LVar.  However, the polymorphic
+-- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 ISet where
   freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   sortFreeze is = AFoldable <$> freezeSet is
   addHandler = forEachHP
 
+-- | The `ISet`s in this module also have the special property that they support an
+-- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- (`snapFreeze`).
 instance OrderedLVarData1 ISet where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
--- | Required for all LVar containers.
-instance F.Foldable (ISet Trvrsbl) where
+-- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- this `ISet` implementation, it need only be `Frzn`, not `Trvrsbl`.
+instance F.Foldable (ISet Frzn) where
   foldr fn zer (ISet lv) =
     -- It's not changing at this point, no problem if duped:
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
     F.foldr fn zer set 
 
+-- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+instance F.Foldable (ISet Trvrsbl) where
+  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+
+-- | `ISet` values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn a 
   frz = unsafeCoerceLVar

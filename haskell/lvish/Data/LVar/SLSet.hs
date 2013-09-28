@@ -44,6 +44,7 @@ module Data.LVar.SLSet
          cartesianProdHP, cartesianProdsHP
        ) where 
 
+import Control.Applicative
 import qualified Data.Foldable as F
 import           Data.Concurrent.SkipListMap as SLM
 import qualified Data.Set as S
@@ -76,6 +77,7 @@ data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
 instance Eq (ISet s v) where
   ISet slm1 == ISet slm2 = state slm1 == state slm2
   
+-- | An `ISet` can be treated as a generic container LVar.
 instance LVarData1 ISet where
   -- In order to make freeze an O(1) operation, freeze is just a cast from the
   -- mutable to the immutable form of the data structure.
@@ -95,6 +97,15 @@ instance LVarData1 ISet where
 
   addHandler = forEachHP
 
+-- | The `ISet`s in this module also have the special property that they support an
+-- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- (`snapFreeze`).
+instance OrderedLVarData1 ISet where
+  snapFreeze is = unsafeCoerceLVar <$> freeze is
+
+-- | `ISet` values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn a 
   frz = unsafeCoerceLVar
@@ -106,11 +117,18 @@ member elm (ISet (WrapLVar lv)) =
     Just () -> True
     Nothing -> False
 
-instance F.Foldable (ISet Trvrsbl) where
+-- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- this `ISet` implementation, it need only be `Frzn`, not `Trvrsbl`.
+instance F.Foldable (ISet Frzn) where
   foldr fn zer (ISet (WrapLVar lv)) =
     unsafeDupablePerformIO $
     SLM.foldlWithKey (\ a k _v -> return (fn k a))
                            zer (L.state lv)
+
+-- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+instance F.Foldable (ISet Trvrsbl) where
+  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
 
 -- | The default number of skiplist levels
 defaultLevels :: Int

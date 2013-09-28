@@ -25,6 +25,7 @@
 
 module Data.LVar.SLMap
        (
+         -- * The type and its basic operations
          IMap,
          newEmptyMap, newMap, newFromList,
          insert, 
@@ -44,6 +45,7 @@ module Data.LVar.SLMap
          Map(), lookup, toStdMap, foldWithKeyM, traverseFrzn
        ) where
 
+import Control.Applicative
 import           Data.Concurrent.SkipListMap as SLM
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
@@ -82,9 +84,12 @@ data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 -- to the standard Data.Map data structure.
 data Map k v = Ord k => FrzMap !(SLM.SLMap k v)
 
+-- | Equality is physical equality, as with @IORef@s.
 instance Eq (IMap k s v) where
   IMap lv1 == IMap lv2 = state lv1 == state lv2 
 
+-- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
+-- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
   freeze orig@(IMap (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
@@ -108,8 +113,15 @@ instance LVarData1 (IMap k) where
         return $ Just $ unWrapPar $
           SLM.foldlWithKey (\() _k v -> forkHP mh $ callb v) () slm
 
+-- | The `IMap`s in this module also have the special property that they support an
+-- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- (`snapFreeze`).
+instance OrderedLVarData1 (IMap k) where
+  snapFreeze is = unsafeCoerceLVar <$> freeze is
 
--- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
+-- | `IMap` values can be returned as the result of a `runParThenFreeze`.
+--   Hence they need a `DeepFrz` instace.
+--   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn a 
   frz = unsafeCoerceLVar
@@ -363,7 +375,6 @@ foldWithKeyM fn init (FrzMap slm) =
 --    SLM.foldlWithKey (\m k v -> fn m k v) init slm
 
 
-
 instance (Ord k, Show k, Show a) => Show (Map k a) where
   show mp = show (toStdMap mp)
 
@@ -373,12 +384,19 @@ instance (Ord k, Eq k, Eq a) => Eq (Map k a) where
 instance (Ord k, Ord a) => Ord (Map k a) where
   compare m1 m2 = compare (toStdMap m1) (toStdMap m2)
 
--- Note: making these strict for now:
-instance F.Foldable (IMap k Trvrsbl) where
+-- | As with all LVars, after freezing, map elements can be consumed. In the case of
+-- this `IMap` implementation, it need only be `Frzn`, not `Trvrsbl`.
+instance F.Foldable (IMap k Frzn) where
+  -- Note: making these strict for now:  
   foldr fn zer (IMap (WrapLVar lv)) =
     unsafeDupablePerformIO $
     SLM.foldlWithKey (\ a _k v -> return (fn v a))
                      zer (L.state lv)
+
+-- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+instance F.Foldable (IMap k Trvrsbl) where
+  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
 
   -- foldr fn init (FrzMap slm) = unsafeDupablePerformIO$
   --   SLM.foldlWithKey (\ acc _ v -> return $! fn v acc) init slm
