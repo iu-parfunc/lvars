@@ -25,7 +25,7 @@
 
 module Data.LVar.IVar
        (
-         IVar,
+         IVar(..),
          -- * Basic IVar operations, same as in monad-par
          new, get, put, put_,
          

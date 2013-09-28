@@ -15,34 +15,33 @@
 
 module Data.LVar.IStructure
        (
-         -- * Basic operations
          IStructure,
          
+         -- * Basic operations         
          newIStructure, newIStructureWithCallback,
          put, put_, get, getLength,
 
          -- * Iteration and callbacks
-         -- forEach,
          forEachHP
+         -- forEach,         
        ) where
 
 import Data.Vector as V
 
 import           Control.DeepSeq (NFData)
-import           Control.Monad (void)
-import           Data.IORef
-import           Data.Maybe (fromMaybe)
+import           Control.Applicative
+import           Data.Maybe (fromJust, isJust)
 import qualified Data.LVar.IVar as IV
+import           Data.LVar.IVar (IVar(IVar))
 import qualified Data.Foldable as F
-import qualified Data.Traversable as T
+-- import qualified Data.Traversable as T
 
-import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.DeepFrz (Frzn, Trvrsbl)
+import           Control.LVish as LV 
+import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
-import qualified Control.LVish.SchedIdempotent as L
-import           Data.LVar.Generic
+import           Data.LVar.Generic as G
 
 ------------------------------------------------------------------------------
 
@@ -50,8 +49,41 @@ import           Data.LVar.Generic
 --   For now this really is a simple vector of IVars.
 newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 
-unIStructure (IStructure lv) = lv
+-- unIStructure (IStructure lv) = lv
 
+instance Eq (IStructure s v) where
+  IStructure vec1 == IStructure vec2 = vec1 == vec2
+
+instance LVarData1 IStructure where
+  freeze orig@(IStructure vec) = WrapPar$ do
+    -- No new alloc here, just time:
+    V.forM_ vec $ \ (IVar (WrapLVar lv)) -> freezeLV lv 
+    return (unsafeCoerceLVar orig)    
+  sortFreeze is = do vec <- freezeIStructure is
+                     return (AFoldable (V.map fromJust (V.filter isJust vec)))
+                     
+  -- Unlike the IStructure-specific forEach, this takes only values, not indices.
+  addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)
+
+-- No extra work here...
+instance OrderedLVarData1 IStructure where
+  snapFreeze is = unsafeCoerceLVar <$> G.freeze is
+
+instance F.Foldable (IStructure Trvrsbl) where
+  foldr fn zer (IStructure vec) = 
+    F.foldr (\ iv acc ->
+              case IV.fromIVar (castFrzn iv) of
+                Nothing -> acc
+                Just x  -> fn x acc)
+             zer vec
+
+instance DeepFrz a => DeepFrz (IStructure s a) where
+  type FrzType (IStructure s a) = IStructure Frzn a 
+  frz = unsafeCoerceLVar
+
+------------------------------------------------------------------------------
+
+-- | Retrieve the number of slots in the I-Structure.
 getLength :: IStructure s a -> Par d s Int
 getLength (IStructure vec) = return $! V.length vec
 
@@ -66,6 +98,7 @@ newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
 
 -- | This registers handlers on each internal IVar as it is created.
+--   It should be more efficient than `newIStructure` followed by `forEachHP`
 newIStructureWithCallback :: Int -> (Int -> elt -> Par d s ()) -> Par d s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
@@ -74,7 +107,9 @@ newIStructureWithCallback len fn =
       IV.whenFull Nothing iv (fn ix)
       return iv
 
--- | O(N) rather than O(1), unfortunately.
+-- | /O(N)/ complexity, unfortunately. This implementation of I-Structures requires
+-- freezing each of the individual IVars stored in the array.
+-- 
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) = do
   v <- V.mapM IV.freezeIVar vec
@@ -83,7 +118,7 @@ freezeIStructure (IStructure vec) = do
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the IStructure, optionally enrolled in a handler pool
-forEachHP :: (Eq a) =>
+forEachHP :: -- (Eq a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> IStructure s a              -- ^ IStructure to listen to
           -> (Int -> a -> Par d s ())    -- ^ callback
@@ -119,15 +154,17 @@ forEach = forEachHP Nothing
 
 
 {-# INLINE put #-}
+
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
 put_ :: Eq elt => IStructure s elt -> Int -> elt -> Par d s ()
 put_ (IStructure vec) !ix !elm = IV.put_ (vec ! ix) elm
 
+-- | Put a single element in the array.  This variant is deeply strict (`NFData`).
 put :: (NFData elt, Eq elt) => IStructure s elt -> Int -> elt -> Par d s ()
 put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 
 {-# INLINE get #-}
--- | Wait for the indexed entry to contain a value.
+-- | Wait for the indexed entry to contain a value and return that value.
 get :: Eq elt => IStructure s elt -> Int -> Par d s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)

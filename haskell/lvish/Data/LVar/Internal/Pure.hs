@@ -2,9 +2,13 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
 
--- | This is not an end-user datatype.  This is for building new LVar types in a
--- comparatively easy way: by putting a pure value in a mutable container, and
--- defining a LUB operation as a pure function.
+{-|
+
+This is not an end-user datatype.  This is for building new LVar types in a
+comparatively easy way: by putting a pure value in a mutable container, and
+defining a LUB operation as a pure function.
+
+-}
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
