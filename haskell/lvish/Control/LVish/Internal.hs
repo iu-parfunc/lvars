@@ -44,8 +44,10 @@ import           Data.List (sort)
 {-# INLINE unWrapPar #-}
 --------------------------------------------------------------------------------
 
--- | This datatype is promoted to type-level (@DataKinds@ extension) and used to indicate whether a `Par`
--- computation is guaranteed-deterministic, or only quasi-deterministic (i.e. might throw NonDeterminismExn).
+-- | This datatype is promoted to type-level (@DataKinds@ extension)
+-- and used to indicate whether a `Par` computation is
+-- guaranteed-deterministic, or only quasi-deterministic (i.e., might
+-- throw `NonDeterminismExn`).
 data Determinism = Det | QuasiDet
   deriving Show
 
@@ -59,12 +61,13 @@ newtype Par :: Determinism -> * -> * -> * where
   WrapPar :: L.Par a -> Par d s a
   deriving (Monad, Functor, Applicative)
 
--- | The generic representation of LVars used by the scheduler.  The end-user can't
--- actually do anything with these and shoud not try to.
+-- | The generic representation of LVars used by the scheduler.  The
+-- end-user can't actually do anything with these and should not try
+-- to.
 newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 
--- | Unsafe: drops type information to go from the safe Par monad to the internal,
--- dangerous one.
+-- | Unsafe: drops type information to go from the safe `Par` monad to
+-- the internal, dangerous one.
 unWrapPar :: Par d s a -> L.Par a
 unWrapPar (WrapPar p) = p 
 

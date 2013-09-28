@@ -106,7 +106,7 @@ instance OrderedLVarData1 ISet where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
 -- | `ISet` values can be returned as the result of a `runParThenFreeze`.
---   Hence they need a `DeepFrz` instace.
+--   Hence they need a `DeepFrz` instance.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn a 
