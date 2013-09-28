@@ -10,17 +10,17 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.2.0.0
+version:             1.0.0.0
 
 -- Changelog:
 -- 0.2 -- switch SLMap over to O(1) freeze
 
 
-synopsis:  LVar data structures and infrastructure to build more.
+synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
 description: 
   .
-  A programming model based on monotonically growing concurrent data structures.
+  A programming model based on monotonically-growing concurrent data structures.
   .
   As a starting point, look at "Control.LVish", as well as one of these papers:
   .
