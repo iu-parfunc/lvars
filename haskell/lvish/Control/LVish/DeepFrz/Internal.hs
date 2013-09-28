@@ -1,5 +1,4 @@
--- I am an UNSAFE module.
-
+{-# LANGUAGE Unsafe #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE EmptyDataDecls #-}

@@ -1,3 +1,5 @@
+{-# LANGUAGE Unsafe #-}
+
 {-# LANGUAGE DataKinds, BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 {-# LANGUAGE InstanceSigs, MagicHash #-}

@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
@@ -48,6 +49,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
 import           Data.LVar.Generic
+import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Data.UtilInternal (traverseWithKey_)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish

@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
@@ -50,6 +51,7 @@ import           Data.Concurrent.SkipListMap as SLM
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic
+import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.Monad
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal

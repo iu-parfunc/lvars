@@ -65,9 +65,9 @@ flag getonce
 library
   -- Modules exported by the library.
   exposed-modules:
+                    ------------- End user modules ------------
                     Control.LVish
                     Control.LVish.DeepFrz
-                    Control.LVish.DeepFrz.Internal
                     Data.LVar.Generic
                     Data.LVar.IVar
                     Data.LVar.PureSet
@@ -76,11 +76,14 @@ library
                     Data.LVar.SLMap
                     Data.LVar.IStructure                    
                     Data.LVar.MaxCounter
-                    Data.LVar.Internal.Pure
+                    -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:
+                    Data.LVar.Internal.Pure                    
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
+                    Data.LVar.Generic.Internal
+                    Control.LVish.DeepFrz.Internal                    
                     
   -- Modules included in this library but not exported.
   other-modules:

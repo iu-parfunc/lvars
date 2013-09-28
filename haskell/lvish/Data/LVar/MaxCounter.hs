@@ -1,3 +1,5 @@
+{-# LANGUAGE Trustworthy #-}
+
 {-# LANGUAGE DataKinds, BangPatterns, MagicHash #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 

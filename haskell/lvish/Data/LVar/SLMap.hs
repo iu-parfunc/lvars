@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -51,7 +52,8 @@ import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable    as F
 import           Data.UtilInternal (traverseWithKey_)
-import           Data.LVar.Generic 
+import           Data.LVar.Generic
+import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.LVish

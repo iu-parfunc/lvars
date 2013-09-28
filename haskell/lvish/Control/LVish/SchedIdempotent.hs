@@ -1,3 +1,4 @@
+{-# LANGUAGE Unsafe #-}
 {-# LANGUAGE RankNTypes #-} 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
