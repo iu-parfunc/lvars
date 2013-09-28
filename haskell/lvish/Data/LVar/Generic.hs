@@ -99,6 +99,7 @@ data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
 unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 a
 unsafeCoerceLVar = unsafeCoerce#
 
+
 ------------------------------------------------------------------------------
 -- Dealing with frozen LVars.
 ------------------------------------------------------------------------------

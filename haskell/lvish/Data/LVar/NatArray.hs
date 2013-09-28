@@ -11,18 +11,36 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE GADTs #-}
 
--- | An I-structure (array) of positive numbers.
---
--- Experimental.
+{-|
+
+An I-structure (array) of /positive/ numbers.  A `NatArray` cannot store zeros.
+
+This particular implementation makes a trade-off between expressiveness (monomorphic
+in array contents) and efficiency.  The efficiency gained of course is that the array
+may be unboxed, and we don't need extra bits to store empty/full status.
+
+/However/, relative to "Data.LVar.IStructure", there is a performance disadvantage as
+well.  As of [2013.09.28] and their initial release, `NatArray`s are implemented as a
+/single/ `LVar`, which means they share a single wait-list of blocked computations.
+If there are many computations blocking on different elements within a `NatArray`,
+scalability will be much worse than with other `IStructure` implementations.
+
+The holy grail is to get unboxed arrays and scalable blocking, but we don't have this
+yet.
+
+Finally, note that this data-structure has an EXPERIMENTAL status and may be removed
+in future releases as we find better ways to support unboxed array structures with
+per-element synchronization.
+
+-}
 
 module Data.LVar.NatArray
        (
          -- * Basic operations
          NatArray,
-         
          newNatArray, put, get,
 
-         -- -- * Iteration and callbacks
+         -- * Iteration and callbacks
          forEach, forEachHP
 
          -- -- * Quasi-deterministic operations
@@ -60,11 +78,12 @@ import qualified Data.Traversable as T
 import           Data.LVar.Generic
 
 import           Control.LVish as LV hiding (addHandler)
-import           Control.LVish.DeepFrz as LV
+import           Control.LVish.DeepFrz.Internal  as DF
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------
 -- Toggles
@@ -100,8 +119,33 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
   M.replicate len 0
 #endif
 
+-- | /O(1)/ Freeze operation that directly returns a nice, usable, representation of
+-- the array data.
 freezeNatArray :: Storable a => NatArray s a -> LV.Par QuasiDet s (U.Vector a)
-freezeNatArray (NatArray lv) = LI.liftIO $ U.unsafeFreeze (LI.state lv)
+freezeNatArray (NatArray lv) =
+  error "FINISHME"
+  -- LI.liftIO $ U.unsafeFreeze (LI.state lv)
+
+--------------------------------------------------------------------------------
+-- Instances:
+
+-- FIXME: there is a tension here.. should NatArray really be a generic LVarData1 at all?
+-- Can it really store anything in Storable!?!?   Or do we need to fix it to numbers
+-- to ensure the zero-trick makes sense?
+
+{-
+
+instance DeepFrz a => DeepFrz (NatArray s a) where
+  type FrzType (NatArray s a) = NatArray Frzn a 
+  frz = unsafeCoerceLVar
+
+-- | /O(1)/: Convert from a frozen `NatArray` to a plain vector.
+--   This is only permitted when the `NatArray` has already been frozen.
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.
+fromNatArray :: NatArray Frzn a -> U.Vector a
+fromNatArray (NatArray lv) = unsafeDupablePerformIO (readIORef (state lv))
+
+-}
 
 --------------------------------------------------------------------------------
 

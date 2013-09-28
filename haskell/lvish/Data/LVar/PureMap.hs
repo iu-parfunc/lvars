@@ -27,7 +27,7 @@ module Data.LVar.PureMap
          getKey, waitValue, waitSize, modify, 
 
          -- * Freezing results (Quasi-determinism) 
-         freezeMap,
+         freezeMap, fromIMap,
          
          -- * Iteration and callbacks
          forEach, forEachHP,
@@ -261,6 +261,12 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
+
+-- | /O(1)/: Convert from an `IMap` to a plain `Data.Map`.
+--   This is only permitted when the `IMap` has already been frozen.
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
+fromIMap :: IMap k Frzn a -> M.Map k a 
+fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.

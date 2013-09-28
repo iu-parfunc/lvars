@@ -164,8 +164,9 @@ freezeSet (ISet (WrapLVar lv)) = WrapPar $
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
--- | Convert from an `ISet` to a plain `Data.Set`.
+-- | /O(1)/: Convert from an `ISet` to a plain `Data.Set`.
 --   This is only permitted when the `ISet` has already been frozen.
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`. 
 fromISet :: ISet Frzn a -> S.Set a 
 -- Alternate names? -- toPure? toSet? fromFrzn??
 fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))

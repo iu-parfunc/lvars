@@ -73,10 +73,9 @@ library
                     Data.LVar.PureSet
                     Data.LVar.PureMap
                     Data.LVar.SLSet
--- TEMP: DISABLED UNTIL THEY ARE PORTED TO THE NEW DEEPFRZ: [2013.09.08]
                     Data.LVar.SLMap
---                    Data.LVar.NatArray
---                    Data.LVar.IStructure                    
+-- TEMP: DISABLED UNTIL THEY ARE PORTED TO THE NEW DEEPFRZ: [2013.09.08]                    
+                    Data.LVar.IStructure                    
 --                    Data.LVar.MaxCounter
 --                    Data.LVar.Internal.Pure
 
@@ -98,7 +97,9 @@ library
                     Control.Reagent
                     Control.LVish.SchedIdempotentInternal 
                     Control.LVish.MonadToss
-                    
+                    -- Not ready for prime-time yet:
+                    Data.LVar.NatArray
+
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
