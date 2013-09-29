@@ -41,6 +41,9 @@ import Data.Word
 import qualified Data.LVar.NatArray as NA
 import Data.LVar.PureSet as IS
 import Data.LVar.PureMap as IM
+
+import qualified Data.LVar.SLMap as SM
+
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
@@ -122,6 +125,10 @@ main = do
    , HU.TestLabel "case_dftest0" $ HU.TestCase case_dftest0
    , HU.TestLabel "case_dftest1" $ HU.TestCase case_dftest1
    , HU.TestLabel "case_dftest3" $ HU.TestCase case_dftest3
+
+   -- , HU.TestLabel "case_show01" $ HU.TestCase case_show01
+   -- , HU.TestLabel "case_show02" $ HU.TestCase case_show02
+   -- , HU.TestLabel "case_show03" $ HU.TestCase case_show03
    ]
    -- Ugh, busted test bracketing in test-framework... thus no good way to do
    -- thread-parameterization and no good way to take advantage of test-framework-th:   
@@ -1030,9 +1037,26 @@ dftest3 = runParIO $ do
 -- dftest4a :: IO (Maybe Int)
 -- dftest4a = runParIO dftest4_
 
+------------------------------------------------------------------------------------------
+-- Show instances
+------------------------------------------------------------------------------------------
 
+case_show01 = assertEqual "show for IVar" "" show01
+show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
 
+case_show02 = assertEqual "show for SLMap" "" show02
+show02 = show$ runParThenFreeze $ do
+  mp <- SM.newEmptyMap
+  SM.insert "key1" (33::Int) mp
+  SM.insert "key2" (44::Int) mp  
+  return mp
 
+case_show03 = assertEqual "show for Map" "" show03
+show03 = show$ runParThenFreeze $ do
+  mp <- IM.newEmptyMap
+  IM.insert "key1" (33::Int) mp
+  IM.insert "key2" (44::Int) mp  
+  return mp
 
 
 ------------------------------------------------------------------------------------------
