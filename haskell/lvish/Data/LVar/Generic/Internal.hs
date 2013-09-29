@@ -70,6 +70,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     -- version of the LVar contents with its original type:
     return (AFoldable ls')
 
+
 -- | Carries a Foldable type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have
 --   to impose a particular memory representation.

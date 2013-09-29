@@ -376,7 +376,6 @@ foldWithKeyM fn init (FrzMap slm) =
 -- foldWithKeyIO fn init (FrzMap slm) = 
 --    SLM.foldlWithKey (\m k v -> fn m k v) init slm
 
-
 instance (Ord k, Show k, Show a) => Show (Map k a) where
   show mp = show (toStdMap mp)
 

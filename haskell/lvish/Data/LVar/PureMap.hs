@@ -9,6 +9,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
+{-# LANGUAGE OverlappingInstances #-}
+
 {-|
 
   This module provides finite maps that only grow.  It is based on the popular `Data.Map`
@@ -45,6 +47,7 @@ import           Control.Monad (void)
 import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
 import           Data.Monoid (Monoid(..))
 import           Data.IORef
+import           Data.List (intersperse)
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
@@ -108,6 +111,16 @@ instance F.Foldable (IMap k Trvrsbl) where
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn a 
   frz = unsafeCoerceLVar
+
+instance (Show k, Show a) => Show (IMap k Frzn a) where
+  show (IMap lv) =
+    let mp' = unsafeDupablePerformIO (readIORef (state lv)) in
+    "{IMap: " ++
+    (concat $ intersperse ", " $ map show $
+     M.toList mp') ++ "}"    
+
+-- instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
+--   show mp = show (castFrzn mp)
 
 --------------------------------------------------------------------------------
 
