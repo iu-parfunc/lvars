@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
@@ -38,11 +39,15 @@ class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- completely available and Foldable.  Guaranteed /O(1)/.
   snapFreeze :: f s a -> Par QuasiDet s (f Trvrsbl a)
 
-instance (Ord a, LVarData1 f, Show a) => Show (f Trvrsbl a) where
+instance (Ord a, LVarData1 f, Show a) => Show (f Frzn a) where
   show lv =
-        "{" ++
-        (concat $ intersperse ", " $ 
-         F.foldr (\ elm ls -> show elm : ls) [] lv) ++ "}"
+        "{LVar: " ++
+        (concat $ intersperse ", " $ map show $ sort $ 
+         F.foldr (\ elm ls -> elm : ls) []
+         (unsafeCoerceLVar lv :: f Trvrsbl a)) ++ "}"
+
+instance (Ord a, LVarData1 f, Show a) => Show (f Trvrsbl a) where
+  show lv = show (castFrzn lv)
 
 {- 
 -- | Just like LVarData1 but for type constructors of kind `*`.
