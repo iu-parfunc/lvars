@@ -24,10 +24,9 @@ description:
   .
   As a starting point, look at "Control.LVish", as well as one of these papers:
   .
-    * <http://www.cs.indiana.edu/~rrnewton/papers/2013-FHPC_LVars.pdf>
+    * /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
-    * <http://www.cs.indiana.edu/~rrnewton/papers/2013_07_LVish_quasiDet_working_draft.pdf>
-
+    * /Freeze after handling: quasi-deterministic programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
 
 license:             BSD3
 license-file:        LICENSE
