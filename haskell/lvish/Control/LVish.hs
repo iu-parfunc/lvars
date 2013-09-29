@@ -26,17 +26,17 @@
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
-  (    
+  (
+    -- * Par computations and their parameters
+    Par(), 
+    Determinism(..), liftQD,
+    
     -- * Basic control flow
     fork,
     yield, 
     runPar, runParIO,
 --    runParIO_, runParLogged,
 --    quiesceAll,
-
-    -- * Par computations and their parameters
-    Par(), 
-    Determinism(..), liftQD,
     
     -- * Various loop constructs
     parForL, parForSimple, parForTree, parForTiled, for_,
@@ -75,16 +75,17 @@ import           Prelude hiding (rem)
 {-# INLINE quiesce #-}
 --------------------------------------------------------------------------------
 
--- | It is always safe to lift a deterministic computation to a quasi-determinism one.
+-- | It is always safe to lift a deterministic computation to a
+-- quasi-deterministic one.
 liftQD :: Par Det s a -> Par QuasiDet s a
 liftQD (WrapPar p) = (WrapPar p)
 
--- | Cooperatively schedule other threads
+-- | Cooperatively schedule other threads.
 yield :: Par d s ()
 yield = WrapPar L.yield
 
--- | Block until a handler pool is quiescent, i.e. all associated parallel
--- computations have completed.
+-- | Block until a handler pool is quiescent, i.e., until all
+-- associated parallel computations have completed.
 quiesce :: L.HandlerPool -> Par d s ()
 quiesce = WrapPar . L.quiesce
 
@@ -109,12 +110,12 @@ forkHP mh (WrapPar f) = WrapPar$ L.forkHP mh f
 newPool :: Par d s L.HandlerPool
 newPool = WrapPar L.newPool
 
--- | Execute a Par computation in the context of a fresh handler pool
+-- | Execute a Par computation in the context of a fresh handler pool.
 withNewPool :: (L.HandlerPool -> Par d s a) -> Par d s (a, L.HandlerPool)
 withNewPool f = WrapPar $ L.withNewPool $ unWrapPar . f
 
 -- | Execute a Par computation in the context of a fresh handler pool, while
--- ignoring the result of the computation
+-- ignoring the result of the computation.
 withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
@@ -139,7 +140,7 @@ runParIO_ (WrapPar p) = L.runParIO p >> return ()
 runParLogged :: (forall s . Par d s a) -> IO ([String],a)
 runParLogged (WrapPar p) = L.runParLogged p 
 
--- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargable
+-- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,
 -- returning the final result.
 --
