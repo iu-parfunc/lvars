@@ -3,6 +3,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
+{-# LANGUAGE FlexibleInstances #-}
+
 -- | A generic interface providing operations that work on ALL LVars.
 
 module Data.LVar.Generic
@@ -19,7 +21,7 @@ module Data.LVar.Generic
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
-import           Data.List (sort)
+import           Data.List (sort, intersperse)
 import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import           Data.LVar.Generic.Internal
@@ -35,6 +37,12 @@ class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
   -- completely available and Foldable.  Guaranteed /O(1)/.
   snapFreeze :: f s a -> Par QuasiDet s (f Trvrsbl a)
+
+instance (Ord a, LVarData1 f, Show a) => Show (f Trvrsbl a) where
+  show lv =
+        "{" ++
+        (concat $ intersperse ", " $ 
+         F.foldr (\ elm ls -> show elm : ls) [] lv) ++ "}"
 
 {- 
 -- | Just like LVarData1 but for type constructors of kind `*`.
