@@ -31,7 +31,7 @@ description:
 license:             BSD3
 license-file:        LICENSE
 author:              Aaron Turon, Lindsey Kuper, Ryan Newton
-maintainer:          lkuper@indiana.edu
+maintainer:          lindsey@composition.al
 category:            Concurrency
 build-type:          Simple
 
