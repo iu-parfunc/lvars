@@ -2,6 +2,9 @@
 
   * Do Hackage release as soon as possible
 
+  * REMOVE extra frozen Map type in SLMap, obsolete.
+  * 
+
   * (?) Make sure there are SHOW instances.  
   * (Ryan) Use modern (released) HSBencher.  
   
