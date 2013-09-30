@@ -5,7 +5,7 @@ mkdir docs_examples
 
 set -e
 
-FILES="Control/LVish/DeepFrz.hs"
+FILES="Control/LVish/DeepFrz.hs Control/LVish.hs"
 
 for fl in $FILES; do 
   echo Extracting from $fl

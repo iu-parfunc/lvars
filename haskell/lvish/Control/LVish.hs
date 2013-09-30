@@ -21,6 +21,26 @@
   But to do anything useful you will need to import one of the data structure modules
   (@Data.LVar.*@).
 
+  Here is a self-contained example that writes the same value to @num@
+  twice and deterministically prints @4@ instead of raising an error, as
+  it would if @num@ were a traditional IVar rather than an LVar.
+
+> {-# LANGUAGE DataKinds #-}
+> 
+> import Control.LVish  -- Generic scheduler; works with any lattice.
+> import Data.LVar.IVar -- The particular lattice in question.
+> 
+> p :: Par Det s Int
+> p = do
+>   num <- new
+>   fork $ do put num 4
+>   fork $ do put num 4
+>   v <- get num
+>   return v
+> 
+> main = do
+>   putStr $ show $ runPar $ p
+
  -}
 
 -- This module reexports the default LVish scheduler, adding some type-level
