@@ -35,7 +35,7 @@ import Util
 --------------------------------------------------------------------------------
 
 #if 1
-import Data.LVar.Set as S
+import Data.LVar.PureSet as S
 #else
 -- [2013.07.09] This one still isn't terminating on 125K+
 --  Well, maybe it's just slow... 5000 takes 2 seconds.
@@ -82,10 +82,10 @@ bf_traverse k !g !l_acc !seen_rank !new_rank !f = do
     -- current paper:
     parMapM_ (\x -> fork$ do 
               let elem = f x
-              putInSet elem l_acc
+              S.insert elem l_acc
               when dbg $ do 
                  st <- unsafePeekSet l_acc
-                 prnt$ " --> Called putInSet, node "++show x
+                 prnt$ " --> Called S.insert, node "++show x
                       ++" size is "++show(Set.size st) 
                       ++" elem is "++show elem --  ++" "++show st
             )
@@ -103,7 +103,7 @@ start_traverse k !g startNode f = do
         
         l_acc <- newEmptySet
         -- "manually" add startNode
-        fork $ putInSet (f startNode) l_acc
+        fork $ S.insert (f startNode) l_acc
         -- pass in { startNode } as the initial "new" set
         set <- bf_traverse k g l_acc IS.empty (IS.singleton startNode) f
         
@@ -143,9 +143,9 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
     logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
-    forVec (nbrs gr nd) (`putInSet` st)
+    forVec (nbrs gr nd) (`S.insert` st)
   return st
---    T.traverse_ (`putInSet` st) (nbrs gr nd)
+--    T.traverse_ (`S.insert` st) (nbrs gr nd)
 
 
 -- | A version that uses an array rather than set representation.

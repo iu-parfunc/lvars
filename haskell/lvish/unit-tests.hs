@@ -173,7 +173,7 @@ case_v2a = v2a >>= assertEqual "put 10 in & wait"
 v2a :: IO (S.Set Int)
 v2a = runParIO $
      do s <- IS.newEmptySet
-        mapM_ (\n -> fork $ IS.putInSet n s) [1..10]
+        mapM_ (\n -> fork $ IS.insert n s) [1..10]
         IS.waitSize 10 s 
         IS.freezeSet s
 
@@ -185,7 +185,7 @@ case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
 v2b :: IO (S.Set Int)
 v2b = runParIO $
      do s   <- IS.newEmptySet
-        ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10]
+        ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10]
         mapM_ IV.get ivs -- Join point.
         IS.freezeSet s
 
@@ -205,7 +205,7 @@ v2b = runParIO $
 --     par :: Par Det s (IS.ISet s Int)
 --     par = 
 --      do s   <- IS.newEmptySet 
---         ivs <- mapM (\n -> IV.spawn_ $ IS.putInSet n s) [1..10::Int]
+--         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]
 --         mapM_ IV.get ivs -- Join point.
 --         return s
 
@@ -219,10 +219,10 @@ v3a :: IO (S.Set Int)
 v3a = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
-        let fn e = IS.putInSet (e*10) s2
+        let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
-          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]        
+          mapM_ (\n -> fork $ IS.insert n s1) [1..10]        
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
           -- ten elements are written to s2.
@@ -237,10 +237,10 @@ v3b :: IO (S.Set Int)
 v3b = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
-        let fn e = IS.putInSet (e*10) s2
+        let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
           -- Populate the first set:
-          mapM_ (\n -> IS.putInSet n s1) [1..10]
+          mapM_ (\n -> IS.insert n s1) [1..10]
           -- Because we filled s1 sequentially, we know it is full at this point.
           -- (If the above were forked we would need a finish/asnyc style construct)
           
@@ -263,9 +263,9 @@ i3c :: IO (S.Set Int)
 i3c = runParIO $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
-        let fn e = IS.putInSet (e*10) s2
+        let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
-          mapM_ (\n -> fork $ IS.putInSet n s1) [1..10]          
+          mapM_ (\n -> fork $ IS.insert n s1) [1..10]          
           IS.waitSize 1 s2 -- Not ENOUGH synchronization!
           IS.freezeSet s2
           -- If this ^ freeze occurs *before* all the puts have happened,
@@ -307,7 +307,7 @@ v3d = runParIO $
             Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
                          logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
-          putInSet elm s2 
+          IS.insert elm s2 
         logStrLn " [freezeSetAfter completed] "
         freezeSet s2
 
@@ -333,7 +333,7 @@ v3e = runParIO $ IS.freezeSet =<<
             Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
                          logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
-          putInSet elm s2
+          IS.insert elm s2
         quiesce hp
         logStrLn " [quiesce completed] "
         return s2
@@ -406,13 +406,13 @@ i7b = runParIO $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
   s2 <- IS.newEmptySet
-  IS.putInSet 0.11 s2
+  IS.insert 0.11 s2
   f1 <- IV.spawn_ $ do IM.insert 1 s1 mp 
                        IM.insert 2 s2 mp
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
-                       IS.putInSet 3.33 s
+                       IS.insert 3.33 s
   -- RACE: this modify is racing with the insert of s2:
-  IM.modify mp 2 IS.newEmptySet (IS.putInSet 4.44) 
+  IM.modify mp 2 IS.newEmptySet (IS.insert 4.44) 
 
   IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
@@ -433,10 +433,10 @@ v7c = runParIO $ do
   s1 <- IS.newEmptySet
   f1 <- IV.spawn_ $ IM.insert 1 s1 mp 
   f2 <- IV.spawn_ $ do s <- IM.getKey 1 mp
-                       IS.putInSet 3.33 s
-  IM.modify mp 2 IS.newEmptySet (IS.putInSet 4.44)
-  f3 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.putInSet 5.55)
-  f4 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.putInSet 6.6)
+                       IS.insert 3.33 s
+  IM.modify mp 2 IS.newEmptySet (IS.insert 4.44)
+  f3 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.insert 5.55)
+  f4 <- IV.spawn_ $ IM.modify mp 3 IS.newEmptySet (IS.insert 6.6)
   -- No easy way to wait on the total size of all contained sets...
   -- 
   -- Need a barrier here.. should have a monad-transformer that provides cilk "sync"
@@ -468,7 +468,7 @@ v8a = runParIO $ do
   logStrLn " [v8a] cartesianProd call finished... next quiesce"
   IS.forEach s3 $ \ elm ->
     logStrLn$ " [v8a]   Got element: "++show elm
-  putInSet 'c' s2
+  IS.insert 'c' s2
   quiesce h
   logStrLn " [v8a] quiesce finished, next freeze::"
   freezeSet s3

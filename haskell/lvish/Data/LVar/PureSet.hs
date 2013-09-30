@@ -26,7 +26,7 @@ module Data.LVar.PureSet
          -- * Basic operations
          ISet, 
          newEmptySet, newSet, newFromList,
-         putInSet, waitElem, waitSize, 
+         insert, waitElem, waitSize, 
 
          -- * Iteration and callbacks
          forEach, forEachHP, 
@@ -58,6 +58,7 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+import Prelude hiding (insert)
 
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
@@ -212,8 +213,8 @@ forEach = forEachHP Nothing
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
-putInSet :: Ord a => a -> ISet s a -> Par d s ()
-putInSet !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
+insert :: Ord a => a -> ISet s a -> Par d s ()
+insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORef ref update
         update set =
           let set' = S.insert elm set in
@@ -304,15 +305,15 @@ traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a -> 
 traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
     x' <- fn x
-    putInSet x' os
+    insert x' os
 
 -- | Variant that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
 unionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
 unionHP mh s1 s2 = do
   os <- newEmptySet
-  forEachHP mh s1 (`putInSet` os)
-  forEachHP mh s2 (`putInSet` os)
+  forEachHP mh s1 (`insert` os)
+  forEachHP mh s2 (`insert` os)
   return os
 
 -- | Variant that optionally ties the handlers in the resulting set to the same
@@ -330,7 +331,7 @@ intersectionHP mh s1 s2 = do
     -- At this point 'elm' has ALREADY been added to "us", we check "them":    
     peek <- LI.liftIO$ readIORef (state lv)
     if S.member elm peek 
-      then putInSet elm outSet
+      then insert elm outSet
       else return ()
 
 -- | Variant of 'cartesianProd' that optionally ties the handlers to a pool.
@@ -346,7 +347,7 @@ cartesianProdHP mh s1 s2 = do
   -- This is expensive, but we've got to do it from both sides to counteract races:
   fn outSet (ISet lv) cmbn elm1 = do
     peek <- LI.liftIO$ readIORef (state lv)
-    F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
+    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
 
 
 -- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
@@ -378,7 +379,7 @@ cartesianProdsHP mh ls = do
     peeksL <- liftIO$ mapM (readIORef . state . unISet) left
     peeksR <- liftIO$ mapM (readIORef . state . unISet) right
 
---    F.foldlM (\() elm2 -> putInSet (cmbn elm1 elm2) outSet) () peek
+--    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
     return undefined
 #endif
 

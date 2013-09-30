@@ -12,7 +12,7 @@ import           Data.Hashable
 import qualified Data.Set as Set
 
 import qualified Control.LVish as L
-import qualified Data.LVar.Set as S
+import qualified Data.LVar.PureSet as S
 
 -- | Abstract over the core scheduler functionality.  This is not safe for end users!
 class Monad p => LParMonad p where
@@ -62,12 +62,12 @@ class LParSet par => QParSet par where
 instance LParSet L.Par where
   type ISet a = S.ISet a
   newEmptySet = S.newEmptySet
-  putInSet    = S.putInSet
+  putInSet    = S.insert
 
 instance LParSet L.QPar where
   type ISet a  = S.ISet a
   newEmptySet  = L.liftQ S.newEmptySet
-  putInSet e s = L.liftQ$ S.putInSet e s
+  putInSet e s = L.liftQ$ S.insert e s
 
 instance QParSet L.QPar where
   freezeSet    = S.freezeSet  
@@ -84,7 +84,7 @@ class LParMonad par => LParSet set par where
 
 instance LParSet S.ISet L.Par where
   newEmptySet = S.newEmptySet
-  putInSet = S.putInSet 
+  putInSet = S.insert 
 #endif
 
 

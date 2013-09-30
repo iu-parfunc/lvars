@@ -133,7 +133,7 @@ instance Out (State s) where
 
 -- | Mutate a store to increase the set of values that an Addr may bind to.
 storeInsert :: Addr -> Value -> Store s -> Par d s ()
-storeInsert a v s = IM.modify s a newEmptySet (IS.putInSet v)
+storeInsert a v s = IM.modify s a newEmptySet (IS.insert v)
   
 -- k-CFA parameters
 
@@ -152,7 +152,7 @@ atomEval benv _  (Lam l v c) = single (Closure (l, v, c) benv)
 single :: Ord a => a -> Par d s (ISet s a)
 single x = do 
   s <- newEmptySet  
-  IS.putInSet x s
+  IS.insert x s
   return s
 
 -- | Extend the search from the current state to adjacent states.  This function
@@ -187,7 +187,7 @@ next seen st0@(State (Call l fun args) benv store time)
             forM_ (formals `zip` params) $ \(formal, params) ->
               storeInsert (Binding formal time) params store'
             let newST = State call' benv'' store' time'
-            putInSet newST seen -- Extending the seen set should spawn more work.
+            IS.insert newST seen -- Extending the seen set should spawn more work.
             return ()
           return ()
 
@@ -197,7 +197,7 @@ next seen st0@(State (Call l fun args) benv store time)
             forM_ params $ \ param -> do
               ms <- escape param store
               case ms of 
-                Just state' -> putInSet state' seen
+                Just state' -> IS.insert state' seen
                 Nothing -> return ()
           return ()
       return ()
@@ -221,7 +221,7 @@ escape (Closure (_l, formals, call) benv) store = do
 fvStuff :: [Var] -> Store s -> Par d s (BEnv, Store s)
 fvStuff xs store = do
   forM_ xs $ \x -> do
-    IM.modify store (Binding x []) newEmptySet $ putInSet Arbitrary
+    IM.modify store (Binding x []) newEmptySet $ insert Arbitrary
   return (M.fromList [(x, []) | x <- xs], store)
 
 --------------------------------------------------------------------------------
@@ -233,7 +233,7 @@ explore :: State s -> Par d s (IS.ISet s (State s))
 explore initial = do
   allSeen <- newEmptySet
 --  liftIO$ putStrLn$ "Kicking off with an initial state: "++show (doc initial)
-  putInSet initial allSeen   
+  IS.insert initial allSeen   
   -- Feedback: recursively feed back new states into allSeen in parallel:
   IS.forEach allSeen (next allSeen)
   return allSeen
@@ -258,7 +258,7 @@ summarize states = do
     void$ IM.forEach store_n $ \ key val -> do
       void$ IS.forEach val $ \ elem  -> do
         IM.modify storeFin key newEmptySet $ \ st -> do
-           putInSet elem st
+           IS.insert elem st
   return storeFin
   
 -- ("Monovariant" because it throws away information we know about what time things arrive at)
@@ -268,7 +268,7 @@ monovariantStore store = do
   IM.forEach store $ \ (Binding vr _throwaway) d -> do
     IS.forEach d $ \ elm -> do
       let elm' = monovariantValue elm
-      IM.modify mp vr newEmptySet (IS.putInSet elm')
+      IM.modify mp vr newEmptySet (IS.insert elm')
     return ()
   return mp
   

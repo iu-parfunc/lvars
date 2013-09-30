@@ -12,7 +12,7 @@ import Control.DeepSeq
 
 import qualified Control.LVish as L
 import qualified Data.LVar.IVar as I
-import qualified Data.LVar.Set  as S
+import qualified Data.LVar.PureSet  as S
 
 import Classes
 
@@ -46,7 +46,7 @@ get = MPar . fmap Mono . I.get
 -- Lifted Set ops:
 
 putInSet :: Ord a => Mono a -> S.ISet a -> MPar ()
-putInSet (Mono a) set = MPar $ S.putInSet a set
+putInSet (Mono a) set = MPar $ S.insert a set
 
 -- By using monotonic callbacks we can guarantee that premature freezes can be rerun
 -- rather than resulting in errors.
@@ -95,7 +95,7 @@ example :: L.Par ()
 example = do
   s1 <- S.newEmptySet
   s2 <- S.newEmptySet
-  mapM_ (\n -> L.fork $ S.putInSet n s1) [1..10::Word]
+  mapM_ (\n -> L.fork $ S.insert n s1) [1..10::Word]
   -- sync here if desired...
   speculateFrozen s1 $ \ snap -> do
     setForeach snap  $ \ elem -> do
@@ -107,7 +107,7 @@ example2 = do
   s1 <- S.newEmptySet
   sz <- newCounter
   sm <- newCounter
-  mapM_ (\n -> L.fork $ S.putInSet n s1) [1..10::Word]
+  mapM_ (\n -> L.fork $ S.insert n s1) [1..10::Word]
   -- sync here if desired...
   speculateFrozen s1 $ \ snap -> do
     setForeach snap  $ \ elem -> do
