@@ -4,8 +4,6 @@
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
 -- Extended with less ad-hoc support for halting
 
--- module Main where
-
 import Control.Applicative (liftA2, liftA3)
 import qualified Control.Monad.State as State
 import Control.Monad

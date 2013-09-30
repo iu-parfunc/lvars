@@ -5,7 +5,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
--- module Apps.CFA.KCFA_LVish
 module Main where
 
 -- Translated from Matt Might's article: http://matt.might.net/articles/implementation-of-kcfa-and-0cfa/k-CFA.scm
@@ -25,16 +24,16 @@ import Data.List ((\\))
 import Debug.Trace
 
 import Control.LVish
-import Control.LVish.DeepFreeze
+import Control.LVish.DeepFrz
 import Control.LVish.Internal (liftIO)
 import Control.LVish.SchedIdempotent (dbgLvl)
 #define NONSCALABLE
 #ifdef NONSCALABLE
-import  Data.LVar.Set as IS
-import  Data.LVar.Map as IM
+import  Data.LVar.PureSet as IS
+import  Data.LVar.PureMap as IM
 #elif defined(HYBRID)
 #warning "Using lockfree map with plain set"
-import  Data.LVar.Set as IS
+import  Data.LVar.PureSet as IS
 import  Data.LVar.SLMap as IM
 #else
 #warning "Building with genuine lock-free structures."
@@ -134,7 +133,7 @@ instance Out (State s) where
 
 -- | Mutate a store to increase the set of values that an Addr may bind to.
 storeInsert :: Addr -> Value -> Store s -> Par d s ()
-storeInsert a v s = IM.modify s a (IS.putInSet v)
+storeInsert a v s = IM.modify s a newEmptySet (IS.putInSet v)
   
 -- k-CFA parameters
 
@@ -222,7 +221,7 @@ escape (Closure (_l, formals, call) benv) store = do
 fvStuff :: [Var] -> Store s -> Par d s (BEnv, Store s)
 fvStuff xs store = do
   forM_ xs $ \x -> do
-    IM.modify store (Binding x []) $ putInSet Arbitrary
+    IM.modify store (Binding x []) newEmptySet $ putInSet Arbitrary
   return (M.fromList [(x, []) | x <- xs], store)
 
 --------------------------------------------------------------------------------
@@ -258,7 +257,7 @@ summarize states = do
   void$ IS.forEach states $ \ (State _ _ store_n _) -> do 
     void$ IM.forEach store_n $ \ key val -> do
       void$ IS.forEach val $ \ elem  -> do
-        IM.modify storeFin key $ \ st -> do
+        IM.modify storeFin key newEmptySet $ \ st -> do
            putInSet elem st
   return storeFin
   
@@ -269,7 +268,7 @@ monovariantStore store = do
   IM.forEach store $ \ (Binding vr _throwaway) d -> do
     IS.forEach d $ \ elm -> do
       let elm' = monovariantValue elm
-      IM.modify mp vr (IS.putInSet elm')
+      IM.modify mp vr newEmptySet (IS.putInSet elm')
     return ()
   return mp
   
@@ -280,15 +279,15 @@ monovariantStore store = do
    monovariantValue Arbitrary             = Ref "unknown"
 
 -- | Perform a complete, monovariant analysis.
-analyse :: Call -> IO (M.Map Var (S.Set Exp))
+
+-- LK: I'm not sure how to fix this.
+analyse :: Call -> IO (M.Map Var (IS.ISet s Exp))
 -- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
 analyse e = runParIO $ do
   ms <- par
-  IMapSnap ms' <- freeze ms
-  IMapSnap ms'' <- traverseSnap (deSnap . freeze) (IMapSnap ms')
-  return ms''
+  IM.freezeMap ms
  where
-   deSnap m = m >>= \ (ISetSnap s) -> return s
+   -- deSnap m = m >>= \ (ISetSnap s) -> return s
    
    -- res :: (M.Map Var (S.Set Exp))
    -- res = runDeepFreezable df 
