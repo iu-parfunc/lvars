@@ -1,6 +1,7 @@
 redex/LVish/compiled/
 dist
 cabal-dev
+docs_examples
 *.o
 *.hi
 *.chi
