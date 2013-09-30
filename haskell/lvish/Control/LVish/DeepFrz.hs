@@ -55,15 +55,15 @@ import Control.LVish.SchedIdempotent (runPar, runParIO)
 -- (after the implicit global barrier of `runPar`), then we've avoided all data
 -- races, and freezing is therefore safe.
 -- 
--- For this to be possible, the type returned from the Par computation must be a
+-- For this to be possible, the type returned from the `Par` computation must be a
 -- member of the `DeepFrz` class.  All LVar libraries should provide this instance
 -- already.  Further, you can create additional instances for custom, pure datatypes.
 -- The result of a `runParThenFreeze` depends on the type-level function `FrzType`,
 -- whose only purpose is to toggle the `s` parameters of all IVars to the `Frzn`
 -- state.
 --
--- Significantly, the freeze at the end of `runParThenFreeze` has NO runtime cost, in
--- spite of the fact that it enables a DEEP (recursive) freeze of the value returned
+-- Significantly, the freeze at the end of `runParThenFreeze` has /no/ runtime cost, in
+-- spite of the fact that it enables a /deep/ (recursive) freeze of the value returned
 -- by the `Par` computation.
 runParThenFreeze :: DeepFrz a => Par Det s a -> FrzType a
 runParThenFreeze (WrapPar p) = frz $ runPar p
@@ -73,7 +73,7 @@ runParThenFreeze (WrapPar p) = frz $ runPar p
 -- Such computations may also do freezes internally, but this function has an
 -- advantage vs. doing your own freeze at the end of your computation.  Namely, when
 -- you use `runParThenFreezeIO`, there is an implicit barrier before the final
--- freeze.  Further, DeepFrz has no runtime overhead, whereas regular freezing has a cost.
+-- freeze.  Further, `DeepFrz` has no runtime overhead, whereas regular freezing has a cost.
 runParThenFreezeIO :: DeepFrz a => Par d s a -> IO (FrzType a)
 runParThenFreezeIO (WrapPar p) = do
   x <- runParIO p

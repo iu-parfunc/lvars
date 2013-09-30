@@ -24,7 +24,7 @@
   Here is a self-contained example that writes the same value to @num@
   twice and deterministically prints @4@ instead of raising an error, as
   it would if @num@ were a traditional IVar rather than an LVar. (You
-  will need to compile using the `-XDataKinds` extension.)
+  will need to compile using the @-XDataKinds@ extension.)
 
 > {-# LANGUAGE DataKinds #-}
 > import Control.LVish  -- Generic scheduler; works with any lattice.
