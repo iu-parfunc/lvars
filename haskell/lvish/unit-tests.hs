@@ -85,6 +85,7 @@ main = do
    , HU.TestLabel "case_v1b" $ HU.TestCase case_v1b
    , HU.TestLabel "case_v2a" $ HU.TestCase case_v2a
    , HU.TestLabel "case_v2b" $ HU.TestCase case_v2b -- livelock? [2013.09.26]
+--   , HU.TestLabel "case_v3a" $ HU.TestCase case_v3a
    , HU.TestLabel "case_v3b" $ HU.TestCase case_v3b
    , HU.TestLabel "case_i3c" $ HU.TestCase case_i3c
    , HU.TestLabel "case_v3d" $ HU.TestCase case_v3d
@@ -191,23 +192,23 @@ v2b = runParIO $
 
 -- FIMXE:
 
--- -- | This version uses deep freeze.        
--- case_v2c :: Assertion
--- case_v2c = assertEqual "t2 with spawn instead of fork"
---              (S.fromList [1..10] :: S.Set Int)
---              (IS.fromISet v2c)
+-- | This version uses deep freeze.        
+case_v2c :: Assertion
+case_v2c = assertEqual "t2 with spawn instead of fork"
+             (S.fromList [1..10] :: S.Set Int)
+             (IS.fromISet v2c)
              
--- -- v2c :: S.Set Int
--- v2c :: IS.ISet Frzn Int
--- v2c = -- IS.fromISet $
---       runParThenFreeze par
---   where
---     par :: Par Det s (IS.ISet s Int)
---     par = 
---      do s   <- IS.newEmptySet 
---         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]
---         mapM_ IV.get ivs -- Join point.
---         return s
+-- v2c :: S.Set Int
+v2c :: IS.ISet Frzn Int
+v2c = -- IS.fromISet $
+      runParThenFreeze par
+  where
+    par :: Par Det s (IS.ISet s Int)
+    par = 
+     do s   <- IS.newEmptySet 
+        ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]
+        mapM_ IV.get ivs -- Join point.
+        return s
 
 -- | Simple callback test.
 -- case_v3a :: Assertion
@@ -991,19 +992,6 @@ dftest1 = runParIO $ do
   IV.put_ iv2 "hello"
   Just x <- IV.freezeIVar iv1
   IV.freezeIVar x
-
--- FIXME
--- case_dftest2 = assertEqual "deefreeze double ivar"
---                  (Just (Just "hello")) =<< dftest2
-
--- -- | This uses the more generic lifting... but it's more annoying to unpack:
--- dftest2 :: IO (Maybe (Maybe String))
--- dftest2 = runParThenFreezeIO $ do
---   iv1 <- IV.new 
---   iv2 <- newBottom
---   IV.put_ iv1 iv2
---   IV.put_ iv2 "hello"
---   return iv1
 
 case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
 dftest3 :: IO (Maybe Int)

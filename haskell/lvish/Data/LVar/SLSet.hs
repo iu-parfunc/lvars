@@ -110,7 +110,7 @@ instance OrderedLVarData1 ISet where
 --   Hence they need a `DeepFrz` instance.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
-  type FrzType (ISet s a) = ISet Frzn a 
+  type FrzType (ISet s a) = ISet Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 -- | Test whether an element is in a frozen image of a set.
