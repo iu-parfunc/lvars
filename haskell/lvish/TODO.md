@@ -1,9 +1,11 @@
 # LVish implementation TODOs
 
+Also see issues for the initial release:
+  https://github.com/iu-parfunc/lvars/issues?milestone=1&state=open
+
   * Do Hackage release as soon as possible
 
   * REMOVE extra frozen Map type in SLMap, obsolete.
-  * 
 
   * (?) Make sure there are SHOW instances.  
   * (Ryan) Use modern (released) HSBencher.  
