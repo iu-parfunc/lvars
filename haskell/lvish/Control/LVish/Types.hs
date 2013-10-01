@@ -1,10 +1,11 @@
-
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- | A simple internal module to factor out types that are used in many places.
 module Control.LVish.Types
        (LVishException(..))
        where
 
+import Data.Typeable (Typeable)
 import Control.Exception
 
 -- | All @LVar@s share a common notion of exceptions.

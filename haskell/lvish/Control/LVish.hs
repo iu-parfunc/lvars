@@ -4,8 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-g{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
@@ -92,7 +91,6 @@ module Control.LVish
   ) where
 
 import qualified Data.Foldable    as F
-import           Data.Typeable (Typeable)
 import           Control.Exception (Exception)
 import           Control.LVish.Internal
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
