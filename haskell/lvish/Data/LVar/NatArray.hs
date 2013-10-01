@@ -70,6 +70,7 @@ import qualified Data.Bits.Atomic as B
 import Data.Bits ((.&.))
 
 import           Control.Monad (void)
+import           Control.Exception (throw)
 import           Data.IORef
 import           Data.Maybe (fromMaybe)
 import qualified Data.Set as S
@@ -197,7 +198,7 @@ forEach = forEachHP Nothing
 -- Strict in the element being put in the set.
 put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt) =>
        NatArray s elt -> Int -> elt -> Par d s ()
-put _ !ix 0 = error$ "NatArray: violation!  Attempt to put zero to index: "++show ix
+put _ !ix 0 = throw (LVarSpecificExn$ "NatArray: violation!  Attempt to put zero to index: "++show ix)
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector offset fptr) =
           withForeignPtr fptr $ \ ptr -> do 
@@ -208,7 +209,7 @@ put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
             case orig of
               0 -> return (Just (ix, elm))
               i | i == elm  -> return Nothing -- Allow repeated, equal puts.
-                | otherwise -> error$"Multiple puts to index of a NatArray: "++
+                | otherwise -> throw$ ConflictingPutExn$ "Multiple puts to index of a NatArray: "++
                                      show ix++" new/old : "++show elm++"/"++show orig
 
 {-# INLINE get #-}

@@ -65,9 +65,15 @@ fromMaxCounter (PureLVar lv) =
   case unsafeDupablePerformIO (readIORef (state lv)) of
     MC n -> n
 
+instance DeepFrz MC where
+   type FrzType MC = MC
+
+-- Don't need this because there is an instance for `PureLVar`:
+{-
 -- | @MaxCounter@ values can be returned in the results of a
 --   `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz (MaxCounter s) where
    type FrzType (MaxCounter s) = (MaxCounter Frzn)
    frz = unsafeCoerce#
+-}

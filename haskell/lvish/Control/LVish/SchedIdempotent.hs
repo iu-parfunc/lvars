@@ -64,7 +64,7 @@ import           System.Random (random)
 -- import Control.Compose ((:.), unO)
 import Data.Traversable 
 
--- import qualified Control.LVish.Types
+import Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 
@@ -345,7 +345,7 @@ putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
         Sched.setStatus q noName       -- retract our modification intent
         whenJust delta $ \d -> do
           case curStatus of
-            Frozen -> error "Attempt to change a frozen LVar"
+            Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
             Active listeners -> 
               B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
         exec (k ret) q 
@@ -595,7 +595,7 @@ runPar_internal2 c = do
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         mytid <- myThreadId
         when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
-        error ("EXCEPTION in runPar("++show mytid++"): "++show e)
+        E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
   return ans
@@ -649,13 +649,6 @@ runParLogged c =
   do res <- runPar_internal2 c
      lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
      return (reverse lines, res)
-
--- | A trapped instance of non-determinism at runtime.
-data NonDeterminismExn = NonDeterminismExn String
-  deriving (Eq, Ord, Show, Read, Typeable)
-
-instance E.Exception NonDeterminismExn where
-
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()

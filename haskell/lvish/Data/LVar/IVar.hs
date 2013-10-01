@@ -42,6 +42,7 @@ import           Control.DeepSeq
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 import qualified Data.Foldable    as F
+import           Control.Exception (throw)
 import           Control.LVish as LV 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as I
@@ -114,9 +115,9 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 
 {-# INLINE put_ #-}
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
--- are not allowed, and result in a runtime error.
+-- are not allowed, and result in a runtime error.  (Unless both values put happen to be @(==)@.)
 --         
--- Strict up to WHNF in the element put.
+-- This function is always at least strict up to WHNF in the element put.
 put_ :: Eq a => IVar s a -> a -> Par d s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef ref update
@@ -124,7 +125,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               error$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")"
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
 
 -- | The specialized freeze just for IVars.  It leaves the result in a natural format (`Maybe`).

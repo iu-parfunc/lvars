@@ -30,7 +30,8 @@ module Data.LVar.SLMap
          IMap,
          newEmptyMap, newMap, newFromList,
          insert, 
-         getKey, waitValue, waitSize, modify, freezeMap,
+         getKey, waitSize, modify, freezeMap,
+         -- waitValue, 
 
          -- * Iteration and callbacks
          forEach, forEachHP, 
@@ -44,7 +45,8 @@ module Data.LVar.SLMap
 
        ) where
 
-import Control.Applicative
+import           Control.Exception (throw)
+import           Control.Applicative
 import           Data.Concurrent.SkipListMap as SLM
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
@@ -89,18 +91,15 @@ instance Eq (IMap k s v) where
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) =
-    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-
   -- | Get the exact contents of the map.  Using this may cause your
   -- program to exhibit a limited form of nondeterminism: it will never
   -- return the wrong answer, but it may include synchronization bugs
-  -- that can (nondeterministically) cause exceptions.
-  sortFreeze (IMap (WrapLVar lv)) = WrapPar $ do
-    freezeLV lv
-    ls <- L.liftIO $ SLM.foldlWithKey
-             (\acc _key elm -> return $! elm:acc) [] (L.state lv)
-    return (AFoldable ls)
+  -- that can (nondeterministically) cause exceptions.  
+  freeze orig@(IMap (WrapLVar lv)) =
+    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+                
+  -- | We can do better than the default here; this is /O(1)/:  
+  sortFrzn = AFoldable 
 
   -- | This generic version has the disadvantage that it does not observe the KEY,
   -- only the value.
@@ -212,7 +211,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
           putRes <- SLM.putIfAbsent slm key $ return elm
           case putRes of
             Added _ -> return $ Just (key, elm)
-            Found _ -> error "Multiple puts to one entry in an IMap!"
+            Found _ -> throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
           
 -- | IMap's containing other LVars have some additional capabilities compared to
 -- those containing regular Haskell data.  In particular, it is possible to modify
@@ -244,7 +243,7 @@ getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
 
 -- | Wait until the map contains a certain value (on any key).
 waitValue :: (Ord k, Eq v) => v -> IMap k s v -> Par d s ()
-waitValue !val (IMap (WrapLVar lv)) = error "TODO"
+waitValue !val (IMap (WrapLVar lv)) = error "TODO / FINISHME SLMap.waitValue"
 
 -- | Wait on the SIZE of the map, not its contents.
 waitSize :: Int -> IMap k s v -> Par d s ()

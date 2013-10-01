@@ -80,8 +80,9 @@ instance Eq (ISet s v) where
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 ISet where
   freeze orig@(ISet (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-  sortFreeze is = AFoldable <$> freezeSet is
   addHandler = forEachHP
+  -- | We can do better than the default here; this is /O(1)/:
+  sortFrzn (ISet lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
 
 -- | The `ISet`s in this module also have the special property that they support an
 -- `O(1)` freeze operation which immediately yields a `Foldable` container

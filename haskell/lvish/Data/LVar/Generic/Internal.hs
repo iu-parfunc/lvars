@@ -59,16 +59,15 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.
   -- The result is fully accessible to the user (`Foldable`).
-  sortFreeze :: forall a s . Ord a => f s a -> Par QuasiDet s (AFoldable a)
-  sortFreeze lv = do
-    lv2 <- freeze lv
+  sortFrzn :: Ord a => f Frzn a -> AFoldable a
+  sortFrzn lv = 
     let lv3 :: f Trvrsbl a
-        lv3 = unsafeCoerceLVar lv2
+        lv3 = unsafeCoerceLVar lv
         ls  = F.foldr (:) [] lv3
         ls' = sort ls
     -- Without a traversible instance we cannot reconstruct an ordered
     -- version of the LVar contents with its original type:
-    return (AFoldable ls')
+    in AFoldable ls'
 
 -- | Carries a Foldable type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have

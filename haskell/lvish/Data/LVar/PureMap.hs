@@ -42,6 +42,7 @@ module Data.LVar.PureMap
        ) where
 
 import           Control.Monad (void)
+import           Control.Exception (throw)
 import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
 import           Data.Monoid (Monoid(..))
 import           Data.IORef
@@ -81,10 +82,10 @@ instance Eq (IMap k s v) where
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)  
-  sortFreeze is = AFoldable <$> freezeMap is
+  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
   addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
+  sortFrzn (IMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
 
 -- | The `IMap`s in this module also have the special property that they support an
 -- `O(1)` freeze operation which immediately yields a `Foldable` container
@@ -180,6 +181,9 @@ forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing 
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
+-- 
+--   As with other container LVars, if an key is put multiple times, the values had
+--   better be equal @(==)@, or a multiple-put error is raised.
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
@@ -187,7 +191,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
         update mp =
           let mp' = M.insertWith fn key elm mp
               fn v1 v2 | v1 == v2  = v1
-                       | otherwise = error "Multiple puts to one entry in an IMap!"
+                       | otherwise = throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
           in
           -- Here we do a constant time check to see if we actually changed anything:
           -- For idempotency it is important that we return Nothing if not.

@@ -7,6 +7,7 @@ module Data.LVar.Pair (
   ) where
 
 import Data.IORef
+import Control.Exception (throw)
 import Control.LVish
 import Control.LVish.Internal
 import Control.LVish.SchedIdempotent (newLV, putLV, getLV)
@@ -30,13 +31,13 @@ newPair = WrapPar $ fmap WrapLVar $ newLV $ do
 putFst :: IPair s a b -> a -> Par d s ()
 putFst (WrapLVar lv) !elt = WrapPar $ putLV lv putter
   where putter (r1, _)  = atomicModifyIORef r1 update
-        update (Just _) = error "Multiple puts to first element of an IPair!"
+        update (Just _) = throw$ ConflictingPutExn$ "Multiple puts to first element of an IPair!"
         update Nothing  = (Just elt, Just $ Left elt)
         
 putSnd :: IPair s a b -> b -> Par d s ()
 putSnd (WrapLVar lv) !elt = WrapPar $ putLV lv putter
   where putter (_, r2)  = atomicModifyIORef r2 update
-        update (Just _) = error "Multiple puts to second element of an IPair!"
+        update (Just _) = throw$ ConflictingPutExn$ "Multiple puts to second element of an IPair!"
         update Nothing  = (Just elt, Just $ Right elt) 
         
 getFst :: IPair s a b -> Par d s a 

@@ -86,19 +86,10 @@ instance LVarData1 ISet where
   -- mutable to the immutable form of the data structure.
   freeze orig@(ISet (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+  addHandler = forEachHP                
+  -- | We can do better than the default here; this is /O(1)/:  
+  sortFrzn (is :: ISet Frzn a) = AFoldable is
 
-  -- | Get the exact contents of the set.  Using this may cause your
-  -- program to exhibit a limited form of nondeterminism: it will never
-  -- return the wrong answer, but it may include synchronization bugs
-  -- that can (nondeterministically) cause exceptions.
-  sortFreeze (ISet (WrapLVar lv)) = WrapPar $ do
-    -- freezeSet :: Ord a => ISet s a -> QPar s (ISet Frzn a)    
-    freezeLV lv
-    set <- L.liftIO $ SLM.foldlWithKey
-             (\s elm () -> return $ S.insert elm s) S.empty (L.state lv)
-    return (AFoldable set)
-
-  addHandler = forEachHP
 
 -- | The `ISet`s in this module also have the special property that they support an
 -- `O(1)` freeze operation which immediately yields a `Foldable` container
