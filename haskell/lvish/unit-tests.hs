@@ -1053,6 +1053,12 @@ show04 = show$ runParThenFreeze $ do
   ISt.put ist 1 (44::Int)
   return ist
 
+case_show05 = assertEqual "show for ISet" "fromList [33,44]" show05
+show05 = show$ runParThenFreeze $ do
+  is <- IS.newEmptySet
+  IS.insert (33::Int) is
+  IS.insert (44::Int) is
+  return is
 
 ------------------------------------------------------------------------------------------
 -- Misc Helpers

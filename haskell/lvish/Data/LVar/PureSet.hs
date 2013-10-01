@@ -110,6 +110,10 @@ instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
+instance (Show a) => Show (ISet Frzn a) where
+  show (ISet lv) =
+    show $ unsafeDupablePerformIO $ readIORef (state lv)
+
 -- | Create a new, empty, monotonically growing 'ISet'.
 newEmptySet :: Par d s (ISet s a)
 newEmptySet = newSet S.empty
