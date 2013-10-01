@@ -325,6 +325,7 @@ fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
 ------------------------------------------------------------------------------------------
 
+main :: IO ()
 main = makeMain runExample
 
 runExample :: UniqM Call -> IO ()

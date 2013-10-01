@@ -62,6 +62,7 @@ instance NFData Call where
 -- Helper functions for constructing syntax trees
 -------------------------------------------------
 
+-- | Use a counter to be able to generate unique names (gensyms)
 type UniqM = State.State Int
 
 newLabel :: UniqM Int
@@ -201,8 +202,9 @@ standardBig n =
         
 
 -- boolScramble 0 k = k
+boolScramble :: Integral a => a -> UniqM Exp -> UniqM Call
 boolScramble 0 k = halt k
-boolScramble 1 k = halt (ref "freeVr")
+boolScramble 1 _ = halt (ref "freeVr")
 boolScramble n k = do 
   x <- newVar "x"
   y <- newVar "y"
