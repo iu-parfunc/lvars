@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -23,6 +24,8 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit (Test(..))
 
+import Control.LVish.DeepFrz
+
 -- k-CFA parameters
 
 k_param :: Int
@@ -45,6 +48,9 @@ data Call = Call Label Exp [Exp]                 deriving (Eq, Ord, Show, Generi
 instance Out Call
 instance Out Exp
 
+instance DeepFrz Exp where
+  type FrzType Exp = Exp
+  
 instance NFData Exp where
   rnf Halt = ()
   rnf (Ref v) = rnf v

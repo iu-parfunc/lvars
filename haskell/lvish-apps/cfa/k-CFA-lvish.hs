@@ -221,7 +221,7 @@ escape (Closure (_l, formals, call) benv) store = do
 fvStuff :: [Var] -> Store s -> Par d s (BEnv, Store s)
 fvStuff xs store = do
   forM_ xs $ \x -> do
-    IM.modify store (Binding x []) newEmptySet $ insert Arbitrary
+    IM.modify store (Binding x []) newEmptySet $ IS.insert Arbitrary
   return (M.fromList [(x, []) | x <- xs], store)
 
 --------------------------------------------------------------------------------
@@ -281,11 +281,9 @@ monovariantStore store = do
 -- | Perform a complete, monovariant analysis.
 
 -- LK: I'm not sure how to fix this.
-analyse :: Call -> IO (M.Map Var (IS.ISet s Exp))
+analyse :: Call -> IMap Var Frzn (IS.ISet Frzn Exp)
 -- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
-analyse e = runParIO $ do
-  ms <- par
-  IM.freezeMap ms
+analyse e = runParThenFreeze $ par
  where
    -- deSnap m = m >>= \ (ISetSnap s) -> return s
    
@@ -331,15 +329,15 @@ main = makeMain runExample
 
 runExample :: UniqM Call -> IO ()
 runExample example = do
-  mp <- analyse (runUniqM example)
-  let res = M.toList mp
+  let mp = analyse (runUniqM example)
+  let res = M.toList (fromIMap mp)
   len <- evaluate (length res)
   putStrLn$ "===== #results = "++show len ++ ",  K is "++show k_param
   when (dbgLvl >= 1) $ 
   --  forM_ res $ \(x, ISetSnap es) -> do
     forM_ res $ \(x, es) -> do
       putStrLn (x ++ ":")
-      mapM_ (putStrLn . ("  " ++) . show) (S.toList es)
+      mapM_ (putStrLn . ("  " ++) . show) (S.toList (IS.fromISet es))
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
