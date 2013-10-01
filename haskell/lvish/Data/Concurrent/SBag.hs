@@ -196,14 +196,17 @@ tryGetAny bag = do
             writeIORef (threadHead localData) blockSize
             loop
             else do            
-              result <- V.read (nodes (fromJust block)) head
-              if isNothing result then do 
+              preTicket <- readArrayForCas (nodes (fromJust block)) head
+              if isNothing (peekTicket preTicket) then do 
                 writeIORef (threadHead localData) (head - 1)
                 trace "reading at head was Nothing" loop
                 else do
-                  V.write (nodes (fromJust block)) head Nothing
+                -- cas               
+                (bool, postTicket) <- casIOArray (nodes $ fromJust block) head preTicket Nothing
+                if bool then do
                   writeIORef (threadHead localData) head
-                  return result
+                  return $ peekTicket postTicket
+                  else do loop
   trace "main tryGetAny loop" loop
       
 tryStealBlock :: SBag a -> Int -> Int -> IO (Maybe a)
@@ -256,15 +259,16 @@ tryStealBlock bag id round = do
           writeIORef (stealHead localData) head
           writeIORef ans Nothing
           else do
-          value <- V.read (nodes $ fromJust block) lHead
-          if isNothing value then do
+          ticketPre <- readArrayForCas (nodes $ fromJust block) lHead
+          if isNothing (peekTicket ticketPre) then do
             loop (lHead + 1)
             else do
-            -- cas --
-            V.write (nodes $ fromJust block) lHead Nothing
-            -- end cas --
-            writeIORef (stealHead localData) lHead
-            writeIORef ans value  
+            -- cas --            
+            (bool, ticket) <- casIOArray (nodes $ fromJust block) lHead ticketPre Nothing
+            if bool then do                          
+              writeIORef (stealHead localData) lHead
+              writeIORef ans (peekTicket ticket)
+              else return ()
   if activeBool then do loop head else return ()            
   readIORef ans
          
