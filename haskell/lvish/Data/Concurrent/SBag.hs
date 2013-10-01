@@ -180,7 +180,7 @@ tryGetAny bag = do
                               old <- readIORef i
                               writeIORef i (old + 1)
                               iLoop
-                            else
+                             else
                               iLoop
           let rLoop = do
                 r <- readIORef round

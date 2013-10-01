@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import Prelude hiding (write, read, freeze, replicate)
 import Data.Vector.Mutable
@@ -87,9 +88,9 @@ test7 = do
 test8 = do
   arr <- replicate 5 False
   x <- B.readArrayForCas (arr :: IOVector Bool) 2
-  xValue <- peekTicket (x :: Ticket Bool)
+  let xValue = peekTicket (x :: Ticket Bool)
   (bool, ticket) <- B.casIOArray arr 2 x True
-  res <- peekTicket (ticket :: Ticket Bool)
+  let res = peekTicket (ticket :: Ticket Bool)
   putStrLn (show (xValue == False) ++ " " ++ show (res == True))
-  
+  return ()
   
