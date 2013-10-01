@@ -1,12 +1,12 @@
-module Data.Concurrent.SBag(SBag, new, insert, tryGetAny) where
+module Data.Concurrent.SBag(SBag, new, insert, tryGetAny, initThread) where
 
 import qualified Data.Vector.Mutable as V
 import qualified Data.Vector as IV
 import GHC.Conc
 import Data.Maybe
 import Data.IORef
---import Data.Atomics
---import Data.Atomics.Internal
+import Data.Atomics
+import Data.Atomics.Internal
 
 import Debug.Trace
 
@@ -314,67 +314,3 @@ foo = do
 
 --------
 
-test0 = do
-  bag <- new
-  return ()
-  
-test1 = do
-  bag <- new
-  initThread bag
-
-test2 = do
-  bag <- new
-  initThread bag
-  insert bag 120
-  
-test3 = do
-  bag <- new
-  initThread bag
-  insert bag 120
-  res <- tryGetAny bag
-  putStrLn $ show $ fromJust res
-  
-test4 = do
-  bag <- new
-  initThread bag
-  insert bag 1
-  insert bag 2
-  res1 <- tryGetAny bag  
-  res2 <- tryGetAny bag
-  putStrLn $ (show $ fromJust res1) ++ " " ++ (show $ fromJust res2)
-  
-test5 = do
-  bag <- new :: IO (SBag Int)
-  initThread bag
-  mapM_ (insert bag) [0..6]
-  mapM_ (\n -> do
-            v <- tryGetAny bag
-            putStrLn $ show v)
-        [0..6]
-    
-test6 = do
-  bag <- new :: IO (SBag Int)
-  mapM_ (insert bag) [0..2]
-  mapM_ (\n -> do
-            v <- tryGetAny bag
-            putStrLn $ show v)
-        [0..2]
-  mapM_ (insert bag) [3..5]
-  mapM_ (\n -> do
-            v <- tryGetAny bag
-            putStrLn $ show v)
-        [0..2]
-    
-test7 = do
-  bag <- new :: IO (SBag Int)
-  mapM_(insert bag) [0..2]
-  mapM_ (\n -> do
-            v <- tryGetAny bag
-            putStrLn $ show v)
-        [0..4]
-  mapM_(insert bag) [3..5]
-  mapM_ (\n -> do
-             v <- tryGetAny bag
-             putStrLn $ show v)
-        [0..4]
-    
