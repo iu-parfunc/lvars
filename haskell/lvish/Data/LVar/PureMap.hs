@@ -51,6 +51,7 @@ import qualified Data.Foldable as F
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Data.UtilInternal (traverseWithKey_)
+import           Data.List (intersperse)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
@@ -108,6 +109,13 @@ instance F.Foldable (IMap k Trvrsbl) where
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
+
+instance (Show k, Show a) => Show (IMap k Frzn a) where
+  show (IMap lv) =
+    let mp' = unsafeDupablePerformIO (readIORef (state lv)) in
+    "{IMap: " ++
+    (concat $ intersperse ", " $ map show $
+     M.toList mp') ++ "}"
 
 --------------------------------------------------------------------------------
 

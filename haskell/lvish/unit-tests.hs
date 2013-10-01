@@ -1029,22 +1029,29 @@ dftest3 = runParIO $ do
 -- Show instances
 ------------------------------------------------------------------------------------------
 
-case_show01 = assertEqual "show for IVar" "" show01
+case_show01 = assertEqual "show for IVar" "Just 3" show01
 show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
 
-case_show02 = assertEqual "show for SLMap" "" show02
-show02 = show$ runParThenFreeze $ do
-  mp <- SM.newEmptyMap
-  SM.insert "key1" (33::Int) mp
-  SM.insert "key2" (44::Int) mp  
-  return mp
+-- case_show02 = assertEqual "show for SLMap" "" show02
+-- show02 = show$ runParThenFreeze $ do
+--   mp <- SM.newEmptyMap
+--   SM.insert "key1" (33::Int) mp
+--   SM.insert "key2" (44::Int) mp  
+--   return mp
 
-case_show03 = assertEqual "show for Map" "" show03
+case_show03 = assertEqual "show for Map" "{IMap: (\"key1\",33), (\"key2\",44)}" show03
 show03 = show$ runParThenFreeze $ do
   mp <- IM.newEmptyMap
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  
   return mp
+
+case_show04 = assertEqual "show for IStructure" "{IStructure: Just 33, Just 44}" show04
+show04 = show$ runParThenFreeze $ do
+  ist <- ISt.newIStructure 2
+  ISt.put ist 0 (33::Int)
+  ISt.put ist 1 (44::Int)
+  return ist
 
 
 ------------------------------------------------------------------------------------------

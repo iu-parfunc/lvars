@@ -89,7 +89,11 @@ instance F.Foldable (IVar Trvrsbl) where
   foldr fn zer (IVar lv) =
     case unsafeDupablePerformIO$ readIORef (state lv) of
       Just x  -> fn x zer
-      Nothing -> zer 
+      Nothing -> zer
+
+instance (Show a) => Show (IVar Frzn a) where
+  show (IVar lv) =
+    show $ unsafeDupablePerformIO $ readIORef (state lv)
 
 --------------------------------------
 

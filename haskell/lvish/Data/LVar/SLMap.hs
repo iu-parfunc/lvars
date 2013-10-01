@@ -49,7 +49,9 @@ import           Data.Concurrent.SkipListMap as SLM
 import qualified Data.Map.Strict as M
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable    as F
+import           Data.IORef (readIORef)
 import           Data.UtilInternal (traverseWithKey_)
+import           Data.List (intersperse)
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.Monad

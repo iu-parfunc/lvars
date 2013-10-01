@@ -35,6 +35,7 @@ import           Data.Maybe (fromJust, isJust)
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.IVar (IVar(IVar))
 import qualified Data.Foldable as F
+import           Data.List (intersperse)
 -- import qualified Data.Traversable as T
 
 import           Control.LVish as LV 
@@ -97,6 +98,15 @@ instance F.Foldable (IStructure Trvrsbl) where
 instance DeepFrz a => DeepFrz (IStructure s a) where
   type FrzType (IStructure s a) = IStructure Frzn (FrzType a)
   frz = unsafeCoerceLVar
+
+instance (Show a) => Show (IStructure Frzn a) where
+  show (IStructure vec) =
+  -- individual elements are showable, and show returns a string, so
+  -- we want to concatenate those.
+    "{IStructure: " Prelude.++
+    (Prelude.concat $ intersperse ", " $ Prelude.map show $ V.toList vec) Prelude.++
+    "}"
+    
 
 ------------------------------------------------------------------------------
 
