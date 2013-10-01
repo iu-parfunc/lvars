@@ -137,7 +137,7 @@ freezeNatArray (NatArray lv) =
 {-
 
 instance DeepFrz a => DeepFrz (NatArray s a) where
-  type FrzType (NatArray s a) = NatArray Frzn a 
+  type FrzType (NatArray s a) = NatArray Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 -- | /O(1)/: Convert from a frozen `NatArray` to a plain vector.

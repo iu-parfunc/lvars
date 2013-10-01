@@ -28,6 +28,8 @@ boilerplate to give them `DeepFrz` instances.  Here is a complete example:
 
 -}
 
+-- LK: TODO: another example of a recursive FrzType would be nice.
+
 module Control.LVish.DeepFrz
        (
          -- * The functions you'll want to use

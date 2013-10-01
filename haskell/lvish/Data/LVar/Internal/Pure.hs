@@ -119,6 +119,8 @@ instance Eq (PureLVar s v) where
 --   Hence they need a `DeepFrz` instace.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (PureLVar s a) where
-  type FrzType (PureLVar s a) = PureLVar Frzn a -- No recursion, the contents are pure.
+  -- We can't be sure that someone won't put an impure value inside a
+  -- PureLVar!  Therefore we have to apply FrzType recursively.
+  type FrzType (PureLVar s a) = PureLVar Frzn (FrzType a)
   frz = unsafeCoerce#
 
