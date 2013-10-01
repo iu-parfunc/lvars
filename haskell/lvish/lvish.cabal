@@ -109,7 +109,7 @@ library
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
---  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -O2 -threaded -rtsopts
   if flag(abstract-par) 
     cpp-options: -DUSE_ABSTRACT_PAR
     build-depends:  abstract-par >=0.4
