@@ -42,6 +42,7 @@ module Data.LVar.PureMap
        ) where
 
 import           Control.Monad (void)
+import           Control.Exception (throw)
 import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
 import           Data.Monoid (Monoid(..))
 import           Data.IORef
@@ -182,7 +183,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
         update mp =
           let mp' = M.insertWith fn key elm mp
               fn v1 v2 | v1 == v2  = v1
-                       | otherwise = error "Multiple puts to one entry in an IMap!"
+                       | otherwise = throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
           in
           -- Here we do a constant time check to see if we actually changed anything:
           -- For idempotency it is important that we return Nothing if not.

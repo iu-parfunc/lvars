@@ -42,6 +42,7 @@ import           Control.DeepSeq
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 import qualified Data.Foldable    as F
+import           Control.Exception (throw)
 import           Control.LVish as LV 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as I
@@ -120,7 +121,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               error$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")"
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
 
 -- | The specialized freeze just for IVars.  It leaves the result in a natural format (`Maybe`).

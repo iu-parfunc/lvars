@@ -650,13 +650,6 @@ runParLogged c =
      lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
      return (reverse lines, res)
 
--- | A trapped instance of non-determinism at runtime.
-data NonDeterminismExn = NonDeterminismExn String
-  deriving (Eq, Ord, Show, Read, Typeable)
-
-instance E.Exception NonDeterminismExn where
-
-
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
 atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))

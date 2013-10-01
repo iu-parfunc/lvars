@@ -20,7 +20,9 @@
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
-  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts)
+  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts
+  -- map: is not exposed, because it has that FINISHME for now... [2013.10.01]
+  )
 where
   
 import System.Random  
@@ -183,7 +185,7 @@ map fn (SLMap (Bottom lm) lm2) = do
 map fn (SLMap (Index lm slm) lmbot) = do
   SLMap slm2 bot2 <- map fn (SLMap slm lmbot)
   lm2  <- LM.map (\(t,a) -> (t,fn a)) lm
-  error "FINISHME"
+  error "FINISHME -- SkipListMap.map"
 --  return$! SLMap (Index lm2 slm2) bot2
 
 

@@ -4,7 +4,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+g{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
@@ -65,6 +66,7 @@ module Control.LVish
     -- * Par computations and their parameters
     Par(), 
     Determinism(..), liftQD,
+    LVishException(..),
     
     -- * Basic control flow
     fork,
@@ -89,14 +91,19 @@ module Control.LVish
     LVar()
   ) where
 
-import qualified Data.Foldable    as F 
+import qualified Data.Foldable    as F
+import           Data.Typeable (Typeable)
+import           Control.Exception (Exception)
 import           Control.LVish.Internal
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 
 import           Prelude hiding (rem)
 -- import GHC.Exts (Constraint)
+
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Inline *everything*, because these are just wrappers:
@@ -155,14 +162,16 @@ withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
 -- | If the input computation is quasi-deterministic (`QuasiDet`), then this may
--- throw 'NonDeterminismExn' on the thread that calls it, but if it returns without
--- exception then it always returns the same answer.
+-- throw a `LVishException` non-deterministically on the thread that calls it, but if
+-- it returns without exception then it always returns the same answer.
 --
 -- If the input computation is deterministic (`Det`), then @runParIO@ will return the
--- same result as `runPar`.  However, it is still conceivably useful for avoiding an
--- extra `unsafePerformIO` required inside the implementation of `runPar`.
+-- same result as `runPar`.  However, `runParIO` is still possibly useful for
+-- avoiding an extra `unsafePerformIO` required inside the implementation of
+-- `runPar`.
 -- 
--- In the future, full non-determinism may be allowed as a third setting.
+-- In the future, /full/ non-determinism may be allowed as a third setting beyond
+-- `Det` and `QuasiDet`.
 runParIO :: (forall s . Par d s a) -> IO a
 runParIO (WrapPar p) = L.runParIO p 
 
