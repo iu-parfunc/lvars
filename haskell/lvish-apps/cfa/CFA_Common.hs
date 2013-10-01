@@ -331,7 +331,8 @@ makeMain runExample = defaultMain$ hUnitTestToTests$ TestList $
   | n <- [300] 
   ]++
   [ TestLabel ("blurN_"++show n) $ TestCase (runExample$ blurN n)
-  | n <- [2..8]
+--   | n <- [2..8]
+  | n <- [2..3] -- Making this smaller so it completes quicker. 
   ]
 
 

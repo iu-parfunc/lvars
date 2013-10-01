@@ -5,7 +5,17 @@ maintainer:          rrnewton@gmail.com
 build-type:          Simple
 cabal-version:       >=1.10
 
-executable cfa
+executable cfa-sequential
+  main-is:             k-CFA.hs
+  ghc-options: 	       -O2 
+  -- other-modules:       
+  other-extensions:    CPP, BangPatterns, DeriveGeneric
+  build-depends:       lvish <2.0, pretty, base >=4.6 && <4.7, deepseq >=1.3 && <1.4, mtl >=2.1 && <2.2, time >=1.4 && <1.5, containers >=0.5 && <0.6, GenericPretty >=1.2 && <1.3, random >=1.0 && <1.1, test-framework >=0.8 && <0.9, test-framework-hunit >=0.3 && <0.4, HUnit >=1.2 && <1.3,
+                       parallel >= 3.2
+  -- hs-source-dirs:      
+  default-language:    Haskell2010
+
+executable cfa-lvish
   main-is:             k-CFA-lvish.hs
   ghc-options: 		   -O2 -threaded -rtsopts -with-rtsopts=-N4
   -- other-modules:       
