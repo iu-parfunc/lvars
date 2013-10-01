@@ -81,10 +81,10 @@ instance Eq (IMap k s v) where
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)  
-  sortFreeze is = AFoldable <$> freezeMap is
+  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
   addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
+  sortFrzn (IMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
 
 -- | The `IMap`s in this module also have the special property that they support an
 -- `O(1)` freeze operation which immediately yields a `Foldable` container

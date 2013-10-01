@@ -63,9 +63,10 @@ instance LVarData1 IStructure where
   freeze orig@(IStructure vec) = WrapPar$ do
     -- No new alloc here, just time:
     V.forM_ vec $ \ (IVar (WrapLVar lv)) -> freezeLV lv 
-    return (unsafeCoerceLVar orig)    
-  sortFreeze is = do vec <- freezeIStructure is
-                     return (AFoldable (V.map fromJust (V.filter isJust vec)))
+    return (unsafeCoerceLVar orig)
+
+  -- | We can do better than the default here; this is /O(1)/:    
+  sortFrzn = AFoldable
                      
   -- Unlike the IStructure-specific forEach, this takes only values, not indices.
   addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)

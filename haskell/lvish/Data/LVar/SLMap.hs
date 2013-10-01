@@ -89,18 +89,15 @@ instance Eq (IMap k s v) where
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
 instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) =
-    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-
   -- | Get the exact contents of the map.  Using this may cause your
   -- program to exhibit a limited form of nondeterminism: it will never
   -- return the wrong answer, but it may include synchronization bugs
-  -- that can (nondeterministically) cause exceptions.
-  sortFreeze (IMap (WrapLVar lv)) = WrapPar $ do
-    freezeLV lv
-    ls <- L.liftIO $ SLM.foldlWithKey
-             (\acc _key elm -> return $! elm:acc) [] (L.state lv)
-    return (AFoldable ls)
+  -- that can (nondeterministically) cause exceptions.  
+  freeze orig@(IMap (WrapLVar lv)) =
+    WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
+                
+  -- | We can do better than the default here; this is /O(1)/:  
+  sortFrzn = AFoldable 
 
   -- | This generic version has the disadvantage that it does not observe the KEY,
   -- only the value.
