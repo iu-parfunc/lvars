@@ -18,7 +18,8 @@ main = do
   test5
   test6
   test7
-  
+  test8
+
 test0 = do
   bag <- B.new
   return ()
@@ -82,3 +83,13 @@ test7 = do
              v <- B.tryGetAny bag
              putStrLn $ show v)
         [0..4]
+
+test8 = do
+  arr <- replicate 5 False
+  x <- B.readArrayForCas (arr :: IOVector Bool) 2
+  xValue <- peekTicket (x :: Ticket Bool)
+  (bool, ticket) <- B.casIOArray arr 2 x True
+  res <- peekTicket (ticket :: Ticket Bool)
+  putStrLn (show (xValue == False) ++ " " ++ show (res == True))
+  
+  

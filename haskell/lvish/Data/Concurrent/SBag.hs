@@ -1,4 +1,5 @@
-module Data.Concurrent.SBag(SBag, new, insert, tryGetAny, initThread) where
+module Data.Concurrent.SBag(SBag, new, insert, tryGetAny, initThread, 
+                            readArrayForCas, casIOArray) where
 
 import qualified Data.Vector.Mutable as V
 import qualified Data.Vector as IV
@@ -301,8 +302,15 @@ currentCap = do
 
 -----               
     
---casIOArray :: V.IOVector a -> Int -> (Int, Ticket a)
---casIOArray = undefined
+casIOArray :: V.IOVector a -> Int -> Ticket a -> a -> IO (Bool, Ticket a)
+casIOArray (V.MVector a b raw) index ticket value =
+  casArrayElem raw (a + index) ticket value
+
+readArrayForCas :: V.IOVector a -> Int -> IO (Ticket a)
+readArrayForCas (V.MVector a b raw) index =
+  readArrayElem raw (a + index)
+
+-----
 
 -- demonstrates that the first int is the start index and the second
 -- is the number of elements.
@@ -311,6 +319,4 @@ foo = do
   let bar (V.MVector a b raw) = (a,b)
   let baz = show $ bar arr
   putStrLn baz    
-
---------
 
