@@ -106,7 +106,7 @@ instance F.Foldable (ISet Trvrsbl) where
 --   Hence they need a `DeepFrz` instace.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
-  type FrzType (ISet s a) = ISet Frzn a 
+  type FrzType (ISet s a) = ISet Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 -- | Create a new, empty, monotonically growing 'ISet'.

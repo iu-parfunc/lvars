@@ -80,7 +80,7 @@ instance LVarData1 IVar where
 
 -- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
 instance DeepFrz a => DeepFrz (IVar s a) where
-  type FrzType (IVar s a) = IVar Frzn a 
+  type FrzType (IVar s a) = IVar Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 -- | As with all other `Trvrsbl` LVars, the elements are traversable in a fixed

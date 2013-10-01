@@ -95,7 +95,7 @@ instance F.Foldable (IStructure Trvrsbl) where
 --   Hence they need a `DeepFrz` instace.
 --   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IStructure s a) where
-  type FrzType (IStructure s a) = IStructure Frzn a 
+  type FrzType (IStructure s a) = IStructure Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
 ------------------------------------------------------------------------------

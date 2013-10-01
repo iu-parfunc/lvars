@@ -79,7 +79,8 @@ data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
 
 {-# INLINE unsafeCoerceLVar #-}
 -- | A safer version of `unsafeCoerce#` for LVars only.
-unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 a
+--   Note that it needs to change the contents type, because freezing is recursive.
+unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 b
 unsafeCoerceLVar = unsafeCoerce#
 
 -- | Here we gain permission to expose the non-deterministic internal structure of an
