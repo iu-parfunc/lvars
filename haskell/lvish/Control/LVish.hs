@@ -46,6 +46,22 @@
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
   (
+    -- * CRITICAL OBLIGATIONS for the user: valid @Eq@ and total @Ord@
+    {-| 
+    We would like to tell you that if you're programming with Safe Haskell (@-XSafe@),
+    that this library provides a formal guarantee that anything executed with `runPar` is
+    guaranteed-deterministic.  Unfortunately, as of this release there is still one back-door
+    that hasn't yet been closed.
+
+    If an adverserial user defines invalid `Eq` instances (claiming objects are equal when they're
+    not), or if they define a `compare` function that is not a /pure, total function/,
+    and then they store those types within `LVar`s,
+    then nondeterminism may leak out of a parallel `runPar` computation.
+
+    In future releases, we will strive to require alternate, safe versions of `Eq` and
+    `Ord` that are derived automatically by our library and by the GHC compiler.
+    -}
+
     -- * Par computations and their parameters
     Par(), 
     Determinism(..), liftQD,
