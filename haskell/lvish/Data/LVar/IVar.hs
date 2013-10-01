@@ -110,9 +110,9 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 
 {-# INLINE put_ #-}
 -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
--- are not allowed, and result in a runtime error.
+-- are not allowed, and result in a runtime error.  (Unless both values put happen to be @(==)@.)
 --         
--- Strict up to WHNF in the element put.
+-- This function is always at least strict up to WHNF in the element put.
 put_ :: Eq a => IVar s a -> a -> Par d s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef ref update

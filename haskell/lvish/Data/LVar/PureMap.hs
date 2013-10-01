@@ -172,6 +172,9 @@ forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing 
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
+-- 
+--   As with other container LVars, if an key is put multiple times, the values had
+--   better be equal @(==)@, or a multiple-put error is raised.
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
