@@ -1,17 +1,17 @@
 {-# LANGUAGE Unsafe #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE KindSignatures #-}
 
 {-|
 
-This module is note @SafeHaskell@; as an end-user, you shouldn't ever need to import it.
+This module is /not/ Safe Haskell; as an end-user, you shouldn't ever
+need to import it.
 
-It is exposed only because it is necessary for writing /new/ LVars that live in their
-own, separate packages.
+It is exposed only because it is necessary for implementing /new/ LVar
+types that will live in their own, separate packages.
 
 -}
 
@@ -24,10 +24,8 @@ module Control.LVish.Internal
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
     unsafeConvert, state,
-    liftIO,
+    liftIO
 
-    -- * General utilities
-    for_
   )
   where
 
@@ -90,14 +88,3 @@ instance MonadIO (Par d s) where
 
 instance MonadToss (Par d s) where
   toss = WrapPar L.toss
-
--- | A simple for loop for numeric ranges (not requiring deforestation
--- optimizations like `forM`).  Inclusive start, exclusive end.
-{-# INLINE for_ #-}
-for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
-for_ (start, end) _fn | start > end = error "for_: start is greater than end"
-for_ (start, end) fn = loop start
-  where
-  loop !i | i == end  = return ()
-          | otherwise = do fn i; loop (i+1)
-  

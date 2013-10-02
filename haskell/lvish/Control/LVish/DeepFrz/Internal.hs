@@ -3,7 +3,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE EmptyDataDecls #-}
 
--- | This module is NOT Safe-Haskell, but it must be used to create
+-- | This module is /not/ Safe Haskell, but it must be used to create
 -- new LVar types.
 module Control.LVish.DeepFrz.Internal
        (
@@ -11,11 +11,13 @@ module Control.LVish.DeepFrz.Internal
        )
        where
 
--- | DeepFreezing is type-level (guaranteed O(1) time complexity)
+-- | DeepFreezing is a type-level (guaranteed O(1) time complexity)
 -- operation.  It marks an LVar and its contents (recursively) as
 -- frozen.  DeepFreezing is not an action that can be taken directly
--- by the user, however.  Rather it is an optional final-step in a
--- `runPar` invocation.
+-- by the user, however.  Rather, it is the final step in a
+-- `runParThenFreeze` invocation.
+
+-- An instance of DeepFrz is a valid return valud for `runParThenFreeze`
 class DeepFrz a where
   -- | This type function is public.  It maps pre-frozen types to
   -- frozen ones.  It should be idempotent.
@@ -30,12 +32,12 @@ class DeepFrz a where
   default frz :: a -> a 
   frz a = a 
 
--- | An uninhabited type that signals an LVar has been frozen.
---   LVars should use this inplace of their `s` parameter.
+-- | An uninhabited type that signals that an LVar has been frozen.
+-- LVars should use this in place of their `s` parameter.
 data Frzn
 
--- | An uninhabited type that signals an LVar is not only frozen, but
--- it may be traversed in whatever order its internal representation
--- dictates.
+-- | An uninhabited type that signals that an LVar is not only frozen,
+-- but it may be traversed in whatever order its internal
+-- representation dictates.
 data Trvrsbl 
 

@@ -29,9 +29,9 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- Interface for generic LVar handling
 ------------------------------------------------------------------------------
 
--- | A class representing monotonic data types that take one type
--- parameter as well as an `s` parameter for session safety.
---
+-- | A class representing monotonic data structures that take /one/ type
+-- parameter, as well as an `s` parameter for session safety.
+-- 
 -- LVars that fall into this class are typically collection types.
 class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
      --   TODO: if there is a Par class to generalize LVar Par monads, then
@@ -46,9 +46,9 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
 
   -- | An /O(1)/ operation that atomically switches the LVar into a
   -- frozen state.  Any threads waiting on the freeze are woken.
-  --
+  -- 
   -- The frozen LVar provides a complete picture of the contents:
-  -- e.g. a whole set instead of one element, or the full/empty
+  -- e.g., a whole set instead of one element, or the full/empty
   -- information for an IVar, instead of just the payload.
   --
   -- However, note that `Frzn` LVars cannot be folded, because they may have
@@ -69,7 +69,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     -- version of the LVar contents with its original type:
     in AFoldable ls'
 
--- | Carries a Foldable type, but you don't get to know which one.
+-- | Carries a `Foldable` type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have
 --   to impose a particular memory representation.
 data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
@@ -82,8 +82,8 @@ data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
 unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 b
 unsafeCoerceLVar = unsafeCoerce#
 
--- | Here we gain permission to expose the non-deterministic internal structure of an
--- LVar: namely, the order in which elements occur.  We pay the piper with an IO
+-- | Here we gain permission to expose the nondeterministic internal structure of an
+-- LVar: namely, the order in which elements occur.  We pay the piper with an `IO`
 -- action.
 unsafeTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
 unsafeTraversable x = return (unsafeCoerceLVar x) 

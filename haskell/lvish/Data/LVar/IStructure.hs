@@ -11,7 +11,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 
--- | An I-Structure, aka an Array of IVars.
+-- | An I-Structure, also known as an array of IVars.
 --   This uses a boxed array.
 
 module Data.LVar.IStructure
@@ -48,7 +48,7 @@ import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 
 ------------------------------------------------------------------------------
 
--- | An I-Structure, aka an Array of IVars.
+-- | An I-Structure, also known as an array of IVars.
 --   For now this really is a simple vector of IVars.
 newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 
@@ -59,7 +59,7 @@ instance Eq (IStructure s v) where
 
 -- | An @IStructure@ can be treated as a generic container LVar.  However, the
 -- polymorphic operations are less useful than the monomorphic ones exposed by this
--- module (e.g. @forEachHP@ vs. @addHandler@).
+-- module (e.g., @forEachHP@ vs. @addHandler@).
 instance LVarData1 IStructure where
   freeze orig@(IStructure vec) = WrapPar$ do
     -- No new alloc here, just time:
@@ -72,15 +72,16 @@ instance LVarData1 IStructure where
   -- Unlike the IStructure-specific forEach, this takes only values, not indices.
   addHandler mh is fn = forEachHP mh is (\ _k v -> fn v)
 
--- | The @IStructure@s in this module also have the special property that they
+-- | The `IStructure`s in this module also have the special property that they
 -- support a freeze operation which immediately yields a `Foldable` container
 -- without any sorting (see `snapFreeze`).
 instance OrderedLVarData1 IStructure where
   -- No extra work here...  
   snapFreeze is = unsafeCoerceLVar <$> G.freeze is
 
--- | As with all LVars, after freezing, map elements can be consumed. In the case of
--- this @IStructure@ implementation, it need only be `Frzn`, not `Trvrsbl`.
+-- As with all LVars, after freezing, map elements can be consumed. In
+-- the case of this @IStructure@ implementation, it need only be
+-- `Frzn`, not `Trvrsbl`.
 instance F.Foldable (IStructure Frzn) where
   foldr fn zer (IStructure vec) = 
     F.foldr (\ iv acc ->
@@ -89,13 +90,13 @@ instance F.Foldable (IStructure Frzn) where
                 Just x  -> fn x acc)
              zer vec
 
--- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+-- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IStructure Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
--- | @IStructure@ values can be returned as the result of a `runParThenFreeze`.
---   Hence they need a `DeepFrz` instace.
---   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
+-- @IStructure@ values can be returned as the result of a
+-- `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
+-- @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IStructure s a) where
   type FrzType (IStructure s a) = IStructure Frzn (FrzType a)
   frz = unsafeCoerceLVar
@@ -111,11 +112,11 @@ instance (Show a) => Show (IStructure Frzn a) where
 
 ------------------------------------------------------------------------------
 
--- | Retrieve the number of slots in the I-Structure.
+-- | Retrieve the number of slots in the `IStructure`.
 getLength :: IStructure s a -> Par d s Int
 getLength (IStructure vec) = return $! V.length vec
 
--- | Physical identity, just as with IORefs.
+-- Physical identity, just as with IORefs.
 -- instance Eq (IStructure s v) where
 --   IStructure lv1 == IStructure lv2 = state lv1 == state lv2 
 
@@ -125,8 +126,8 @@ newIStructure :: Int -> Par d s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
 
--- | This registers handlers on each internal IVar as it is created.
---   It should be more efficient than `newIStructure` followed by `forEachHP`
+-- | Register handlers on each internal IVar as it is created.
+--   This operation should be more efficient than `newIStructure` followed by `forEachHP`.
 newIStructureWithCallback :: Int -> (Int -> elt -> Par d s ()) -> Par d s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
@@ -135,9 +136,8 @@ newIStructureWithCallback len fn =
       IV.whenFull Nothing iv (fn ix)
       return iv
 
--- | /O(N)/ complexity, unfortunately. This implementation of I-Structures requires
+-- | /O(N)/ complexity, unfortunately. This implementation of `IStructure`s requires
 -- freezing each of the individual IVars stored in the array.
--- 
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) = do
   v <- V.mapM IV.freezeIVar vec
@@ -145,10 +145,10 @@ freezeIStructure (IStructure vec) = do
 
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
--- the IStructure, optionally enrolled in a handler pool
+-- the `IStructure`, optionally enrolled in a handler pool.
 forEachHP :: -- (Eq a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
-          -> IStructure s a              -- ^ IStructure to listen to
+          -> IStructure s a              -- ^ `IStructure` to listen to
           -> (Int -> a -> Par d s ())    -- ^ callback
           -> Par d s ()
 forEachHP hp (IStructure vec) callb =
@@ -183,16 +183,16 @@ forEach = forEachHP Nothing
 
 {-# INLINE put #-}
 
--- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
+-- | Put a single element in the `IStructure` at a given index.  That index must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
 put_ :: Eq elt => IStructure s elt -> Int -> elt -> Par d s ()
 put_ (IStructure vec) !ix !elm = IV.put_ (vec ! ix) elm
 
--- | Put a single element in the array.  This variant is deeply strict (`NFData`).
+-- | Put a single element in the `IStructure` at a given index.  This variant is deeply strict (`NFData`).
 put :: (NFData elt, Eq elt) => IStructure s elt -> Int -> elt -> Par d s ()
 put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 
 {-# INLINE get #-}
--- | Wait for the indexed entry to contain a value and return that value.
+-- | Wait for the indexed entry to contain a value, and return that value.
 get :: Eq elt => IStructure s elt -> Int -> Par d s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)

@@ -16,27 +16,27 @@
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This is an internal module that provides the core parallel scheduler.
---   It is NOT for end-users.
+--   It is /not/ for end-users.
 
 module Control.LVish.SchedIdempotent
   (
-    -- * Basic types and accessors:
+    -- * Basic types and accessors
     LVar(), state, HandlerPool(),
     Par(..), ClosedPar(..),
     
-    -- * Safe, deterministic operations:
+    -- * Safe, deterministic operations
     yield, newPool, fork, forkHP,
     runPar, runParIO, runParLogged,
     withNewPool, withNewPool_,
     forkWithExceptions,
     
-    -- * Quasi-deterministic operations:
+    -- * Quasi-deterministic operations
     quiesce, quiesceAll,
 
     -- * Debug facilities
     logStrLn, dbgLvl,
        
-    -- * UNSAFE operations.  Should be used only by experts to build new abstractions.
+    -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
     addHandler, liftIO, toss
   ) where
@@ -96,7 +96,7 @@ logLnAt_ _ _ = return ()
 {-# INLINE logStrLn_ #-}
 #endif
 
--- | Print all accumulated log lines
+-- | Print all accumulated log lines.
 printLog :: IO ()
 printLog = do
   -- Clear the log when we read it:
@@ -131,7 +131,7 @@ theEnv = unsafePerformIO getEnvironment
 
 {-# NOINLINE dbgLvl #-}
 -- | Debugging flag shared by several modules.
---   This is activated by setting the environment variable DEBUG=1..5
+--   This is activated by setting the environment variable @DEBUG=1..5@.
 dbgLvl :: Int
 dbgLvl = case lookup "DEBUG" theEnv of
        Nothing  -> defaultDbg
@@ -151,20 +151,20 @@ defaultDbg = 0
 
 -- | LVars are parameterized by two types:
 -- 
---     * The first, @a@, characterizes the "state" of the LVar (i.e. the lattice
+--     * The first, @a@, characterizes the \"state\" of the LVar (i.e., the lattice
 --     value), and should be a concurrently mutable data type.  That means, in
 --     particular, that only a /transient snapshot/ of the lattice value can be
 --     obtained in general.  But the information in such a snapshot is always a
 --     lower bound on the current value of the LVar.
---
---     * The second, @d@, characterizes the "delta" associated with a @putLV@
---     operation (i.e. the actual change, if any, to the LVar's lattice value).
+-- 
+--     * The second, @d@, characterizes the \"delta\" associated with a @putLV@
+--     operation (i.e., the actual change, if any, to the LVar's lattice value).
 --     In many cases such deltas allow far more efficient communication between
 --     @putLV@s and blocked @getLV@s or handlers.  It is crucial, however, that
 --     the behavior of a @get@ or handler does not depend on the /particular/
 --     choice of @putLV@ operations (and hence deltas) that moved the LVar over
 --     the threshold.  For simple data structures, the delta may just be the
---     entire LVar state, but for e.g. collection data structures, delta will
+--     entire LVar state, but for, e.g., collection data structures, delta will
 --     generally represent a single insertion.
 data LVar a d = LVar {
   state  :: a,                -- the current, "global" state of the LVar
@@ -200,9 +200,9 @@ data Listener d = Listener {
   onFreeze ::      B.Token (Listener d) -> SchedState -> IO ()
 }
 
--- | A HandlerPool contains a way to count outstanding parallel computations that
+-- | A @HandlerPool@ contains a way to count outstanding parallel computations that
 -- are affiliated with the pool.  It detects the condition where all such threads
--- have completeed.
+-- have completed.
 data HandlerPool = HandlerPool {
   numHandlers      :: C.Counter,   -- How many handler callbacks are currently
                                    -- running?
@@ -260,7 +260,7 @@ isFrozen (LVar {status}) = do
 -- LVar operations
 ------------------------------------------------------------------------------
     
--- | Create an LVar
+-- | Create an LVar.
 newLV :: IO a -> Par (LVar a d)
 newLV init = mkPar $ \k q -> do
   state     <- init
@@ -272,7 +272,7 @@ newLV init = mkPar $ \k q -> do
 -- | Do a threshold read on an LVar
 getLV :: (LVar a d)                  -- ^ the LVar 
       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
-      -> (d ->         IO (Maybe b)) -- ^ does d pass the threshold?
+      -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
       -> Par b
 getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   -- tradeoff: we fastpath the case where the LVar is already beyond the
@@ -333,9 +333,9 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
             Nothing -> sched q
 
 
--- | Update an LVar
+-- | Update an LVar.
 putLV_ :: LVar a d                 -- ^ the LVar
-       -> (a -> Par (Maybe d, b))  -- ^ how to do the put and whether the LVar's
+       -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
 putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do  
@@ -359,8 +359,8 @@ putLV :: LVar a d             -- ^ the LVar
 putLV lv doPut = putLV_ lv doPut'
   where doPut' a = do r <- liftIO (doPut a); return (r, ())
 
--- | Freeze an LVar (limited nondeterminism)
---   It is the data-structure implementors responsibility to expose this as qasi-deterministc.
+-- | Freeze an LVar (introducing quasi-determinism).
+--   It is the data structure implementor's responsibility to expose this as quasi-deterministc.
 freezeLV :: LVar a d -> Par ()
 freezeLV LVar {name, status} = mkPar $ \k q -> do
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
@@ -376,7 +376,7 @@ freezeLV LVar {name, status} = mkPar $ \k q -> do
 -- Handler pool operations
 ------------------------------------------------------------------------------  
 
--- | Create a handler pool
+-- | Create a handler pool.
 newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
   cnt <- C.new
@@ -385,15 +385,15 @@ newPool = mkPar $ \k q -> do
   hpMsg " [dbg-lvish] Created new pool" hp
   exec (k hp) q
   
--- | Convenience function.  Execute a Par computation in the context of a fresh handler pool
+-- | Convenience function.  Execute a @Par@ computation in the context of a fresh handler pool.
 withNewPool :: (HandlerPool -> Par a) -> Par (a, HandlerPool)
 withNewPool f = do
   hp <- newPool
   a  <- f hp
   return (a, hp)
   
--- | Convenience function.  Execute a Par computation in the context of a fresh
--- handler pool, while ignoring the result of the computation
+-- | Convenience function.  Execute a @Par@ computation in the context of a fresh
+-- handler pool, while ignoring the result of the computation.
 withNewPool_ :: (HandlerPool -> Par ()) -> Par HandlerPool
 withNewPool_ f = do
   hp <- newPool
@@ -402,7 +402,7 @@ withNewPool_ f = do
 
 data DecStatus = HasDec | HasNotDec
 
--- | Close a Par task so that it is properly registered with a handler pool
+-- | Close a @Par@ task so that it is properly registered with a handler pool.
 closeInPool :: Maybe HandlerPool -> Par () -> IO ClosedPar
 closeInPool Nothing c = return $ close c $ const (ClosedPar sched)
 closeInPool (Just hp) c = do
@@ -437,7 +437,7 @@ closeInPool (Just hp) c = do
                                     -- continuation that clears it from the
                                     -- handler pool
 
--- | Add a handler to an existing pool
+-- | Add a handler to an existing pool.
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> LVar a d                    -- ^ LVar to listen to
@@ -462,7 +462,7 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
                                       -- launch any callbacks now
     exec (k ()) q 
 
--- | Block until a handler pool is quiescent      
+-- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()
 quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
   hpMsg " [dbg-lvish] Begin quiescing pool, identity= " hp
@@ -485,8 +485,9 @@ quiesceAll = mkPar $ \k q -> do
   logStrLn_ " [dbg-lvish] Return from global barrier."
   exec (k ()) q
 
--- | Freeze an LVar after a given handler quiesces
---   This is quasideterministic, but it 
+-- | Freeze an LVar after a given handler quiesces.
+
+-- This is quasi-deterministic.
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
               -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
               -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
@@ -505,7 +506,7 @@ freezeLVAfter lv globalCB updateCB = do
 -- Par monad operations
 ------------------------------------------------------------------------------
 
--- | Fork a child thread, optionally in the context of a handler pool
+-- | Fork a child thread, optionally in the context of a handler pool.
 forkHP :: Maybe HandlerPool -> Par () -> Par ()
 forkHP mh child = mkPar $ \k q -> do
   closed <- closeInPool mh child
@@ -513,11 +514,11 @@ forkHP mh child = mkPar $ \k q -> do
 --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
   exec closed q  
   
--- | Fork a child thread
+-- | Fork a child thread.
 fork :: Par () -> Par ()
 fork f = forkHP Nothing f
 
--- | Perform an IO action
+-- | Perform an @IO@ action.
 liftIO :: IO a -> Par a
 liftIO io = mkPar $ \k q -> do
   r <- io
@@ -531,7 +532,7 @@ instance MonadToss Par where
     writeIORef (Sched.prng q) g'
     exec (k b) q
 
--- | Cooperatively schedule other threads
+-- | Cooperatively schedule other threads.
 yield :: Par ()  
 yield = mkPar $ \k q -> do
   Sched.yieldWork q (k ())
@@ -642,7 +643,7 @@ runPar = unsafePerformIO . runPar_internal
 runParIO :: Par a -> IO a
 runParIO = runPar_internal
 
--- | Debugging aide.  Return debugging logs, in realtime order, in addition to the
+-- | Debugging aid.  Return debugging logs, in realtime order, in addition to the
 -- final result.
 runParLogged :: Par a -> IO ([String],a)
 runParLogged c =
@@ -677,7 +678,7 @@ hpId_ (HandlerPool cnt bag) = do
            " transient cnt "++show c
 
 
--- | Exceptions that walk up the fork tree of threads:
+-- | Exceptions that walk up the fork tree of threads.
 forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
 forkWithExceptions forkit descr action = do 
    parent <- myThreadId

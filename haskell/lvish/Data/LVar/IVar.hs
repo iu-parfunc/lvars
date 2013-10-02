@@ -10,7 +10,7 @@
 
 {-|
 
-  `IVar`s are the very simplest form of `LVar`s.  They are either empty, or full, and
+  IVars are the very simplest form of LVars.  They are either empty, or full, and
   contain only at most a single value.
 
   For more explanation of using IVars in Haskell, see the @monad-par@ and
@@ -69,7 +69,7 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
--- | An @IVar@ can be treated as a generic container LVar which happens to
+-- | An `IVar` can be treated as a generic container LVar which happens to
 -- contain at most one value!  Note, however, that the polymorphic operations are
 -- less useful than the monomorphic ones exposed by this module.
 instance LVarData1 IVar where  
@@ -79,13 +79,13 @@ instance LVarData1 IVar where
     return (unsafeCoerceLVar orig)
   addHandler = whenFull
 
--- | DeepFrz is just a type-coercion.  No bits flipped at runtime:
+-- Just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IVar s a) where
   type FrzType (IVar s a) = IVar Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
--- | As with all other `Trvrsbl` LVars, the elements are traversable in a fixed
--- order.
+-- As with all other `Trvrsbl` LVars, the elements are traversable in
+-- a fixed order.
 instance F.Foldable (IVar Trvrsbl) where
   foldr fn zer (IVar lv) =
     case unsafeDupablePerformIO$ readIORef (state lv) of
@@ -105,7 +105,7 @@ new = WrapPar$ fmap (IVar . WrapLVar) $
       newLV $ newIORef Nothing
 
 {-# INLINE get #-}
--- | read the value in a @IVar@.  The 'get' can only return when the
+-- | Read the value in a @IVar@.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- @IVar@.
 get :: IVar s a -> Par d s a
@@ -114,8 +114,8 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
         deltaThresh  x     = return $ Just x  -- always past threshold
 
 {-# INLINE put_ #-}
--- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
--- are not allowed, and result in a runtime error.  (Unless both values put happen to be @(==)@.)
+-- | Put a value into an @IVar@.  Multiple 'put's to the same @IVar@
+-- are not allowed, and result in a runtime error, unless both values put happen to be @(==)@.
 --         
 -- This function is always at least strict up to WHNF in the element put.
 put_ :: Eq a => IVar s a -> a -> Par d s ()
@@ -171,7 +171,6 @@ spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
 {-# INLINE spawnP #-}
--- | A variant that 
 spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
 spawnP a = spawn (return a)
 

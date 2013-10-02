@@ -92,14 +92,14 @@ instance LVarData1 ISet where
 
 
 -- | The `ISet`s in this module also have the special property that they support an
--- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- /O(1)/ freeze operation which immediately yields a `Foldable` container
 -- (`snapFreeze`).
 instance OrderedLVarData1 ISet where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
--- | `ISet` values can be returned as the result of a `runParThenFreeze`.
---   Hence they need a `DeepFrz` instance.
---   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
+-- `ISet` values can be returned as the result of a
+--  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
+--  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn (FrzType a)
   frz = unsafeCoerceLVar
@@ -111,15 +111,16 @@ member elm (ISet (WrapLVar lv)) =
     Just () -> True
     Nothing -> False
 
--- | As with all LVars, after freezing, map elements can be consumed. In the case of
--- this `ISet` implementation, it need only be `Frzn`, not `Trvrsbl`.
+-- As with all LVars, after freezing, map elements can be consumed. In
+-- the case of this `ISet` implementation, it need only be `Frzn`, not
+-- `Trvrsbl`.
 instance F.Foldable (ISet Frzn) where
   foldr fn zer (ISet (WrapLVar lv)) =
     unsafeDupablePerformIO $
     SLM.foldlWithKey (\ a k _v -> return (fn k a))
                            zer (L.state lv)
 
--- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+-- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (ISet Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 

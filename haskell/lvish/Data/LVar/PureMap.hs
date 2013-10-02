@@ -88,25 +88,26 @@ instance LVarData1 (IMap k) where
   sortFrzn (IMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
 
 -- | The `IMap`s in this module also have the special property that they support an
--- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- /O(1)/ freeze operation which immediately yields a `Foldable` container
 -- (`snapFreeze`).
 instance OrderedLVarData1 (IMap k) where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
--- | As with all LVars, after freezing, map elements can be consumed. In the case of
--- this `IMap` implementation, it need only be `Frzn`, not `Trvrsbl`.
+-- As with all LVars, after freezing, map elements can be consumed. In
+-- the case of this `IMap` implementation, it need only be `Frzn`, not
+-- `Trvrsbl`.
 instance F.Foldable (IMap k Frzn) where
   foldr fn zer (IMap lv) =
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
     F.foldr fn zer set 
 
--- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+-- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
--- | `IMap` values can be returned as the result of a `runParThenFreeze`.
---   Hence they need a `DeepFrz` instace.
---   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
+-- `IMap` values can be returned as the result of a
+--  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
+--  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
@@ -182,7 +183,7 @@ forEach = forEachHP Nothing
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
 -- 
---   As with other container LVars, if an key is put multiple times, the values had
+--   As with other container LVars, if a key is inserted multiple times, the values had
 --   better be equal @(==)@, or a multiple-put error is raised.
 insert :: (Ord k, Eq v) =>
           k -> v -> IMap k s v -> Par d s () 
@@ -199,13 +200,13 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
           then (mp',Just (key,elm))
           else (mp, Nothing)
 
--- | IMap's containing other LVars have some additional capabilities compared to
+-- | `IMap`s containing other LVars have some additional capabilities compared to
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
--- inserts a "bottom" element if there is no existing entry for the key.
---
+-- inserts a \"bottom\" element if there is no existing entry for the key.
+-- 
 -- Unfortunately, that means that this takes another computation for creating new
--- "bottom" elements for the nested LVars stored inside the Map.
+-- \"bottom\" elements for the nested LVars stored inside the `IMap`.
 modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
@@ -259,7 +260,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
                       | otherwise = return Nothing 
 
 
--- | Wait on the SIZE of the map, not its contents.
+-- | Wait on the /size/ of the map, not its contents.
 waitSize :: Int -> IMap k s v -> Par d s ()
 waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     getLV lv globalThresh deltaThresh

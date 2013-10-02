@@ -111,14 +111,14 @@ instance LVarData1 (IMap k) where
           SLM.foldlWithKey (\() _k v -> forkHP mh $ callb v) () slm
 
 -- | The `IMap`s in this module also have the special property that they support an
--- `O(1)` freeze operation which immediately yields a `Foldable` container
+-- /O(1)/ freeze operation which immediately yields a `Foldable` container
 -- (`snapFreeze`).
 instance OrderedLVarData1 (IMap k) where
   snapFreeze is = unsafeCoerceLVar <$> freeze is
 
--- | `IMap` values can be returned as the result of a `runParThenFreeze`.
---   Hence they need a `DeepFrz` instace.
---   @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
+-- `IMap` values can be returned as the result of a
+-- `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
+-- @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
@@ -334,10 +334,9 @@ unionHP mh m1 m2 = do
 -- Operations on frozen Maps
 --------------------------------------------------------------------------------
 
--- LK, 9/30/2013: I'm not sure if we actually need/want these anymore.
-
--- | As with all LVars, after freezing, map elements can be consumed. In the case of
--- this `IMap` implementation, it need only be `Frzn`, not `Trvrsbl`.
+-- As with all LVars, after freezing, map elements can be consumed. In
+-- the case of this `IMap` implementation, it need only be `Frzn`, not
+-- `Trvrsbl`.
 instance F.Foldable (IMap k Frzn) where
   -- Note: making these strict for now:  
   foldr fn zer (IMap (WrapLVar lv)) =
@@ -345,6 +344,6 @@ instance F.Foldable (IMap k Frzn) where
     SLM.foldlWithKey (\ a _k v -> return (fn v a))
                      zer (L.state lv)
 
--- | Of course, the stronger `Trvrsbl` state is still fine for folding.
+-- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)

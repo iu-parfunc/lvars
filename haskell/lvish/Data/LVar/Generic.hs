@@ -3,11 +3,11 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
--- | A generic interface providing operations that work on ALL LVars.
+-- | A generic interface providing operations that work on /all/ LVars.
 
 module Data.LVar.Generic
        (
-         -- * The classes containing the generic interfaces
+         -- * Classes containing the generic interfaces
          LVarData1(..), OrderedLVarData1(..),
          
          -- * Supporting types and utilities
@@ -26,14 +26,14 @@ import           Data.LVar.Generic.Internal
 
 --------------------------------------------------------------------------------
 
--- |/Some LVar datatypes are stored in an /internally/ ordered way so
+-- | Some LVar datatypes are stored in an /internally/ ordered way so
 -- that it is then possible to take /O(1)/ frozen snapshots and consume them
 -- inexpensively in a deterministic order.
---
+-- 
 -- LVars with this additional property provide this class as well as `LVarData1`.
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
-  -- completely available and Foldable.  Guaranteed /O(1)/.
+  -- completely available and `Foldable`.  Guaranteed /O(1)/.
   snapFreeze :: f s a -> Par QuasiDet s (f Trvrsbl a)
 
 {- 
@@ -52,13 +52,13 @@ class LVarData0 (t :: *) where
 -- Dealing with frozen LVars.
 ------------------------------------------------------------------------------
 
--- | `Trvrsbl` is a stronger property than `Frzn` so it is always ok to \"upcast\" to
+-- | `Trvrsbl` is a stronger property than `Frzn`, so it is always safe to \"upcast\" to
 -- the weaker version.
 castFrzn :: LVarData1 f => f Trvrsbl a -> f Frzn a
 castFrzn x = unsafeCoerceLVar x
 
--- | LVish Par actions must commute, therefore one safe way to consume a frozen (but
--- unordered) LVar, /even in another runPar session/, is to run a par computation for
+-- | LVish `Par` actions must commute, therefore one safe way to consume a frozen (but
+-- unordered) LVar, /even in another `runPar` session/, is to run a `Par` computation for
 -- each element.
 forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
 forFrzn fzn fn =

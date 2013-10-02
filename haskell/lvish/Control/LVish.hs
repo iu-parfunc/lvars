@@ -10,6 +10,7 @@
 {-# LANGUAGE DataKinds #-}  -- For 'Determinism'
 -- {-# LANGUAGE ConstraintKinds, KindSignatures #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 {-|
@@ -17,14 +18,15 @@
   The @lvish@ package provides a parallel programming model based on monotonically
   growing data structures.
 
-  This module provides the core scheduler and basic control flow operations.  
-  But to do anything useful you will need to import one of the data structure modules
-  (@Data.LVar.*@).
+  This module provides the core scheduler and basic control flow
+  operations.  But to do anything useful you will need to import, along
+  with this module, one of the data structure modules (@Data.LVar.*@).
 
-  Here is a self-contained example that writes the same value to @num@
-  twice and deterministically prints @4@ instead of raising an error, as
-  it would if @num@ were a traditional IVar rather than an LVar. (You
-  will need to compile using the @-XDataKinds@ extension.)
+  Here is a self-contained example. This program writes the same value
+  to an @LVar@ called @num@ twice.  It deterministically prints @4@
+  instead of raising an error, as it would if @num@ were a traditional
+  IVar rather than an LVar. (You will need to compile using the
+  @-XDataKinds@ extension.)
 
 > {-# LANGUAGE DataKinds #-}
 > import Control.LVish  -- Generic scheduler; works with any lattice.
@@ -53,7 +55,7 @@ module Control.LVish
     guaranteed-deterministic.  Unfortunately, as of this release there is still one back-door
     that hasn't yet been closed.
 
-    If an adverserial user defines invalid `Eq` instances (claiming objects are equal when they're
+    If an adversarial user defines invalid `Eq` instances (claiming objects are equal when they're
     not), or if they define a `compare` function that is not a /pure, total function/,
     and then they store those types within `LVar`s,
     then nondeterminism may leak out of a parallel `runPar` computation.
@@ -160,7 +162,7 @@ withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
 -- | If the input computation is quasi-deterministic (`QuasiDet`), then this may
--- throw a `LVishException` non-deterministically on the thread that calls it, but if
+-- throw a `LVishException` nondeterministically on the thread that calls it, but if
 -- it returns without exception then it always returns the same answer.
 --
 -- If the input computation is deterministic (`Det`), then @runParIO@ will return the
@@ -168,7 +170,7 @@ withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 -- avoiding an extra `unsafePerformIO` required inside the implementation of
 -- `runPar`.
 -- 
--- In the future, /full/ non-determinism may be allowed as a third setting beyond
+-- In the future, /full/ nondeterminism may be allowed as a third setting beyond
 -- `Det` and `QuasiDet`.
 runParIO :: (forall s . Par d s a) -> IO a
 runParIO (WrapPar p) = L.runParIO p 
@@ -262,3 +264,14 @@ parForTiled otiles (start,end) body = do
              (halfT,remT) = tiles `quotRem` 2
          fork$ loop offset half halfT
          loop (offset+half) (half+rem) (halfT+remT)
+
+
+-- | A simple for loop for numeric ranges (not requiring deforestation
+-- optimizations like `forM`).  Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) _fn | start > end = error "for_: start is greater than end"
+for_ (start, end) fn = loop start
+  where
+  loop !i | i == end  = return ()
+          | otherwise = do fn i; loop (i+1)
