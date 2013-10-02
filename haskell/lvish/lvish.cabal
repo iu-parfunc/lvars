@@ -65,7 +65,8 @@ library
   Source-repository head
     type:     git
     location: https://github.com/iu-parfunc/lvars
-
+    subdir:   haskell/lvish
+    
   -- Modules exported by the library.
   exposed-modules:
                     ------------- End user modules ------------
