@@ -62,6 +62,10 @@ flag getonce
 
 --------------------------------------------------------------------------------
 library
+  Source-repository head
+    type:     git
+    location: https://github.com/iu-parfunc/lvars
+
   -- Modules exported by the library.
   exposed-modules:
                     ------------- End user modules ------------
@@ -105,7 +109,9 @@ library
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                  parallel ==3.2.*, async ==2.0.*,
-                 atomic-primops, hashable, transformers, random, chaselev-deque, bits-atomic, missing-foreign,
+                 atomic-primops, hashable, transformers, random, 
+                 chaselev-deque, 
+                 bits-atomic, missing-foreign,
                  ghc-prim
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
