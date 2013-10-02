@@ -66,7 +66,8 @@ library
     type:     git
     location: https://github.com/iu-parfunc/lvars
     subdir:   haskell/lvish
-    
+    tag:      release-lvish-1.0
+
   -- Modules exported by the library.
   exposed-modules:
                     ------------- End user modules ------------
@@ -117,8 +118,7 @@ library
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
-  -- Actually -threaded won't do anything for a library, this is just a reminder:
-  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -O2 -rtsopts
   if flag(abstract-par) 
     cpp-options: -DUSE_ABSTRACT_PAR
     build-depends:  abstract-par >=0.4
