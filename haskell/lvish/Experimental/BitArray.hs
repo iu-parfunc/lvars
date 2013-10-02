@@ -106,7 +106,6 @@ newEmptyBitArray len = WrapPar $ fmap (BitArray . WrapLVar) $ newLV $ do
 --------------------------------------------------------------------------------
 
 {-
-type QPar = Par QuasiDet 
 
 -- | Freeze an 'BitArray' after a specified callback/handler is done running.  This
 -- differs from withCallbacksThenFreeze by not taking an additional action to run in

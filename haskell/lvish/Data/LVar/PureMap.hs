@@ -61,8 +61,6 @@ import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
-type QPar = Par QuasiDet  -- Shorthand.
-
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
 ------------------------------------------------------------------------------

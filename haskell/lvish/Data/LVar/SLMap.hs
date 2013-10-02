@@ -68,8 +68,6 @@ import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
 
-type QPar = Par QuasiDet -- Shorthand used below.
-
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
 ------------------------------------------------------------------------------

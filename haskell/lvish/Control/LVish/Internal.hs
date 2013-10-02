@@ -20,6 +20,7 @@ module Control.LVish.Internal
     -- * Type-safe wrappers around internal components
     Par(..), LVar(..),
     Determinism(..),
+    QPar,
     
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
@@ -58,6 +59,9 @@ data Determinism = Det | QuasiDet
 newtype Par :: Determinism -> * -> * -> * where
   WrapPar :: L.Par a -> Par d s a
   deriving (Monad, Functor, Applicative)
+
+-- | A shorthand for quasi-deterministic `Par` computations.
+type QPar = Par QuasiDet
 
 -- | The generic representation of LVars used by the scheduler.  The
 -- end-user can't actually do anything with these and should not try

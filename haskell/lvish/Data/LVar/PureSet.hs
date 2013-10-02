@@ -139,9 +139,6 @@ newFromList ls = newSet (S.fromList ls)
 -- Quasi-deterministic ops:
 --------------------------------------------------------------------------------
 
--- Just a shorthand for below:
-type QPar = Par QuasiDet 
-
 -- | Freeze an 'ISet' after a specified callback/handler is done running.  This
 -- differs from withCallbacksThenFreeze by not taking an additional action to run in
 -- the context of the handlers.
