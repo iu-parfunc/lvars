@@ -96,6 +96,10 @@ instance (Show a) => Show (IVar Frzn a) where
   show (IVar lv) =
     show $ unsafeDupablePerformIO $ readIORef (state lv)
 
+-- | For convenience only; the user could define this.
+instance Show a => Show (IVar Trvrsbl a) where
+  show = show . castFrzn 
+
 --------------------------------------
 
 {-# INLINE new #-}

@@ -107,7 +107,10 @@ instance (Show a) => Show (IStructure Frzn a) where
     "{IStructure: " Prelude.++
     (Prelude.concat $ intersperse ", " $ Prelude.map show $ V.toList vec) Prelude.++
     "}"
-    
+
+-- | For convenience only; the user could define this.
+instance Show a => Show (IStructure Trvrsbl a) where
+  show = show . castFrzn
 
 ------------------------------------------------------------------------------
 

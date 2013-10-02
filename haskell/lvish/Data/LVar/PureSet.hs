@@ -47,6 +47,7 @@ module Data.LVar.PureSet
 import           Control.Monad (void)
 import           Control.Applicative ((<$>))
 import           Data.IORef
+import           Data.List (intersperse)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import qualified Data.Foldable as F
@@ -112,7 +113,13 @@ instance DeepFrz a => DeepFrz (ISet s a) where
 
 instance (Show a) => Show (ISet Frzn a) where
   show (ISet lv) =
-    show $ unsafeDupablePerformIO $ readIORef (state lv)
+    let set = S.toList $ unsafeDupablePerformIO $ readIORef (state lv) in
+    "{ISet: " ++
+     (concat $ intersperse ", " $ map show set) ++ "}"
+
+-- | For convenience; the user could define this.
+instance Show a => Show (ISet Trvrsbl a) where
+  show = show . castFrzn
 
 -- | Create a new, empty, monotonically growing 'ISet'.
 newEmptySet :: Par d s (ISet s a)

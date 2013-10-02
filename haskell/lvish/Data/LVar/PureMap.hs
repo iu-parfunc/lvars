@@ -118,6 +118,10 @@ instance (Show k, Show a) => Show (IMap k Frzn a) where
     (concat $ intersperse ", " $ map show $
      M.toList mp') ++ "}"
 
+-- | For convenience only; the user could define this.
+instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
+  show lv = show (castFrzn lv)
+
 --------------------------------------------------------------------------------
 
 -- | Create a fresh map with nothing in it.

@@ -21,7 +21,7 @@ module Data.LVar.Generic.Internal
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
-import           Data.List (sort)
+import           Data.List (sort, intersperse)
 import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
@@ -73,6 +73,10 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
 --   The purpose of this type is that `sortFreeze` should not have
 --   to impose a particular memory representation.
 data AFoldable a = forall f2 . F.Foldable f2 => AFoldable (f2 a)
+
+instance Show a => Show (AFoldable a) where
+  show (AFoldable col) =
+    "AFoldable ["++ (concat$ intersperse ", " $ map show $ F.foldr (:) [] col)++"]"
 
 --------------------------------------------------------------------------------
 

@@ -123,7 +123,6 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
-
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels
@@ -334,8 +333,6 @@ unionHP mh m1 m2 = do
 -- Operations on frozen Maps
 --------------------------------------------------------------------------------
 
--- LK, 9/30/2013: I'm not sure if we actually need/want these anymore.
-
 -- | As with all LVars, after freezing, map elements can be consumed. In the case of
 -- this `IMap` implementation, it need only be `Frzn`, not `Trvrsbl`.
 instance F.Foldable (IMap k Frzn) where
@@ -348,3 +345,17 @@ instance F.Foldable (IMap k Frzn) where
 -- | Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+instance (Show k, Show a) => Show (IMap k Frzn a) where
+  show (IMap (WrapLVar lv)) =
+    "{IMap: " ++
+     (concat $ intersperse ", " $ 
+      unsafeDupablePerformIO $
+       SLM.foldlWithKey (\ acc k v -> return$ show (k, v) : acc)
+        [] (L.state lv)
+     ) ++ "}"
+
+-- | For convenience only; the user could define this.
+instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
+  show lv = show (castFrzn lv)
+
