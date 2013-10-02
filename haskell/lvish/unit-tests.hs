@@ -37,19 +37,20 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 import Data.Word
 
--- import Data.LVar.Generic (newBottom)
+import qualified Data.LVar.Generic as G
 import qualified Data.LVar.NatArray as NA
 import Data.LVar.PureSet as IS
 import Data.LVar.PureMap as IM
 
 import qualified Data.LVar.SLMap as SM
+import qualified Data.LVar.SLSet as SS
 
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
 
 import Control.LVish
-import Control.LVish.DeepFrz (DeepFrz(..), Frzn, runParThenFreeze, runParThenFreezeIO)
+import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
 import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import qualified Control.LVish.SchedIdempotent as L
@@ -74,11 +75,13 @@ import TestHelpers as T
 main :: IO ()
 main = do
   -- T.stdTestHarness $ return all_tests -- Version that varies threads.
-  -- defaultMain $ hUnitTestToTests all_tests
-  
-  -- Counts{errors,failures} <- HU.runTestTT all_tests
-  (Counts{errors,failures},_) <- HU.runTestText (HU.putTextToHandle stdout False) all_tests  
-  if errors+failures == 0 then exitSuccess else exitFailure
+  if True then -- Use test-framework:
+    defaultMain $ hUnitTestToTests all_tests
+   else do 
+    -- Counts{errors,failures} <- HU.runTestTT all_tests
+    (Counts{errors,failures},_) <- HU.runTestText (HU.putTextToHandle stdout False) all_tests  
+    if errors+failures == 0 then exitSuccess else exitFailure
+
  where 
  all_tests :: HU.Test
  all_tests =
@@ -127,9 +130,15 @@ main = do
    , HU.TestLabel "case_dftest1" $ HU.TestCase case_dftest1
    , HU.TestLabel "case_dftest3" $ HU.TestCase case_dftest3
 
-   -- , HU.TestLabel "case_show01" $ HU.TestCase case_show01
-   -- , HU.TestLabel "case_show02" $ HU.TestCase case_show02
-   -- , HU.TestLabel "case_show03" $ HU.TestCase case_show03
+   , HU.TestLabel "case_show01" $ HU.TestCase case_show01
+   , HU.TestLabel "case_show02" $ HU.TestCase case_show02
+   , HU.TestLabel "case_show03" $ HU.TestCase case_show03
+   , HU.TestLabel "case_show04" $ HU.TestCase case_show04
+   , HU.TestLabel "case_show05" $ HU.TestCase case_show05
+   , HU.TestLabel "case_show06" $ HU.TestCase case_show06
+
+   , HU.TestLabel "case_show05B" $ HU.TestCase case_show05B
+   , HU.TestLabel "case_show06B" $ HU.TestCase case_show06B
    ]
    -- Ugh, busted test bracketing in test-framework... thus no good way to do
    -- thread-parameterization and no good way to take advantage of test-framework-th:   
@@ -1029,36 +1038,70 @@ dftest3 = runParIO $ do
 -- Show instances
 ------------------------------------------------------------------------------------------
 
+case_show01 :: Assertion
 case_show01 = assertEqual "show for IVar" "Just 3" show01
+show01 :: String
 show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
 
--- case_show02 = assertEqual "show for SLMap" "" show02
--- show02 = show$ runParThenFreeze $ do
---   mp <- SM.newEmptyMap
---   SM.insert "key1" (33::Int) mp
---   SM.insert "key2" (44::Int) mp  
---   return mp
+-- | It happens that these come out in the opposite order from the Pure one:
+case_show02 :: Assertion
+case_show02 = assertEqual "show for SLMap" "{IMap: (\"key2\",44), (\"key1\",33)}" show02
+show02 :: String
+show02 = show$ runParThenFreeze $ do
+  mp <- SM.newEmptyMap
+  SM.insert "key1" (33::Int) mp
+  SM.insert "key2" (44::Int) mp  
+  return mp
 
-case_show03 = assertEqual "show for Map" "{IMap: (\"key1\",33), (\"key2\",44)}" show03
+case_show03 :: Assertion
+case_show03 = assertEqual "show for PureMap" "{IMap: (\"key1\",33), (\"key2\",44)}" show03
+show03 :: String
 show03 = show$ runParThenFreeze $ do
   mp <- IM.newEmptyMap
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  
   return mp
 
+case_show04 :: Assertion
 case_show04 = assertEqual "show for IStructure" "{IStructure: Just 33, Just 44}" show04
+show04 :: String
 show04 = show$ runParThenFreeze $ do
   ist <- ISt.newIStructure 2
   ISt.put ist 0 (33::Int)
   ISt.put ist 1 (44::Int)
   return ist
 
-case_show05 = assertEqual "show for ISet" "fromList [33,44]" show05
-show05 = show$ runParThenFreeze $ do
+case_show05 :: Assertion
+case_show05 = assertEqual "show for PureSet" "{ISet: 33, 44}" (show show05)
+show05 :: ISet Frzn Int
+show05 = runParThenFreeze $ do
   is <- IS.newEmptySet
   IS.insert (33::Int) is
   IS.insert (44::Int) is
   return is
+
+-- | It happens that these come out in the opposite order from the Pure one:
+case_show06 :: Assertion
+case_show06 = assertEqual "show for SLSet" "{ISet: 44, 33}" (show show06)
+show06 :: SS.ISet Frzn Int
+show06 = runParThenFreeze $ do
+  is <- SS.newEmptySet
+  SS.insert (33::Int) is
+  SS.insert (44::Int) is
+  return is
+
+----------------------------------------
+-- Test sortFrzn instances:
+
+case_show05B :: Assertion
+case_show05B = assertEqual "show for PureSet/Trvrsbl" "AFoldable [33, 44]" (show show05B)
+show05B :: G.AFoldable Int
+show05B = G.sortFrzn show05
+
+case_show06B :: Assertion
+case_show06B = assertEqual "show for SLSet/Trvrsbl" "AFoldable [44, 33]" (show show06B)
+show06B :: G.AFoldable Int
+show06B = G.sortFrzn show06
 
 ------------------------------------------------------------------------------------------
 -- Misc Helpers

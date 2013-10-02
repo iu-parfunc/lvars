@@ -123,7 +123,6 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
-
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels
@@ -347,3 +346,17 @@ instance F.Foldable (IMap k Frzn) where
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+instance (Show k, Show a) => Show (IMap k Frzn a) where
+  show (IMap (WrapLVar lv)) =
+    "{IMap: " ++
+     (concat $ intersperse ", " $ 
+      unsafeDupablePerformIO $
+       SLM.foldlWithKey (\ acc k v -> return$ show (k, v) : acc)
+        [] (L.state lv)
+     ) ++ "}"
+
+-- | For convenience only; the user could define this.
+instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
+  show lv = show (castFrzn lv)
+

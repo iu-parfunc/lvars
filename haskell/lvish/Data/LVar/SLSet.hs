@@ -48,6 +48,7 @@ module Data.LVar.SLSet
 import Control.Applicative
 import qualified Data.Foldable as F
 import           Data.Concurrent.SkipListMap as SLM
+import           Data.List (intersperse)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic
@@ -103,6 +104,18 @@ instance OrderedLVarData1 ISet where
 instance DeepFrz a => DeepFrz (ISet s a) where
   type FrzType (ISet s a) = ISet Frzn (FrzType a)
   frz = unsafeCoerceLVar
+
+instance Show a => Show (ISet Frzn a) where
+  show lv = "{ISet: " ++
+     (concat $ intersperse ", " $ map show $ 
+      F.foldr (\ elm ls -> elm : ls) []
+      (unsafeCoerceLVar lv :: ISet Trvrsbl a)) ++ "}"
+
+-- | For convenience only; the user could define this.
+instance Show a => Show (ISet Trvrsbl a) where
+  show lv = show (castFrzn lv)
+
+--------------------------------------------------------------------------------
 
 -- | Test whether an element is in a frozen image of a set.
 member :: a -> ISet Frzn a -> Bool

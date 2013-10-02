@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.0
+version:             1.0.0.1
 
 -- Changelog:
 -- 0.2 -- switch SLMap over to O(1) freeze
@@ -26,7 +26,8 @@ description:
   .
     * /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
-    * /Freeze after writing: quasi-deterministic programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
+
+    * POPL 2014: /Freeze after writing: quasi-deterministic programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
 
 license:             BSD3
 license-file:        LICENSE
@@ -62,6 +63,12 @@ flag getonce
 
 --------------------------------------------------------------------------------
 library
+  Source-repository head
+    type:     git
+    location: https://github.com/iu-parfunc/lvars
+    subdir:   haskell/lvish
+    tag:      release-lvish-1.0
+
   -- Modules exported by the library.
   exposed-modules:
                     ------------- End user modules ------------
@@ -69,18 +76,18 @@ library
                     Control.LVish.DeepFrz
                     Data.LVar.Generic
                     Data.LVar.IVar
+                    Data.LVar.IStructure 
                     Data.LVar.PureSet
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
-                    Data.LVar.IStructure                    
                     -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:
-                    Data.LVar.Internal.Pure                    
+                    Data.LVar.Internal.Pure
+                    Data.LVar.Generic.Internal
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
-                    Data.LVar.Generic.Internal
                     Control.LVish.DeepFrz.Internal                    
                     
   -- Modules included in this library but not exported.
@@ -105,13 +112,14 @@ library
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, lattices ==1.2.*, 
                  split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
                  parallel ==3.2.*, async ==2.0.*,
-                 atomic-primops, hashable, transformers, random, chaselev-deque, bits-atomic, missing-foreign,
+                 atomic-primops, hashable, transformers, random, 
+                 chaselev-deque, 
+                 bits-atomic, missing-foreign,
                  ghc-prim
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
-  -- Actually -threaded won't do anything for a library, this is just a reminder:
-  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -O2 -rtsopts
   if flag(abstract-par) 
     cpp-options: -DUSE_ABSTRACT_PAR
     build-depends:  abstract-par >=0.4
@@ -127,8 +135,10 @@ library
 --------------------------------------------------------------------------------
 -- TODO: New tests here:
 test-suite test-lvish
-    type:				exitcode-stdio-1.0
-    main-is:    		unit-tests.hs
+    type:	    exitcode-stdio-1.0
+    main-is:        unit-tests.hs
+    other-modules:  TestHelpers    
+                    
     ghc-options: 		-O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
                      random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, test-framework, 
