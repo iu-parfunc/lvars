@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.0
+version:             1.0
 
 -- Changelog:
 -- 0.2 -- switch SLMap over to O(1) freeze
@@ -127,8 +127,10 @@ library
 --------------------------------------------------------------------------------
 -- TODO: New tests here:
 test-suite test-lvish
-    type:				exitcode-stdio-1.0
-    main-is:    		unit-tests.hs
+    type:	    exitcode-stdio-1.0
+    main-is:        unit-tests.hs
+    other-modules:  TestHelpers    
+                    
     ghc-options: 		-O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
                      random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, test-framework, 

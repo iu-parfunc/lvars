@@ -1100,6 +1100,7 @@ show05B = G.sortFrzn show05
 
 case_show06B :: Assertion
 case_show06B = assertEqual "show for SLSet/Trvrsbl" "AFoldable [44, 33]" (show show06B)
+show06B :: G.AFoldable Int
 show06B = G.sortFrzn show06
 
 ------------------------------------------------------------------------------------------
