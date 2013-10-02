@@ -11,8 +11,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 
--- | An I-Structure, also known as an array of IVars.
---   This uses a boxed array.
+-- | An I-Structure, also known as an array of IVars, implemented using a boxed vector.
 
 module Data.LVar.IStructure
        (
@@ -49,7 +48,6 @@ import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 ------------------------------------------------------------------------------
 
 -- | An I-Structure, also known as an array of IVars.
---   For now this really is a simple vector of IVars.
 newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 
 -- unIStructure (IStructure lv) = lv
@@ -57,7 +55,7 @@ newtype IStructure s a = IStructure (V.Vector (IV.IVar s a))
 instance Eq (IStructure s v) where
   IStructure vec1 == IStructure vec2 = vec1 == vec2
 
--- | An @IStructure@ can be treated as a generic container LVar.  However, the
+-- | An `IStructure` can be treated as a generic container LVar.  However, the
 -- polymorphic operations are less useful than the monomorphic ones exposed by this
 -- module (e.g., @forEachHP@ vs. @addHandler@).
 instance LVarData1 IStructure where
@@ -124,7 +122,7 @@ getLength (IStructure vec) = return $! V.length vec
 --   IStructure lv1 == IStructure lv2 = state lv1 == state lv2 
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
---   All entries start off as zero, which must be BOTTOM.
+--   All entries start off as zero, which must be \"bottom\".
 newIStructure :: Int -> Par d s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)

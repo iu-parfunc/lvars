@@ -14,12 +14,13 @@
 
 {-|
 
-  This module provides finite maps that only grow.  It is based on a concurrent-skip-list
-  implementation of maps.
+This module provides finite maps that only grow. It is based on a
+/concurrent skip list/ implementation of maps.
 
-  Note that this module provides almost the same interface as "Data.LVar.PureMap",
-  but this module is usually more efficient.  However, it's always good to test muliple
-  data structures if you have a performance-critical use case.
+This module is usually a more efficient alternative to
+`Data.LVar.PureMap`, and provides almost the same interface. However,
+it's always good to test multiple data structures if you have a
+performance-critical use case.
 
  -}
 
@@ -30,7 +31,10 @@ module Data.LVar.SLMap
          IMap,
          newEmptyMap, newMap, newFromList,
          insert, 
-         getKey, waitSize, modify, freezeMap,
+         getKey, waitSize, modify,
+
+         -- * Quasi-deterministic operations
+         freezeMap,
          -- waitValue, 
 
          -- * Iteration and callbacks
@@ -40,7 +44,7 @@ module Data.LVar.SLMap
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_, 
          
-         -- * Alternate versions of derived ops that expose HandlerPools they create.
+         -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP,
 
        ) where
@@ -146,13 +150,13 @@ newMap mp =
                    ) mp
   return slm
 
--- | Create a new 'IMap' drawing initial elements from an existing list.
+-- | Create a new map drawing initial elements from an existing list.
 newFromList :: (Ord k, Eq v) =>
                [(k,v)] -> Par d s (IMap k s v)
 newFromList ls = newFromList_ ls defaultLevels
 
--- | Create a new 'IMap' drawing initial elements from an existing list, with
--- the given number of skiplist levels.
+-- | Create a new map drawing initial elements from an existing list, with
+-- the given number of skip list levels.
 newFromList_ :: Ord k => [(k,v)] -> Int -> Par d s (IMap k s v)
 newFromList_ ls n = do  
   m@(IMap lv) <- newEmptyMap_ n
@@ -196,7 +200,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
         SLM.foldlWithKey (\() k v -> forkHP mh $ callb k v) () slm
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
--- the map
+-- the map.
 forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing         
 
@@ -210,16 +214,16 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
             Added _ -> return $ Just (key, elm)
             Found _ -> throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
           
--- | IMap's containing other LVars have some additional capabilities compared to
+-- | `IMap`s containing other LVars have some additional capabilities compared to
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
--- inserts a "bottom" element if there is no existing entry for the key.
+-- inserts a \"bottom\" element if there is no existing entry for the key.
 --
 modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
-          -> (Par d s (f s a))    -- ^ Create a new "bottom" element whenever an entry is not present.
-          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand-side of the keyed entry.
+          -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
+          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par d s b
 modify (IMap (WrapLVar lv)) key newBottom fn = do
     act <- WrapPar $ putLV_ lv putter
@@ -256,12 +260,13 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     -- the threshold.a
     deltaThresh _ = globalThresh (L.state lv) False
 
--- | Get the exact contents of the map  Using this may cause your
+-- | Get the exact contents of the map.  As with any
+-- quasi-deterministic operation, using `freezeMap` may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 --
--- This is an O(1) operation that doesn't copy the in-memory representation of the
+-- This is an /O(1)/ operation that doesn't copy the in-memory representation of the
 -- IMap.
 freezeMap :: Ord k => IMap k s v -> QPar s (IMap k Frzn v)
 -- freezeMap (IMap (WrapLVar lv)) = return (IMap (WrapLVar lv))
@@ -277,13 +282,13 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
 -- Higher level routines that could (mostly) be defined using the above interface.
 --------------------------------------------------------------------------------
 
--- | Establish monotonic map between the input and output sets.  Produce a new result
+-- | Establish a monotonic map between the input and output map  Produce a new result
 -- based on each element, while leaving the keys the same.
 traverseMap :: (Ord k, Eq b) =>
                (k -> a -> Par d s b) -> IMap k s a -> Par d s (IMap k s b)
 traverseMap f s = traverseMapHP Nothing f s
 
--- | An imperative-style, inplace version of 'traverseMap' that takes the output set
+-- | An imperative-style, in-place version of 'traverseMap' that takes the output map
 -- as an argument.
 traverseMap_ :: (Ord k, Eq b) =>
                 (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
@@ -298,7 +303,7 @@ traverseMap_ f s o = traverseMapHP_ Nothing f s o
 copy :: (Ord k, Eq v) => IMap k s v -> Par d s (IMap k s v)
 copy = traverseMap (\ _ x -> return x)
 
--- | Variant that optionally ties the handlers to a pool.
+-- | Variant of `traverseMap` that optionally ties the handlers to a pool.
 traverseMapHP :: (Ord k, Eq b) =>
                  Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a ->
                  Par d s (IMap k s b)
@@ -307,7 +312,7 @@ traverseMapHP mh fn set = do
   traverseMapHP_ mh fn set os  
   return os
 
--- | Variant that optionally ties the handlers to a pool.
+-- | Variant of `traverseMap_` that optionally ties the handlers to a pool.
 traverseMapHP_ :: (Ord k, Eq b) =>
                   Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a -> IMap k s b ->
                   Par d s ()

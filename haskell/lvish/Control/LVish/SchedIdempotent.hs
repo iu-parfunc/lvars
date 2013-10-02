@@ -152,13 +152,13 @@ defaultDbg = 0
 -- | LVars are parameterized by two types:
 -- 
 --     * The first, @a@, characterizes the \"state\" of the LVar (i.e., the lattice
---     value), and should be a concurrently mutable data type.  That means, in
---     particular, that only a /transient snapshot/ of the lattice value can be
+--     element), and should be a concurrently mutable data type.  That means, in
+--     particular, that only a /transient snapshot/ of the state can be
 --     obtained in general.  But the information in such a snapshot is always a
 --     lower bound on the current value of the LVar.
 -- 
 --     * The second, @d@, characterizes the \"delta\" associated with a @putLV@
---     operation (i.e., the actual change, if any, to the LVar's lattice value).
+--     operation (i.e., the actual change, if any, to the LVar's state).
 --     In many cases such deltas allow far more efficient communication between
 --     @putLV@s and blocked @getLV@s or handlers.  It is crucial, however, that
 --     the behavior of a @get@ or handler does not depend on the /particular/
@@ -189,7 +189,7 @@ data Status d
   = Frozen                       -- further changes to the state are forbidden
   | Active (B.Bag (Listener d))  -- bag of blocked threshold reads and handlers
 
--- | A listener for an LVar is informed of each change to the LVar's lattice value
+-- | A listener for an LVar is informed of each change to the LVar's state
 -- (represented as a delta) and the event of the LVar freezing.  The listener is
 -- given access to a bag token, allowing it to remove itself from the bag of
 -- listeners, after unblocking a threshold read, for example.  It is also given

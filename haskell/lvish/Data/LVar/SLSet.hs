@@ -13,12 +13,13 @@
 
 {-|
 
-  This module provides sets that only grow.  It is based on a concurrent-skip-list
-  implementation of sets.
+This module provides sets that only grow.  It is based on a
+/concurrent skip list/ representation of sets.
 
-  Note that this module provides almost the same interface as "Data.LVar.PureSet",
-  but this module is usually more efficient.  However, it's always good to test muliple
-  data structures if you have a performance-critical use case.
+This module is usually a more efficient alternative to
+"Data.LVar.PureSet", and provides almost the same interface.  However,
+it's always good to test multiple data structures if you have a
+performance-critical use case.
 
  -}
 
@@ -40,7 +41,7 @@ module Data.LVar.SLSet
          copy, traverseSet, traverseSet_, union, intersection,
          cartesianProd, cartesianProds, 
 
-         -- * Alternate versions of derived ops that expose HandlerPools they create.
+         -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseSetHP, traverseSetHP_,
          cartesianProdHP, cartesianProdsHP
        ) where 
@@ -77,7 +78,7 @@ import Prelude hiding (insert)
 data ISet s a = Ord a => ISet {-# UNPACK #-}!(LVar s (SLM.SLMap a ()) a)
 -- TODO: Address the possible inefficiency of carrying Ord dictionaries at runtime.
 
--- | Physical identity, just as with IORefs.
+-- | Physical identity, just as with `IORef`s.
 instance Eq (ISet s v) where
   ISet slm1 == ISet slm2 = state slm1 == state slm2
   
@@ -142,16 +143,16 @@ instance F.Foldable (ISet Trvrsbl) where
 defaultLevels :: Int
 defaultLevels = 8
 
--- | Create a new, empty, monotonically growing 'ISet'.
+-- | Create a new, empty, monotonically growing set.
 newEmptySet :: Ord a => Par d s (ISet s a)
 newEmptySet = newEmptySet_ defaultLevels
 
--- | Tuning: Create a new, empty, monotonically growing 'ISet', with the given number
--- of skiplist levels.
+-- | Tuning: Create a new, empty, monotonically growing set, with the given number
+-- of skip list levels.
 newEmptySet_ :: Ord a => Int -> Par d s (ISet s a)
 newEmptySet_ n = fmap (ISet . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
--- | Create a new set populated with initial elements.
+-- | Create a new `ISet` populated with initial elements.
 newSet :: Ord a => S.Set a -> Par d s (ISet s a)
 newSet set = 
  fmap (ISet . WrapLVar) $ WrapPar $ newLV $ do
@@ -182,7 +183,7 @@ newFromList_ ls n = do
 --------------------------------------------------------------------------------
 
 -- | Freeze an 'ISet' after a specified callback/handler is done running.  This
--- differs from withCallbacksThenFreeze by not taking an additional action to run in
+-- differs from `withCallbacksThenFreeze` by not taking an additional action to run in
 -- the context of the handlers.
 --
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
@@ -228,7 +229,7 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $
         SLM.foldlWithKey (\() v () -> forkHP hp $ callb v) () slm
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
--- the set
+-- the set.
 forEach :: ISet s a -> (a -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
 
@@ -251,7 +252,7 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
     deltaThresh e2 | e2 == elm = return $ Just ()
                    | otherwise = return Nothing
 
--- | Wait on the SIZE of the set, not its contents.
+-- | Wait on the /size/ of the set, not its contents.
 waitSize :: Int -> ISet s a -> Par d s ()
 waitSize !sz (ISet (WrapLVar lv)) = WrapPar$
     getLV lv globalThresh deltaThresh
@@ -274,11 +275,11 @@ waitSize !sz (ISet (WrapLVar lv)) = WrapPar$
 copy :: Ord a => ISet s a -> Par d s (ISet s a)
 copy = traverseSet return 
 
--- | Establish monotonic map between the input and output sets.
+-- | Establish a monotonic map between the input and output sets.
 traverseSet :: Ord b => (a -> Par d s b) -> ISet s a -> Par d s (ISet s b)
 traverseSet f s = traverseSetHP Nothing f s
 
--- | An imperative-style, inplace version of 'traverseSet' that takes the output set
+-- | An imperative-style, in-place version of 'traverseSet' that takes the output set
 -- as an argument.
 traverseSet_ :: Ord b => (a -> Par d s b) -> ISet s a -> ISet s b -> Par d s ()
 traverseSet_ f s o = traverseSetHP_ Nothing f s o
@@ -291,11 +292,11 @@ union = unionHP Nothing
 intersection :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
 intersection = intersectionHP Nothing
 
--- | Cartesian product of two sets.
+-- | Take the cartesian product of two sets.
 cartesianProd :: (Ord a, Ord b) => ISet s a -> ISet s b -> Par d s (ISet s (a,b))
 cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
   
--- | Takes the cartesian product of several sets.
+-- | Take the cartesian product of several sets.
 cartesianProds :: Ord a => [ISet s a] -> Par d s (ISet s [a])
 cartesianProds ls = cartesianProdsHP Nothing ls
 
@@ -303,7 +304,7 @@ cartesianProds ls = cartesianProdsHP Nothing ls
 -- Alternate versions of functions that EXPOSE the HandlerPools
 --------------------------------------------------------------------------------
 
--- | Variant that optionally ties the handlers to a pool.
+-- | Variant of `traverseSet` that optionally ties the handlers to a pool.
 traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
                  Par d s (ISet s b)
 traverseSetHP mh fn set = do
@@ -311,7 +312,7 @@ traverseSetHP mh fn set = do
   traverseSetHP_ mh fn set os  
   return os
 
--- | Variant that optionally ties the handlers to a pool.
+-- | Variant of `traverseSet_` that optionally ties the handlers to a pool.
 traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a -> ISet s b ->
                   Par d s ()
 traverseSetHP_ mh fn set os = do

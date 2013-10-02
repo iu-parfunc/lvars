@@ -11,11 +11,11 @@
 
 {-|
 
-  This module provides finite maps that only grow.  It is based on the popular `Data.Map`
+  This module provides finite maps that only grow.  It is based on the popular "Data.Map"
   balanced-tree representation of maps.  Thus scalability is /not/ good for this
   implementation.  However, there are some interoperability benefits.  For example,
   after running a parallel computation with a map result, this module can produce a
-  `Data.Map` in /O(1)/ without copying, which may be useful downstream.
+  `Map` in /O(1)/ without copying, which may be useful downstream.
 
  -}
 
@@ -26,18 +26,18 @@ module Data.LVar.PureMap
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, 
-
-         -- * Freezing results (Quasi-determinism) 
-         freezeMap, fromIMap,
          
          -- * Iteration and callbacks
          forEach, forEachHP,
          withCallbacksThenFreeze,
 
+         -- * Quasi-deterministic operations
+         freezeMap, fromIMap,
+
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_,  union,
          
-         -- * Alternate versions of derived ops that expose HandlerPools they create.
+         -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP
        ) where
 
@@ -69,7 +69,7 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 --  `STRef`) in addition to the @a@ parameter that describes the type of elements
 -- in the set.
 -- 
--- Performance note: There is only ONE mutable location in this implementation.  Thus
+-- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
 newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 
@@ -139,7 +139,7 @@ newFromList = newMap . M.fromList
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
--- valueof the Map variable.
+-- value of the provided action.
 withCallbacksThenFreeze :: forall k v b s . Eq b =>
                            IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
 withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
@@ -163,7 +163,7 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
         IV.put_ resIV res
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
--- the map, optionally enrolled in a handler pool
+-- the map, optionally enrolled in a handler pool.
 forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
           -> IMap k s v                  -- ^ Map to listen to
           -> (k -> v -> Par d s ())      -- ^ callback
@@ -179,7 +179,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
         traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
--- the map
+-- the map.
 forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing 
 
@@ -212,8 +212,8 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
-          -> (Par d s (f s a))    -- ^ Create a new "bottom" element whenever an entry is not present.
-          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand-side of the keyed entry.
+          -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
+          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par d s b
 modify (IMap lv) key newBottom fn = WrapPar $ do 
   let ref = state lv      
@@ -276,15 +276,17 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     -- the threshold.a
     deltaThresh _ = globalThresh (L.state lv) False
 
--- | Get the exact contents of the map  Using this may cause your
+-- | Get the exact contents of the map.  As with any
+-- quasi-deterministic operation, using `freezeSet` may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 --
--- This Data.Map based LVar has the property that you can
--- retrieve the full set without any IO, and without nondeterminism
--- leaking.  (This is because the internal order is fixed for the
--- tree-based Data.Set.)    
+-- This "Data.Map"-based implementation has the special property that
+-- you can retrieve the full set without any `IO`, and without
+-- nondeterminism leaking.  (This is because the internal order is
+-- fixed for the tree-based representation of maps that "Data.Map"
+-- uses.)
 freezeMap :: IMap k s v -> QPar s (M.Map k v)
 freezeMap (IMap (WrapLVar lv)) = WrapPar $
    do freezeLV lv
@@ -304,13 +306,14 @@ fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
 -- Higher level routines that could (mostly) be defined using the above interface.
 --------------------------------------------------------------------------------
 
--- | Establish monotonic map between the input and output sets.  Produce a new result
--- based on each element, while leaving the keys the same.
+-- | Establish a monotonic map between the input and output sets.
+-- Produce a new result based on each element, while leaving the keys
+-- the same.
 traverseMap :: (Ord k, Eq b) =>
                (k -> a -> Par d s b) -> IMap k s a -> Par d s (IMap k s b)
 traverseMap f s = traverseMapHP Nothing f s
 
--- | An imperative-style, inplace version of 'traverseMap' that takes the output set
+-- | An imperative-style, in-place version of 'traverseMap' that takes the output set
 -- as an argument.
 traverseMap_ :: (Ord k, Eq b) =>
                 (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
@@ -318,7 +321,6 @@ traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
 -- | Return a new map which will (ultimately) contain everything in either input
 -- map.  Conflicting entries will result in a multiple put exception.
--- Optionally ties the handlers to a pool.
 union :: (Ord k, Eq a) => IMap k s a -> IMap k s a -> Par d s (IMap k s a)
 union = unionHP Nothing
 
@@ -333,7 +335,7 @@ union = unionHP Nothing
 copy :: (Ord k, Eq v) => IMap k s v -> Par d s (IMap k s v)
 copy = traverseMap (\ _ x -> return x)
 
--- | Variant that optionally ties the handlers to a pool.
+-- | A variant of `traverseMap` that optionally ties the handlers to a pool.
 traverseMapHP :: (Ord k, Eq b) =>
                  Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a ->
                  Par d s (IMap k s b)
@@ -342,7 +344,7 @@ traverseMapHP mh fn set = do
   traverseMapHP_ mh fn set os  
   return os
 
--- | Variant that optionally ties the handlers to a pool.
+-- | A variant of `traverseMap_` that optionally ties the handlers to a pool.
 traverseMapHP_ :: (Ord k, Eq b) =>
                   Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a -> IMap k s b ->
                   Par d s ()
@@ -351,8 +353,9 @@ traverseMapHP_ mh fn set os = do
     x' <- fn k x
     insert k x' os
 
--- | Variant that optionally ties the handlers in the resulting set to the same
--- handler pool as those in the two input sets.
+-- | A variant of `union` that optionally ties the handlers in the
+-- resulting set to the same handler pool as those in the two input
+-- sets.
 unionHP :: (Ord k, Eq a) => Maybe HandlerPool ->
            IMap k s a -> IMap k s a -> Par d s (IMap k s a)
 unionHP mh m1 m2 = do
@@ -366,4 +369,3 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
-

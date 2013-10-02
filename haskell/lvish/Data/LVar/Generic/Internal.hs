@@ -47,7 +47,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   -- | An /O(1)/ operation that atomically switches the LVar into a
   -- frozen state.  Any threads waiting on the freeze are woken.
   -- 
-  -- The frozen LVar provides a complete picture of the contents:
+  -- The contents of a frozen LVar are fully observable:
   -- e.g., a whole set instead of one element, or the full/empty
   -- information for an IVar, instead of just the payload.
   --
@@ -81,13 +81,13 @@ instance Show a => Show (AFoldable a) where
 --------------------------------------------------------------------------------
 
 {-# INLINE unsafeCoerceLVar #-}
--- | A safer version of `unsafeCoerce#` for LVars only.
---   Note that it needs to change the contents type, because freezing is recursive.
+-- | A safer version of `unsafeCoerce#` (that is, with a slightly more constrained type) for LVars only.
+--   Note, that the type of the LVar's contents must be allowed to change, because freezing is recursive.
 unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 b
 unsafeCoerceLVar = unsafeCoerce#
 
 -- | Here we gain permission to expose the nondeterministic internal structure of an
--- LVar: namely, the order in which elements occur.  We pay the piper with an `IO`
+-- LVar: namely, the order in which its contents occur  We pay the piper with an `IO`
 -- action.
 unsafeTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
 unsafeTraversable x = return (unsafeCoerceLVar x) 

@@ -10,17 +10,24 @@
 
 {-|
 
-  IVars are the very simplest form of LVars.  They are either empty, or full, and
-  contain only at most a single value.
+  IVars are the very simplest form of LVars.  They are either empty or full, and
+  contain at most a single value.
 
-  For more explanation of using IVars in Haskell, see the @monad-par@ and
+  For further information on using IVars in Haskell, see the @monad-par@ and
   @meta-par@ packages and papers:
 
     * <http://hackage.haskell.org/package/monad-par>
 
     * <http://www.cs.indiana.edu/~rrnewton/papers/haskell2011_monad-par.pdf>
 
+    * <http://hackage.haskell.org/package/meta-par>
+
     * <http://www.cs.indiana.edu/~rrnewton/papers/2012-ICFP_meta-par.pdf>
+
+Unlike the @IVar@ type provided by @monad-par@, the 'IVar' type
+provided in this module permits repeated `put`s of the same value, in
+keeping with the lattice-based semantics of LVars in which a `put`
+takes the least upper bound of the old and new values.
 
  -}
 
@@ -33,7 +40,7 @@ module Data.LVar.IVar
          -- * Derived IVar operations, same as in monad-par
         spawn, spawn_, spawnP,
 
-        -- * LVar style operations
+        -- * LVar-style operations
         freezeIVar, fromIVar, whenFull)
        where
 
@@ -60,12 +67,12 @@ import qualified Control.Monad.Par.Class as PC
 -- IVars implemented on top of (the idempotent implementation of) LVars
 ------------------------------------------------------------------------------
        
--- | An `IVar` is the simplest type of `LVar`.
+-- | An `IVar` is the simplest form of `LVar`.
 newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 -- the global data for an IVar a is a reference to Maybe a, while deltas are
 -- simply values of type a (taking the IVar from Nothing to Just):
 
--- | Physical equality just as with IORefs.
+-- | Physical equality, just as with `IORef`s.
 instance Eq (IVar s a) where
   (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
@@ -109,17 +116,17 @@ new = WrapPar$ fmap (IVar . WrapLVar) $
       newLV $ newIORef Nothing
 
 {-# INLINE get #-}
--- | Read the value in a @IVar@.  The 'get' can only return when the
+-- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
--- @IVar@.
+-- IVar.
 get :: IVar s a -> Par d s a
 get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
   where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
         deltaThresh  x     = return $ Just x  -- always past threshold
 
 {-# INLINE put_ #-}
--- | Put a value into an @IVar@.  Multiple 'put's to the same @IVar@
--- are not allowed, and result in a runtime error, unless both values put happen to be @(==)@.
+-- | Put a value into an IVar.  Multiple 'put's to the same IVar
+-- are not allowed, and result in a runtime error, unless the values put happen to be @(==)@.
 --         
 -- This function is always at least strict up to WHNF in the element put.
 put_ :: Eq a => IVar s a -> a -> Par d s ()
@@ -132,7 +139,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
                                throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
 
--- | The specialized freeze just for IVars.  It leaves the result in a natural format (`Maybe`).
+-- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
 freezeIVar :: IVar s a -> LV.Par QuasiDet s (Maybe a)
 freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
@@ -142,15 +149,15 @@ freezeIVar (IVar (WrapLVar lv)) = WrapPar $
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
     
--- | Unpack a frozen `IVar` (as produced by a generic `freeze` operation) as a more
+-- | Unpack a frozen IVar (as produced by a generic `freeze` operation) as a more
 -- palatable data structure.
 fromIVar :: IVar Frzn a -> Maybe a
 fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (state lv)
 
 {-# INLINE whenFull #-}
--- | Register a handler that fires when the `IVar` is filled, which, of course, only
+-- | Register a handler that fires when the IVar is filled, which, of course, only
 --   happens once.
-whenFull :: Maybe HandlerPool -> IVar s elt -> (elt -> Par d s ()) -> Par d s ()
+whenFull :: Maybe HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
@@ -170,7 +177,7 @@ spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
 spawn p  = do r <- new;  fork (p >>= put r);   return r
 
 {-# INLINE spawn_ #-}
--- | A version of `spawn` that uses only weak-head-normal form rather than full `NFData`.
+-- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
 spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
 spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
