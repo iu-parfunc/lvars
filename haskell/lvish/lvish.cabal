@@ -10,11 +10,12 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.1
+version:             1.0.0.2
 
 -- Changelog:
--- 0.2 -- switch SLMap over to O(1) freeze
-
+-- 0.2     -- switch SLMap over to O(1) freeze
+-- 1.0     -- initial public release
+-- 1.0.0.2 -- minor docs polishing
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -67,7 +68,7 @@ library
     type:     git
     location: https://github.com/iu-parfunc/lvars
     subdir:   haskell/lvish
-    tag:      release-lvish-1.0
+    tag:      release-lvish-1.0.0.2
 
   -- Modules exported by the library.
   exposed-modules:
