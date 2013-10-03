@@ -29,6 +29,9 @@ description:
   .
 
     * POPL 2014: /Freeze after writing: quasi-deterministic programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
+  . 
+  If the haddocks are not building, here is a mirror:
+  <http://www.cs.indiana.edu/~rrnewton/haddock/lvish/>
 
 license:             BSD3
 license-file:        LICENSE
