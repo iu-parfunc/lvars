@@ -272,6 +272,7 @@ newLV init = mkPar $ \k q -> do
 -- | Do a threshold read on an LVar
 getLV :: (LVar a d)                  -- ^ the LVar 
       -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
+                                     -- The @Bool@ indicates whether the LVar is FROZEN.
       -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
       -> Par b
 getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
