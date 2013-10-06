@@ -21,7 +21,7 @@
 module Control.LVish.SchedIdempotent
   (
     -- * Basic types and accessors
-    LVar(), state, HandlerPool(),
+    LVar(..), state, HandlerPool(),
     Par(..), ClosedPar(..),
     
     -- * Safe, deterministic operations
@@ -38,7 +38,10 @@ module Control.LVish.SchedIdempotent
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
-    addHandler, liftIO, toss
+    addHandler, liftIO, toss,
+
+    -- * Internal, private bits.
+    mkPar, Status(..), sched, Listener(..)
   ) where
 
 import           Control.Monad hiding (sequence, join)
