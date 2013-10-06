@@ -43,6 +43,7 @@ instance WorkSched (Par2 Idemp) where
 instance WorkSched (Par2 NonIdemp) where  
   getLV = mkGetLV NonIdemp
 
+-- ARGH: everything overloaded on these two should have a SPECIALIZE pragma for both.
 
 {-# INLINE mkGetLV #-}
 mkGetLV :: Idempotency -> LVar a1 d
