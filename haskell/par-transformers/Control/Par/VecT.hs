@@ -11,7 +11,19 @@
 -- computations.
 
 module Control.Par.VecT
-       -- (ParVec, runParVec, forkWithVec, liftST, getParVec, initParVec)
+       (
+         -- * The monad transformer: a dischargable effect
+         VecT, runVecT,
+
+         -- * An alternate fork operation 
+         forkWithVec,
+
+         -- * Accessing the threaded Vector state
+         getVecT, initVecT,
+         
+         -- * Working with ST
+         liftST, dropST
+       )
        where
 
 import Control.Monad
@@ -29,10 +41,10 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
-import qualified Control.LVish.Internal as LI
 import qualified Control.LVish as LV
 import qualified Control.Par.Class as PC
-import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
+-- import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
+import Data.LVar.IVar ()
 
 --------------------------------------------------------------------------------
 
@@ -76,7 +88,7 @@ getVecT = VecT S.get
 
 -- | initVecT creates a new mutable vector and returns a VecT
 -- computation with that new mutable vector's state as its state.
-initVecT :: (PC.ParFuture par, MonadIO par) =>
+initVecT :: PC.ParFuture par =>
             Int -> VecT s elt par ()
 initVecT size = do
   vec <- liftST $ MV.new size
@@ -109,13 +121,27 @@ forkWithVec mid (VecT lef) (VecT rig) = VecT $ do
   return (lx,rx)
 
 -- | Allow `ST` computations inside `VecT` computations.
-liftST :: MonadIO par =>
+--   This operation has some overhead. 
+liftST :: PC.ParFuture par =>
           ST s a -> VecT s elt par a
-liftST st = VecT $ liftIO io
-  where
-    io = unsafeSTToIO st
+liftST st =
+  seq thunk (return thunk)
+ where
+   -- WARNING: this requires locking on EACH unsafePerformIO.
+   -- This is inefficient IF the underlying 'par' actually would
+   -- have the capability to peform IO more efficiently.
+   -- But we can't assume that.
+   thunk = unsafePerformIO io
+   io    = unsafeSTToIO st 
+
+-- | Rather than lifting ST into the VecT, drop it into the underlying `par` monad as IO.
+--   In some situations this might be more efficient.   
+dropST :: (MonadIO par) =>
+          ST s a -> VecT s elt par a
+dropST = VecT . liftIO . unsafeSTToIO  
 
 instance PC.ParIVar par =>
+-- instance PC.ParFuture par =>
          PC.ParFuture (VecT s elt par) where
   type Future      (VecT s elt par)   = PC.Future par
   type FutContents (VecT s elt par) a = PC.FutContents par a
@@ -145,6 +171,7 @@ instance PC.ParIVar par =>
 --------------------------------------------------------------------------------
 
 -- Little tests:
+t1 :: IO String
 t1 = unsafeSTToIO p1
 
 p1 :: ST s String
@@ -153,7 +180,9 @@ p1 = do
   writeSTRef r "hello"
   readSTRef r
 
--- t2 = runVecT p2
+t2 :: String
+t2 = LV.runPar $
+     runVecT p2
 
 p2 :: VecT s Float (LV.Par d s2) String
 p2 = do
@@ -182,4 +211,3 @@ p2 = do
   liftST$ writeSTRef r "hello "
   hello <- liftST$ readSTRef r
   return$ hello ++ show z
-
