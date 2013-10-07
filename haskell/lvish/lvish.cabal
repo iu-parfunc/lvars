@@ -117,7 +117,9 @@ library
                  atomic-primops, hashable, transformers, random, 
                  chaselev-deque, 
                  bits-atomic, missing-foreign,
-                 ghc-prim, par-classes
+                 ghc-prim, 
+                 par-classes      <= 2.0, 
+                 par-transformers <= 2.0
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
