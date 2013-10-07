@@ -3,13 +3,19 @@
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -O2 #-}
 
+{-|
+
+In contrast with "Data.LVar.MemoBasic", this module provides..............
+
+ -}
+
 module Data.LVar.Memo
+--       (Memo, MemoFuture, getLazy, getMemo, force) 
        where
 
 import Data.Set (Set)
 import Control.Monad
-import qualified Data.Set as Set
--- import Test.QuickCheck  
+import qualified Data.Set as S
 
 import Control.LVish
 import qualified Control.LVish.Internal as LV
@@ -27,21 +33,21 @@ import qualified Data.LVar.SLMap as IM
 import System.IO.Unsafe (unsafePerformIO)
 import Debug.Trace
 
-import qualified Control.Par.StateT as StT
+import qualified Control.Par.StateT as St
 
 --------------------------------------------------------------------------------
--- Imaginatary memoization interface:
+-- 
 --------------------------------------------------------------------------------
 
 -- | Could use a more scalable structure here... but we need union as well as
 -- elementwise insertion.
 type SetAcc a = IORef (S.Set a)
 
--- But it should be more efficient to implement it directly:
+
 newtype Memo (d::Determinism) s a b =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo (IM.IMap s a (SetAcc a, IVar s b))  
+  Memo (IM.IMap s a (SetAcc a, IVar s b)) 
 --  Memo (IM.IMap s a (SLM.SLMap a (), IVar s b))
 
   -- We need a State transformer on the computations running inside the memo table to
@@ -110,6 +116,25 @@ force (MemoFuture pr) = pr
 
 
 -}
+
+--------------------------------------------------------------------------------
+-- Cycle-detecting memoized computations
+--------------------------------------------------------------------------------
+
+-- | A private type for keeping track of which keys we have gone through to get where
+-- we are.
+newtype RememberSet key = RememberSet (S.Set key)
+
+--  A Par-monad transformer that adds the cycle-detection capability.
+-- 
+-- newtype MemoCycT (d::Determinism) s key par res = MemoCycT ()
+--
+-- UH OH, we need generic version of set, map, and maybe 's' param operations to be
+-- able to make this a general transformer I think....
+
+-- | The LVish Par monad extended with the capability to detect cycles in memoized
+-- computations.
+newtype MemoCycT (d::Determinism) s key res = MemoCycT ()
 
 
 {-
