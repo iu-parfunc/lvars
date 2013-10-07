@@ -3,64 +3,33 @@
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -O2 #-}
 
-module Data.LVar.Memo
-       where
+{-|
 
-import Data.Set (Set)
-import Control.Monad
-import qualified Data.Set as Set
--- import Test.QuickCheck  
+This basic version of memotables is implemented on top of existing LVars without
+breaking any rules.
+
+The problem is that it cannot do cycle detection, because that requires tracking
+extra information (where we've been) which is NOT exposed to the user and NOT used 
+
+ -}
+module Data.LVar.MemoBasic
+       (Memo, MemoFuture, getLazy, getMemo, force) where
 
 import Control.LVish
-import qualified Control.LVish.Internal as LV
-import qualified Control.LVish.SchedIdempotent as LI
-
-import Data.IORef
-import Data.LVar.PureSet as IS
-import Data.LVar.IVar as IV
-import qualified Data.Concurrent.SkipListMap as SLM
-import qualified Data.Set as S
-
 import qualified Data.LVar.SLMap as IM
--- import qualified Data.LVar.PureSet as S
-
-import System.IO.Unsafe (unsafePerformIO)
-import Debug.Trace
-
-import qualified Control.Par.StateT as StT
-
+import Data.LVar.SLSet as IS
+import Data.LVar.IVar as IV
 --------------------------------------------------------------------------------
 -- Imaginatary memoization interface:
---------------------------------------------------------------------------------
 
--- | Could use a more scalable structure here... but we need union as well as
--- elementwise insertion.
-type SetAcc a = IORef (S.Set a)
+-- | A Memo-table that stores cached results of executing a `Par` computation.
+data Memo (d::Determinism) s a b = Memo !(IS.ISet s a) !(IM.IMap a s b)
+-- We COULD implement a memo table on top of existing LVars, with a Set LVar whose
+-- call-back invokes the function, and then a Map to store the results.  A "get"
+-- would become a put on the Set followed by a get on the Map.
 
--- But it should be more efficient to implement it directly:
-newtype Memo (d::Determinism) s a b =
-  -- Here we keep both a Ivars of return values, and a set of keys whose computations
-  -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo (IM.IMap s a (SetAcc a, IVar s b))  
---  Memo (IM.IMap s a (SLM.SLMap a (), IVar s b))
-
-  -- We need a State transformer on the computations running inside the memo table to
-  -- keep track of where they have come from and ADD that information to new
-  -- `getMemo` requests that they make.
-
+-- | A result from a lookup in a Memo-table, unforced.
 newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
-
--- | A Par-monad transformer for computations running inside a memo table.
-type MemoT key par det s a = par det s a
--- ParStateT par det s a  
-
--- | Lift @Par@ computations into a memoized function.
-liftMemo :: p d s a -> MemoT key p d s a
-liftMemo = undefined
-
---------------------------------------------------------------------------------
-
-{-
 
 -- | Reify a function in the `Par` monad as an explicit memoization table.
 makeMemo :: (Ord a, Eq b) => (a -> Par d s b) -> Par d s (Memo d s a b)
@@ -108,8 +77,6 @@ force (MemoFuture pr) = pr
 -- put) which would then not be deferred.  Such futures can't be canceled anyway, so
 -- there's really no need to defer the exceptions.
 
-
--}
 
 
 {-

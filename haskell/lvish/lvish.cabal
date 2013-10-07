@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.2
+version:             1.0.0.3
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -81,6 +81,8 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
+                    --------------- Experimental --------------
+                    Data.LVar.MemoBasic
                     -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:
