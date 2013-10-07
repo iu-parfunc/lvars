@@ -138,42 +138,17 @@ newtype RememberSet key = RememberSet (S.Set key)
 -- computations.
 newtype MemoCycT (d::Determinism) s key res = MemoCycT ()
 
-
--- data Response par key ans =
---     Done ans
---   | Continue [key] ([ans] -> par (Response par key ans))
-
--- data RequestResponse par key ans =
---     Response ans
---   | Request [key] (RequestCont par key ans)
-
--- type RequestCont par key ans = ([ans] -> par (RequestResponse par key ans))
-
--- -- | Chase recursive calls through an (new, implicit) Memo table until reaching a
--- -- cycle.  Return the final value resulting from the initial request/response as well
--- -- as a `Memo` containing all the intermediate results that were computed in the
--- -- process.
--- fixedPoint :: (Ord k, Eq v) => RequestResponse (Par d s) k v -> Par d s (v, Memo d s k v)
--- fixedPoint = undefined
-
-
--- | Make a Memo table with the added capability that any cycles in requests will be
--- detected.  A special cycle-handler determines what result is returned when a cycle
--- is detected starting at a given key.
---
--- The result of this function Memo-table returns 
-
-
--- newtype Response ans = Response ans
--- data    Request         par key ans = Request !key (RequestCont par key ans)
--- type    RequestResponse par key ans = Either (Response ans) (Request par key ans)
-
 data Response par key ans =
     Done !ans
   | Request !key (RequestCont par key ans)
     
 type RequestCont par key ans = (ans -> par (Response par key ans))
 
+-- | Make a Memo table with the added capability that any cycles in requests will be
+-- detected.  A special cycle-handler determines what result is returned when a cycle
+-- is detected starting at a given key.
+--
+-- The result of this function Memo-table returns 
 makeFixedPointMemo :: (Ord k, Eq v) =>
                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
                    -> (k -> Par d s v)                     -- ^ Handler for a cycle on @k@.
@@ -184,13 +159,9 @@ makeFixedPointMemo initCont cycHndlr = do
   -- The map stores results:
   mp  <- IM.newEmptyMap
   IS.forEach set $ \ key0 -> do
-    vr  <- IV.new
     -- The accumulator stores continuations waiting for an answer:
-    waitlst <- LV.WrapPar $ LI.liftIO $ newIORef []
---    IM.insert key0 (waitlst, vr) mp
     let loop hist resp = 
          case resp of
---           Done ans -> IV.put_ vr ans
            Done ans -> IM.insert key0 ans mp
            Request key2 newCont
              | S.member key2 hist -> do res <- cycHndlr key2 
@@ -199,25 +170,9 @@ makeFixedPointMemo initCont cycHndlr = do
                IS.insert key2 set
                res   <- IM.getKey key2 mp
                resp' <- newCont res
-               loop hist resp'
-{-
-  --             (waitlst2, vr2) <- IM.getKey key2 mp
-
-               fork $ do res   <- IM.getKey key2 mp
-                         resp' <- newCont res
-                         loop hist resp'
-
-             -- Here we must atomically look at the IVar and the waitlist and find if the
-             -- result is ready.
-             atomicModifyIORef waitlst2 $ \ (wl) ->
-               if wl == [] -- unvailable
-               then undefined
-               else 
-             undefined
--}
+               loop (S.insert key2 hist) resp'
     resp <- initCont key0
-    loop S.empty resp
-    return ()
+    loop (S.singleton key0) resp
     
   return $! Memo set mp
 

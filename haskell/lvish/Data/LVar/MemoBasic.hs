@@ -13,12 +13,26 @@ extra information (where we've been) which is NOT exposed to the user and NOT us
 
  -}
 module Data.LVar.MemoBasic
-       (Memo, MemoFuture, getLazy, getMemo, force) where
+       (
+         -- * Memo tables and defered lookups 
+         Memo, MemoFuture,
+         
+         -- * Basic operations
+         getLazy, getMemo, force,
+
+         -- * An idiom for fixed point computations
+         makeMemoFixedPoint,
+         Response(..)   
+
+       ) where
+
 
 import Control.LVish
+import qualified Data.Set as S
 import qualified Data.LVar.SLMap as IM
 import Data.LVar.SLSet as IS
 import Data.LVar.IVar as IV
+
 --------------------------------------------------------------------------------
 -- Imaginatary memoization interface:
 
@@ -77,21 +91,51 @@ force (MemoFuture pr) = pr
 -- put) which would then not be deferred.  Such futures can't be canceled anyway, so
 -- there's really no need to defer the exceptions.
 
+--------------------------------------------------------------------------------
+-- A fixed-point combinator
+--------------------------------------------------------------------------------
+
+data Response par key ans =
+    Done !ans
+  | Request !key (RequestCont par key ans)
+    
+type RequestCont par key ans = (ans -> par (Response par key ans))
+
+-- | Make a Memo table with the added capability that any cycles in requests will be
+-- detected.  A special cycle-handler determines what result is returned when a cycle
+-- is detected starting at a given key.
+--
+-- The result of this function Memo-table returns 
+makeMemoFixedPoint :: (Ord k, Eq v) =>
+                      (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
+                   -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
+                   -> Par d s (Memo d s k v)
+makeMemoFixedPoint initCont cycHndlr = do
+  -- The set provides our front-line memoization when new key come.
+  set <- IS.newEmptySet
+  -- The map stores results:
+  mp  <- IM.newEmptyMap
+  IS.forEach set $ \ key0 -> do
+    -- The accumulator stores continuations waiting for an answer:
+    let loop hist resp = 
+         case resp of
+           Done ans -> IM.insert key0 ans mp
+           Request key2 newCont
+             | S.member key2 hist -> do res <- cycHndlr key2 
+                                        IM.insert key2 res mp
+             | otherwise -> do 
+               IS.insert key2 set
+               res   <- IM.getKey key2 mp
+               resp' <- newCont res
+               loop (S.insert key2 hist) resp'
+    resp <- initCont key0
+    loop (S.singleton key0) resp
+    
+  return $! Memo set mp
+
 
 
 {-
-
-
--- | This version watches for, and catches, cyclic requests to the memotable that
--- would normally diverge.  Once caught, the user specifies what to do with these
--- cycles by providing a handler.  The handler is called on the key which formed the
--- cycle.  That is, computing the invocation spawned by that key results in a demand
--- for that key.  
-makeMemoCyclic :: (MemoTable d s a b -> a -> Par d s b) -> (a -> Par d s b) -> Par d s (MemoTable d s a b)
-makeMemoCyclic normalFn ifCycle  = undefined
--- FIXME: Are there races where more than one cycle can be hit?  Can we guarantee
--- that all are hit?  
-
 
 
 -- | Cancel an outstanding speculative computation.  This recursively attempts to
