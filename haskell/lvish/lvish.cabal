@@ -56,10 +56,6 @@ flag quick
   description: Build some targets but not others.  Omit apps and tests.
   default: False
 
-flag abstract-par
-  description: If enabled, provide instances for generic par operations using the establish type classes.
-  default: False
-
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
@@ -119,14 +115,12 @@ library
                  atomic-primops, hashable, transformers, random, 
                  chaselev-deque, 
                  bits-atomic, missing-foreign,
-                 ghc-prim
+                 ghc-prim, par-classes
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
   ghc-options: -O2 -rtsopts
-  if flag(abstract-par) 
-    cpp-options: -DUSE_ABSTRACT_PAR
-    build-depends:  abstract-par >=0.4
+
                     -- monad-par-extras >=0.4
   if flag(debug)
      cpp-options: -DDEBUG_LVAR
@@ -143,7 +137,7 @@ test-suite test-lvish
     main-is:        unit-tests.hs
     other-modules:  TestHelpers    
                     
-    ghc-options: 		-O2 -threaded -rtsopts -with-rtsopts=-N4
+    ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
                      random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, test-framework, 
                      test-framework-hunit, test-framework-th
