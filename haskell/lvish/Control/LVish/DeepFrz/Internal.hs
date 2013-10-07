@@ -7,7 +7,7 @@
 -- new LVar types.
 module Control.LVish.DeepFrz.Internal
        (
-         DeepFrz(..), Frzn, Trvrsbl 
+         DeepFrz(..), NonFrzn, Frzn, Trvrsbl 
        )
        where
 
@@ -35,6 +35,10 @@ class DeepFrz a where
 -- | An uninhabited type that signals that an LVar has been frozen.
 -- LVars should use this in place of their `s` parameter.
 data Frzn
+
+-- | This exists only for the purpose of being a type which is NOT equal to Frzn.
+-- One could just have well have used '()', but this is more descriptive.
+data NonFrzn
 
 -- | An uninhabited type that signals that an LVar is not only frozen,
 -- but it may be traversed in whatever order its internal
