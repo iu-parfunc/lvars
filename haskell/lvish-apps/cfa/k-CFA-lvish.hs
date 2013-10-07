@@ -280,19 +280,10 @@ monovariantStore store = do
 
 -- | Perform a complete, monovariant analysis.
 
--- LK: I'm not sure how to fix this.
 analyse :: Call -> IMap Var Frzn (IS.ISet Frzn Exp)
--- analyse :: Call -> IO (M.Map Var (Snapshot IS.ISet Exp))
 analyse e = runParThenFreeze $ par
  where
-   -- deSnap m = m >>= \ (ISetSnap s) -> return s
-   
-   -- res :: (M.Map Var (S.Set Exp))
-   -- res = runDeepFreezable df 
-   -- df = DeepFreezable par
-   
    par :: forall d s . Par d s (IM.IMap Var s (IS.ISet s Exp))
-   -- par :: Par d s (Store s)
    par = do
      logStrLn " [kcfa] Starting program..."
      newStore <- newEmptyMap 
