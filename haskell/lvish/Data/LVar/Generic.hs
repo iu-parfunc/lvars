@@ -58,7 +58,7 @@ castFrzn :: LVarData1 f => f Trvrsbl a -> f Frzn a
 castFrzn x = unsafeCoerceLVar x
 
 -- | LVish `Par` actions must commute, therefore one safe way to consume a frozen (but
--- unordered) LVar, /even in another `runPar` session/, is to run a `Par` computation for
+-- unordered) LVar, even in another `runPar` session, is to run a `Par` computation for
 -- each element.
 forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
 forFrzn fzn fn =

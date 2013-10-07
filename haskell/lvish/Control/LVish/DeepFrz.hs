@@ -8,7 +8,7 @@
 
 {-|
 
-The `DeepFrz` module rovides a way to return arbitrarily complex data
+The `DeepFrz` module provides a way to return arbitrarily complex data
 structures containing LVars from `Par` computations.
 
 The important thing to know is that to use `runParThenFreeze` to run a

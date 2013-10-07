@@ -11,7 +11,7 @@ module Control.LVish.DeepFrz.Internal
        )
        where
 
--- | DeepFreezing is a type-level (guaranteed O(1) time complexity)
+-- | DeepFreezing is a type-level (guaranteed /O(1)/ time complexity)
 -- operation.  It marks an LVar and its contents (recursively) as
 -- frozen.  DeepFreezing is not an action that can be taken directly
 -- by the user, however.  Rather, it is the final step in a
@@ -36,8 +36,8 @@ class DeepFrz a where
 -- LVars should use this in place of their `s` parameter.
 data Frzn
 
--- | This exists only for the purpose of being a type which is NOT equal to Frzn.
--- One could just have well have used '()', but this is more descriptive.
+-- | This exists only for the purpose of being a type which is /not/ equal to `Frzn`.
+-- One could just as well have used @()@, but this is more descriptive.
 data NonFrzn
 
 -- | An uninhabited type that signals that an LVar is not only frozen,

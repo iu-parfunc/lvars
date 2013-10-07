@@ -66,6 +66,10 @@ type QPar = Par QuasiDet
 -- | The generic representation of LVars used by the scheduler.  The
 -- end-user can't actually do anything with these and should not try
 -- to.
+
+-- LK: I don't care if we use `a` and `d` or `all` and `delt`, but why
+-- not be consistent between here and SchedIdempotent.hs?  Also, what
+-- does `all` mean?
 newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 
 -- | Unsafe: drops type information to go from the safe `Par` monad to

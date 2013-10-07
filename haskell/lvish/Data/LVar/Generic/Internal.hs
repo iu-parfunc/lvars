@@ -87,7 +87,7 @@ unsafeCoerceLVar :: LVarData1 f => f s1 a -> f s2 b
 unsafeCoerceLVar = unsafeCoerce#
 
 -- | Here we gain permission to expose the nondeterministic internal structure of an
--- LVar: namely, the order in which its contents occur  We pay the piper with an `IO`
+-- LVar: namely, the order in which its contents occur.  We pay the piper with an `IO`
 -- action.
 unsafeTraversable :: LVarData1 f => f Frzn a -> IO (f Trvrsbl a)
 unsafeTraversable x = return (unsafeCoerceLVar x) 
