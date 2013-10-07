@@ -57,7 +57,7 @@ import GHC.Prim (Constraint)
 class Monad m => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
-  type Future m a 
+  type Future m :: * -> *
 
   -- | Different implementations may place different constraints on
   -- what is allowable inside a Future.  For example, some
@@ -90,8 +90,6 @@ class Monad m => ParFuture m where
   spawn  p = spawn_ (do x <- p; deepseq x (return x))
   spawnP a = spawn (return a)
 
-
-
 --------------------------------------------------------------------------------
 
 -- | A simple type alias.  A hint.
@@ -102,7 +100,6 @@ type IVar m a = Future m a
 --
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
 class ParFuture m  => ParIVar m  where
---  type IVar m a
   
   -- | Forks a computation to happen in parallel.  The forked
   -- computation may exchange values with other computations using
@@ -111,7 +108,7 @@ class ParFuture m  => ParIVar m  where
 
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall a . m (Future m a) 
+  new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -124,40 +121,27 @@ class ParFuture m  => ParIVar m  where
   --
   -- Sometimes partial strictness is more appropriate: see 'put_'.
   --
-  put  :: forall a . NFData a => IVar m a -> a -> m ()
+  put  :: forall a . (FutContents m a, NFData a) =>
+          IVar m a -> a -> m ()
   put v a = deepseq a (put_ v a)
   
   -- | like 'put', but only head-strict rather than fully-strict.  
-  put_ :: forall a . IVar m a -> a -> m ()
+  put_ :: forall a . (FutContents m a) =>
+          IVar m a -> a -> m ()
 
   -- Extra API routines that have default implementations:
 
-{-
   -- | creates a new @IVar@ that contains a value
-  newFull :: NFData a => a -> m (IVar m a)
+  newFull :: (FutContents m a, NFData a) => a -> m (IVar m a)
   newFull a = deepseq a (newFull_ a)
 
   -- | creates a new @IVar@ that contains a value (head-strict only)
-  newFull_ ::  a -> m (IVar m a)
-  newFull_ a = new
--}
-  -- newFull_ a = do v <- new
-  --                 -- This is usually inefficient!
-  --       	  -- put_ v a
-  --       	  return v
+  newFull_ :: FutContents m a => a -> m (IVar m a)
+  newFull_ a = do v <- new
+                  -- This is usually inefficient!
+        	  put_ v a
+        	  return v
 
-newFull_ :: forall m a . (ParIVar m, FutContents m a) => a -> m (IVar m a)
--- newFull_ :: ParIVar m => a -> m (IVar m a)  
-newFull_ a =  do
---                 v::IVar m Int <- new
---                 v::IVar m a <- (new :: m (IVar m a))
---                 v <- new  
-                 -- This is usually inefficient!
---        	 put_ v a
-        	 return undefined
- where
-   _ = (new :: m (IVar m a))
-   
 --------------------------------------------------------------------------------
 
 
