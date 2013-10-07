@@ -226,6 +226,19 @@ v2c = -- IS.fromISet $
         mapM_ IV.get ivs -- Join point.
         return s
 
+escape01 :: IV.IVar Frzn Int
+escape01 = runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
+
+-- | This is VERY BAD:
+escape01B :: Par d Frzn String
+escape01B = 
+            do IV.put escape01 (4::Int)
+               return "uh oh"
+
+-- | [2013.10.06] Fixed this by requiring a SPECIFIC type, NonFrzn.
+-- major_bug :: String
+-- major_bug = runParThenFreeze escape01B
+               
 -- | Simple callback test.
 -- case_v3a :: Assertion
 -- case_v3a = v3a >>= assertEqual "simple callback test"
