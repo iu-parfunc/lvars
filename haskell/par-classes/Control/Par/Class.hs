@@ -146,7 +146,7 @@ class ParFuture m  => ParIVar m  where
   --       	  -- put_ v a
   --       	  return v
 
-newFull_ :: forall m a . ParIVar m => a -> m (IVar m a)
+newFull_ :: forall m a . (ParIVar m, FutContents m a) => a -> m (IVar m a)
 -- newFull_ :: ParIVar m => a -> m (IVar m a)  
 newFull_ a =  do
 --                 v::IVar m Int <- new
@@ -155,7 +155,9 @@ newFull_ a =  do
                  -- This is usually inefficient!
 --        	 put_ v a
         	 return undefined
-
+ where
+   _ = (new :: m (IVar m a))
+   
 --------------------------------------------------------------------------------
 
 
