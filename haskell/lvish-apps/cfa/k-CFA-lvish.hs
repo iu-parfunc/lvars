@@ -316,6 +316,9 @@ fvsCall (Call _ fun args) = fvsExp fun `S.union` S.unions (map fvsExp args)
 
 ------------------------------------------------------------------------------------------
 
+-- FIXME (issue #18): LK: This compiles and runs, but a bunch of tests
+-- fail and I'm not sure what's up
+
 main :: IO ()
 main = makeMain runExample
 
