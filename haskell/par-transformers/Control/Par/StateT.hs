@@ -8,7 +8,7 @@
 --   This module provides instances that make StateT-transformed
 --   monads into valid Par monads.
 
-module Control.Par.State
+module Control.Par.StateT
   (
     -- * Class for state split at fork points
    SplittableState(..)

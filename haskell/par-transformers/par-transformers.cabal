@@ -32,7 +32,7 @@ Library
 --                 Control.Par.Combinator,
 
                  -- State on top of Par is generally useful, but experimental
-                 Control.Par.State
+                 Control.Par.StateT
  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
