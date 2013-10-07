@@ -33,6 +33,8 @@ Library
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT
+                 
+                 Control.Par.VecT
  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
@@ -55,6 +57,10 @@ Library
                , random       >= 1.0
                , mtl          >= 2.0
                , transformers >= 0.2
+               , vector       >= 0.9
+               , ghc-prim 
+
+               , lvish
 
   ghc-options: -O2
   Other-modules:

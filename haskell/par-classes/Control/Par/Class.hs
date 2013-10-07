@@ -54,7 +54,7 @@ import GHC.Prim (Constraint)
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
 -- 
 -- class Monad m => ParFuture future m | m -> future where
-class Monad m => ParFuture m where
+class (Functor m, Monad m) => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
   type Future m :: * -> *
