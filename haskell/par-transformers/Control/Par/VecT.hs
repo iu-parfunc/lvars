@@ -41,10 +41,10 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
-import qualified Control.LVish as LV
 import qualified Control.Par.Class as PC
+-- import qualified Control.LVish as LV
 -- import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
-import Data.LVar.IVar ()
+-- import Data.LVar.IVar ()
 
 --------------------------------------------------------------------------------
 
@@ -180,34 +180,3 @@ p1 = do
   writeSTRef r "hello"
   readSTRef r
 
-t2 :: String
-t2 = LV.runPar $
-     runVecT p2
-
-p2 :: VecT s Float (LV.Par d s2) String
-p2 = do
-  r <- liftST$ newSTRef "hi"
-  initVecT 10
-  v <- getVecT
-
-  liftST$ set v 0
-
-  forkWithVec 5
-     (do v1 <- getVecT
-         -- We can't protect against this sort of out-of-bounds error
-         -- at compile time -- for that we'd need dependent types.
-         -- liftST$ write v1 9 0 -- BAD! out of bounds
-         liftST$ write v1 2 33.3
-     )
-     (do v2 <- getVecT
-         -- This, we actually *can* protect against at compile time.
-         -- liftST$ read v 2  -- BAD!
-         -- liftST$ readSTRef r
-         liftST$ write v2 2 44.4)
-
-  -- After the barrier we can access it again:
-  z <- liftST$ freeze v
-
-  liftST$ writeSTRef r "hello "
-  hello <- liftST$ readSTRef r
-  return$ hello ++ show z

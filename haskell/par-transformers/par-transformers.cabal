@@ -60,7 +60,7 @@ Library
                , vector       >= 0.9
                , ghc-prim 
 
-               , lvish
+--               , lvish
 
   ghc-options: -O2
   Other-modules:
