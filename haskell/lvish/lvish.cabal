@@ -82,6 +82,7 @@ library
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     Data.LVar.Memo
+                    Data.LVar.MemoCyc
                     -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:

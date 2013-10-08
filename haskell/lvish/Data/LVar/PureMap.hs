@@ -22,7 +22,7 @@
 module Data.LVar.PureMap
        (
          -- * Basic operations
-         IMap, 
+         IMap(..), 
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify, 

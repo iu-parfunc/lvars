@@ -9,7 +9,7 @@ In contrast with "Data.LVar.Memo", this module provides..............
 
  -}
 
-module Data.LVar.Memo2
+module Data.LVar.MemoCyc
        (
          -- * Memo tables and defered lookups 
          Memo, MemoFuture, 
@@ -29,6 +29,7 @@ module Data.LVar.Memo2
 import Data.Set (Set)
 import Control.Monad
 import qualified Data.Set as S
+import qualified Data.Map as M
 
 import Control.LVish
 import qualified Control.LVish.Internal as LV
@@ -40,9 +41,13 @@ import Data.LVar.IVar as IV
 import qualified Data.Concurrent.SkipListMap as SLM
 import qualified Data.Set as S
 
-import qualified Data.LVar.SLMap as IM
+import qualified Data.LVar.PureMap as IM
+-- import qualified Data.LVar.SLMap as IM
 -- import qualified Data.LVar.PureSet as S
 
+import Data.Char (ord)
+import Data.List (intersperse)
+import System.IO.Unsafe
 import Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -194,9 +199,9 @@ makeMemoFixedPoint initCont cycHndlr = do
     -- The accumulator stores continuations waiting for an answer:
     let loop :: S.Set k -> (Response (Par d s) k v) -> Par d s ()
         loop hist resp = do 
-         dbg ("!going around loop, length "++show (hist))
+         dbg ("![MemoFixedPoint] going around loop, hist length "++show (S.size hist))
          case resp of
-           Done ans -> do dbg ("  Final result on key: "++showS key0++" unioning history "++show hist)
+           Done ans -> do dbg ("  Final result on key: "++showID key0)
                           -- unionSetAcc hist key0_reach
                           IV.put_ key0_vr ans
            Request key2 newCont -> do
@@ -206,14 +211,12 @@ makeMemoFixedPoint initCont cycHndlr = do
                res <- cycHndlr key2
                (key2_reach, key2_resIV) <- IM.getKey key2 mp
                insertSetAcc key2 key2_reach
-               dbg ("  HIT CYCLE, key: "++showS key2)
+               dbg ("  HIT CYCLE, key: "++showWID key2)
                IV.put_ key2_resIV res
                dbg (" umm... what to do for key0 after the cycle is found for key2...?")
               else do
                IS.insert key2 set
-               (key2_reach, key2_resIV) <- IM.getKey key2 mp
-               dbg ("  About to block on intermediate result for key: "++showS key2)
-
+               (key2_reach, key2_resIV) <- IM.getKey key2 mp               
                let cyc_check elseCase = do
                      reach <- readSetAcc key2_reach 
                      if S.member key0 reach then do
@@ -225,8 +228,11 @@ makeMemoFixedPoint initCont cycHndlr = do
                            
                -- PRECHECK: before we block waiting for the other component to finish:
                cyc_check $ do
---               do                         
+--               do
+                 dbg ("  About to block on intermediate result for key: "++showWID key2)
+                 LV.WrapPar$ LI.liftIO$ putStrLn =<< showMapContents mp
                  res <- IV.get key2_resIV
+                 dbg ("  |-> DONE blocking on key: "++showWID key2)
 -- UNION FINAL CHILD REACHABLE INTO key0 REACHABLE!:
                  keyset <- readSetAcc key2_reach
                  hist'' <- unionSetAcc keyset key0_reach
@@ -238,14 +244,36 @@ makeMemoFixedPoint initCont cycHndlr = do
     
   return $! Memo set mp
 
+showMapContents (IM.IMap lv) = do
+  mp <- readIORef (LV.state lv)
+  let lst = M.toList mp
+  return$ "    Map Contents: (length "++ show (length lst) ++")\n" ++
+    concat [ "      "++fullempt++" "++showWID k++" -> "++vals++"\n"
+           | (k,(v,IV.IVar ivr)) <- lst
+--            , let vals = "hello"
+           , let lst = S.toList $ unsafePerformIO (readIORef v)
+           , let vals = "#"++show (length lst)++"["++ (concat $ intersperse ", " $ map showID lst)  ++"]"
+           , let fullempt = if Nothing == unsafePerformIO (readIORef (LV.state ivr))
+                            then "[empty]"
+                            else "[full]"
+           ]
+
+
+
 {-# INLNINE dbg #-}
 dbg :: Monad m => String -> m ()
 dbg s = trace s (return ())
 dbg _ = return ()
 
-showS :: Show a => a -> String
-showS x = let str = (show x) in
-          (show (length str))++"__"++str
+showWID :: Show a => a -> String
+showWID x = let str = (show x) in
+            showID x++"__"++str
+
+showID :: Show a => a -> String
+showID x = let str = (show x) in
+           (show (length str))++"-"++ show (checksum str)
+
+checksum str = sum (map ord str)
 
 
 mem02 :: Bool
