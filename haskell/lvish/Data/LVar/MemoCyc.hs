@@ -267,11 +267,14 @@ dbg _ = return ()
 
 showWID :: Show a => a -> String
 showWID x = let str = (show x) in
-            showID x++"__"++str
+            if length str < 10
+            then str
+            else showID x++"__"++str
 
 showID :: Show a => a -> String
 showID x = let str = (show x) in
-           (show (length str))++"-"++ show (checksum str)
+           if length str < 10 then str
+           else (show (length str))++"-"++ show (checksum str)
 
 checksum str = sum (map ord str)
 
@@ -293,6 +296,18 @@ mem03 = runPar $ do
    fn 33 = return (Request 44 (\_ -> return (Done False)))
    fn 44 = return (Request 33 (\_ -> return (Done False)))
 
+mem04 :: (Bool, S.Set Int, S.Set Int, S.Set Int)
+mem04 = runPar $ do
+  m <- makeMemoFixedPoint fn (\_ -> return True)
+  bl <- getMemo m 33
+  r1 <- getReachable m 33
+  r2 <- getReachable m 44
+  r3 <- getReachable m 55
+  return (bl, r1, r2, r3)
+ where
+   fn 33 = return (Request 44 (\_ -> return (Done False)))
+   fn 44 = return (Request 55 (\_ -> return (Done False)))
+   fn 55 = return (Request 33 (\_ -> return (Done False)))
 
 {-
 
