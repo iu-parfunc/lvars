@@ -43,8 +43,11 @@ import qualified Control.Par.StateT as St
 -- elementwise insertion.
 type SetAcc a = IORef (S.Set a)
 newSetAcc = LV.WrapPar $ LI.liftIO $ newIORef S.empty
+readSetAcc r = LV.WrapPar $ LI.liftIO $ readIORef r
 insertSetAcc x ref = LV.WrapPar $ LI.liftIO $
-                     atomicModifyIORef ref (\ s -> (S.insert x s,()))
+                     atomicModifyIORef' ref (\ s -> let new = S.insert x s in (new,new))
+unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
+                    atomicModifyIORef' ref (\ s -> let new = S.union x s in (new,new))
 
 data Memo (d::Determinism) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
@@ -171,36 +174,40 @@ makeMemoFixedPoint initCont cycHndlr = do
     key0_vr    <- IV.new
     key0_reach <- newSetAcc
     IM.insert key0 (key0_reach,key0_vr) mp
---    ref <- LV.WrapLVar$ LI.liftIO$ newIORef ([],Nothing)
---    IM.insert key0 ref mp
-
--- Ideal strategy... keep a straight line of where we've been...
--- BUT, if we observe an already visited node, then it is OUR
--- responsibility to BFS its downstream links to check for a cycle.
--- (or is it?)
 
     -- The accumulator stores continuations waiting for an answer:
     let loop :: S.Set k -> (Response (Par d s) k v) -> Par d s ()
         loop hist resp =
-         trace ("!going around loop, hist length "++show (hist)) $ do 
+         trace ("!going around loop, length "++show (hist)) $ do 
          case resp of
-           Done ans -> trace ("  Insert on key: "++showS key0) $
+           Done ans -> trace ("  Final result on key: "++showS key0++" unioning history "++show hist) $ do 
+                       -- unionSetAcc hist key0_reach
                        IV.put_ key0_vr ans
            Request key2 newCont -> do
+             hist' <- insertSetAcc key2 key0_reach
+             trace ("  Added "++show key2++" to history of "++show key0++" yielding "++show hist') $ return ()
              if S.member key2 hist then do
                res <- cycHndlr key2
-               (reachable, key2_resIV) <- IM.getKey key2 mp
-               insertSetAcc key2 reachable
+               (key2_reach, key2_resIV) <- IM.getKey key2 mp
+               insertSetAcc key2 key2_reach
                trace ("  HIT CYCLE, key: "++showS key2) $
                  IV.put_ key2_resIV res
+               trace (" umm... what to do for key0 after the cycle is found for key2...?")$ return ()
               else do
                -- FIXME: carry HIST here:
                IS.insert key2 set
-               (reachable, key2_resIV) <- IM.getKey key2 mp
-               trace ("  About to block on intermediate result for key: "++showS key2) $ return()
-               res <- IV.get key2_resIV
-               resp' <- newCont res
-               loop (S.insert key2 hist) resp'
+               (key2_reach, key2_resIV) <- IM.getKey key2 mp
+               reach <- readSetAcc key2_reach
+               if S.member key0 reach then do
+                 trace ("... found cycle on key0 "++show key0++", between components...") $ return()
+                 insertSetAcc key0 key0_reach
+                 ans <- cycHndlr key0
+                 IV.put_ key0_vr ans
+                else do 
+                 trace ("  About to block on intermediate result for key: "++showS key2) $ return()
+                 res <- IV.get key2_resIV
+                 resp' <- newCont res
+                 loop hist' resp'
     resp <- initCont key0
     loop (S.singleton key0) resp
     
@@ -250,6 +257,12 @@ showS x = let str = (show x) in
     
 --   return $! Memo set mp
 
+
+mem02 :: Bool
+mem02 = runPar $ do
+  m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done False))))
+                          (\_ -> return True)
+  getMemo m 33
 
 mem03 :: Bool
 mem03 = runPar $ do
