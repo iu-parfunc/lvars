@@ -44,6 +44,7 @@ import Data.LVar.PureMap as IM
 
 import qualified Data.LVar.SLMap as SM
 import qualified Data.LVar.SLSet as SS
+import Data.LVar.Memo  as Memo
 
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.IStructure as ISt
@@ -139,6 +140,8 @@ main = do
 
    , HU.TestLabel "case_show05B" $ HU.TestCase case_show05B
    , HU.TestLabel "case_show06B" $ HU.TestCase case_show06B
+
+   , HU.TestLabel "case_mem01" $ HU.TestCase case_mem01
    ]
    -- Ugh, busted test bracketing in test-framework... thus no good way to do
    -- thread-parameterization and no good way to take advantage of test-framework-th:   
@@ -1115,6 +1118,40 @@ case_show06B :: Assertion
 case_show06B = assertEqual "show for SLSet/Trvrsbl" "AFoldable [44, 33]" (show show06B)
 show06B :: G.AFoldable Int
 show06B = G.sortFrzn show06
+
+------------------------------------------------------------------------------------------
+-- Memo tables
+------------------------------------------------------------------------------------------
+
+case_mem01 :: Assertion
+case_mem01 = assertEqual "memo table test 1" (11,101) mem01
+mem01 :: (Integer, Integer)
+mem01 = runPar $ do
+  m <- makeMemo (return . (+1))
+  a <- getMemo m 10
+  b <- getMemo m 100
+  return (a,b)
+
+-- | The simplest cycle
+case_mem02 :: Assertion
+case_mem02 = assertEqual "memo table, cycle test" True mem02
+mem02 :: Bool
+mem02 = runPar $ do
+  m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done False))))
+                          (\_ -> return True)
+  getMemo m 33
+
+-- | Let's do a cycle through two keys.
+case_mem03 :: Assertion
+case_mem03 = assertEqual "memo table, cycle test" True mem03
+mem03 :: Bool
+mem03 = runPar $ do
+  m <- makeMemoFixedPoint fn (\_ -> return True)
+  getMemo m 33
+ where
+   fn 33 = return (Request 44 (\_ -> return (Done False)))
+   fn 44 = return (Request 33 (\_ -> return (Done False)))
+
 
 ------------------------------------------------------------------------------------------
 -- Misc Helpers

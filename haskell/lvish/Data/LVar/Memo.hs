@@ -15,7 +15,7 @@ extra information (where we've been) which is NOT exposed to the user and NOT us
 module Data.LVar.Memo
        (
          -- * Memo tables and defered lookups 
-         Memo, MemoFuture,
+         Memo, MemoFuture, makeMemo,
          
          -- * Basic operations
          getLazy, getMemo, force,
@@ -25,19 +25,23 @@ module Data.LVar.Memo
          Response(..)   
 
        ) where
-
+import Debug.Trace
 
 import Control.LVish
 import qualified Data.Set as S
-import qualified Data.LVar.SLMap as IM
-import Data.LVar.SLSet as IS
+-- import qualified Data.LVar.SLMap as IM
+-- import Data.LVar.SLSet as IS
+import qualified Data.LVar.PureMap as IM
+import Data.LVar.PureSet as IS
 import Data.LVar.IVar as IV
 
 --------------------------------------------------------------------------------
 -- Imaginatary memoization interface:
 
 -- | A Memo-table that stores cached results of executing a `Par` computation.
-data Memo (d::Determinism) s a b = Memo !(IS.ISet s a) !(IM.IMap a s b)
+data Memo (d::Determinism) s a b =
+     Memo !(IS.ISet s a)
+          !(IM.IMap a s b)
 -- We COULD implement a memo table on top of existing LVars, with a Set LVar whose
 -- call-back invokes the function, and then a Map to store the results.  A "get"
 -- would become a put on the Set followed by a get on the Map.
@@ -46,13 +50,15 @@ data Memo (d::Determinism) s a b = Memo !(IS.ISet s a) !(IM.IMap a s b)
 newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
 
 -- | Reify a function in the `Par` monad as an explicit memoization table.
-makeMemo :: (Ord a, Eq b) => (a -> Par d s b) -> Par d s (Memo d s a b)
+makeMemo :: (Ord a, Eq b, Show a, Show b) =>
+            (a -> Par d s b) -> Par d s (Memo d s a b)
 makeMemo fn = do
   st <- newEmptySet
   mp <- IM.newEmptyMap
   IS.forEach st $ \ elm -> do
     res <- fn elm
-    IM.insert elm res mp
+    trace ("makeMemo, about to insert result: "++show (show elm, show res)) $    
+      IM.insert elm res mp
   return $! Memo st mp
 -- TODO: this version may want to have access to the memo-table within the handler as
 -- well....
@@ -106,7 +112,7 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- is detected starting at a given key.
 --
 -- The result of this function Memo-table returns 
-makeMemoFixedPoint :: (Ord k, Eq v) =>
+makeMemoFixedPoint :: (Ord k, Eq v, Show k) =>
                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
                    -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
                    -> Par d s (Memo d s k v)
@@ -117,14 +123,19 @@ makeMemoFixedPoint initCont cycHndlr = do
   mp  <- IM.newEmptyMap
   IS.forEach set $ \ key0 -> do
     -- The accumulator stores continuations waiting for an answer:
-    let loop hist resp = 
+    let loop hist resp =
+         trace ("!going around loop, hist length "++show (hist)) $ 
          case resp of
-           Done ans -> IM.insert key0 ans mp
+           Done ans -> trace ("  Insert on key: "++showS key0) $
+                       IM.insert key0 ans mp
            Request key2 newCont
-             | S.member key2 hist -> do res <- cycHndlr key2 
-                                        IM.insert key2 res mp
-             | otherwise -> do 
+             | S.member key2 hist -> do res <- cycHndlr key2
+                                        trace ("  HIT CYCLE, key: "++showS key2) $
+                                          IM.insert key2 res mp
+             | otherwise -> do
+               -- FIXME: carry HIST here:
                IS.insert key2 set
+               trace ("  About to block on intermediate result for key: "++showS key2) $ return()
                res   <- IM.getKey key2 mp
                resp' <- newCont res
                loop (S.insert key2 hist) resp'
@@ -133,7 +144,8 @@ makeMemoFixedPoint initCont cycHndlr = do
     
   return $! Memo set mp
 
-
+showS x = let str = (show x) in
+          (show (length str))++"__"++str
 
 {-
 

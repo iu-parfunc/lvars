@@ -41,14 +41,21 @@ import qualified Control.Par.StateT as St
 
 -- | Could use a more scalable structure here... but we need union as well as
 -- elementwise insertion.
-type SetAcc a = IORef [a]
+type SetAcc a = IORef (S.Set a)
+newSetAcc = LV.WrapPar $ LI.liftIO $ newIORef S.empty
+insertSetAcc x ref = LV.WrapPar $ LI.liftIO $
+                     atomicModifyIORef ref (\ s -> (S.insert x s,()))
 
 data Memo (d::Determinism) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
   Memo { input :: !(IS.ISet s k)
 --       , store :: !(IM.IMap k s (SetAcc (RequestCont (Par d s) k v), IVar s v))
-       , store :: !(IM.IMap k s v)
+--       , store :: !(IM.IMap k s v)
+--       , store :: !(IM.IMap k s (IORef (S.Set k, Maybe v)))
+--       , store :: !(IM.IMap k s (IVar s (v, S.Set k)))
+       , store :: !(IM.IMap k s (SetAcc k, IVar s v))
+         -- ^ Store all the (transitively) reachable keys from this key.
        }
 --  Memo (IM.IMap s a (SLM.SLMap a (), IVar s b))
 
@@ -81,6 +88,8 @@ makeMemo fn = do
   return $! Memo st mp
 -- TODO: this version may want to have access to the memo-table within the handler as
 -- well....
+-}
+
 
 -- | Read from the memo-table.  If the value must be computed, do that right away and
 -- block until its complete.
@@ -95,8 +104,8 @@ getMemo tab key =
 getLazy :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s (MemoFuture d s b)
 getLazy (Memo st mp) key = do 
   IS.insert key st
-  return $! MemoFuture (IM.getKey key mp)
-
+  (_, iv) <- IM.getKey key mp
+  return $! MemoFuture (IV.get iv)
 
 -- | This will throw exceptions that were raised during the computation, INCLUDING
 -- multiple put.
@@ -117,8 +126,6 @@ force (MemoFuture pr) = pr
 -- there's really no need to defer the exceptions.
 
 
--}
-
 --------------------------------------------------------------------------------
 -- Cycle-detecting memoized computations
 --------------------------------------------------------------------------------
@@ -138,6 +145,8 @@ newtype RememberSet key = RememberSet (S.Set key)
 -- computations.
 newtype MemoCycT (d::Determinism) s key res = MemoCycT ()
 
+--------------------------------------------------------------------------------
+
 data Response par key ans =
     Done !ans
   | Request !key (RequestCont par key ans)
@@ -149,32 +158,107 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- is detected starting at a given key.
 --
 -- The result of this function Memo-table returns 
-makeFixedPointMemo :: (Ord k, Eq v) =>
+makeMemoFixedPoint :: forall d s k v . (Ord k, Eq v, Show k) =>
                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
-                   -> (k -> Par d s v)                     -- ^ Handler for a cycle on @k@.
+                   -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
                    -> Par d s (Memo d s k v)
-makeFixedPointMemo initCont cycHndlr = do
+makeMemoFixedPoint initCont cycHndlr = do
   -- The set provides our front-line memoization when new key come.
   set <- IS.newEmptySet
   -- The map stores results:
   mp  <- IM.newEmptyMap
   IS.forEach set $ \ key0 -> do
+    key0_vr    <- IV.new
+    key0_reach <- newSetAcc
+    IM.insert key0 (key0_reach,key0_vr) mp
+--    ref <- LV.WrapLVar$ LI.liftIO$ newIORef ([],Nothing)
+--    IM.insert key0 ref mp
+
+-- Ideal strategy... keep a straight line of where we've been...
+-- BUT, if we observe an already visited node, then it is OUR
+-- responsibility to BFS its downstream links to check for a cycle.
+-- (or is it?)
+
     -- The accumulator stores continuations waiting for an answer:
-    let loop hist resp = 
+    let loop :: S.Set k -> (Response (Par d s) k v) -> Par d s ()
+        loop hist resp =
+         trace ("!going around loop, hist length "++show (hist)) $ do 
          case resp of
-           Done ans -> IM.insert key0 ans mp
-           Request key2 newCont
-             | S.member key2 hist -> do res <- cycHndlr key2 
-                                        IM.insert key2 res mp
-             | otherwise -> do 
+           Done ans -> trace ("  Insert on key: "++showS key0) $
+                       IV.put_ key0_vr ans
+           Request key2 newCont -> do
+             if S.member key2 hist then do
+               res <- cycHndlr key2
+               (reachable, key2_resIV) <- IM.getKey key2 mp
+               insertSetAcc key2 reachable
+               trace ("  HIT CYCLE, key: "++showS key2) $
+                 IV.put_ key2_resIV res
+              else do
+               -- FIXME: carry HIST here:
                IS.insert key2 set
-               res   <- IM.getKey key2 mp
+               (reachable, key2_resIV) <- IM.getKey key2 mp
+               trace ("  About to block on intermediate result for key: "++showS key2) $ return()
+               res <- IV.get key2_resIV
                resp' <- newCont res
                loop (S.insert key2 hist) resp'
     resp <- initCont key0
     loop (S.singleton key0) resp
     
   return $! Memo set mp
+
+showS x = let str = (show x) in
+          (show (length str))++"__"++str
+
+
+ 
+
+-- data Response par key ans =
+--     Done !ans
+--   | Request !key (RequestCont par key ans)
+    
+-- type RequestCont par key ans = (ans -> par (Response par key ans))
+
+-- -- | Make a Memo table with the added capability that any cycles in requests will be
+-- -- detected.  A special cycle-handler determines what result is returned when a cycle
+-- -- is detected starting at a given key.
+-- --
+-- -- The result of this function Memo-table returns 
+-- makeFixedPointMemo :: (Ord k, Eq v) =>
+--                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
+--                    -> (k -> Par d s v)                     -- ^ Handler for a cycle on @k@.
+--                    -> Par d s (Memo d s k v)
+-- makeFixedPointMemo initCont cycHndlr = do
+--   -- The set provides our front-line memoization when new key come.
+--   set <- IS.newEmptySet
+--   -- The map stores results:
+--   mp  <- IM.newEmptyMap
+--   IS.forEach set $ \ key0 -> do
+--     -- The accumulator stores continuations waiting for an answer:
+--     let loop hist resp = 
+--          case resp of
+--            Done ans -> IM.insert key0 ans mp
+--            Request key2 newCont
+--              | S.member key2 hist -> do res <- cycHndlr key2 
+--                                         IM.insert key2 res mp
+--              | otherwise -> do 
+--                IS.insert key2 set
+--                res   <- IM.getKey key2 mp
+--                resp' <- newCont res
+--                loop (S.insert key2 hist) resp'
+--     resp <- initCont key0
+--     loop (S.singleton key0) resp
+    
+--   return $! Memo set mp
+
+
+mem03 :: Bool
+mem03 = runPar $ do
+  m <- makeMemoFixedPoint fn (\_ -> return True)
+  getMemo m 33
+ where
+   fn 33 = return (Request 44 (\_ -> return (Done False)))
+   fn 44 = return (Request 33 (\_ -> return (Done False)))
+
 
 {-
 
