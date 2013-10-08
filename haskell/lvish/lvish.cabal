@@ -81,8 +81,7 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
-                    --------------- Experimental --------------
-                    Data.LVar.MemoBasic
+                    Data.LVar.Memo
                     -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:

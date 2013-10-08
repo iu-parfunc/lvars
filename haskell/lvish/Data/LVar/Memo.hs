@@ -5,70 +5,45 @@
 
 {-|
 
-In contrast with "Data.LVar.MemoBasic", this module provides..............
+This basic version of memotables is implemented on top of existing LVars without
+breaking any rules.
+
+The problem is that it cannot do cycle detection, because that requires tracking
+extra information (where we've been) which is NOT exposed to the user and NOT used 
 
  -}
-
 module Data.LVar.Memo
---       (Memo, MemoFuture, getLazy, getMemo, force) 
-       where
+       (
+         -- * Memo tables and defered lookups 
+         Memo, MemoFuture,
+         
+         -- * Basic operations
+         getLazy, getMemo, force,
 
-import Data.Set (Set)
-import Control.Monad
-import qualified Data.Set as S
+         -- * An idiom for fixed point computations
+         makeMemoFixedPoint,
+         Response(..)   
+
+       ) where
+
 
 import Control.LVish
-import qualified Control.LVish.Internal as LV
-import qualified Control.LVish.SchedIdempotent as LI
-
-import Data.IORef
-import Data.LVar.PureSet as IS
-import Data.LVar.IVar as IV
-import qualified Data.Concurrent.SkipListMap as SLM
 import qualified Data.Set as S
-
 import qualified Data.LVar.SLMap as IM
--- import qualified Data.LVar.PureSet as S
-
-import System.IO.Unsafe (unsafePerformIO)
-import Debug.Trace
-
-import qualified Control.Par.StateT as St
+import Data.LVar.SLSet as IS
+import Data.LVar.IVar as IV
 
 --------------------------------------------------------------------------------
--- 
---------------------------------------------------------------------------------
+-- Imaginatary memoization interface:
 
--- | Could use a more scalable structure here... but we need union as well as
--- elementwise insertion.
-type SetAcc a = IORef [a]
+-- | A Memo-table that stores cached results of executing a `Par` computation.
+data Memo (d::Determinism) s a b = Memo !(IS.ISet s a) !(IM.IMap a s b)
+-- We COULD implement a memo table on top of existing LVars, with a Set LVar whose
+-- call-back invokes the function, and then a Map to store the results.  A "get"
+-- would become a put on the Set followed by a get on the Map.
 
-data Memo (d::Determinism) s k v =
-  -- Here we keep both a Ivars of return values, and a set of keys whose computations
-  -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo { input :: !(IS.ISet s k)
---       , store :: !(IM.IMap k s (SetAcc (RequestCont (Par d s) k v), IVar s v))
-       , store :: !(IM.IMap k s v)
-       }
---  Memo (IM.IMap s a (SLM.SLMap a (), IVar s b))
-
-  -- We need a State transformer on the computations running inside the memo table to
-  -- keep track of where they have come from and ADD that information to new
-  -- `getMemo` requests that they make.
-
+-- | A result from a lookup in a Memo-table, unforced.
 newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
-
--- | A Par-monad transformer for computations running inside a memo table.
-type MemoT key par det s a = par det s a
--- ParStateT par det s a  
-
--- | Lift @Par@ computations into a memoized function.
-liftMemo :: p d s a -> MemoT key p d s a
-liftMemo = undefined
-
---------------------------------------------------------------------------------
-
-{-
 
 -- | Reify a function in the `Par` monad as an explicit memoization table.
 makeMemo :: (Ord a, Eq b) => (a -> Par d s b) -> Par d s (Memo d s a b)
@@ -116,27 +91,9 @@ force (MemoFuture pr) = pr
 -- put) which would then not be deferred.  Such futures can't be canceled anyway, so
 -- there's really no need to defer the exceptions.
 
-
--}
-
 --------------------------------------------------------------------------------
--- Cycle-detecting memoized computations
+-- A fixed-point combinator
 --------------------------------------------------------------------------------
-
--- | A private type for keeping track of which keys we have gone through to get where
--- we are.
-newtype RememberSet key = RememberSet (S.Set key)
-
---  A Par-monad transformer that adds the cycle-detection capability.
--- 
--- newtype MemoCycT (d::Determinism) s key par res = MemoCycT ()
---
--- UH OH, we need generic version of set, map, and maybe 's' param operations to be
--- able to make this a general transformer I think....
-
--- | The LVish Par monad extended with the capability to detect cycles in memoized
--- computations.
-newtype MemoCycT (d::Determinism) s key res = MemoCycT ()
 
 data Response par key ans =
     Done !ans
@@ -149,11 +106,11 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- is detected starting at a given key.
 --
 -- The result of this function Memo-table returns 
-makeFixedPointMemo :: (Ord k, Eq v) =>
+makeMemoFixedPoint :: (Ord k, Eq v) =>
                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
-                   -> (k -> Par d s v)                     -- ^ Handler for a cycle on @k@.
+                   -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
                    -> Par d s (Memo d s k v)
-makeFixedPointMemo initCont cycHndlr = do
+makeMemoFixedPoint initCont cycHndlr = do
   -- The set provides our front-line memoization when new key come.
   set <- IS.newEmptySet
   -- The map stores results:
@@ -176,19 +133,9 @@ makeFixedPointMemo initCont cycHndlr = do
     
   return $! Memo set mp
 
+
+
 {-
-
-
--- | This version watches for, and catches, cyclic requests to the memotable that
--- would normally diverge.  Once caught, the user specifies what to do with these
--- cycles by providing a handler.  The handler is called on the key which formed the
--- cycle.  That is, computing the invocation spawned by that key results in a demand
--- for that key.  
-makeMemoCyclic :: (MemoTable d s a b -> a -> Par d s b) -> (a -> Par d s b) -> Par d s (MemoTable d s a b)
-makeMemoCyclic normalFn ifCycle  = undefined
--- FIXME: Are there races where more than one cycle can be hit?  Can we guarantee
--- that all are hit?  
-
 
 
 -- | Cancel an outstanding speculative computation.  This recursively attempts to
