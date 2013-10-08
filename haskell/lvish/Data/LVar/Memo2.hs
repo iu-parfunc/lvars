@@ -177,32 +177,32 @@ makeMemoFixedPoint initCont cycHndlr = do
 
     -- The accumulator stores continuations waiting for an answer:
     let loop :: S.Set k -> (Response (Par d s) k v) -> Par d s ()
-        loop hist resp =
-         trace ("!going around loop, length "++show (hist)) $ do 
+        loop hist resp = do 
+         dbg ("!going around loop, length "++show (hist))
          case resp of
-           Done ans -> trace ("  Final result on key: "++showS key0++" unioning history "++show hist) $ do 
-                       -- unionSetAcc hist key0_reach
-                       IV.put_ key0_vr ans
+           Done ans -> do dbg ("  Final result on key: "++showS key0++" unioning history "++show hist)
+                          -- unionSetAcc hist key0_reach
+                          IV.put_ key0_vr ans
            Request key2 newCont -> do
              hist' <- insertSetAcc key2 key0_reach
-             trace ("  Added "++show key2++" to history of "++show key0++" yielding "++show hist') $ return ()
+             dbg ("  Added "++show key2++" to history of "++show key0++" yielding "++show hist')
              if S.member key2 hist then do
                res <- cycHndlr key2
                (key2_reach, key2_resIV) <- IM.getKey key2 mp
                insertSetAcc key2 key2_reach
-               trace ("  HIT CYCLE, key: "++showS key2) $
-                 IV.put_ key2_resIV res
-               trace (" umm... what to do for key0 after the cycle is found for key2...?")$ return ()
+               dbg ("  HIT CYCLE, key: "++showS key2)
+               IV.put_ key2_resIV res
+               dbg (" umm... what to do for key0 after the cycle is found for key2...?")
               else do
                -- FIXME: carry HIST here:
                IS.insert key2 set
                (key2_reach, key2_resIV) <- IM.getKey key2 mp
-               trace ("  About to block on intermediate result for key: "++showS key2) $ return()
+               dbg ("  About to block on intermediate result for key: "++showS key2)
 
                let cyc_check elseCase = do
                      reach <- readSetAcc key2_reach -- This should now be final...
                      if S.member key0 reach then do
-                         trace ("... found cycle on key0 "++show key0++", between components...") $ return()
+                         dbg ("... found cycle on key0 "++show key0++", between components...") 
                          insertSetAcc key0 key0_reach
                          ans <- cycHndlr key0
                          IV.put_ key0_vr ans
@@ -218,6 +218,8 @@ makeMemoFixedPoint initCont cycHndlr = do
     loop (S.singleton key0) resp
     
   return $! Memo set mp
+
+dbg s = trace s (return ())
 
 showS x = let str = (show x) in
           (show (length str))++"__"++str
