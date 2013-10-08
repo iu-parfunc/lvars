@@ -10,7 +10,20 @@ In contrast with "Data.LVar.Memo", this module provides..............
  -}
 
 module Data.LVar.Memo2
---       (Memo, MemoFuture, getLazy, getMemo, force) 
+       (
+         -- * Memo tables and defered lookups 
+         Memo, MemoFuture, 
+         
+         -- * Basic operations
+         getLazy, getMemo, force,
+
+         -- * Graph reachability 
+         getReachable,
+
+         -- * An idiom for fixed point computations
+         makeMemoFixedPoint,
+         Response(..)   
+       )
        where
 
 import Data.Set (Set)
@@ -30,57 +43,52 @@ import qualified Data.Set as S
 import qualified Data.LVar.SLMap as IM
 -- import qualified Data.LVar.PureSet as S
 
-import System.IO.Unsafe (unsafePerformIO)
 import Debug.Trace
 
-import qualified Control.Par.StateT as St
-
 --------------------------------------------------------------------------------
--- 
+-- Simple atomic Set accumulators
 --------------------------------------------------------------------------------
 
 -- | Could use a more scalable structure here... but we need union as well as
 -- elementwise insertion.
 type SetAcc a = IORef (S.Set a)
+newSetAcc :: Par d s (SetAcc a)
 newSetAcc = LV.WrapPar $ LI.liftIO $ newIORef S.empty
+readSetAcc :: (SetAcc a) -> Par d s (S.Set a)
 readSetAcc r = LV.WrapPar $ LI.liftIO $ readIORef r
+insertSetAcc :: Ord a => a -> SetAcc a -> Par d s (S.Set a)
 insertSetAcc x ref = LV.WrapPar $ LI.liftIO $
-                     atomicModifyIORef' ref (\ s -> let new = S.insert x s in (new,new))
+                     atomicModifyIORef' ref (\ s -> let ss = S.insert x s in (ss,ss))
+unionSetAcc :: Ord a => Set a -> SetAcc a -> Par d s (S.Set a)
 unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
-                    atomicModifyIORef' ref (\ s -> let new = S.union x s in (new,new))
+                    atomicModifyIORef' ref (\ s -> let ss = S.union x s in (ss,ss))
 
+--------------------------------------------------------------------------------
+-- Types
+--------------------------------------------------------------------------------
+
+-- | A Memo-table that stores cached results of executing a `Par` computation.
+-- 
+--   This, enhanced, version of the Memo-table also is required to track all the keys
+--   that are reachable from each key (for cycle-detection).
 data Memo (d::Determinism) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo { input :: !(IS.ISet s k)
---       , store :: !(IM.IMap k s (SetAcc (RequestCont (Par d s) k v), IVar s v))
---       , store :: !(IM.IMap k s v)
---       , store :: !(IM.IMap k s (IORef (S.Set k, Maybe v)))
---       , store :: !(IM.IMap k s (IVar s (v, S.Set k)))
-       , store :: !(IM.IMap k s (SetAcc k, IVar s v))
+  Memo !(IS.ISet s k)
+       !(IM.IMap k s (SetAcc k, IVar s v))
          -- ^ Store all the (transitively) reachable keys from this key.
-       }
---  Memo (IM.IMap s a (SLM.SLMap a (), IVar s b))
 
-  -- We need a State transformer on the computations running inside the memo table to
-  -- keep track of where they have come from and ADD that information to new
-  -- `getMemo` requests that they make.
-
+-- | A result from a lookup in a Memo-table, unforced.
+--   The two-stage `getLazy`/`force` lookup is useful to separate
+--   spawning the work from demanding its result.
 newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
-
--- | A Par-monad transformer for computations running inside a memo table.
-type MemoT key par det s a = par det s a
--- ParStateT par det s a  
-
--- | Lift @Par@ computations into a memoized function.
-liftMemo :: p d s a -> MemoT key p d s a
-liftMemo = undefined
 
 --------------------------------------------------------------------------------
 
 {-
 
 -- | Reify a function in the `Par` monad as an explicit memoization table.
+--   When you build a Memo this way it will not have any cycle-detection capability.
 makeMemo :: (Ord a, Eq b) => (a -> Par d s b) -> Par d s (Memo d s a b)
 makeMemo fn = do
   st <- newEmptySet
@@ -109,6 +117,14 @@ getLazy (Memo st mp) key = do
   IS.insert key st
   (_, iv) <- IM.getKey key mp
   return $! MemoFuture (IV.get iv)
+
+
+getReachable :: (Ord k, Eq v) => Memo d s k v -> k -> Par d s (S.Set k)
+getReachable (Memo st mp) key = do 
+  IS.insert key st -- Execute it, if it hasn't already.
+  (set, iv) <- IM.getKey key mp
+  _ <- IV.get iv
+  readSetAcc set
 
 -- | This will throw exceptions that were raised during the computation, INCLUDING
 -- multiple put.
@@ -194,13 +210,12 @@ makeMemoFixedPoint initCont cycHndlr = do
                IV.put_ key2_resIV res
                dbg (" umm... what to do for key0 after the cycle is found for key2...?")
               else do
-               -- FIXME: carry HIST here:
                IS.insert key2 set
                (key2_reach, key2_resIV) <- IM.getKey key2 mp
                dbg ("  About to block on intermediate result for key: "++showS key2)
 
                let cyc_check elseCase = do
-                     reach <- readSetAcc key2_reach -- This should now be final...
+                     reach <- readSetAcc key2_reach 
                      if S.member key0 reach then do
                          dbg ("... found cycle on key0 "++show key0++", between components...") 
                          insertSetAcc key0 key0_reach
@@ -209,61 +224,28 @@ makeMemoFixedPoint initCont cycHndlr = do
                       else elseCase
                            
                -- PRECHECK: before we block waiting for the other component to finish:
-               cyc_check $ do                      
+               cyc_check $ do
+--               do                         
                  res <- IV.get key2_resIV
+-- UNION FINAL CHILD REACHABLE INTO key0 REACHABLE!:
+                 keyset <- readSetAcc key2_reach
+                 hist'' <- unionSetAcc keyset key0_reach
                  cyc_check $ do -- POSTCHECK: when key2 is finished
                    resp' <- newCont res
-                   loop hist' resp'
+                   loop hist'' resp'
     resp <- initCont key0
     loop (S.singleton key0) resp
     
   return $! Memo set mp
 
+{-# INLNINE dbg #-}
+dbg :: Monad m => String -> m ()
 dbg s = trace s (return ())
+dbg _ = return ()
 
+showS :: Show a => a -> String
 showS x = let str = (show x) in
           (show (length str))++"__"++str
-
-
- 
-
--- data Response par key ans =
---     Done !ans
---   | Request !key (RequestCont par key ans)
-    
--- type RequestCont par key ans = (ans -> par (Response par key ans))
-
--- -- | Make a Memo table with the added capability that any cycles in requests will be
--- -- detected.  A special cycle-handler determines what result is returned when a cycle
--- -- is detected starting at a given key.
--- --
--- -- The result of this function Memo-table returns 
--- makeFixedPointMemo :: (Ord k, Eq v) =>
---                       (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
---                    -> (k -> Par d s v)                     -- ^ Handler for a cycle on @k@.
---                    -> Par d s (Memo d s k v)
--- makeFixedPointMemo initCont cycHndlr = do
---   -- The set provides our front-line memoization when new key come.
---   set <- IS.newEmptySet
---   -- The map stores results:
---   mp  <- IM.newEmptyMap
---   IS.forEach set $ \ key0 -> do
---     -- The accumulator stores continuations waiting for an answer:
---     let loop hist resp = 
---          case resp of
---            Done ans -> IM.insert key0 ans mp
---            Request key2 newCont
---              | S.member key2 hist -> do res <- cycHndlr key2 
---                                         IM.insert key2 res mp
---              | otherwise -> do 
---                IS.insert key2 set
---                res   <- IM.getKey key2 mp
---                resp' <- newCont res
---                loop (S.insert key2 hist) resp'
---     resp <- initCont key0
---     loop (S.singleton key0) resp
-    
---   return $! Memo set mp
 
 
 mem02 :: Bool
@@ -272,10 +254,13 @@ mem02 = runPar $ do
                           (\_ -> return True)
   getMemo m 33
 
-mem03 :: Bool
+mem03 :: (Bool, S.Set Int, S.Set Int)
 mem03 = runPar $ do
   m <- makeMemoFixedPoint fn (\_ -> return True)
-  getMemo m 33
+  bl <- getMemo m 33
+  r1 <- getReachable m 33
+  r2 <- getReachable m 44
+  return (bl, r1, r2)
  where
    fn 33 = return (Request 44 (\_ -> return (Done False)))
    fn 44 = return (Request 33 (\_ -> return (Done False)))
