@@ -197,17 +197,23 @@ makeMemoFixedPoint initCont cycHndlr = do
                -- FIXME: carry HIST here:
                IS.insert key2 set
                (key2_reach, key2_resIV) <- IM.getKey key2 mp
-               reach <- readSetAcc key2_reach
-               if S.member key0 reach then do
-                 trace ("... found cycle on key0 "++show key0++", between components...") $ return()
-                 insertSetAcc key0 key0_reach
-                 ans <- cycHndlr key0
-                 IV.put_ key0_vr ans
-                else do 
-                 trace ("  About to block on intermediate result for key: "++showS key2) $ return()
+               trace ("  About to block on intermediate result for key: "++showS key2) $ return()
+
+               let cyc_check elseCase = do
+                     reach <- readSetAcc key2_reach -- This should now be final...
+                     if S.member key0 reach then do
+                         trace ("... found cycle on key0 "++show key0++", between components...") $ return()
+                         insertSetAcc key0 key0_reach
+                         ans <- cycHndlr key0
+                         IV.put_ key0_vr ans
+                      else elseCase
+                           
+               -- PRECHECK: before we block waiting for the other component to finish:
+               cyc_check $ do                      
                  res <- IV.get key2_resIV
-                 resp' <- newCont res
-                 loop hist' resp'
+                 cyc_check $ do -- POSTCHECK: when key2 is finished
+                   resp' <- newCont res
+                   loop hist' resp'
     resp <- initCont key0
     loop (S.singleton key0) resp
     
