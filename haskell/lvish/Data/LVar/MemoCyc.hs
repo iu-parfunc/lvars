@@ -166,25 +166,32 @@ makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
 makeMemoFixedPoint_seq initCont cycHndlr initKey = do
   -- Start things off:
   resp <- initCont initKey
-  loop initKey (S.singleton initKey) resp return
+  (_,v) <- loop initKey (S.singleton initKey) resp return
+  return v
  where
-   loop :: k -> S.Set k -> (Response (Par d s) k v) -> (v -> Par d s v) -> Par d s v
+   loop :: k -> S.Set k -> (Response (Par d s) k v) -> ((Bool,v) -> Par d s (Bool,v)) -> Par d s (Bool,v)
    loop current hist resp kont = do
     dbg (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
     case resp of
       Done ans -> do dbg ("  !! Final result, answer "++show ans)
-                     kont ans
+                     kont (False,ans)
       Request key2 newCont
-        | S.member key2 hist -> do ans <- cycHndlr key2
-                                   kont ans
+        -- Here we have hit a cycle, and label it as such for the CURRENT node.
+        | S.member key2 hist -> do ans <- cycHndlr current
+                                   kont (True,ans)
         | otherwise -> do
           dbg ("  Requesting child computation with key "++showWID key2)
           resp' <- initCont key2
-          loop key2 (S.insert key2 hist) resp' $ \ ans2 -> do
-            dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
-            resp' <- newCont ans2
-            -- Popping back to processing the current key, which may not be finished.
-            loop current hist resp' kont
+          loop key2 (S.insert key2 hist) resp' $ \ (wasloop,ans2) ->
+            if wasloop then do 
+               -- Here the child computation ended up being processed as a cycle, so we must be as well:
+               ans3 <- cycHndlr current
+               kont (True,ans3)
+             else do            
+               dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
+               resp'' <- newCont ans2
+               -- Popping back to processing the current key, which may not be finished.
+               loop current hist resp'' kont
 
         
 --------------------------------------------------------------------------------
@@ -443,7 +450,7 @@ cyc04 = runPar $ do
 
 
 cyc04B :: String
-cyc04B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 44
+cyc04B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 33
  where
    fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++show a)))
    fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++show a)))
