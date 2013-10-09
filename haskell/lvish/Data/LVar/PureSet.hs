@@ -24,7 +24,7 @@
 module Data.LVar.PureSet
        (
          -- * Basic operations
-         ISet, 
+         ISet(..), 
          newEmptySet, newSet, newFromList,
          insert, waitElem, waitSize, 
 

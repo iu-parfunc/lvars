@@ -1,0 +1,66 @@
+Name:                par-transformers
+Version:             1.0
+Synopsis:            Extend Par monads with additional capabilities
+
+
+-- Version history:
+--  1.0     : Initial release replaced deprecated monad-par-transformers.
+
+Description:         The modules below provide additional
+                     data structures, and other added capabilities
+                     layered on top of any valid 'Par' monad.
+
+License:             BSD3
+License-file:        LICENSE
+Author:              Ryan Newton, Simon Marlow
+Maintainer:          Ryan Newton <rrnewton@gmail.com>
+Copyright:           (c) Ryan Newton 2012
+Stability:           Experimental
+Category:            Control,Parallelism,Monads
+Build-type:          Simple
+Cabal-version:       >=1.8
+
+Library
+  Source-repository head
+    type:     git
+    location: https://github.com/iu-parfunc/lvars
+    subdir:   haskell/par-transformers
+
+  Exposed-modules: 
+                 -- A collection of combinators for common parallel
+                 -- patterns and data structure traversals:
+--                 Control.Par.Combinator,
+
+                 -- State on top of Par is generally useful, but experimental
+                 Control.Par.StateT
+                 
+                 Control.Par.VecT
+ 
+                 -- Deterministic RNG needs more testing.
+--                 Control.Par.RNG
+
+                 -- Deprecated AList interface
+   --              Control.Par.AList,
+
+  Other-modules:
+                 -- Pedigree is experimental, but potentially useful for
+                 -- many purposes such as assigning unique, reproducable
+                 -- identifiers to IVars
+--                 Control.Monad.Par.Pedigree
+
+
+  Build-depends: base >= 4 && < 5
+               -- This provides the interface which monad-par implements:
+               , par-classes  >= 1.0 && < 2.0
+               , cereal       >= 0.3
+               , deepseq      >= 1.3
+               , random       >= 1.0
+               , mtl          >= 2.0
+               , transformers >= 0.2
+               , vector       >= 0.9
+               , ghc-prim 
+
+--               , lvish
+
+  ghc-options: -O2
+  Other-modules:

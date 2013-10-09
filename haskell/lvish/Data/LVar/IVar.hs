@@ -59,9 +59,7 @@ import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)
 
-#ifdef USE_ABSTRACT_PAR
-import qualified Control.Monad.Par.Class as PC
-#endif
+import qualified Control.Par.Class as PC
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -191,16 +189,15 @@ put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
 put v a = deepseq a (put_ v a)
 
 
-#ifdef USE_ABSTRACT_PAR
-  -- MIN_VERSION_abstract_par(0,4,0)
-#warning "Using the latest version of abstract par to activate ParFuture/IVar instances."
-instance PC.ParFuture (IVar s) (Par d s) where
+instance PC.ParFuture (Par d s) where
+  type Future (Par d s) = IVar s
+  type FutContents (Par d s) a = (Eq a)
   spawn_ = spawn_
   get = get
 
-instance PC.ParIVar (IVar s) (Par d s) where
+instance PC.ParIVar (Par d s) where
   fork = fork  
   put_ = put_
   new = new
-#endif
+
 

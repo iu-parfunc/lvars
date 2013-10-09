@@ -1,0 +1,47 @@
+Name:                par-classes
+Version:             1.0
+Synopsis:            Type classes providing a general interface to various @Par@ monads.
+
+-- Version history:
+--  1.0      : Replacing old 'abstract-par' package with this new, extended version.
+
+Description:
+  A @Par@ monad offers a parallel programming API based on dataflow
+  programming.  To use the traditional `Par` monad, install the @monad-par@
+  package, which includes this package as a dependency.
+  .
+  This package is an abstract interface only. It provides a number of
+  type clasess, but not an implementation.  The type classes separate
+  different levels of @Par@ functionality.  See the
+  "Control.Par.Class" module for more details.
+
+-- Homepage:            https://github.com/simonmar/monad-par
+License:             BSD3
+License-file:        LICENSE
+Author:              Ryan Newton
+Maintainer:          Ryan Newton <rrnewton@gmail.com>
+Copyright:           (c) Ryan Newton 2011-2012
+Stability:           Experimental
+Category:            Control,Parallelism,Monads
+Build-type:          Simple
+Cabal-version:       >=1.8
+
+extra-source-files:
+
+Library
+  Source-repository head
+    type:     git
+    location: https://github.com/iu-parfunc/lvars
+    subdir:   haskell/par-classes
+
+  Exposed-modules: 
+           -- A class generalizing different levels of monad-par functionality:
+           Control.Par.Class
+
+           -- A class providing unsafe functionality:
+--           , Control.Par.Unsafe
+
+  Build-depends: base >= 4 && < 5
+               , deepseq >= 1.1, ghc-prim
+               -- TEMP: for ghc-mod
+--               , lvish, monad-par, ghc-prim, mtl
