@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.2
+version:             1.0.0.4
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -32,6 +32,11 @@ description:
   . 
   If the haddocks are not building, here is a mirror:
   <http://www.cs.indiana.edu/~rrnewton/haddock/lvish/>
+  .
+  Change Log: 
+  .
+  * 1.0.0.4 - this is a critical bugfix release; please do not use earlier versions.
+
 
 license:             BSD3
 license-file:        LICENSE
