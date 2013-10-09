@@ -177,14 +177,17 @@ makeMemoFixedPoint_seq initCont cycHndlr initKey = do
                      kont (False,ans)
       Request key2 newCont
         -- Here we have hit a cycle, and label it as such for the CURRENT node.
-        | S.member key2 hist -> do ans <- cycHndlr current
+        | S.member key2 hist -> do dbg ("    Stopping before hitting a cycle on "++showID key2++", call cycHndlr on "++showID current)
+                                   ans <- cycHndlr current
                                    kont (True,ans)
         | otherwise -> do
           dbg ("  Requesting child computation with key "++showWID key2)
           resp' <- initCont key2
           loop key2 (S.insert key2 hist) resp' $ \ (wasloop,ans2) ->
-            if wasloop then do 
+--            if wasloop then do
+            if False then do            
                -- Here the child computation ended up being processed as a cycle, so we must be as well:
+               dbg ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
                ans3 <- cycHndlr current
                kont (True,ans3)
              else do            
