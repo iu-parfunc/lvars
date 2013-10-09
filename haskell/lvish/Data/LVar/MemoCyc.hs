@@ -153,6 +153,42 @@ data Response par key ans =
     
 type RequestCont par key ans = (ans -> par (Response par key ans))
 
+
+--------------------------------------------------------------------------------
+-- Sequential version:
+
+
+makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
+                          (k -> Par d s (Response (Par d s) k v)) -- ^ The computation to perform for new requests
+                       -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
+                       -> k                                       -- ^ Key to lookup.
+                       -> Par d s v
+makeMemoFixedPoint_seq initCont cycHndlr initKey = do
+  -- Start things off:
+  resp <- initCont initKey
+  loop initKey (S.singleton initKey) resp return
+ where
+   loop :: k -> S.Set k -> (Response (Par d s) k v) -> (v -> Par d s v) -> Par d s v
+   loop current hist resp kont = do
+    dbg (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
+    case resp of
+      Done ans -> do dbg ("  !! Final result, answer "++show ans)
+                     kont ans
+      Request key2 newCont
+        | S.member key2 hist -> do ans <- cycHndlr key2
+                                   kont ans
+        | otherwise -> do
+          dbg ("  Requesting child computation with key "++showWID key2)
+          resp' <- initCont key2
+          loop key2 (S.insert key2 hist) resp' $ \ ans2 -> do
+            dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
+            resp' <- newCont ans2
+            -- Popping back to processing the current key, which may not be finished.
+            loop current hist resp' kont
+
+        
+--------------------------------------------------------------------------------
+
 -- | Make a Memo table with the added capability that any cycles in requests will be
 -- detected.  A special cycle-handler determines what result is returned when a cycle
 -- is detected starting at a given key.
@@ -392,20 +428,29 @@ cyc03 = runPar $ do
    fn 33 = return (Request 44 (\_ -> return (Done "33 finished, no cycle")))
    fn 44 = return (Request 33 (\_ -> return (Done "44 finished, no cycle")))
 
-cyc04 :: (Bool, S.Set Int, S.Set Int, S.Set Int)
+cyc04 :: (String, S.Set Int, S.Set Int, S.Set Int)
 cyc04 = runPar $ do
-  m <- makeMemoFixedPoint fn (\_ -> return True)
+  m <- makeMemoFixedPoint fn (\_ -> return "cycle")
   bl <- getMemo m 33
   r1 <- getReachable m 33
   r2 <- getReachable m 44
   r3 <- getReachable m 55
   return (bl, r1, r2, r3)
  where
-   fn 33 = return (Request 44 (\_ -> return (Done False)))
-   fn 44 = return (Request 55 (\_ -> return (Done False)))
-   fn 55 = return (Request 33 (\_ -> return (Done False)))
+   fn 33 = return (Request 44 (\_ -> return (Done "33 complete")))
+   fn 44 = return (Request 55 (\_ -> return (Done "44 complete")))
+   fn 55 = return (Request 33 (\_ -> return (Done "55 complete")))
 
-main = print cyc02
+
+cyc04B :: String
+cyc04B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 44
+ where
+   fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++show a)))
+   fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++show a)))
+   fn 55 = return (Request 33 (\a -> return (Done$ "55 complete: "++show a)))
+
+
+-- main = print cyc02
 
 {-
 
