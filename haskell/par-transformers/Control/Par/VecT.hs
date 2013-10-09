@@ -57,7 +57,7 @@ import qualified Control.Par.Class as PC
 newtype VecT s elt par a = VecT ((S.StateT (STVector s elt) par) a)
 
 -- newtype VecT s elt a = VecT ((S.StateT (STVector s elt) ParIO) a)
- deriving Monad
+ deriving (Monad, Functor)
 
 -- | @runVecT@ discharges the extra state effect leaving the the underlying par
 -- Computation -- just like `runStateT`.  Here, using the standard trick runVecT has
