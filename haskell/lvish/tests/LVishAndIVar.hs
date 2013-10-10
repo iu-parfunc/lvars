@@ -5,13 +5,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Main where
+module LVishAndIVar(tests, runTests) where
 
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
--- import Test.Framework.TH (testGroupGenerator, defaultMainGenerator)
+import Test.Framework.TH (testGroupGenerator)
 
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import qualified Test.HUnit as HU
@@ -64,6 +64,9 @@ import TestHelpers as T
 
 --------------------------------------------------------------------------------
 
+tests :: Test
+tests = $(testGroupGenerator)
+
 -- Disabling thread-variation due to below bug:
 #if 1
 -- EEK!  Just got this [2013.06.27]:
@@ -73,8 +76,8 @@ import TestHelpers as T
 --     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
 -- Aborted (core dumped)
 
-main :: IO ()
-main = do
+runTests :: IO ()
+runTests = do
   -- T.stdTestHarness $ return all_tests -- Version that varies threads.
   if True then -- Use test-framework:
     defaultMain $ hUnitTestToTests all_tests
@@ -148,8 +151,8 @@ main = do
    -- $(testGroupGenerator)
 #else
 -- This is what we would do if not for the atomic-primops triggered GHC linking bug:
-main :: IO ()
-main = $(defaultMainGenerator)
+runTests :: IO ()
+runTests = defaultMain [tests]
 #endif
 
 case_v0 :: HU.Assertion
@@ -1131,27 +1134,6 @@ mem01 = runPar $ do
   a <- getMemo m 10
   b <- getMemo m 100
   return (a,b)
-
--- | The simplest cycle
-case_mem02 :: Assertion
-case_mem02 = assertEqual "memo table, cycle test" True mem02
-mem02 :: Bool
-mem02 = runPar $ do
-  m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done False))))
-                          (\_ -> return True)
-  getMemo m 33
-
--- | Let's do a cycle through two keys.
-case_mem03 :: Assertion
-case_mem03 = assertEqual "memo table, cycle test" True mem03
-mem03 :: Bool
-mem03 = runPar $ do
-  m <- makeMemoFixedPoint fn (\_ -> return True)
-  getMemo m 33
- where
-   fn 33 = return (Request 44 (\_ -> return (Done False)))
-   fn 44 = return (Request 33 (\_ -> return (Done False)))
-
 
 ------------------------------------------------------------------------------------------
 -- Misc Helpers

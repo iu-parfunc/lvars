@@ -73,7 +73,7 @@ library
     type:     git
     location: https://github.com/iu-parfunc/lvars
     subdir:   haskell/lvish
-    tag:      release-lvish-1.0.0.2
+--    tag:      release-lvish-1.0.0.4
 
   -- Modules exported by the library.
   exposed-modules:
@@ -144,13 +144,19 @@ library
 -- TODO: New tests here:
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
-    main-is:        unit-tests.hs
+    main-is:        Main.hs
+    hs-source-dirs: ./ tests/
     other-modules:  TestHelpers    
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
-                     random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, test-framework, 
-                     test-framework-hunit, test-framework-th
+                     random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, 
+                     par-classes      <= 2.0, 
+                     par-transformers <= 2.0,
+                     test-framework, test-framework-hunit, test-framework-th
+-- And the self-dependency:  TODO -- how to get this to work? [2013.10.10]
+-- For now it gets compiled TWICE:
+--    build-depends:   lvish
     if flag(debug)
        cpp-options: -DDEBUG_LVAR
     if flag(chaselev)

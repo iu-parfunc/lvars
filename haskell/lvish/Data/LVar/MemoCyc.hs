@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, DataKinds #-}
 {-# LANGUAGE KindSignatures, EmptyDataDecls #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, CPP #-}
 {-# OPTIONS_GHC -O2 #-}
 
 {-|
@@ -8,6 +8,9 @@
 In contrast with "Data.LVar.Memo", this module provides..............
 
  -}
+
+-- TEMP:
+#define DEBUG_MEMO
 
 module Data.LVar.MemoCyc
 {-       
@@ -27,30 +30,28 @@ module Data.LVar.MemoCyc
        )
 -}
        where
-
+-- Standard:
 import Data.Set (Set)
 import Control.Monad
 import qualified Data.Set as S
 import qualified Data.Map as M
-
-import Control.LVish
-import qualified Control.LVish.Internal as LV
-import qualified Control.LVish.SchedIdempotent as LI
-
 import Data.IORef
-import Data.LVar.PureSet as IS
-import Data.LVar.IVar as IV
-import qualified Data.Concurrent.SkipListMap as SLM
-import qualified Data.Set as S
-
-import qualified Data.LVar.PureMap as IM
--- import qualified Data.LVar.SLMap as IM
--- import qualified Data.LVar.PureSet as S
-
 import Data.Char (ord)
 import Data.List (intersperse)
 import System.IO.Unsafe
 import Debug.Trace
+
+-- LVish:
+import Control.LVish
+import qualified Control.LVish.Internal as LV
+import qualified Control.LVish.SchedIdempotent as LI
+import Data.LVar.PureSet as IS
+import Data.LVar.IVar as IV
+import qualified Data.Concurrent.SkipListMap as SLM
+import qualified Data.Set as S
+import qualified Data.LVar.PureMap as IM
+-- import qualified Data.LVar.SLMap as IM
+-- import qualified Data.LVar.PureSet as S
 
 --------------------------------------------------------------------------------
 -- Simple atomic Set accumulators
@@ -157,44 +158,60 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 --------------------------------------------------------------------------------
 -- Sequential version:
 
-
+-- | This supercombinator does a parallel depth-first search of a dynamic graph, with
+-- detection of cycles.
+-- 
+-- Each node in the graph is a computation whose input is the `key` (the vertex ID).
+-- Each such computation dynamically computes which other keys it depends on and
+-- requests the values associated with those keys.
+--
+-- This implementation uses a sequential depth-first-search (DFS), starting from the
+-- initially requested key.  One can picture this search as a directed tree radiating
+-- from the starting key.  When a cycle is detected at any leaf of this tree, an
+-- alternate cycle handler is called instead of running the normal computation for
+-- that key.
 makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
                           (k -> Par d s (Response (Par d s) k v)) -- ^ The computation to perform for new requests
-                       -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
-                       -> k                                       -- ^ Key to lookup.
+                       -> (k -> Par d s v)  -- ^ Handler for a cycle on @k@.  The
+                                            -- value it returns is in lieu of running
+                                            -- the main computation at this
+                                            -- particular node in the graph.
+                          -> k              -- ^ Key to lookup.
                        -> Par d s v
 makeMemoFixedPoint_seq initCont cycHndlr initKey = do
   -- Start things off:
   resp <- initCont initKey
-  (_,v) <- loop initKey (S.singleton initKey) resp return
+  v <- loop initKey (S.singleton initKey) resp return
   return v
  where
-   loop :: k -> S.Set k -> (Response (Par d s) k v) -> ((Bool,v) -> Par d s (Bool,v)) -> Par d s (Bool,v)
+   loop :: k -> S.Set k -> (Response (Par d s) k v) -> (v -> Par d s v) -> Par d s v
    loop current hist resp kont = do
     dbg (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
     case resp of
       Done ans -> do dbg ("  !! Final result, answer "++show ans)
-                     kont (False,ans)
+                     kont ans
       Request key2 newCont
         -- Here we have hit a cycle, and label it as such for the CURRENT node.
-        | S.member key2 hist -> do dbg ("    Stopping before hitting a cycle on "++showID key2++", call cycHndlr on "++showID current)
-                                   ans <- cycHndlr current
-                                   kont (True,ans)
+        | S.member key2 hist -> do
+          dbg ("    Stopping before hitting a cycle on "++showID key2++", call cycHndlr on "++showID current)
+          ans <- cycHndlr current
+          kont ans
         | otherwise -> do
           dbg ("  Requesting child computation with key "++showWID key2)
           resp' <- initCont key2
-          loop key2 (S.insert key2 hist) resp' $ \ (wasloop,ans2) ->
---            if wasloop then do
-            if False then do            
-               -- Here the child computation ended up being processed as a cycle, so we must be as well:
-               dbg ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
-               ans3 <- cycHndlr current
-               kont (True,ans3)
-             else do            
-               dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
-               resp'' <- newCont ans2
-               -- Popping back to processing the current key, which may not be finished.
-               loop current hist resp'' kont
+          loop key2 (S.insert key2 hist) resp' $ \ ans2 -> do
+            dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
+            resp'' <- newCont ans2
+            -- Popping back to processing the current key, which may not be finished.
+            loop current hist resp'' kont
+            
+-- --            if wasloop then do
+--             if False then do            
+--                -- Here the child computation ended up being processed as a cycle, so we must be as well:
+--                dbg ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
+--                ans3 <- cycHndlr current
+--                kont (True,ans3)
+
 
         
 --------------------------------------------------------------------------------
@@ -363,104 +380,6 @@ makeMemoFixedPoint initCont cycHndlr = do
 
 -}
 
-showMapContents (IM.IMap lv) = do
-  mp <- readIORef (LV.state lv)
-  let lst = M.toList mp
-  return$ "    Map Contents: (length "++ show (length lst) ++")\n" ++
-    concat [ "      "++fullempt++" "++showWID k++" -> "++vals++"\n"
-           | (k,(v,IV.IVar ivr)) <- lst
---            , let vals = "hello"
-           , let lst = S.toList $ unsafePerformIO (readIORef v)
-           , let vals = "#"++show (length lst)++"["++ (concat $ intersperse ", " $ map showID lst)  ++"]"
-           , let fullempt = if Nothing == unsafePerformIO (readIORef (LV.state ivr))
-                            then "[empty]"
-                            else "[full]"
-           ]
-
-showMapContents2 (IM.IMap lv) = do
-  mp <- readIORef (LV.state lv)
-  let lst = M.toList mp
-  return$ "    Map Contents: (length "++ show (length lst) ++")\n" ++
-    concat [ "      "++fullempt++" "++showWID k++" -> "++vals++"\n"
-           | (k,(IS.ISet setlv, IV.IVar ivr)) <- lst
---            , let vals = "hello"
-           , let lst = S.toList $ unsafePerformIO (readIORef (LV.state setlv))
-           , let vals = "#"++show (length lst)++"["++ (concat $ intersperse ", " $ map showID lst)  ++"]"
-           , let fullempt = if Nothing == unsafePerformIO (readIORef (LV.state ivr))
-                            then "[empty]"
-                            else "[full]"
-           ]
-
-
-
--- | Variant of `union` that optionally ties the handlers in the resulting set to the same
--- handler pool as those in the two input sets.
-copyTo :: Ord a => IS.ISet s a -> IS.ISet s a -> Par d s ()
-copyTo sfrom sto = do
-  IS.forEach sfrom (`insert` sto)
-
-
-
-{-# INLNINE dbg #-}
-dbg :: Monad m => String -> m ()
-dbg s = trace s (return ())
-dbg _ = return ()
-
-showWID :: Show a => a -> String
-showWID x = let str = (show x) in
-            if length str < 10
-            then str
-            else showID x++"__"++str
-
-showID :: Show a => a -> String
-showID x = let str = (show x) in
-           if length str < 10 then str
-           else (show (length str))++"-"++ show (checksum str)
-
-checksum str = sum (map ord str)
-
-
-cyc02 :: String
-cyc02 = runPar $ do
-  m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done "nocycle"))))
-                          (\_ -> return "cycle")
-  getMemo m 33
-
-cyc03 :: (String, String, S.Set Int, S.Set Int)
-cyc03 = runPar $ do
-  m  <- makeMemoFixedPoint fn (\_ -> return "cycle")
-  s1 <- getMemo m 33
-  s2 <- getMemo m 44
-  r1 <- getReachable m 33
-  r2 <- getReachable m 44
-  return (s1, s2, r1, r2)
- where
-   fn 33 = return (Request 44 (\_ -> return (Done "33 finished, no cycle")))
-   fn 44 = return (Request 33 (\_ -> return (Done "44 finished, no cycle")))
-
-cyc04 :: (String, S.Set Int, S.Set Int, S.Set Int)
-cyc04 = runPar $ do
-  m <- makeMemoFixedPoint fn (\_ -> return "cycle")
-  bl <- getMemo m 33
-  r1 <- getReachable m 33
-  r2 <- getReachable m 44
-  r3 <- getReachable m 55
-  return (bl, r1, r2, r3)
- where
-   fn 33 = return (Request 44 (\_ -> return (Done "33 complete")))
-   fn 44 = return (Request 55 (\_ -> return (Done "44 complete")))
-   fn 55 = return (Request 33 (\_ -> return (Done "55 complete")))
-
-
-cyc04B :: String
-cyc04B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 33
- where
-   fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++show a)))
-   fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++show a)))
-   fn 55 = return (Request 33 (\a -> return (Done$ "55 complete: "++show a)))
-
-
--- main = print cyc02
 
 {-
 
@@ -485,4 +404,66 @@ cancel :: MemoFuture Det s b -> Par Det s ()
 cancel fut = undefined
 
 -}
+
+--------------------------------------------------------------------------------
+-- Misc Helpers and Utilities
+--------------------------------------------------------------------------------
+
+showMapContents :: (Eq t1, Show a, Show a1) => IM.IMap a1 s (IORef (Set a), IV.IVar t t1) -> IO String
+showMapContents (IM.IMap lv) = do
+  mp <- readIORef (LV.state lv)
+  let lst = M.toList mp
+  return$ "    Map Contents: (length "++ show (length lst) ++")\n" ++
+    concat [ "      "++fullempt++" "++showWID k++" -> "++vals++"\n"
+           | (k,(v,IV.IVar ivr)) <- lst
+--            , let vals = "hello"
+           , let lst = S.toList $ unsafePerformIO (readIORef v)
+           , let vals = "#"++show (length lst)++"["++ (concat $ intersperse ", " $ map showID lst)  ++"]"
+           , let fullempt = if Nothing == unsafePerformIO (readIORef (LV.state ivr))
+                            then "[empty]"
+                            else "[full]"
+           ]
+
+showMapContents2 :: (Eq t3, Show t1, Show a) => IM.IMap a s (ISet t t1, IV.IVar t2 t3) -> IO String
+showMapContents2 (IM.IMap lv) = do
+  mp <- readIORef (LV.state lv)
+  let lst = M.toList mp
+  return$ "    Map Contents: (length "++ show (length lst) ++")\n" ++
+    concat [ "      "++fullempt++" "++showWID k++" -> "++vals++"\n"
+           | (k,(IS.ISet setlv, IV.IVar ivr)) <- lst
+--            , let vals = "hello"
+           , let lst = S.toList $ unsafePerformIO (readIORef (LV.state setlv))
+           , let vals = "#"++show (length lst)++"["++ (concat $ intersperse ", " $ map showID lst)  ++"]"
+           , let fullempt = if Nothing == unsafePerformIO (readIORef (LV.state ivr))
+                            then "[empty]"
+                            else "[full]"
+           ]
+
+-- | Variant of `union` that optionally ties the handlers in the resulting set to the same
+-- handler pool as those in the two input sets.
+copyTo :: Ord a => IS.ISet s a -> IS.ISet s a -> Par d s ()
+copyTo sfrom sto = do
+  IS.forEach sfrom (`insert` sto)
+
+{-# INLNINE dbg #-}
+dbg :: Monad m => String -> m ()
+#ifdef DEBUG_MEMO
+dbg s = trace s (return ())
+#else
+dbg _ = return ()
+#endif
+
+showWID :: Show a => a -> String
+showWID x = let str = (show x) in
+            if length str < 10
+            then str
+            else showID x++"__"++str
+
+showID :: Show a => a -> String
+showID x = let str = (show x) in
+           if length str < 10 then str
+           else (show (length str))++"-"++ show (checksum str)
+
+checksum :: String -> Int
+checksum str = sum (map ord str)
 
