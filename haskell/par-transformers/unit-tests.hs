@@ -1,0 +1,67 @@
+
+module Main where
+
+import Control.LVish      as LV
+import Data.LVar.IVar () -- Instances.
+import Control.Par.VecT   as V
+import Control.Par.StateT as S
+
+import Control.Monad
+import Control.Monad.IO.Class
+import qualified Control.Monad.Trans.State.Strict as S
+import Control.Monad.ST        (ST)
+import Control.Monad.ST.Unsafe (unsafeSTToIO)
+import Control.Monad.Trans (lift)
+
+import Data.STRef
+import Data.Vector.Mutable as MV
+import Data.Vector       (freeze)
+import Prelude hiding (read, length)
+import System.IO.Unsafe (unsafePerformIO)
+
+import GHC.Prim (RealWorld)
+
+import qualified Control.Par.Class as PC
+--------------------------------------------------------------------------------
+
+
+t2 :: String
+t2 = LV.runPar $
+     runVecT p2
+
+-- | A simple test that modifies two locations in a vector, multiple times, in parallel.
+p2 :: VecT s Float (LV.Par d s2) String
+p2 = do
+  r <- liftST$ newSTRef "hi"
+  initVecT 10
+  v0 <- getVecT
+
+  liftST$ set v0 0
+
+  forkWithVec 5
+     (do v1 <- getVecT
+         -- We can't protect against this sort of out-of-bounds error
+         -- at compile time -- for that we'd need dependent types.
+         -- liftST$ write v1 9 0 -- BAD! out of bounds
+         liftST$ do write v1 2 33.3
+                    tmp <- read v1 2
+                    write v1 2 (tmp + 2)
+     )
+     (do v2 <- getVecT
+         -- This, we actually *can* protect against at compile time.
+         -- liftST$ read v 2  -- BAD!
+         -- liftST$ readSTRef r
+         liftST$ do write v2 2 44.3
+                    tmp <- read v2 2
+                    write v2 2 (tmp + 2)         
+     )
+
+  -- After the barrier we can access it again:
+  z <- liftST$ freeze v0
+
+  liftST$ writeSTRef r "hello "
+  hello <- liftST$ readSTRef r
+  return$ hello ++ show z
+
+
+main = putStrLn "finishme"
