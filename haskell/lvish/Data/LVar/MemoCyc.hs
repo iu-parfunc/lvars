@@ -445,7 +445,7 @@ copyTo :: Ord a => IS.ISet s a -> IS.ISet s a -> Par d s ()
 copyTo sfrom sto = do
   IS.forEach sfrom (`insert` sto)
 
-{-# INLNINE dbg #-}
+{-# INLINE dbg #-}
 dbg :: Monad m => String -> m ()
 #ifdef DEBUG_MEMO
 dbg s = trace s (return ())

@@ -51,28 +51,35 @@ cyc04 = runPar $ do
 -- Test the sequential cycle-detection approach
 -----------------------------------------------
 
-case_02B :: Assertion
-case_02B = assertEqual "direct, one-node cycle, DFS" "cycle-33" cyc02B
-cyc02B :: String
-cyc02B = runPar $ makeMemoFixedPoint_seq
+case_02seq :: Assertion
+case_02seq = assertEqual "direct, one-node cycle, DFS" "cycle-33" cyc02seq
+cyc02seq :: String
+cyc02seq = runPar $ makeMemoFixedPoint_seq
                    (\33 -> return$ Request 33 (\a -> return$ Done$ "33 finished: "++a))
                    (\k -> return$ "cycle-"++show k)
                    33
 
-case_03B :: Assertion
-case_03B = assertEqual "2-way cycle, DFS" "44 finished: cycle-33"  cyc03B
-cyc03B :: String
-cyc03B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 44
+case_03seq :: Assertion
+case_03seq = assertEqual "2-way cycle, DFS" "44 finished: cycle-33"  cyc03seq
+cyc03seq :: String
+cyc03seq = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 44
  where
    fn 33 = return (Request 44 (\a -> return (Done$ "33 finished: "++a)))
    fn 44 = return (Request 33 (\a -> return (Done$ "44 finished: "++a)))
 
-case_04B :: Assertion
-case_04B = assertEqual "3-way cycle, DFS"
-             "33 complete: 44 complete: cycle-55" cyc04B
+case_04seq :: Assertion
+case_04seq = assertEqual "3-way cycle, DFS"
+             "33 complete: 44 complete: cycle-55" cyc04seq
 
-cyc04B :: String
-cyc04B = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 33
+cyc04seq :: String
+cyc04seq = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 33
+ where
+   fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++a)))
+   fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++a)))
+   fn 55 = return (Request 33 (\a -> return (Done$ "55 complete: "++a)))
+
+cyc05seq :: String
+cyc05seq = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 33
  where
    fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++a)))
    fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++a)))
