@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, ParallelListComp #-}
 
 -- | Test only the memoization functionality, corresponds to the @Data.LVar.Memo*@
 -- modules.
@@ -6,6 +6,7 @@
 module MemoTests where
 import Control.LVish
 import Data.LVar.MemoCyc
+import qualified Data.LVar.IVar as IV
 import Data.Set as S
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
@@ -18,47 +19,34 @@ import Prelude as P
 -- Unit Tests
 --------------------------------------------------------------------------------
 
-cyc02 :: String
-cyc02 = runPar $ do
-  m <- makeMemoFixedPoint (\33 -> return [33])
+cyc02 :: IO String
+cyc02 = runParIO $ makeMemoFixedPoint
+          (\33 -> return [33])
           (\cyc k nbrs ->
             return ("key "++show k++" cyc "++show cyc++" nbrs "++show (P.map fst nbrs)))
-  getMemo m (33::Int)
+          (33::Int)
 
-
-{-
-cyc02 :: String
-cyc02 = runPar $ do
-  m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done "nocycle"))))
-                          (\_ -> return "cycle")
-  getMemo m 33
-
-cyc03 :: (String)
-cyc03 = runPar $ do
-  m  <- makeMemoFixedPoint fn (\k -> return ("cycle-"++show k))
-  s1 <- getMemo m 33
-  s2 <- getMemo m 44
---  r1 <- getReachable m 33
---  r2 <- getReachable m 44
-  return (s1)
+cyc03 :: IO String
+cyc03 = runParIO $ makeMemoFixedPoint fn1 fn2 33
  where
-   fn 33 = return (Request 44 (\_ -> return (Done "33 finished, no cycle")))
-   fn 44 = return (Request 33 (\_ -> return (Done "44 finished, no cycle")))
+   fn1 33 = return [44]
+   fn1 44 = return [33]   
+   fn2 cyc k nbrs = return ("key "++show k++" cyc "++show cyc++" nbrs "++show (P.map fst nbrs))
 
-cyc04 :: (String)
-cyc04 = runPar $ do
-  m <- makeMemoFixedPoint fn (\k -> return ("cycle-"++show k))
-  bl <- getMemo m 33
-  -- r1 <- getReachable m 33
-  -- r2 <- getReachable m 44
-  -- r3 <- getReachable m 55
-  return (bl)
+cyc04 :: IO String
+cyc04 = runParIO $ makeMemoFixedPoint fn1 hndlr 33
  where
-   fn 33 = return (Request 44 (\_ -> return (Done "33 complete")))
-   fn 44 = return (Request 55 (\_ -> return (Done "44 complete")))
-   fn 55 = return (Request 33 (\_ -> return (Done "55 complete")))
--}
+   fn1 33 = return [44]
+   fn1 44 = return [55]
+   fn1 55 = return [33]
 
+   hndlr True 55 nbrs = return "stop-at-55"
+   hndlr cyc k nbrs = do
+     vals <- mapM (IV.get . snd) nbrs
+     return ("key="++show k++" cyc:"++show cyc++" nbrs:("++
+             concat [ show k++","++str++" " | (k,_) <- nbrs | str <- vals ] ++")")
+
+   
 -----------------------------------------------
 -- Test the sequential cycle-detection approach
 -----------------------------------------------

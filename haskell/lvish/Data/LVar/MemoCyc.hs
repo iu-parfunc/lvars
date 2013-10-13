@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, DataKinds #-}
 {-# LANGUAGE KindSignatures, EmptyDataDecls #-}
-{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE NamedFieldPuns, ParallelListComp  #-}
 {-# LANGUAGE BangPatterns, CPP #-}
 {-# OPTIONS_GHC -O2 #-}
 
@@ -39,6 +39,7 @@ import qualified Data.Map as M
 import Data.IORef
 import Data.Char (ord)
 import Data.List (intersperse)
+import qualified Data.Foldable as F
 import System.IO.Unsafe
 import Debug.Trace
 
@@ -96,7 +97,9 @@ data Memo (d::Determinism) s k v =
 
 -- | All the information associated with one node in the graph of keys.
 data NodeRecord s k v = NodeRecord
-  { reachme  :: !(IS.ISet s k)
+  { mykey    :: k
+  , chldrn   :: [k]
+  , reachme  :: !(IS.ISet s k)
   , in_cycle :: !(IVar s Bool)
   , result   :: !(IVar s v)
   } deriving (Eq)
@@ -241,12 +244,14 @@ type NodeAction d s k v =
      Bool -> k  -> [(Bool,IV.IVar s v)] -> Par d s v  
   -- One thing that's missing here is WHICH child node(s) puts us in a cycle.
 
-makeMemoFixedPoint :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
+makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
 --                      (k -> Par d s ([k], [v] -> Par d s v)   -- ^ Initial computation to perform for new requests
-                      (k -> Par d s [k])  -- ^ Sketch the graph: map a key onto its children.
-                   -> NodeAction d s k v 
-                   -> Par d s (Memo d s k v)
-makeMemoFixedPoint keyNbrs nodeHndlr = do
+                      (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
+                   -> NodeAction QuasiDet s k v
+                   -> k   
+                   -> Par QuasiDet s v
+                   -- (Memo QuasiDet s k v)
+makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
 
   -- First: propogate key requests.
   -- This will not diverge because the Set here suppressed duplicate callbacks:
@@ -254,27 +259,27 @@ makeMemoFixedPoint keyNbrs nodeHndlr = do
   -- The map stores results:
   mp  <- IM.newEmptyMap
 
-  IS.forEach set $ \ key0 -> do
+  keywalkHP <- newPool
+
+  IS.forEachHP (Just keywalkHP) set $ \ key0 -> do
     dbg ("![MemoFixedPoint] Start new key "++show key0)
     -- Make some empty space for results:
     key0_res   <- IV.new
     key0_cycle <- IV.new    
     key0_reach <- IS.newEmptySet
-    IM.insert key0 (NodeRecord key0_reach key0_cycle key0_res) mp
     -- Next fetch the child node identities:
-    child_keys <- keyNbrs key0
+    child_keys <- keyNbrs key0    
+    IM.insert key0 (NodeRecord key0 child_keys key0_reach key0_cycle key0_res) mp
     dbg ("  Computed nbrs of "++showID key0++" to be: "++ (showIDs child_keys))
 
     case child_keys of
-      [] -> do 
-               IV.put_ key0_cycle False
-               error "NO CHILDREN - finishme"
+      [] -> return () -- IV.put_ key0_cycle False
       _  -> do 
        -- Spawn traversals of child nodes:
        forM_ child_keys (`IS.insert` set)
          
        -- Establish the (expensive) cycle-checker handler:
-       IS.forEach key0_reach $ \ key1 ->
+       IS.forEachHP (Just keywalkHP) key0_reach $ \ key1 ->
          when (key1 == key0) $ do
            dbg ("   !! Cycle detected on key "++showID key0)
            IV.put_ key0_cycle True
@@ -285,52 +290,48 @@ makeMemoFixedPoint keyNbrs nodeHndlr = do
          nrec@NodeRecord{reachme} <- IM.getKey child mp
          IS.insert key0 reachme -- Child is reachable from us.
          -- Further, what reaches us, reaches the child:
-         copyTo key0_reach set
+         copyTo keywalkHP key0_reach reachme
+         dbg ("   Inserted ourselves ("++showID key0++") in reachme list of child: "++showID child)
          return nrec
 
        -- If all our children are do not participate in a cycle, neither do we.
-       fork $ let loop [] = IV.put_ key0_cycle False
-                  loop (NodeRecord{in_cycle}:tl) = do
-                      bl <- IV.get in_cycle
-                      case bl of
-                        True  -> return ()
-                        False -> loop tl
-              in loop chldrecs
+       -- fork $ let loop [] = IV.put_ key0_cycle False
+       --            loop (NodeRecord{in_cycle}:tl) = do
+       --                bl <- IV.get in_cycle
+       --                case bl of
+       --                  True  -> return ()
+       --                  False -> loop tl
+       --        in loop chldrecs         
        -- FINISHME: If we have some cycle children and some leafish ones....
        -- then we may need to do an unsafe peek at our reachme set, no?
-       
+       return ()
 
-  return $! Memo set mp  
-{-  OLD VERSION:
+  IS.insert initKey set
+  quiesce keywalkHP
+  -- fset <- IS.freezeSet set
+  frmap <- IM.freezeMap mp
 
-    let loop :: (Response (Par d s) k v) -> Par d s ()
-        loop resp = do 
-         case resp of
-           Done ans -> do dbg ("  !! Final result on key: "++showID key0++", answer "++show ans)
-                          weakPutIVar key0_res ans
-           Request key2 newCont -> do
-             dbg ("  Requesting child computation with key "++showWID key2)
-             IS.insert key2 set                            -- Launch the computation.
-             (key2_reach, key2_iv) <- IM.getKey key2 mp -- Wait for this to get posted.
-             IS.insert key0 key2_reach                     -- Register that we can reach key2
-             copyTo key0_reach key2_reach                  -- Further, what reaches us, reaches key2
-             dbg ("  About to block on intermediate result for key: "++showWID key2)
-             LV.WrapPar$ LI.liftIO$ putStrLn =<< showMapContents2 mp
-             res <- IV.get key2_iv                      -- Now BLOCK.
-             dbg ("  |-> DONE blocking on key: "++showWID key2++", it yielded "++show res)
-             -- IF there was a cycle, we need to check if we've already been resolved.
-             -- WARNING: This is the NON-MONOTONIC part.
-             mayb <- peekIVar key0_res
-             case mayb of
-               Just _  -> do dbg ("Note: key0 "++showID key0++" has already been resolved by child call to "++showID key2)
-                             return ()
-               Nothing -> do 
-                 resp' <- newCont res
-                 dbg ("![MemoFixedPoint] (key "++showID key0++") child finished, going around loop... ")
-                 loop resp'
-    resp <- initCont key0
-    loop resp
--}
+  dbg ("Froze map: "++show (M.keys frmap))
+  
+  -- TODO: need parallel traversable:
+  let getcyc vr = do mb <- IV.freezeIVar vr
+                     if mb == Just True
+                       then return True
+                       else return False
+      fn NodeRecord{mykey, chldrn, reachme,in_cycle=mecyc,result=myres} () = fork$ do
+          bl  <- getcyc mecyc
+          bls <- mapM (getcyc . in_cycle . (frmap M.!)) chldrn
+          dbg ("   !! Invoking node handler at key "++showID mykey++" cyc "++show bl++" chldrn "++show bls)
+          x  <- nodeHndlr bl mykey [ (b, result (frmap M.! k)) | b <- bls
+                                                               | k <- chldrn ]
+          dbg ("   !! Writing result into key "++showID mykey)
+          IV.put_ myres x
+          
+  F.foldrM fn () frmap
+
+  let NodeRecord{result} = frmap M.! initKey
+  IV.get result
+--  return $! Memo set mp  
 
 
 -- | Write to the IVar only if nothing is there at the moment.
@@ -501,9 +502,9 @@ showMapContents2 (IM.IMap lv) = do
 
 -- | Variant of `union` that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
-copyTo :: Ord a => IS.ISet s a -> IS.ISet s a -> Par d s ()
-copyTo sfrom sto = do
-  IS.forEach sfrom (`insert` sto)
+copyTo :: Ord a => HandlerPool -> IS.ISet s a -> IS.ISet s a -> Par d s ()
+copyTo hp sfrom sto = do
+  IS.forEachHP (Just hp) sfrom (`insert` sto)
 
 {-# INLINE dbg #-}
 dbg :: Monad m => String -> m ()

@@ -201,3 +201,6 @@ counts_ (Index m slm) = do
   c  <- LM.foldlWithKey (\n _ _ -> return (n+1)) 0 m
   cs <- counts_ slm
   return $ c:cs
+
+
+-- TODO: provide a balanced traversal / fold:
