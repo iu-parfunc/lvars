@@ -12,45 +12,57 @@ import Test.Framework.TH (testGroupGenerator)
 import Test.Framework    (defaultMain, Test)
 import Test.Framework.Providers.HUnit (testCase) -- For macro-expansion.
 
+import Prelude as P
+
 --------------------------------------------------------------------------------
 -- Unit Tests
 --------------------------------------------------------------------------------
 
 cyc02 :: String
 cyc02 = runPar $ do
+  m <- makeMemoFixedPoint (\33 -> return [33])
+          (\cyc k nbrs ->
+            return ("key "++show k++" cyc "++show cyc++" nbrs "++show (P.map fst nbrs)))
+  getMemo m (33::Int)
+
+
+{-
+cyc02 :: String
+cyc02 = runPar $ do
   m <- makeMemoFixedPoint (\_ -> return (Request 33 (\_ -> return (Done "nocycle"))))
                           (\_ -> return "cycle")
   getMemo m 33
 
-cyc03 :: (String, String, S.Set Int, S.Set Int)
+cyc03 :: (String)
 cyc03 = runPar $ do
-  m  <- makeMemoFixedPoint fn (\_ -> return "cycle")
+  m  <- makeMemoFixedPoint fn (\k -> return ("cycle-"++show k))
   s1 <- getMemo m 33
   s2 <- getMemo m 44
-  r1 <- getReachable m 33
-  r2 <- getReachable m 44
-  return (s1, s2, r1, r2)
+--  r1 <- getReachable m 33
+--  r2 <- getReachable m 44
+  return (s1)
  where
    fn 33 = return (Request 44 (\_ -> return (Done "33 finished, no cycle")))
    fn 44 = return (Request 33 (\_ -> return (Done "44 finished, no cycle")))
 
-cyc04 :: (String, S.Set Int, S.Set Int, S.Set Int)
+cyc04 :: (String)
 cyc04 = runPar $ do
-  m <- makeMemoFixedPoint fn (\_ -> return "cycle")
+  m <- makeMemoFixedPoint fn (\k -> return ("cycle-"++show k))
   bl <- getMemo m 33
-  r1 <- getReachable m 33
-  r2 <- getReachable m 44
-  r3 <- getReachable m 55
-  return (bl, r1, r2, r3)
+  -- r1 <- getReachable m 33
+  -- r2 <- getReachable m 44
+  -- r3 <- getReachable m 55
+  return (bl)
  where
    fn 33 = return (Request 44 (\_ -> return (Done "33 complete")))
    fn 44 = return (Request 55 (\_ -> return (Done "44 complete")))
    fn 55 = return (Request 33 (\_ -> return (Done "55 complete")))
+-}
 
 -----------------------------------------------
 -- Test the sequential cycle-detection approach
 -----------------------------------------------
-
+{-
 case_02seq :: Assertion
 case_02seq = assertEqual "direct, one-node cycle, DFS" "cycle-33" cyc02seq
 cyc02seq :: String
@@ -84,11 +96,12 @@ cyc05seq = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 
    fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++a)))
    fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++a)))
    fn 55 = return (Request 33 (\a -> return (Done$ "55 complete: "++a)))
+-}
 
--- main = print cyc02
+--------------------------------------------------------------------------------
 
-tests :: Test
-tests = $(testGroupGenerator)
+-- tests :: Test
+-- tests = $(testGroupGenerator)
 
-runTests :: IO ()
-runTests = defaultMain [tests]
+-- runTests :: IO ()
+-- runTests = defaultMain [tests]
