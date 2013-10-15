@@ -12,9 +12,6 @@ In contrast with "Data.LVar.Memo", this module provides..............
 
  -}
 
--- TEMP:
-#define DEBUG_MEMO
-
 module Data.LVar.MemoCyc
 {-       
        (
@@ -257,7 +254,11 @@ type NodeAction d s k v =
      IsCycle -> k  -> [(IsCycle,IV.IVar s v)] -> Par d s v  
   -- One thing that's missing here is WHICH child node(s) puts us in a cycle.
 
+#ifdef DEBUG_MEMO
 makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
+#else
+makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
+#endif
                       (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
                    -> NodeAction QuasiDet s k v
                    -> k   
@@ -348,12 +349,14 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
   ------------------------------------------------------------
   -- TEMP: Debugging
   ------------------------------------------------------------
+#ifdef DEBUG_MEMO  
   when (dbg_lvl >= 4) $ do
      dbgPr ("| START creating dot graph...")    
-     dg <- debugVizMemoGraph False initKey frmap
+     dg <- debugVizMemoGraph True initKey frmap
      dbgPr ("| DONE creating dot graph...")
      unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc.pdf")
        `seq` return ()
+#endif       
   ------------------------------------------------------------  
   return final
 --  return $! Memo set mp  
@@ -507,6 +510,10 @@ shortTwo n a b = (left, shortShow (half+remain) b)
      (q,r) = quotRem (abs(n-3)) 2 
      half = q + r
 
+--------------------------------------------------------------------------------
+
+#ifdef DEBUG_MEMO
+
 -- | Debugging flag shared by all accelerate-backend-kit modules.
 --   This is activated by setting the environment variable DEBUG=1..5
 dbg_lvl :: Int
@@ -589,3 +596,6 @@ debugVizMemoGraph idOnly initKey frmap = do
   return dg
 
 weighted c = GC.WC {GC.wColor=c, GC.weighting=Nothing}
+
+#endif
+-- End DEBUG_MEMO

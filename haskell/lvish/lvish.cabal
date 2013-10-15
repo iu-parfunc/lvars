@@ -50,8 +50,8 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 flag debug
-  description: Activate additional debug assertions, and printed output 
-               if DEBUGLVL env var is set to 1 or higher.
+  description: Activate additional debug assertions, and printed output.
+--               if DEBUGLVL env var is set to 1 or higher.
   default: False
 
 flag chaselev
@@ -136,6 +136,7 @@ library
                     -- monad-par-extras >=0.4
   if flag(debug)
      cpp-options: -DDEBUG_LVAR
+     cpp-options: -DDEBUG_MEMO
   if flag(chaselev)
      cpp-options: -DCHASE_LEV
   if flag(getonce)
