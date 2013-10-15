@@ -2,6 +2,8 @@
 {-# LANGUAGE KindSignatures, EmptyDataDecls #-}
 {-# LANGUAGE NamedFieldPuns, ParallelListComp  #-}
 {-# LANGUAGE BangPatterns, CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+-- {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -O2 #-}
 
 {-|
@@ -55,6 +57,15 @@ import qualified Data.LVar.PureMap as IM
 -- import qualified Data.LVar.SLMap as IM
 -- import qualified Data.LVar.PureSet as S
 
+----- For debugging: ----
+import System.Environment (getEnvironment)
+import Data.Graph.Inductive.Graph as G
+import Data.Graph.Inductive.PatriciaTree as G
+import Data.GraphViz as GV
+import qualified Data.GraphViz.Attributes.Complete as GA
+import qualified Data.GraphViz.Attributes.Colors   as GC
+import           Data.Text.Lazy     (pack)
+import Data.Int
 --------------------------------------------------------------------------------
 -- Simple atomic Set accumulators
 --------------------------------------------------------------------------------
@@ -199,21 +210,21 @@ makeMemoFixedPoint_seq initCont cycHndlr initKey = do
  where
    loop :: k -> S.Set k -> (Response (Par d s) k v) -> (v -> Par d s v) -> Par d s v
    loop current hist resp kont = do
-    dbg (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
+    dbgPr (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
     case resp of
-      Done ans -> do dbg ("  !! Final result, answer "++show ans)
+      Done ans -> do dbgPr ("  !! Final result, answer "++show ans)
                      kont ans
       Request key2 newCont
         -- Here we have hit a cycle, and label it as such for the CURRENT node.
         | S.member key2 hist -> do
-          dbg ("    Stopping before hitting a cycle on "++showID key2++", call cycHndlr on "++showID current)
+          dbgPr ("    Stopping before hitting a cycle on "++showID key2++", call cycHndlr on "++showID current)
           ans <- cycHndlr current
           kont ans
         | otherwise -> do
-          dbg ("  Requesting child computation with key "++showWID key2)
+          dbgPr ("  Requesting child computation with key "++showWID key2)
           resp' <- initCont key2
           loop key2 (S.insert key2 hist) resp' $ \ ans2 -> do
-            dbg ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
+            dbgPr ("  DONE blocking on child key, cont invoked with answer: "++show ans2)
             resp'' <- newCont ans2
             -- Popping back to processing the current key, which may not be finished.
             loop current hist resp'' kont
@@ -221,13 +232,15 @@ makeMemoFixedPoint_seq initCont cycHndlr initKey = do
 -- --            if wasloop then do
 --             if False then do            
 --                -- Here the child computation ended up being processed as a cycle, so we must be as well:
---                dbg ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
+--                dbgPr ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
 --                ans3 <- cycHndlr current
 --                kont (True,ans3)
 
 -}
         
 --------------------------------------------------------------------------------
+
+type IsCycle = Bool
 
 -- | The handler at a particular node (key) in the graph.  This takes as argument a
 --   key, along with a boolean indicating whether the current node has been found to
@@ -241,11 +254,10 @@ makeMemoFixedPoint_seq initCont cycHndlr initKey = do
 --   with the key.
 type NodeAction d s k v =
 --     Bool -> k  -> [(Bool,Par d s v)] -> Par d s v
-     Bool -> k  -> [(Bool,IV.IVar s v)] -> Par d s v  
+     IsCycle -> k  -> [(IsCycle,IV.IVar s v)] -> Par d s v  
   -- One thing that's missing here is WHICH child node(s) puts us in a cycle.
 
-makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
---                      (k -> Par d s ([k], [v] -> Par d s v)   -- ^ Initial computation to perform for new requests
+makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
                       (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
                    -> NodeAction QuasiDet s k v
                    -> k   
@@ -262,7 +274,7 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
   keywalkHP <- newPool
 
   IS.forEachHP (Just keywalkHP) set $ \ key0 -> do
-    dbg ("![MemoFixedPoint] Start new key "++show key0)
+    dbgPr ("![MemoFixedPoint] Start new key "++show key0)
     -- Make some empty space for results:
     key0_res   <- IV.new
     key0_cycle <- IV.new    
@@ -270,7 +282,7 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
     -- Next fetch the child node identities:
     child_keys <- keyNbrs key0    
     IM.insert key0 (NodeRecord key0 child_keys key0_reach key0_cycle key0_res) mp
-    dbg ("  Computed nbrs of "++showID key0++" to be: "++ (showIDs child_keys))
+    dbgPr ("  Computed nbrs of "++showID key0++" to be: "++ (showIDs child_keys))
 
     case child_keys of
       [] -> return () -- IV.put_ key0_cycle False
@@ -281,7 +293,7 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
        -- Establish the (expensive) cycle-checker handler:
        IS.forEachHP (Just keywalkHP) key0_reach $ \ key1 ->
          when (key1 == key0) $ do
-           dbg ("   !! Cycle detected on key "++showID key0)
+           dbgPr ("   !! Cycle detected on key "++showID key0)
            IV.put_ key0_cycle True
 
        -- Now we must wait for records to come up, and establish ourselves as upstream
@@ -291,7 +303,7 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
          IS.insert key0 reachme -- Child is reachable from us.
          -- Further, what reaches us, reaches the child:
          copyTo keywalkHP key0_reach reachme
-         dbg ("   Inserted ourselves ("++showID key0++") in reachme list of child: "++showID child)
+         dbgPr ("   Inserted ourselves ("++showID key0++") in reachme list of child: "++showID child)
          return nrec
 
        -- If all our children are do not participate in a cycle, neither do we.
@@ -311,136 +323,40 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
   -- fset <- IS.freezeSet set
   frmap <- IM.freezeMap mp
 
-  dbg ("Froze map: "++show (M.keys frmap))
+  dbgPr ("Froze map: "++show (M.keys frmap))
   
   -- TODO: need parallel traversable:
   let getcyc vr = do mb <- IV.freezeIVar vr
                      if mb == Just True
                        then return True
                        else return False
+      showCyc bl = if bl then "cycle" else "Nocyc"
       fn NodeRecord{mykey, chldrn, reachme,in_cycle=mecyc,result=myres} () = fork$ do
           bl  <- getcyc mecyc
-          bls <- mapM (getcyc . in_cycle . (frmap M.!)) chldrn
-          dbg ("   !! Invoking node handler at key "++showID mykey++" cyc "++show bl++" chldrn "++show bls)
-          x  <- nodeHndlr bl mykey [ (b, result (frmap M.! k)) | b <- bls
+          bls <- mapM (getcyc . in_cycle . (frmap #)) chldrn
+          dbgPr ("   !! Invoking node handler at key "++showID mykey++" "++
+               showCyc bl ++" chldrn "++concat (intersperse " "$ map showCyc bls))
+          x  <- nodeHndlr bl mykey [ (b, result (frmap # k)) | b <- bls
                                                                | k <- chldrn ]
-          dbg ("   !! Writing result into key "++showID mykey)
+          dbgPr ("   !! Writing result into key "++showID mykey++" value: "++show x)
           IV.put_ myres x
           
   F.foldrM fn () frmap
 
-  let NodeRecord{result} = frmap M.! initKey
-  IV.get result
+  let NodeRecord{result} = frmap # initKey
+  final <- IV.get result
+  ------------------------------------------------------------
+  -- TEMP: Debugging
+  ------------------------------------------------------------
+  when (dbg_lvl >= 4) $ do
+     dbgPr ("| START creating dot graph...")    
+     dg <- debugVizMemoGraph False initKey frmap
+     dbgPr ("| DONE creating dot graph...")
+     unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc.pdf")
+       `seq` return ()
+  ------------------------------------------------------------  
+  return final
 --  return $! Memo set mp  
-
-
--- | Write to the IVar only if nothing is there at the moment.
-weakPutIVar  (IV.IVar lv) val = LV.WrapPar $ LI.liftIO $
-  atomicModifyIORef' (LV.state lv) fn
- where
-  fn Nothing = (Just val, ())
-  fn stuff   = (stuff, ())
-
--- | Overwrite previous values.
-strongPutIVar (IV.IVar lv) val = LV.WrapPar $ LI.liftIO $ 
-  writeIORef (LV.state lv) (Just val)
-
--- | An unsafe peek operation on the IVar.
-peekIVar :: IVar s1 d1 -> Par d s (Maybe d1)
-peekIVar (IV.IVar lv) = LV.WrapPar $ LI.liftIO $ 
-  readIORef (LV.state lv)
-
-
-{-
-
--- | Make a Memo table with the added capability that any cycles in requests will be
--- detected.  A special cycle-handler determines what result is returned when a cycle
--- is detected starting at a given key.
---
--- The result of this function Memo-table returns 
-makeMemoFixedPoint :: forall d s k v . (Ord k, Eq v, Show k) =>
-                      (k -> Par d s (Response (Par d s) k v)) -- ^ Initial computation to perform for new requests
-                   -> (k -> Par d s v)                        -- ^ Handler for a cycle on @k@.
-                   -> Par d s (Memo d s k v)
-makeMemoFixedPoint initCont cycHndlr = do
-  -- The set provides our front-line memoization when new key come.
-  set <- IS.newEmptySet
-  -- The map stores results:
-  mp  <- IM.newEmptyMap
-  IS.forEach set $ \ key0 -> do
-    dbg ("![MemoFixedPoint] Start new key "++show key0)
-    key0_vr    <- IV.new
-    key0_reach <- newSetAcc
-    IM.insert key0 (key0_reach,key0_vr) mp
-
-    -- Make sure that we are not reachable from ourselves, given the current state of knowledge.
-    -- We need to be very careful about data-races here...
-    let selfcheck = do
-         reachme <- readSetAcc key0_reach
-         dbg$ "    (selfcheck) "++showID key0++" in "++ ("{"++(concat$ intersperse ", " $ map showID $ S.toList reachme)++"}")
-         when (S.member key0 reachme) $ do
-            ans <- cycHndlr key0
-            IV.put_ key0_vr ans
-         
-    -- The accumulator stores continuations waiting for an answer:
-    let loop :: (Response (Par d s) k v) -> Par d s ()
-        loop resp = do 
-         case resp of
-           Done ans -> do dbg ("  Final result on key: "++showID key0)
-                          -- unionSetAcc hist key0_reach
-                          IV.put_ key0_vr ans
-           Request key2 newCont -> do
-             -- hist' <- insertSetAcc key2 key0_reach
-             -- dbg ("  Added "++show key2++" to history of "++show key0++" yielding "++show hist')
-
-             -- TODO: read our own reachable-from set... get rid of 'hist'.
-             reachme0 <- readSetAcc key0_reach
-             if S.member key2 reachme0 then do
-                res <- cycHndlr key2
-                (key2_reach, key2_resIV) <- IM.getKey key2 mp
-                insertSetAcc key2 key2_reach               
-                dbg ("  HIT CYCLE, key: "++showWID key2)
-                IV.put_ key2_resIV res
-                error (" umm... what to do for key0 after the cycle is found for key2...?")
-              else do
-               IS.insert key2 set -- Launch the computation.
-               (key2_reach, key2_resIV) <- IM.getKey key2 mp
-               -- BIG delay: we can't register reachabilty until AFTER key2 has already started running.
-               -- We can't easily change this to "caller populates" because we get memoization from the set.
-               reachme <- readSetAcc key0_reach
-               unionSetAcc (S.insert key0 reachme) key2_reach -- We can reach key2 from anything that can reach key0
-    
-               let cyc_check elseCase = do
---                     reach <- readSetAcc key2_reach
-                     canreach <- readSetAcc key0_reach
-                     if S.member key2 canreach then do -- Discovered that we can reach key0 from key2.
-                         dbg ("... found cycle on key0 "++show key0++", between components...") 
-                         insertSetAcc key0 key0_reach
-                         ans <- cycHndlr key0
-                         IV.put_ key0_vr ans
-                      else elseCase
-                           
-               -- PRECHECK: before we block waiting for the other component to finish:
-               cyc_check $ do
-                 selfcheck
-                 dbg ("  About to block on intermediate result for key: "++showWID key2)
-                 LV.WrapPar$ LI.liftIO$ putStrLn =<< showMapContents mp
-                 res <- IV.get key2_resIV
-                 dbg ("  |-> DONE blocking on key: "++showWID key2)
--- UNION FINAL CHILD REACHABLE INTO key0 REACHABLE!:
---                 keyset <- readSetAcc key2_reach
---                 hist'' <- unionSetAcc keyset key0_reach
-                 cyc_check $ do -- POSTCHECK: when key2 is finished
-                   resp' <- newCont res
-                   dbg ("![MemoFixedPoint]   going around loop... ")                   
-                   loop resp'
-    resp <- initCont key0
-    loop resp
-    
-  return $! Memo set mp
-
--}
-
 
 {-
 
@@ -469,6 +385,11 @@ cancel fut = undefined
 --------------------------------------------------------------------------------
 -- Misc Helpers and Utilities
 --------------------------------------------------------------------------------
+
+(#) :: (Ord a1, Show a1) => M.Map a1 a -> a1 -> a
+m # k = case M.lookup k m of
+         Nothing -> error$ "Key was missing from map: "++show k
+         Just x  -> x
 
 showMapContents :: (Eq t1, Show a, Show a1) => IM.IMap a1 s (IORef (Set a), IV.IVar t t1) -> IO String
 showMapContents (IM.IMap lv) = do
@@ -506,12 +427,12 @@ copyTo :: Ord a => HandlerPool -> IS.ISet s a -> IS.ISet s a -> Par d s ()
 copyTo hp sfrom sto = do
   IS.forEachHP (Just hp) sfrom (`insert` sto)
 
-{-# INLINE dbg #-}
-dbg :: Monad m => String -> m ()
+{-# INLINE dbgPr #-}
+dbgPr :: Monad m => String -> m ()
 #ifdef DEBUG_MEMO
-dbg s = trace s (return ())
+dbgPr s = trace s (return ())
 #else
-dbg _ = return ()
+dbgPr _ = return ()
 #endif
 
 showWID :: Show a => a -> String
@@ -530,3 +451,142 @@ showIDs ls = ("{"++(concat$ intersperse ", " $ map showID ls)++"}")
 checksum :: String -> Int
 checksum str = sum (map ord str)
 
+
+--------------------------------------------------------------------------------
+-- DEBUGGING
+--------------------------------------------------------------------------------
+
+-- | A show class that tries to stay under a budget.
+class Show t => ShortShow t where
+  shortShow :: Int -> t -> String
+  shortShow n x = take n (show x)
+
+instance ShortShow Bool where
+  shortShow 1 True  = "t"
+  shortShow 1 False = "f"
+  shortShow 2 True  = "#t"
+  shortShow 2 False = "#f"  
+  shortShow n b     = take n (show b)
+
+instance ShortShow Integer where shortShow = shortShowNum
+instance ShortShow Int   where shortShow = shortShowNum
+instance ShortShow Int8  where shortShow = shortShowNum
+instance ShortShow Int16 where shortShow = shortShowNum
+instance ShortShow Int32 where shortShow = shortShowNum
+instance ShortShow Int64 where shortShow = shortShowNum                                                            
+
+shortShowNum :: Show a => Int -> a -> String
+shortShowNum n num =
+    let str = show num
+        len = length str in
+    if len > n then
+      (take (n-2) str)++".."
+    else str
+         
+instance ShortShow String where
+  shortShow n str =
+    let len = length str in
+    if len > 2 && n ==2
+    then ".."
+    else if len > 1 && n == 1
+    then "?"
+    else take n str
+
+instance (ShortShow a, ShortShow b) => ShortShow (a,b) where
+  shortShow 1 _ = "?"
+  shortShow 2 _ = ".."
+  shortShow n (a,b) = let (l,r) = shortTwo (n-3) a b 
+                      in "("++ l ++","++ r ++")"
+    
+-- this could be better...
+shortTwo :: (ShortShow t, ShortShow t1) => Int -> t -> t1 -> (String, String)
+shortTwo n a b = (left, shortShow (half+remain) b)
+   where
+     remain = abs (half - length left)
+     left = shortShow half a
+     (q,r) = quotRem (abs(n-3)) 2 
+     half = q + r
+
+-- | Debugging flag shared by all accelerate-backend-kit modules.
+--   This is activated by setting the environment variable DEBUG=1..5
+dbg_lvl :: Int
+dbg_lvl = case lookup "DEBUG" theEnv of
+       Nothing  -> defaultDbg
+       Just ""  -> defaultDbg
+       Just "0" -> defaultDbg
+       Just s   ->
+         trace (" ! Responding to env Var: DEBUG="++s)$
+         case reads s of
+           ((n,_):_) -> n
+           [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
+
+theEnv :: [(String, String)]
+theEnv = unsafePerformIO getEnvironment
+
+defaultDbg :: Int
+defaultDbg = 0
+
+debugVizMemoGraph :: forall s t t1 t2 . (Ord t1, ShortShow t1, Show t2, F.Foldable t) =>
+                     Bool                       -- ^ Use shorter `showID` for keys.
+                     -> t1                      -- ^ The inital key.
+                     -> t (NodeRecord s t1 t2)  -- ^ A frozen map of graph nodes.
+--                     Par d s (Gr (Bool,String) ())
+                     -> Par QuasiDet s (GV.DotGraph G.Node)
+debugVizMemoGraph idOnly initKey frmap = do
+  let showKey = if idOnly then showID
+                else shortShow 40
+  let gcons :: NodeRecord s t1 t2
+            ->                (M.Map t1 G.Node, G.Gr (Bool,String) ())
+            -> Par QuasiDet s (M.Map t1 G.Node, G.Gr (Bool,String) ())
+      gcons NodeRecord{mykey, in_cycle,result}
+            (labmap, gracc :: G.Gr (Bool,String) ()) = do
+        dbgPr (" .. About to wait for node result, key "++show mykey)
+        res <- IV.get result
+        dbgPr (" .. About to wait for node in_cycle, key "++show mykey)
+        cyc <- IV.freezeIVar in_cycle
+        let num = 1 + G.noNodes gracc  
+            gr' = G.insNode (num, (cyc == Just True,
+                                   showKey mykey++
+                                   "\n=> "++ show res)) $ 
+                  gracc
+            labmap' = M.insert mykey num labmap
+        return (labmap',gr')
+        
+      gedges :: NodeRecord s t1 t2
+            ->         (M.Map t1 G.Node, G.Gr (Bool,String) ())
+            -> Par d s (M.Map t1 G.Node, G.Gr (Bool,String) ())
+      gedges NodeRecord{mykey, chldrn }
+            (labmap, gracc :: G.Gr (Bool,String) ()) = do 
+        let chldnodes = map (labmap #) chldrn
+            num = labmap # mykey
+            gr' = G.insEdges [ (num,cnd::Int,()) | cnd <- chldnodes ] $
+                  gracc
+            labmap' = M.insert mykey num labmap
+        return (labmap',gr')
+        
+  dbgPr (" !! Creating graphviz graph from MemoCyc map of size "++show (F.foldr (\ _ n -> 1+n) 0 frmap))
+--  dbgPr (" !! All keys "++show frmap)
+  
+  -- Two passes, first add nodes, then edges:
+  (lm,graph0) <- F.foldrM gcons (M.empty, G.empty) frmap
+  dbgPr (" .. Added all nodes to the graph...")  
+  (_,graph)   <- F.foldrM gedges (lm, graph0) frmap
+  dbgPr (" .. Added all edges to the graph...")    
+  let -- dg = graphToDot nonClusteredParams graph
+      myparams :: GV.GraphvizParams G.Node (Bool,String) () () (Bool,String)
+      myparams = GV.defaultParams { GV.fmtNode= nodeAttrs }
+
+      nodeAttrs :: (Int, (Bool,String)) -> [GA.Attribute]
+--      nodeAttrs :: (Int, String) -> [GA.Attribute]      
+      nodeAttrs (_num, (cyc,lbl)) =
+        [ GA.Label$ GA.StrLabel $ pack lbl ] ++
+        (if showKey initKey == lbl
+         then [GA.Color [weighted$ GA.X11Color GV.Red]]
+         else []) ++
+        (if cyc then []
+         else [GA.Shape GA.BoxShape])
+
+      dg = GV.graphToDot myparams graph -- (G.nmap uid graph)
+  return dg
+
+weighted c = GC.WC {GC.wColor=c, GC.weighting=Nothing}

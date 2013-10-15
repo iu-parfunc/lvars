@@ -129,6 +129,8 @@ library
   -- TEMP:
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
+  -- TEMP:
+  build-depends: fgl, graphviz, text
   ghc-options: -O2 -rtsopts
 
                     -- monad-par-extras >=0.4
