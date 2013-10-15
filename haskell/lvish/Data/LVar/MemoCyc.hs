@@ -536,27 +536,25 @@ debugVizMemoGraph idOnly initKey frmap = do
   let showKey = if idOnly then showID
                 else shortShow 40
   let gcons :: NodeRecord s t1 t2
-            ->                (M.Map t1 G.Node, G.Gr (Bool,String) ())
-            -> Par QuasiDet s (M.Map t1 G.Node, G.Gr (Bool,String) ())
+            ->                (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
+            -> Par QuasiDet s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
       gcons NodeRecord{mykey, in_cycle,result}
-            (labmap, gracc :: G.Gr (Bool,String) ()) = do
+            (labmap, gracc) = do
         dbgPr (" .. About to wait for node result, key "++show mykey)
         res <- IV.get result
         dbgPr (" .. About to wait for node in_cycle, key "++show mykey)
         cyc <- IV.freezeIVar in_cycle
         let num = 1 + G.noNodes gracc  
-            gr' = G.insNode (num, (cyc == Just True,
-                                   showKey mykey++
-                                   "\n=> "++ show res)) $ 
+            gr' = G.insNode (num, (cyc == Just True,mykey,res)) $ 
                   gracc
             labmap' = M.insert mykey num labmap
         return (labmap',gr')
         
       gedges :: NodeRecord s t1 t2
-            ->         (M.Map t1 G.Node, G.Gr (Bool,String) ())
-            -> Par d s (M.Map t1 G.Node, G.Gr (Bool,String) ())
+            ->         (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
+            -> Par d s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
       gedges NodeRecord{mykey, chldrn }
-            (labmap, gracc :: G.Gr (Bool,String) ()) = do 
+            (labmap, gracc) = do 
         let chldnodes = map (labmap #) chldrn
             num = labmap # mykey
             gr' = G.insEdges [ (num,cnd::Int,()) | cnd <- chldnodes ] $
@@ -573,14 +571,15 @@ debugVizMemoGraph idOnly initKey frmap = do
   (_,graph)   <- F.foldrM gedges (lm, graph0) frmap
   dbgPr (" .. Added all edges to the graph...")    
   let -- dg = graphToDot nonClusteredParams graph
-      myparams :: GV.GraphvizParams G.Node (Bool,String) () () (Bool,String)
+      myparams :: GV.GraphvizParams G.Node (Bool,t1,t2) () () (Bool,t1,t2)
       myparams = GV.defaultParams { GV.fmtNode= nodeAttrs }
 
-      nodeAttrs :: (Int, (Bool,String)) -> [GA.Attribute]
+      nodeAttrs :: (Int, (Bool,t1,t2)) -> [GA.Attribute]
 --      nodeAttrs :: (Int, String) -> [GA.Attribute]      
-      nodeAttrs (_num, (cyc,lbl)) =
+      nodeAttrs (_num, (cyc,key,res)) =
+        let lbl = showKey key++"\n=> "++ show res in
         [ GA.Label$ GA.StrLabel $ pack lbl ] ++
-        (if showKey initKey == lbl
+        (if key == initKey 
          then [GA.Color [weighted$ GA.X11Color GV.Red]]
          else []) ++
         (if cyc then []
