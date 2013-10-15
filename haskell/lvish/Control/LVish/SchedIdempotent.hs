@@ -50,6 +50,7 @@ import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
+import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
@@ -60,12 +61,12 @@ import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
 import           System.Mem.StableName (makeStableName, hashStableName)
-import           Debug.Trace(trace)
+import           Text.Printf (printf)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
 
 -- import Control.Compose ((:.), unO)
-import Data.Traversable 
+import           Data.Traversable 
 
 import Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched

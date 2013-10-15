@@ -175,7 +175,6 @@ data Response par key ans =
     
 type RequestCont par key ans = (ans -> par (Response par key ans))
 
-{-
 --------------------------------------------------------------------------------
 -- Sequential version:
 
@@ -233,7 +232,6 @@ makeMemoFixedPoint_seq initCont cycHndlr initKey = do
 --                ans3 <- cycHndlr current
 --                kont (True,ans3)
 
--}
         
 --------------------------------------------------------------------------------
 
@@ -251,8 +249,13 @@ type IsCycle = Bool
 --   with the key.
 type NodeAction d s k v =
 --     Bool -> k  -> [(Bool,Par d s v)] -> Par d s v
-     IsCycle -> k  -> [(IsCycle,IV.IVar s v)] -> Par d s v  
+     IsCycle -> k  -> [(k,IsCycle,IV.IVar s v)] -> Par d s (NodeValue k v)
   -- One thing that's missing here is WHICH child node(s) puts us in a cycle.
+
+-- | At the end of the handler execution, the value of a node is either ready, or it
+-- is instead deferred to be exactly the value provided by another key.
+data NodeValue k v = FinalValue !v | Defer k 
+  deriving (Show,Eq,Ord)
 
 #ifdef DEBUG_MEMO
 makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
@@ -337,11 +340,16 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
           bls <- mapM (getcyc . in_cycle . (frmap #)) chldrn
           dbgPr ("   !! Invoking node handler at key "++showID mykey++" "++
                showCyc bl ++" chldrn "++concat (intersperse " "$ map showCyc bls))
-          x  <- nodeHndlr bl mykey [ (b, result (frmap # k)) | b <- bls
-                                                               | k <- chldrn ]
-          dbgPr ("   !! Writing result into key "++showID mykey++" value: "++show x)
-          IV.put_ myres x
-          
+          x  <- nodeHndlr bl mykey [ (k, b, result (frmap # k)) | b <- bls
+                                                                | k <- chldrn ]
+          case x of
+            FinalValue vv -> do 
+              dbgPr ("   !! Writing result into key "++showID mykey++" value: "++show x)
+              IV.put_ myres vv
+            Defer tokey -> do dbgPr ("   !! No result yet on key "++showID mykey++", DEFERing to key "++showID tokey)
+                              fork $ do kv <- IV.get (result(frmap # tokey))
+                                        dbgPr ("   .. Delegated key "++showID tokey++", of key "++showID mykey++" produced result: "++show kv)
+                                        IV.put_ myres kv
   F.foldrM fn () frmap
 
   let NodeRecord{result} = frmap # initKey
@@ -351,11 +359,14 @@ makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
   ------------------------------------------------------------
 #ifdef DEBUG_MEMO  
   when (dbg_lvl >= 4) $ do
-     dbgPr ("| START creating dot graph...")    
+     dbgPr ("| START creating dot graph...")
      dg <- debugVizMemoGraph True initKey frmap
-     dbgPr ("| DONE creating dot graph...")
+     unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc_short.pdf")
+       `seq` return ()     
+     dg <- debugVizMemoGraph False initKey frmap
      unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc.pdf")
        `seq` return ()
+     dbgPr ("| DONE creating dot graph...")       
 #endif       
   ------------------------------------------------------------  
   return final
@@ -433,7 +444,8 @@ copyTo hp sfrom sto = do
 {-# INLINE dbgPr #-}
 dbgPr :: Monad m => String -> m ()
 #ifdef DEBUG_MEMO
-dbgPr s = trace s (return ())
+dbgPr s | dbg_lvl >= 1 = trace s (return ())
+        | otherwise = return ()
 #else
 dbgPr _ = return ()
 #endif
