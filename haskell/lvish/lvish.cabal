@@ -97,7 +97,9 @@ library
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal                    
-                    
+                    -- This is also not recommended for general use yet.
+                    Data.Concurrent.SkipListMap
+
   -- Modules included in this library but not exported.
   other-modules:
                     Data.UtilInternal
@@ -106,7 +108,6 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Data.Concurrent.LinkedMap
-                    Data.Concurrent.SkipListMap
                     Data.Concurrent.AlignedIORef
                     Control.Reagent
                     Control.LVish.SchedIdempotentInternal 
