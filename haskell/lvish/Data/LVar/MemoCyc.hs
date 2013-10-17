@@ -38,6 +38,7 @@ import qualified Data.Map as M
 import Data.IORef
 import Data.Char (ord)
 import Data.List (intersperse)
+import Data.Int
 import qualified Data.Foldable as F
 import System.IO.Unsafe
 import Debug.Trace
@@ -55,6 +56,7 @@ import qualified Data.LVar.PureMap as IM
 -- import qualified Data.LVar.PureSet as S
 
 ----- For debugging: ----
+#ifdef DEBUG_MEMO  
 import System.Environment (getEnvironment)
 import Data.Graph.Inductive.Graph as G
 import Data.Graph.Inductive.PatriciaTree as G
@@ -62,7 +64,7 @@ import Data.GraphViz as GV
 import qualified Data.GraphViz.Attributes.Complete as GA
 import qualified Data.GraphViz.Attributes.Colors   as GC
 import           Data.Text.Lazy     (pack)
-import Data.Int
+#endif
 --------------------------------------------------------------------------------
 -- Simple atomic Set accumulators
 --------------------------------------------------------------------------------

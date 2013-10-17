@@ -131,11 +131,11 @@ library
   build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
                  bytestring-mmap
   -- TEMP:
-  build-depends: fgl, graphviz, text
   ghc-options: -O2 -rtsopts
 
                     -- monad-par-extras >=0.4
   if flag(debug)
+     build-depends: fgl, graphviz, text
      cpp-options: -DDEBUG_LVAR
      cpp-options: -DDEBUG_MEMO
   if flag(chaselev)
