@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.5
+version:             1.0.0.7
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -100,6 +100,10 @@ library
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
 
+                    -- Not ready for prime-time yet:
+                    Data.LVar.NatArray
+                    Data.LVar.MaxCounter                    
+
   -- Modules included in this library but not exported.
   other-modules:
                     Data.UtilInternal
@@ -113,9 +117,6 @@ library
                     Control.LVish.SchedIdempotentInternal 
                     Control.LVish.MonadToss
                     Control.LVish.Types
-                    -- Not ready for prime-time yet:
-                    Data.LVar.NatArray
-                    Data.LVar.MaxCounter
 
   -- Other library packages from which modules are imported.
   build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, lattices ==1.2.*, 

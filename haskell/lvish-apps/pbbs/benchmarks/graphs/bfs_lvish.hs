@@ -1,11 +1,17 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, RankNTypes #-}
 
 import Data.Set as Set
 
-import Util.PBBS
+-- Benchmark utils:
+import PBBS.FileReader
+import PBBS.Timing (wait_clocks, runAndReport)
+-- calibrate, measureFreq, commaint,
+
 import Control.LVish
 import Control.LVish.Internal
+import Control.LVish.DeepFrz (runParThenFreezeIO)
+import qualified Control.LVish.SchedIdempotent as L
 
 import Control.Monad
 import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
@@ -28,7 +34,6 @@ import System.Environment (getArgs)
 import System.Directory
 import System.Process
 
-import Util
 
 -- define DEBUG_CHECKS
 
@@ -559,7 +564,6 @@ main = do
                    let -- par2 :: Par d0 s0 (ISet s0 NodeID)
                        par3 :: Par d0 s0 (IStructure s0 Bool)
                        par3 = bfs_async_arr gr 0
-                   --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
                    _ <- runParIO_ par3
                    return ()
 
@@ -568,10 +572,9 @@ main = do
                    let -- par2 :: Par d0 s0 (ISet s0 NodeID)
                        par4 :: Par d0 s0 (NatArray s0 Word8)
                        par4 = bfs_async_arr2 gr 0
-                   --  set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
                    _ <- runParIO_ par4
                    return ()
-
+{-
       ----------------------------------------
       "misN1" -> do 
               putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
@@ -708,10 +711,15 @@ main = do
               putStrLn$ "Processing finished, max degree was: "++show maxdeg
               let ISetSnap s = set
               putStrLn$ "Connected component, set size "++show (Set.size s)
-
+-}
       oth -> error$"Unknown benchmark mode "++oth
 
   putStrLn$ "Done"
   
 
+-- runParIO_ :: (forall s . Par d s a) -> IO ()
+-- runParIO_ p = do runParIO p; return ()
 
+-- Unsafe version, fix this:
+runParIO_ :: (Par d s a) -> IO ()
+runParIO_ (WrapPar p) = L.runParIO p >> return ()

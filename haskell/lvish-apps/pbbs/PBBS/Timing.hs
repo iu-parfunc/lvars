@@ -1,7 +1,10 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 
-module PBBS.Timing (runAndReport, calibrate, measureFreq, commaint) where
+module PBBS.Timing
+       (runAndReport, calibrate, measureFreq, commaint,
+        wait_clocks)
+       where
 -- module Main where
 
 import           Control.Exception (evaluate)
