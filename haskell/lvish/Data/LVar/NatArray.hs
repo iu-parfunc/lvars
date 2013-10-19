@@ -82,9 +82,9 @@ import           Data.LVar.Generic
 import           Control.LVish as LV hiding (addHandler)
 import           Control.LVish.DeepFrz.Internal  as DF
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 ------------------------------------------------------------------------------

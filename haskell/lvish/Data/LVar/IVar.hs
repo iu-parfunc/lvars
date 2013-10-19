@@ -53,8 +53,8 @@ import           Control.Exception (throw)
 import           Control.LVish as LV 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as I
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
-import qualified Control.LVish.SchedIdempotent as LI 
+import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV)
+import qualified Control.LVish.Sched as LI 
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)

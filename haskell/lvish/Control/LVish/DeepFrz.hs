@@ -53,7 +53,7 @@ import GHC.Prim (unsafeCoerce#)
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), NonFrzn, Frzn, Trvrsbl)
 import Control.LVish.Internal (Determinism(..), Par(WrapPar))
-import Control.LVish.SchedIdempotent (runPar, runParIO)
+import Control.LVish.Sched (runPar, runParIO)
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation inside a

@@ -96,7 +96,7 @@ import qualified Data.Foldable    as F
 import           Control.Exception (Exception)
 import           Control.LVish.Internal
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Sched as L
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 

@@ -57,8 +57,8 @@ import           Data.List (intersperse)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
-import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.Sched (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
+import qualified Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 

@@ -18,7 +18,7 @@
 -- | This is an internal module that provides the core parallel scheduler.
 --   It is /not/ for end-users.
 
-module Control.LVish.SchedIdempotent
+module Control.LVish.Sched
   (
     -- * Basic types and accessors
     LVar(..), state, HandlerPool(),
@@ -69,7 +69,7 @@ import           System.Random (random)
 import           Data.Traversable 
 
 import Control.LVish.Types
-import qualified Control.LVish.SchedIdempotentInternal as Sched
+import qualified Control.LVish.SchedQueue as Queue
 
 
 ----------------------------------------------------------------------------------------------------
@@ -173,7 +173,8 @@ defaultDbg = 0
 data LVar a d = LVar {
   state  :: a,                -- the current, "global" state of the LVar
   status :: {-# UNPACK #-} !(IORef (Status d)), -- is the LVar active or frozen?  
-  name   :: {-# UNPACK #-} !LVarID            -- a unique identifier for this LVar
+  name   :: {-# UNPACK #-} !LVarID,             -- a unique identifier for this LVar
+  handlerStatus :: {-# UNPACK #-} !(IORef HandlerStatus) -- are handlers being installed?
 }
 
 type LVarID = IORef ()
@@ -204,6 +205,11 @@ data Listener d = Listener {
   onFreeze ::      B.Token (Listener d) -> SchedState -> IO ()
 }
 
+data HandlerStatus
+ = Dormant      -- no handlers currently being installed
+ | Installing Int [ClosedPar] -- some number of handlers being installed, with
+                              -- a list of blocked puts waiting on completion
+
 -- | A @HandlerPool@ contains a way to count outstanding parallel computations that
 -- are affiliated with the pool.  It detects the condition where all such threads
 -- have completed.
@@ -228,7 +234,7 @@ newtype ClosedPar = ClosedPar {
   exec :: SchedState -> IO ()
 }
 
-type SchedState = Sched.State ClosedPar LVarID
+type SchedState = Queue.State ClosedPar LVarID
 
 instance Functor Par where
   fmap f m = Par $ \k -> close m (k . f)
@@ -260,6 +266,21 @@ isFrozen (LVar {status}) = do
     Active _ -> return False
     Frozen   -> return True
     
+-- Optionall wraps an IO action so that it will only execute once even if
+-- called multiple times (even concurrently).
+dedupWhen :: Bool -> (a -> IO ()) -> IO (a -> IO ())
+{-# INLINE dedupWhen #-}
+dedupWhen dedup c = 
+  if dedup
+  then do  
+    hasInvoked <- newIORef False
+    return $ \x -> do
+      ticket <- readForCAS hasInvoked
+      unless (peekTicket ticket) $ do
+        (winner, _) <- casIORef hasInvoked ticket True
+        when winner $ c x
+  else return c
+
 ------------------------------------------------------------------------------
 -- LVar operations
 ------------------------------------------------------------------------------
@@ -271,7 +292,8 @@ newLV init = mkPar $ \k q -> do
   listeners <- B.new
   status    <- newIORef $ Active listeners
   name      <- newLVID
-  exec (k $ LVar {state, status, name}) q
+  handlerStatus <- newIORef Dormant
+  exec (k $ LVar {state, status, name, handlerStatus}) q
 
 -- | Do a threshold read on an LVar
 getLV :: (LVar a d)                  -- ^ the LVar 
@@ -301,10 +323,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                                -- continuation immediately        
 
         Nothing -> do          -- /transiently/ not past the threshhold; block        
-          
-#if GET_ONCE
-          execFlag <- newIORef False
-#endif
+          enableCont <- dedupWhen (not $ Queue.idemp q) $ Queue.pushWork q . k
   
           let onUpdate d = unblockWhen $ deltaThresh d
               onFreeze   = unblockWhen $ globalThresh state True
@@ -313,14 +332,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
                   B.remove tok
-#if GET_ONCE
-                  ticket <- readForCAS execFlag
-                  unless (peekTicket ticket) $ do
-                    (winner, _) <- casIORef execFlag ticket True
-                    when winner $ Sched.pushWork q (k b) 
-#else 
-                  Sched.pushWork q (k b)                     
-#endif
+                  enableCont b
           
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
@@ -343,18 +355,40 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
-putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do  
-  Sched.setStatus q name         -- publish our intent to modify the LVar
-  let cont (delta, ret) = ClosedPar $ \q -> do
-        curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
-        Sched.setStatus q noName       -- retract our modification intent
-        whenJust delta $ \d -> do
-          case curStatus of
-            Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
-            Active listeners -> 
-              B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-        exec (k ret) q 
-  exec (close (doPut state) cont) q            -- possibly modify the LVar  
+putLV_ lv@(LVar {state, status, name, handlerStatus}) doPut = 
+  mkPar body where 
+    body k q = 
+      let setPutFlag   = Queue.setStatus q name
+          clearPutFlag = Queue.setStatus q noName
+
+          cont (delta, ret) = ClosedPar $ \q -> do
+            curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
+            clearPutFlag                   -- retract our modification intent
+            whenJust delta $ \d -> do
+              case curStatus of
+                Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
+                Active listeners -> 
+                  B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
+            exec (k ret) q 
+
+          execPut = exec (close (doPut state) cont) q  -- possibly modify the LVar  
+
+          putIdemp = do
+            setPutFlag -- publish our intent to modify the LVar
+            execPut    -- do the modification (and subsequently clear the flag)
+
+          putNonidemp = do
+            setPutFlag -- publish our intent to modify the LVar
+            ticket    <- readForCAS handlerStatus
+            case peekTicket ticket of
+              Dormant -> execPut
+              Installing n ps -> do
+                (success, _) <- casIORef handlerStatus ticket 
+                                         (Installing n $ (ClosedPar $ body k):ps)
+                clearPutFlag 
+                if success then sched q else putNonidemp
+      
+      in if Queue.idemp q then putIdemp else putNonidemp
   
 -- | Update an LVar without generating a result.  
 putLV :: LVar a d             -- ^ the LVar
@@ -372,7 +406,7 @@ freezeLV LVar {name, status} = mkPar $ \k q -> do
   case oldStatus of
     Frozen -> return ()
     Active listeners -> do
-      Sched.await q (name /=)  -- wait until all currently-running puts have
+      Queue.await q (name /=)  -- wait until all currently-running puts have
                                -- snapshotted the active status
       B.foreach listeners $ \Listener {onFreeze} tok -> onFreeze tok q
   exec (k ()) q
@@ -405,38 +439,27 @@ withNewPool_ f = do
   f hp
   return hp
 
-data DecStatus = HasDec | HasNotDec
-
 -- | Close a @Par@ task so that it is properly registered with a handler pool.
-closeInPool :: Maybe HandlerPool -> Par () -> IO ClosedPar
-closeInPool Nothing c = return $ close c $ const (ClosedPar sched)
-closeInPool (Just hp) c = do
-  decRef <- newIORef HasNotDec      -- in case the thread is duplicated, ensure
-                                    -- that the counter is decremented only once
-                                    -- on termination
-  let cnt = numHandlers hp
-      
-      tryDecRef = do                -- attempt to claim the role of decrementer
-        ticket <- readForCAS decRef
-        case peekTicket ticket of
-          HasDec    -> return False
-          HasNotDec -> do
-            (firstToDec, _) <- casIORef decRef ticket HasDec
-            return firstToDec
+closeInPool :: Maybe HandlerPool -> Bool -> Par () -> IO ClosedPar
+closeInPool Nothing dedup c = return $ close c $ const (ClosedPar sched)
+closeInPool (Just hp) dedup c = do
+  let cnt = numHandlers hp      
+      onTerminate_ q = do
+        C.dec cnt                 -- record handler completion in pool
+        quiescent <- C.poll cnt   -- check for (transient) quiescence
+        when quiescent $ do       -- wake any threads waiting on quiescence
+          hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
+          let invoke t tok = do
+                B.remove tok
+                Queue.pushWork q t                
+          B.foreach (blockedOnQuiesce hp) invoke
+          
+  onTerminate <- dedupWhen dedup onTerminate_          
             
-      onFinishHandler _ = ClosedPar $ \q -> do
-        shouldDec <- tryDecRef      -- are we the first copy of the thread to
-                                    -- terminate?
-        when shouldDec $ do
-          C.dec cnt                 -- record handler completion in pool
-          quiescent <- C.poll cnt   -- check for (transient) quiescence
-          when quiescent $ do       -- wake any threads waiting on quiescence
-            hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
-            let invoke t tok = do
-                  B.remove tok
-                  Sched.pushWork q t                
-            B.foreach (blockedOnQuiesce hp) invoke
+  let onFinishHandler _ = ClosedPar $ \q -> do
+        onTerminate q
         sched q
+        
   C.inc $ numHandlers hp            -- record handler invocation in pool
   return $ close c onFinishHandler  -- close the task with a special "done"
                                     -- continuation that clears it from the
@@ -449,15 +472,41 @@ addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
-addHandler hp LVar {state, status} globalThresh updateThresh = 
-  let spawnWhen thresh q = do
+addHandler hp LVar {state, status, handlerStatus, name} globalThresh updateThresh = 
+  let acqLock q = when (not $ Queue.idemp q) $ do
+        ticket    <- readForCAS handlerStatus
+        let (newStatus, wait) = case peekTicket ticket of
+              Dormant         -> (Installing 1 [],     True)
+              Installing n ps -> (Installing (n+1) ps, False)
+        (success, _) <- casIORef handlerStatus ticket newStatus
+        if success
+          then when wait $ Queue.await q (name /=) -- first handler installation; wait
+                                                   -- for existing puts to complete
+          else acqLock q  -- retry lock acquisition
+               
+      relLock q = when (not $ Queue.idemp q) $ do
+        ticket    <- readForCAS handlerStatus
+        let (newStatus, ps) = case peekTicket ticket of
+              Dormant         -> error "BUG: acq/rel mismatch on handler lock"
+              Installing 1 ps -> (Dormant, ps)
+              Installing n ps -> (Installing (n-1) ps, [])
+        (success, _) <- casIORef handlerStatus ticket newStatus
+        if success
+          then forM_ ps $ Queue.pushWork q 
+          else relLock q  -- retry lock release
+    
+      spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          closed <- closeInPool hp cb
-          Sched.pushWork q closed        
+          -- deduplicate only if we ARE assuming idempotence (since then
+          -- termination task might itself be duplicated)
+          closed <- closeInPool hp (Queue.idemp q) cb
+          Queue.pushWork q closed 
+          
       onUpdate d _ q = spawnWhen (updateThresh d) q
-      onFreeze   _ _ = return ()        
+      onFreeze   _ _ = return ()              
   in mkPar $ \k q -> do
+    acqLock q
     curStatus <- readIORef status 
     case curStatus of
       Active listeners ->             -- enroll the handler as a listener
@@ -465,6 +514,7 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
       Frozen -> return ()             -- frozen, so no need to enroll 
     spawnWhen (globalThresh state) q  -- poll globally to see whether we should
                                       -- launch any callbacks now
+    relLock q  
     exec (k ()) q 
 
 -- | Block until a handler pool is quiescent.
@@ -514,8 +564,10 @@ freezeLVAfter lv globalCB updateCB = do
 -- | Fork a child thread, optionally in the context of a handler pool.
 forkHP :: Maybe HandlerPool -> Par () -> Par ()
 forkHP mh child = mkPar $ \k q -> do
-  closed <- closeInPool mh child
-  Sched.pushWork q (k ()) -- "Work-first" policy.
+  -- deduplicate only if we ARE assuming idempotence (since then termination
+  -- task might itself be duplicated)
+  closed <- closeInPool mh (Queue.idemp q) child
+  Queue.pushWork q (k ()) -- "Work-first" policy.
 --  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
   exec closed q  
   
@@ -532,21 +584,21 @@ liftIO io = mkPar $ \k q -> do
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
 instance MonadToss Par where  
   toss = mkPar $ \k q -> do  
-    g <- readIORef $ Sched.prng q
+    g <- readIORef $ Queue.prng q
     let (b, g' ) = random g
-    writeIORef (Sched.prng q) g'
+    writeIORef (Queue.prng q) g'
     exec (k b) q
 
 -- | Cooperatively schedule other threads.
 yield :: Par ()  
 yield = mkPar $ \k q -> do
-  Sched.yieldWork q (k ())
+  Queue.yieldWork q (k ())
   sched q
   
 {-# INLINE sched #-}
 sched :: SchedState -> IO ()
 sched q = do
-  n <- Sched.next q
+  n <- Queue.next q
   case n of
     Just t  -> exec t q
     Nothing -> return ()
@@ -568,12 +620,12 @@ runPar_internal c = do
 
 runPar_internal2 :: Par a -> IO a
 runPar_internal2 c = do
-  queues <- Sched.new numCapabilities noName
+  queues <- Queue.new numCapabilities noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
-  main_cpu <- Sched.currentCPU
+  main_cpu <- Queue.currentCPU
   answerMV <- newEmptyMVar
 
 #if 1

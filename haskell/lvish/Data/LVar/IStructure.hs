@@ -40,7 +40,7 @@ import           Data.List (intersperse)
 import           Control.LVish as LV 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)

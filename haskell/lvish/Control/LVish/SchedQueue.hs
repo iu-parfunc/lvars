@@ -3,8 +3,8 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Control.LVish.SchedIdempotentInternal (
-  State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
+module Control.LVish.SchedQueue (
+  State(), new, number, idemp, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
@@ -72,6 +72,7 @@ popOther = popMine
 -- All the state relevant to a single worker thread
 data State a s = State
     { no       :: {-# UNPACK #-} !Int,
+      idemp    :: Bool,              -- are we assuming task idempotence?
       prng     :: IORef StdGen,      -- core-local random number generation
       status   :: IORef s,
       workpool :: Deque a,         
@@ -147,7 +148,7 @@ new n s = do
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
-        return State { no = i, workpool, idle, status, states, prng }
+        return State { no = i, idemp = False, workpool, idle, status, states, prng }
   rec states <- forM [0..(n-1)] $ mkState states
   return states
 
