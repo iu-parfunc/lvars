@@ -58,10 +58,6 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: True
 
-flag quick
-  description: Build some targets but not others.  Omit apps and tests.
-  default: False
-
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
@@ -134,7 +130,6 @@ library
   -- TEMP:
   ghc-options: -O2 -rtsopts
 
-                    -- monad-par-extras >=0.4
   if flag(debug)
      build-depends: fgl, graphviz, text
      cpp-options: -DDEBUG_LVAR
