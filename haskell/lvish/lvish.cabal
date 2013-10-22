@@ -17,6 +17,7 @@ version:             1.0.0.7
 -- 1.0     -- initial public release
 -- 1.0.0.2 -- minor docs polishing
 -- 1.0.0.4 -- Bugfix for runParThenFreeze 's' param (issue #26).
+-- 1.0.0.6 -- Tighten up dependencies; minor doc fixes
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -29,7 +30,7 @@ description:
     * FHPC 2013: /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
 
-    * POPL 2014: /Freeze after writing: quasi-deterministic programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
+    * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
   . 
   If the haddocks are not building, here is a mirror:
   <http://www.cs.indiana.edu/~rrnewton/haddock/lvish/>
@@ -69,7 +70,7 @@ library
     type:     git
     location: https://github.com/iu-parfunc/lvars
     subdir:   haskell/lvish
---    tag:      release-lvish-1.0.0.4
+--    tag:      release-lvish-1.0.0.6
 
   -- Modules exported by the library.
   exposed-modules:
