@@ -61,6 +61,10 @@ import           Debug.Trace(trace)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
 
+#ifdef DEBUG_LVAR               
+import           Text.Printf (printf)
+#endif
+
 -- import Control.Compose ((:.), unO)
 import Data.Traversable 
 
