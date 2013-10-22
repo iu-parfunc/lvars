@@ -84,6 +84,10 @@ instance LVarData1 IVar where
     return (unsafeCoerceLVar orig)
   addHandler = whenFull
 
+instance LVarWBottom IVar where
+  type LVContents IVar a = ()
+  newBottom = new
+
 -- Just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (IVar s a) where
   type FrzType (IVar s a) = IVar Frzn (FrzType a)

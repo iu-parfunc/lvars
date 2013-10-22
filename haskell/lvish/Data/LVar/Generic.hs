@@ -8,7 +8,8 @@
 module Data.LVar.Generic
        (
          -- * Classes containing the generic interfaces
-         LVarData1(..), OrderedLVarData1(..),
+         LVarData1(..), LVarWBottom(..),
+         OrderedLVarData1(..),
          
          -- * Supporting types and utilities
          AFoldable(..),

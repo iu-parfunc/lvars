@@ -6,6 +6,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{-# LANGUAGE TypeFamilies, ConstraintKinds #-}
+
 {-|
 
 This module contains the unsafe bits that we cannot expose from 
@@ -14,7 +16,8 @@ This module contains the unsafe bits that we cannot expose from
 -}
 
 module Data.LVar.Generic.Internal
-       (LVarData1(..), AFoldable(..),
+       (LVarData1(..), LVarWBottom (..),
+        AFoldable(..),
         unsafeCoerceLVar, unsafeTraversable)
        where
 
@@ -24,6 +27,8 @@ import qualified Data.Foldable    as F
 import           Data.List (sort, intersperse)
 import           GHC.Prim (unsafeCoerce#)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+
+import GHC.Prim (Constraint)
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling
@@ -37,8 +42,6 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
      --   TODO: if there is a Par class to generalize LVar Par monads, then
      --   it needs to be a superclass of this.
      where  
-  -- type LVCtxt (f :: * -> * -> *) (s :: *) (a :: *) :: Constraint
-  --  I was not able to get abstracting over the constraints to work.
 
   -- | Add a handler function which is called whenever an element is
   -- added to the LVar.
@@ -53,8 +56,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   --
   -- However, note that `Frzn` LVars cannot be folded, because they may have
   -- nondeterministic ordering after being frozen.  See `sortFreeze`.
-  freeze :: -- LVCtxt f s a =>
-            f s a -> Par QuasiDet s (f Frzn a)
+  freeze :: f s a -> Par QuasiDet s (f Frzn a)
 
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.
@@ -68,6 +70,15 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     -- Without a traversible instance we cannot reconstruct an ordered
     -- version of the LVar contents with its original type:
     in AFoldable ls'
+
+-- | A class enabling generic creation of new LVars.
+class LVarData1 f => LVarWBottom (f :: * -> * -> *) where
+  -- | Requirements for contents types of this LVar.
+  type LVContents f a :: Constraint
+  
+  newBottom :: (LVContents f a) => Par d s (f s a)
+
+  -- singletonLV :: (LVContents f a) => a -> Par d s (f s a)
 
 -- | Carries a `Foldable` type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have

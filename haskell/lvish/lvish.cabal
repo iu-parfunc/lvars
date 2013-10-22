@@ -90,13 +90,14 @@ library
                     -- These are only for developing new LVars:
                     Data.LVar.Internal.Pure
                     Data.LVar.Generic.Internal
+                    Data.LVar.PureMap.Unsafe
+                    Data.LVar.SLMap.Unsafe                    
                     Control.LVish.SchedIdempotent
                     Control.LVish.Internal
-                    Control.LVish.DeepFrz.Internal                    
+                    Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
-
-                    -- Not ready for prime-time yet:
+                    -- Not quite ready for prime-time yet:
                     Data.LVar.NatArray
                     Data.LVar.MaxCounter                    
 
