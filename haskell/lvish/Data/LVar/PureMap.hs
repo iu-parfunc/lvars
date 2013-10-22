@@ -34,6 +34,7 @@ module Data.LVar.PureMap
 
          -- * Quasi-deterministic operations
          freezeMap, fromIMap,
+         -- traverseFrzn_,
 
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_,  union,
@@ -302,6 +303,16 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
 fromIMap :: IMap k Frzn a -> M.Map k a 
 fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
+
+-- | Traverse a frozen map for side effect.  This is useful (in comparison with more
+-- generic operations) because the function passed in may see the key as well as the
+-- value.
+traverseFrzn_ :: (Ord k, Eq b) =>
+                 (k -> a -> Par d s ()) -> IMap k Frzn a -> Par d s ()
+traverseFrzn_ fn mp =
+ undefined
+--  fromIMap mp
+
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.
