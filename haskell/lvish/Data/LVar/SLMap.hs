@@ -35,6 +35,7 @@ module Data.LVar.SLMap
 
          -- * Quasi-deterministic operations
          freezeMap,
+         traverseFrzn_,
          -- waitValue, 
 
          -- * Iteration and callbacks
@@ -276,6 +277,16 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   -- For the final deepFreeze at the end of a runpar we can actually skip
   -- the freezeLV part....  
   return (unsafeCoerce# x)
+
+
+-- | Traverse a frozen map for side effect.  This is useful (in comparison with more
+-- generic operations) because the function passed in may see the key as well as the
+-- value.
+traverseFrzn_ :: (Ord k) =>
+                 (k -> a -> Par d s ()) -> IMap k Frzn a -> Par d s ()
+traverseFrzn_ fn (IMap (WrapLVar lv)) = 
+  SLM.foldlWithKey (\ () k v -> fn k v)
+                   () (L.state lv)
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.
