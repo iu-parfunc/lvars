@@ -108,22 +108,27 @@ library
                     Control.LVish.MonadToss
                     Control.LVish.Types
                     -- Not ready for prime-time yet:
-                    Data.LVar.NatArray
+--                    Data.LVar.NatArray
                     Data.LVar.MaxCounter
 
   -- Other library packages from which modules are imported.
-  build-depends: base ==4.6.*, deepseq ==1.3.*, containers ==0.5.*, lattices ==1.2.*, 
-                 split ==0.2.*, bytestring ==0.10.*, time ==1.4.*, rdtsc ==1.3.*, vector ==0.10.*, 
-                 parallel ==3.2.*, async ==2.0.*,
-                 atomic-primops, hashable, transformers, random, 
-                 chaselev-deque, 
-                 bits-atomic, missing-foreign,
+  build-depends: base    >= 4.6, 
+                 deepseq >= 1.3, 
+                 containers >= 0.5, 
+                 lattices   >= 1.2, 
+                 vector >=0.10,
+                 atomic-primops >= 0.4, 
+                 random, 
+                 transformers,
                  ghc-prim
+                 -- Used in NatArray:
+--                 bits-atomic, missing-foreign
 
   ghc-options: -O2 -rtsopts
   if flag(debug)
      cpp-options: -DDEBUG_LVAR
   if flag(chaselev)
+     build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
   if flag(getonce)
      cpp-options: -DGET_ONCE
@@ -146,5 +151,4 @@ test-suite test-lvish
        cpp-options: -DCHASE_LEV
     if flag(getonce)
        cpp-options: -DGET_ONCE
-
 

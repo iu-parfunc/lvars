@@ -67,7 +67,6 @@ import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as L
-import           System.Random (randomIO)
 import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
