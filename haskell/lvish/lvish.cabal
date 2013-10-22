@@ -164,6 +164,7 @@ test-suite test-lvish
 --    build-depends:   lvish
     if flag(debug)
        cpp-options: -DDEBUG_LVAR
+       cpp-options: -DDEBUG_MEMO
     if flag(chaselev)
        cpp-options: -DCHASE_LEV
     if flag(getonce)
