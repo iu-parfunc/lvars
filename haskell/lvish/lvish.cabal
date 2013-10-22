@@ -59,14 +59,6 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: True
 
-flag quick
-  description: Build some targets but not others.  Omit apps and tests.
-  default: False
-
-flag abstract-par
-  description: If enabled, provide instances for generic par operations using the establish type classes.
-  default: False
-
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
@@ -129,10 +121,6 @@ library
                  ghc-prim
 
   ghc-options: -O2 -rtsopts
-  if flag(abstract-par) 
-    cpp-options: -DUSE_ABSTRACT_PAR
-    build-depends:  abstract-par >=0.4
-                    -- monad-par-extras >=0.4
   if flag(debug)
      cpp-options: -DDEBUG_LVAR
   if flag(chaselev)
