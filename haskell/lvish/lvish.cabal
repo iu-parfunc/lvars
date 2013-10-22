@@ -29,7 +29,6 @@ description:
   .
     * FHPC 2013: /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
-
     * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
   . 
   If the haddocks are not building, here is a mirror:
