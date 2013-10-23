@@ -5,7 +5,9 @@
 
 module MemoTests where
 import Control.LVish
+
 import Data.LVar.MemoCyc
+
 import qualified Data.LVar.IVar as IV
 import Data.Set as S
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
@@ -19,6 +21,8 @@ import Prelude as P
 -- Unit Tests
 --------------------------------------------------------------------------------
 
+-- This has changed a bunch, update it: [2013.10.23]
+{-
 cyc02 :: IO String
 cyc02 = runParIO $ makeMemoFixedPoint
           (\33 -> return [33])
@@ -45,12 +49,12 @@ cyc04 = runParIO $ makeMemoFixedPoint fn1 hndlr 33
      vals <- mapM (IV.get . snd) nbrs
      return ("key="++show k++" cyc:"++show cyc++" nbrs:("++
              concat [ show k++","++str++" " | (k,_) <- nbrs | str <- vals ] ++")")
-
+-}
    
 -----------------------------------------------
 -- Test the sequential cycle-detection approach
 -----------------------------------------------
-{-
+
 case_02seq :: Assertion
 case_02seq = assertEqual "direct, one-node cycle, DFS" "cycle-33" cyc02seq
 cyc02seq :: String
@@ -84,12 +88,12 @@ cyc05seq = runPar $ makeMemoFixedPoint_seq fn (\k -> return ("cycle-"++show k)) 
    fn 33 = return (Request 44 (\a -> return (Done$ "33 complete: "++a)))
    fn 44 = return (Request 55 (\a -> return (Done$ "44 complete: "++a)))
    fn 55 = return (Request 33 (\a -> return (Done$ "55 complete: "++a)))
--}
+
 
 --------------------------------------------------------------------------------
 
--- tests :: Test
--- tests = $(testGroupGenerator)
+tests :: Test
+tests = $(testGroupGenerator)
 
--- runTests :: IO ()
--- runTests = defaultMain [tests]
+runTests :: IO ()
+runTests = defaultMain [tests]
