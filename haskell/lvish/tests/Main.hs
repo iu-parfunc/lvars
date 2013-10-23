@@ -9,6 +9,9 @@ import Test.Framework (defaultMain, Test)
 import qualified MemoTests
 import qualified LVishAndIVar
 import qualified LogicalTests
+import qualified SkipListTests
+
+import qualified SNZITests
 
 main :: IO ()
 main = defaultMain alltests
@@ -18,5 +21,7 @@ alltests =
        [ LVishAndIVar.tests
        , MemoTests.tests
        , LogicalTests.tests
+       , SkipListTests.tests
+       -- , SNZITests.tests -- These have failures still [2013.10.23] 
        ]
 
