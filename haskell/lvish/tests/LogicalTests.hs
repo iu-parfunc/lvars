@@ -64,10 +64,15 @@ case_or4 = assertEqual "" True $ runPar $ do
               asyncOr Nothing (return False) (return True) (IV.put v)
               IV.get v
 
+case_andMap01 :: Assertion
+case_andMap01 = assertEqual "" False $ runPar $
+                 andMap Nothing (return . even) [1..200::Int]
 
+case_orMap01 :: Assertion
+case_orMap01 = assertEqual "" True $ runPar $
+                orMap Nothing (return . even) [1..200::Int]
 
 -- TODO: add ones with explicit timing controls (sleep).
-
 
 --------------------------------------------------------------------------------
 
