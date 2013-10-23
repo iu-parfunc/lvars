@@ -8,6 +8,7 @@ import Test.Framework (defaultMain, Test)
 
 import qualified MemoTests
 import qualified LVishAndIVar
+import qualified LogicalTests
 
 main :: IO ()
 main = defaultMain alltests
@@ -16,5 +17,6 @@ alltests :: [Test]
 alltests = 
        [ LVishAndIVar.tests
        , MemoTests.tests
+       , LogicalTests.tests
        ]
 
