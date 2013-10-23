@@ -21,7 +21,10 @@ module Data.LVar.Generic.Internal
         unsafeCoerceLVar, unsafeTraversable)
        where
 
-import           Control.LVish
+import           Control.LVish.Types
+import           Control.LVish.Basics
+import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.SchedIdempotent (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort, intersperse)

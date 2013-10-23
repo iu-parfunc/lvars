@@ -17,7 +17,9 @@ module Data.LVar.Generic
        )
        where
 
-import           Control.LVish
+import           Control.LVish.Types
+import           Control.LVish.Basics
+import           Control.LVish.Internal (Par, Determinism(..))
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort)
