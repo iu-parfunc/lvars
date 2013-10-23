@@ -34,6 +34,38 @@ case_and3 = assertEqual "" True $ runPar $ do
               asyncAnd Nothing (return True) (return True) (IV.put v)
               IV.get v                        
 
+case_and4 :: Assertion
+case_and4 = assertEqual "" False $ runPar $ do
+              v <- IV.new
+              asyncAnd Nothing (return False) (return True) (IV.put v)
+              IV.get v
+
+case_or1 :: Assertion
+case_or1 = assertEqual "" True $ runPar $ do
+              v <- IV.new
+              asyncOr Nothing (return True) (return False) (IV.put v)
+              IV.get v
+
+case_or2 :: Assertion
+case_or2 = assertEqual "" False $ runPar $ do
+              v <- IV.new
+              asyncOr Nothing (return False) (return False) (IV.put v)
+              IV.get v
+
+case_or3 :: Assertion
+case_or3 = assertEqual "" True $ runPar $ do
+              v <- IV.new
+              asyncOr Nothing (return True) (return True) (IV.put v)
+              IV.get v                        
+
+case_or4 :: Assertion
+case_or4 = assertEqual "" True $ runPar $ do
+              v <- IV.new
+              asyncOr Nothing (return False) (return True) (IV.put v)
+              IV.get v
+
+
+
 -- TODO: add ones with explicit timing controls (sleep).
 
 
