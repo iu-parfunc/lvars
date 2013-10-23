@@ -110,7 +110,7 @@ library
                     Data.LVar.MaxCounter
 
   -- Other library packages from which modules are imported.
-  build-depends: base    >= 4.6, 
+  build-depends: base    >= 4.6 && <= 4.8, 
                  deepseq >= 1.3, 
                  containers >= 0.5, 
                  lattices   >= 1.2, 
@@ -138,14 +138,25 @@ test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        unit-tests.hs
     other-modules:  TestHelpers    
-                    
+
     ghc-options: 		-O2 -threaded -rtsopts -with-rtsopts=-N4
-    build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
-                     random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, test-framework, 
-                     test-framework-hunit, test-framework-th
+
+    -- DUPLICATE:
+    build-depends: base    >= 4.6 && <= 4.8, 
+                   deepseq >= 1.3, 
+                   containers >= 0.5, 
+                   lattices   >= 1.2, 
+                   vector >=0.10,
+                   atomic-primops >= 0.4, 
+                   random, 
+                   transformers,
+                   ghc-prim
+    
+    build-depends: time, HUnit, test-framework, test-framework-hunit, test-framework-th
     if flag(debug)
        cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
+       build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
     if flag(getonce)
        cpp-options: -DGET_ONCE

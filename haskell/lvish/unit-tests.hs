@@ -38,7 +38,9 @@ import qualified Data.Map as M
 import Data.Word
 
 import qualified Data.LVar.Generic as G
+#ifdef NATARRAY
 import qualified Data.LVar.NatArray as NA
+#endif
 import Data.LVar.PureSet as IS
 import Data.LVar.PureMap as IM
 
@@ -105,13 +107,14 @@ main = do
    , HU.TestLabel "case_v8b" $ HU.TestCase case_v8b
    , HU.TestLabel "case_v8c" $ HU.TestCase case_v8c
    , HU.TestLabel "case_v8d" $ HU.TestCase case_v8d
+#ifdef NATARRAY     
    , HU.TestLabel "case_v9a" $ HU.TestCase case_v9a
    , HU.TestLabel "case_i9c" $ HU.TestCase case_i9c
    , HU.TestLabel "case_v9d" $ HU.TestCase case_v9d
    , HU.TestLabel "case_v9e" $ HU.TestCase case_v9e
 --    , HU.TestLabel "case_v9f" $ HU.TestCase case_v9f -- [2013.09.26] RRN: problems..
---   , HU.TestLabel "case_v9g" $ HU.TestCase case_v9g -- [2013.09.26] Blocked indefinitely
    , HU.TestLabel "case_i9h" $ HU.TestCase case_i9h
+#endif     
    , HU.TestLabel "case_lp01" $ HU.TestCase case_lp01
    , HU.TestLabel "case_lp02" $ HU.TestCase case_lp02
    , HU.TestLabel "case_lp03" $ HU.TestCase case_lp03
@@ -573,6 +576,7 @@ v8d = runParIO $ do
 -- NatArrays
 --------------------------------------------------------------------------------
 
+#ifdef NATARRAY
 case_v9a :: Assertion
 case_v9a = assertEqual "basic NatArray" 4 =<< v9a
 v9a :: IO Word8
@@ -661,6 +665,19 @@ v9f = runParIO$ do
                                      loop (acc+v) (ix+1)
   loop 0 0
 
+-- Uh oh, this is blocking indefinitely sometimes...
+-- BUT, only when I run the whole test suite.. via cabal install --enable-tests
+case_i9h :: Assertion
+case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
+i9i :: IO Word
+i9i = runParIO$ do
+  arr <- NA.newNatArray 1
+  NA.put arr 0 0
+  NA.get arr 0
+
+#endif
+-- end: NatArray tests
+
 -- | One more time with a full IStructure.
 case_v9g :: Assertion
 case_v9g = assertEqual "IStructure, compare effficiency:" 5000050000 =<< v9g
@@ -677,16 +694,6 @@ v9g = runParIO$ do
                                      loop (acc+v) (ix+1)
   loop 0 0
 
-
--- Uh oh, this is blocking indefinitely sometimes...
--- BUT, only when I run the whole test suite.. via cabal install --enable-tests
-case_i9h :: Assertion
-case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
-i9i :: IO Word
-i9i = runParIO$ do
-  arr <- NA.newNatArray 1
-  NA.put arr 0 0
-  NA.get arr 0
 
 --------------------------------------------------------------------------------
 -- Looping constructs
