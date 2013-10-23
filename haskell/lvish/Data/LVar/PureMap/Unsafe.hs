@@ -3,9 +3,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# LANGUAGE ScopedTypeVariables, ConstraintKinds  #-}
+
 module Data.LVar.PureMap.Unsafe
        (
          -- * Unsafe operations:
+         unsafePeekKey,
+--         unsafeGetOrInit, unsafeInsertIfAbsent,
          
          -- * These are here only to reexport downstream:
          IMap(..), forEachHP
@@ -109,3 +113,55 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
 ------------------------------------------------------------------------------
 
 
+-- | An unsafe, nonblocking version of `getKey`.  This reveals whether
+unsafePeekKey :: Ord k => k -> IMap k s v -> Par d s (Maybe v)
+unsafePeekKey key (IMap (WrapLVar lv)) = do
+    mp <- liftIO$ readIORef (L.state lv)
+    return$! M.lookup key mp
+
+-- | A generic initialize proceedure that returns a preexisting value, if it exists,
+-- otherwise filling in a new "bottom" value and returning it.
+--     
+-- The boolean return value is @True@ iff a new, fresh entry was created.
+unsafeGetOrInit :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+          key -- ^ The key to lookup or populate.
+          -> IMap key s (f s a) 
+          -> Par d s (Bool, f s a)
+unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
+ where
+  -- go1 is OPTIONAL optimization.  Could skip right to go2.
+  -- The tension here is that we can't do IO during an atomicModifyIORef.
+  go1 = do
+    let mpref = (L.state lv)
+    mp <- liftIO$ readIORef mpref  
+    case M.lookup key mp of 
+      Just x -> return (False,x)
+      Nothing -> go2
+  go2 = do 
+           bot <- G.newBottom
+           liftIO$ atomicModifyIORef' (L.state lv) $ \ mp -> 
+             -- Here we pay the cost of a SECOND lookup.  Ouch!
+             case M.lookup key mp of
+               Nothing -> (M.insert key bot mp,(True,bot))
+               -- Oops! it appeared in the meantime.  Our allocation was still wasted:
+               Just x  -> (mp,(False,x))
+
+-- FIXME: need a delta-thresh!          
+--      act <- putLV_ (unWrapLVar lv) putter
+
+
+{-
+
+-- | An unsafe way to race to insert.  Returns Nothing if the insert is successful,
+-- and the found value otherwise.
+unsafeInsertIfAbsent :: Ord k => k -> v -> IMap k s v -> Par d s (Maybe v)a
+unsafeInsertIfAbsent key val (IMap (WrapLVar lv)) = liftIO$ 
+  atomicModifyIORef' (L.state lv) $ \ mp -> 
+    case M.lookup key mp of
+      Nothing -> (M.insert key val mp,Nothing)
+      -- Oops! it appeared in the meantime.  Our allocation was still wasted:
+      x@(Just _) -> (mp,x)
+
+-- FIXME: need a delta-thresh!          
+--      act <- putLV_ (unWrapLVar lv) putter
+-}

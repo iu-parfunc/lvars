@@ -1,3 +1,5 @@
+-- | A simple, non-scalable counter.
+
 module Data.Concurrent.Counter(Counter, new, inc, dec, poll) where
 
 import Control.Monad
@@ -9,6 +11,7 @@ type Counter = IORef Int
 new :: IO Counter
 new = newIORef 0
 
+-- TODO: at least switch to use fetch-and-add...
 inc :: Counter -> IO ()
 inc c = atomicModifyIORef' c $ \n -> (n+1,())
 

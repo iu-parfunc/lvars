@@ -27,7 +27,9 @@ module Data.LVar.PureMap
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitValue, waitSize, modify,
-         gmodify,
+
+         -- * Generic routines and convenient aliases
+         gmodify, getOrInit,
          
          -- * Iteration and callbacks
          forEach, forEachHP,
@@ -41,7 +43,7 @@ module Data.LVar.PureMap
          copy, traverseMap, traverseMap_,  union,
          
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
-         traverseMapHP, traverseMapHP_, unionHP
+         traverseMapHP, traverseMapHP_, unionHP                                        
        ) where
 
 import           Control.LVish.DeepFrz.Internal
@@ -156,10 +158,10 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
                            (Just (key, bot), 
                             do L.logStrLn$ " [Map.modify] key absent, adding the new one."
                                unWrapPar$ fn bot))
-      
       act <- putLV_ (unWrapLVar lv) putter
       act
 
+{-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
 gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
@@ -168,7 +170,14 @@ gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show 
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par d s b
 gmodify map key fn = modify map key G.newBottom fn
-  
+
+{-# INLINE getOrInit #-}
+-- | Return the preexisting value for a key if it exists, and otherwise return
+-- 
+--   This is a convenience routine that can easily be defined in terms of `gmodify`
+getOrInit :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+          key -> IMap key s (f s a) -> Par d s (f s a)
+getOrInit key mp = gmodify mp key return
 
 -- | Wait for the map to contain a specified key, and return the associated value.
 getKey :: Ord k => k -> IMap k s v -> Par d s v
