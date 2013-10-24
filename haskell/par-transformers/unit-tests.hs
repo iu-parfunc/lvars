@@ -134,10 +134,10 @@ p5 = do
   forkWithVec 5
     (do vo1 <- getVecT
         liftST$ do write vo1 0 5
-        lift$ liftST$ write vi 0 5)
+        lift$ liftST$ write vi 1 120)
     (do vo2 <- getVecT
         liftST$ do write vo2 0 120
-        lift$ liftST$ write vi 0 120)
+        lift$ liftST$ write vi 0 5)
     
   z <- liftST$ freeze vo
   
