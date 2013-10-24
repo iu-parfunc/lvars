@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -22,8 +23,17 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
+
+import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
+import Test.Framework.Providers.HUnit
+import Test.Framework -- (Test, defaultMain, testGroup)
+import Test.Framework.TH (defaultMainGenerator)
+
 --------------------------------------------------------------------------------
 
+case_t2 :: Assertion
+case_t2 = assertEqual "basic forkWithVec usage"
+            "hello fromList [0.0,0.0,35.3,0.0,0.0,0.0,0.0,46.3,0.0,0.0]" t2
 
 t2 :: String
 t2 = LV.runPar $
@@ -56,7 +66,7 @@ p2 = do
                     write v2 2 (tmp + 2)         
      )
 
-  -- After the barrier we can access it again:
+  -- After the barrier we can access v0 again:
   z <- liftST$ freeze v0
 
   liftST$ writeSTRef r "hello "
@@ -64,4 +74,4 @@ p2 = do
   return$ hello ++ show z
 
 
-main = putStrLn "finishme"
+main = $(defaultMainGenerator)
