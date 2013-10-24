@@ -6,7 +6,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | Core tests for the LVish scheduler and basic futures/IVars.
---   TODO: other data structure tests should be factored out of here.
 
 module LVishAndIVar(tests, runTests) where
 
