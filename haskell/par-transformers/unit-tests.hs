@@ -103,7 +103,7 @@ case_t3 :: Assertion
 case_t3 = assertEqual "simple stacked VecT"
           "120.05" t3
 
-{--
+
 
 -- | Given a vector of "unknown" length, find the length.
 printLength :: VecT s Float (LV.Par d s2) String
@@ -113,9 +113,14 @@ printLength = do
   let len = (length v)
   return$ show len
 
-tpr :: String
-tpr = LV.runPar $ runVecT printLength
+t4 :: String
+t4 = LV.runPar $ runVecT printLength
 
+case_t4 :: Assertion
+case_t4 = assertEqual "test fetching a vector length"
+          "120" t4
+
+{-
 
 mergeSort :: VecT s Int (LV.Par d s2) ()
 mergeSort = do
