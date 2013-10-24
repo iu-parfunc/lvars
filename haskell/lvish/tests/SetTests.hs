@@ -163,12 +163,12 @@ v3d = runParIO $
                       4 -> Just 3
                       5 -> Just 4
           case dep of
-            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
-            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+            Nothing -> logDbgLn 1 $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logDbgLn 1 $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
-                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+                         logDbgLn 1 $ "  [Invocation "++show elm++"] dependency satisfied! "
           IS.insert elm s2 
-        logStrLn " [freezeSetAfter completed] "
+        logDbgLn 1 " [freezeSetAfter completed] "
         freezeSet s2
 
 case_v3e :: Assertion
@@ -189,13 +189,13 @@ v3e = runParIO $ IS.freezeSet =<<
                       4 -> Just 3
                       5 -> Just 4
           case dep of
-            Nothing -> logStrLn $ "  [Invocation "++show elm++"] has no dependencies, running... "
-            Just d -> do logStrLn $ "  [Invocation "++show elm++"] waiting on "++show dep
+            Nothing -> logDbgLn 1 $ "  [Invocation "++show elm++"] has no dependencies, running... "
+            Just d -> do logDbgLn 1 $ "  [Invocation "++show elm++"] waiting on "++show dep
                          IS.waitElem d s2
-                         logStrLn $ "  [Invocation "++show elm++"] dependency satisfied! "
+                         logDbgLn 1 $ "  [Invocation "++show elm++"] dependency satisfied! "
           IS.insert elm s2
         quiesce hp
-        logStrLn " [quiesce completed] "
+        logDbgLn 1 " [quiesce completed] "
         return s2
 
 --------------------------------------------------------------------------------
@@ -215,15 +215,15 @@ v8a :: IO (S.Set (Integer, Char))
 v8a = runParIO $ do
   s1 <- IS.newFromList [1,2,3]
   s2 <- IS.newFromList ['a','b']
-  logStrLn " [v8a] now to construct cartesian product..."
+  logDbgLn 1 " [v8a] now to construct cartesian product..."
   h  <- newPool
   s3 <- IS.cartesianProdHP (Just h) s1 s2
-  logStrLn " [v8a] cartesianProd call finished... next quiesce"
+  logDbgLn 1 " [v8a] cartesianProd call finished... next quiesce"
   IS.forEach s3 $ \ elm ->
-    logStrLn$ " [v8a]   Got element: "++show elm
+    logDbgLn 1$ " [v8a]   Got element: "++show elm
   IS.insert 'c' s2
   quiesce h
-  logStrLn " [v8a] quiesce finished, next freeze::"
+  logDbgLn 1 " [v8a] quiesce finished, next freeze::"
   freezeSet s3
 
 case_v8b :: Assertion
@@ -243,11 +243,11 @@ v8b = runParIO $ do
   s3 <- IS.traverseSetHP    (Just hp) (return . (+100)) s1
   s4 <- IS.cartesianProdsHP (Just hp) [s1,s2,s3]
   IS.forEachHP (Just hp) s4 $ \ elm ->
-    logStrLn $ " [v8b]   Got element: "++show elm
+    logDbgLn 1 $ " [v8b]   Got element: "++show elm
   -- [2013.07.03] Confirmed: this makes the bug(s) go away:  
   -- liftIO$ threadDelay$ 100*1000
   quiesce hp
-  logStrLn " [v8b] quiesce finished, next freeze::"
+  logDbgLn 1 " [v8b] quiesce finished, next freeze::"
   freezeSet s4
 
 ------------------------------------------------------------------------------------------

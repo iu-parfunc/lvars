@@ -1,4 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
+ {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -118,13 +118,25 @@ runParLogged (WrapPar p) = L.runParLogged p
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 
 
--- | This is only used when compiled in debugging mode.  It atomically adds a string
--- onto an in-memory log.
-logStrLn :: String -> Par d s ()
+-- logStrLn :: String -> Par d s ()
+-- #ifdef DEBUG_LVAR
+-- logStrLn = WrapPar . L.logStrLn
+-- #else 
+-- logStrLn _  = return ()
+-- {-# INLINE logStrLn #-}
+-- #endif
+
+-- | Log a line of debugging output.  This is only used when *compiled* in debugging
+-- mode.  It atomically adds a string onto an in-memory log.
+-- 
+-- The provided `Int`, is the "debug level" associated with the message, 1-5.  One is
+-- the least verbose, and five is the most.  When debugging, the user can control the
+-- debug level by setting the env var DEBUG, e.g. @DEBUG=5@.
+logDbgLn :: Int -> String -> Par d s ()
 #ifdef DEBUG_LVAR
-logStrLn = WrapPar . L.logStrLn
+logDbgLn n = WrapPar . L.liftIO . L.logLnAt_ n 
 #else 
-logStrLn _  = return ()
+logDbgLn _ _  = return ()
 {-# INLINE logStrLn #-}
 #endif
 
