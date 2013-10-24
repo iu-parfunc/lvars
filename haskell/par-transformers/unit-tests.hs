@@ -73,6 +73,36 @@ p2 = do
   hello <- liftST$ readSTRef r
   return$ hello ++ show z
 
+-- | Attempt to stack a VecT ontop of another VecT
+p3 :: VecT s2 Float (VecT s1 Int (LV.Par d s0)) String 
+p3 = do
+  initVecT 10
+  vo <- getVecT
+  vi <- lift$ do
+    initVecT 20
+    vi <- getVecT            
+    liftST$ write vi 0 5
+    return vi
+  
+  liftST$ write vo 0 120.0
+    
+  -- this line doesn't have a meaning, it is just here to make sure it
+  -- typechecks
+  let len = length vi
+  
+  voh <- liftST$ read vo 0
+  vih <- lift$ liftST$ read vi 0
+  
+  return$ show voh ++ show vih
+  
+t3 :: String
+t3 = LV.runPar $
+     runVecT $ runVecT p3
+     
+case_t3 :: Assertion
+case_t3 = assertEqual "simple stacked VecT"
+          "120.05" t3
+
 {--
 
 -- | Given a vector of "unknown" length, find the length.
