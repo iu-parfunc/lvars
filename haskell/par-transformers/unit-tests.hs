@@ -119,6 +119,53 @@ t4 = LV.runPar $ runVecT printLength
 case_t4 :: Assertion
 case_t4 = assertEqual "test fetching a vector length"
           "120" t4
+       
+-- | Try to forkWithVec on a stack of VecT
+p5 :: VecT s2 Int (VecT s1 Int (LV.Par d s0)) String
+p5 = do
+  initVecT 10
+  vo <- getVecT
+  liftST$ set vo 0
+  
+  lift$ initVecT 10
+  vi <- lift$ getVecT
+  lift$ liftST$ set vi 1
+  
+  forkWithVec 5
+    (do vo1 <- getVecT
+        liftST$ do write vo1 0 5
+        lift$ liftST$ write vi 0 5)
+    (do vo2 <- getVecT
+        liftST$ do write vo2 0 120
+        lift$ liftST$ write vi 0 120)
+    
+  z <- liftST$ freeze vo
+  
+  zz <- lift$ liftST$ freeze vi 
+    
+  return$ show z ++ " " ++ show zz
+        
+t5 :: String    
+t5 = LV.runPar $ runVecT $ runVecT p5
+                     
+
+{-
+
+-- Takes a stack of two VecTs as we have to worry about both the array
+-- and the secondary buffer array. s1 is going to be the "real" array,
+-- and when calling the mergeSort wrapper a "buffer" array s2 will be
+-- layered on.
+mergeSort :: VecT s2 Int (VecT s1 Int (LV.Par d s0)) ()
+mergeSort = do
+  vi <- lift$ getVecT
+  vo <- getVecT
+  
+  if length vi <= 1 then
+    return ()
+   else do
+    forkWithVec 
+
+-}
 
 {-
 
@@ -147,5 +194,5 @@ msd = LV.runPar $ runVecT $ do
   mergeSort
 --}
 
-main = $(defaultMainGenerator)
-
+--main = $(defaultMainGenerator)
+main = do putStrLn t5
