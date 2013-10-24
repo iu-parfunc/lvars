@@ -153,7 +153,8 @@ test-suite test-lvish
     main-is:        Main.hs
     hs-source-dirs: ./ tests/
     other-modules:  TestHelpers, 
-                    LVishAndIVar, MemoTests, LogicalTests
+                    LVishAndIVar, MemoTests, LogicalTests, 
+                    ArrayTests
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 

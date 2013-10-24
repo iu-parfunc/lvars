@@ -8,6 +8,7 @@ import Test.Framework (defaultMain, Test)
 
 import qualified MemoTests
 import qualified LVishAndIVar
+import qualified ArrayTests
 import qualified LogicalTests
 import qualified SkipListTests
 
@@ -19,6 +20,7 @@ main = defaultMain alltests
 alltests :: [Test]
 alltests = 
        [ LVishAndIVar.tests
+       , ArrayTests.tests
        , MemoTests.tests
        , LogicalTests.tests
        , SkipListTests.tests
