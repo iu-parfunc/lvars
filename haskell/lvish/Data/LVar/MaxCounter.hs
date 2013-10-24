@@ -34,7 +34,7 @@ newtype MC = MC Int
   deriving (Eq, Show, Ord, Read)
 
 instance JoinSemiLattice MC where 
-  join (MC a) (MC b) = MC (a `max` b)
+  join (MC !a) (MC !b) = MC (a `max` b)
 
 instance BoundedJoinSemiLattice MC where
   bottom = MC minBound

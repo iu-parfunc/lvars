@@ -128,7 +128,7 @@ library
                     Control.LVish.Logical
 
   -- Other library packages from which modules are imported.
-  build-depends: base    >= 4.6, 
+  build-depends: base    >= 4.6 && <= 4.8, 
                  deepseq >= 1.3, 
                  containers >= 0.5, 
                  lattices   >= 1.2, 
@@ -174,7 +174,8 @@ test-suite test-lvish
                     SetTests
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
-    build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
+    build-depends:   base ==4.6.* && <= 4.8,
+                     containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
                      random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, 
                      par-classes      <= 2.0, 
                      par-transformers <= 2.0,
