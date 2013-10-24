@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, assertOr, timeOut,
+   nTimes, assertOr, timeOut, timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
  where 
@@ -262,7 +262,13 @@ timeOut interval act = do
               else do threadDelay (10 * 1000)
                       loop   
   loop
-  
+
+-- | Evaluate a pure value to weak-head normal form, with timeout.
+--   This is NONDETERMINISTIC, so its type is sketchy:  
+timeOutPure :: Double -> a -> Maybe a
+timeOutPure tm thnk =
+  unsafePerformIO (timeOut tm (evaluate thnk))
+
 assertOr :: Assertion -> Assertion -> Assertion
 assertOr act1 act2 = 
   catch act1 

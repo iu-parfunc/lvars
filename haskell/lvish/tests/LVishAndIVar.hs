@@ -6,7 +6,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | Core tests for the LVish scheduler and basic futures/IVars.
---   TODO: other data structure tests should be factored out of here.
 
 module LVishAndIVar(tests, runTests) where
 
@@ -95,7 +94,7 @@ v1b = do let tag = "callback on ivar "
          (logs,_) <- runParLogged $ do
                        i <- IV.new
                        IV.put i (3::Int)                       
-                       IV.whenFull Nothing i (\x -> logStrLn$ tag++show x)
+                       IV.whenFull Nothing i (\x -> logDbgLn 1$ tag++show x)
                        IV.put i 3
                        IV.put i 3
                        return ()
@@ -131,7 +130,7 @@ i3f :: IO ()
 i3f = runParIO$ do
   iv <- IV.new
   fork $ do IV.get iv
-            logStrLn "Unblocked!  Shouldn't see this."
+            logDbgLn 1 "Unblocked!  Shouldn't see this."
             return ()
   return ()
 #else 
@@ -161,22 +160,22 @@ i3g = runParIO$ do
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
 lp01 = runParIO$ do
-  logStrLn " [lp01] Starting parForSimple loop..."
+  logDbgLn 1 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
-    logStrLn$ " [lp01]  iter "++show ix
+    logDbgLn 1$ " [lp01]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
   IV.get x
 
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
 lp02 = runParIO$ do
-  logStrLn " [lp02] Starting parForL loop..."
+  logDbgLn 1 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
-    logStrLn$ " [lp02]  iter "++show ix
+    logDbgLn 1$ " [lp02]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logStrLn$ " [lp02] after loop..."
+  logDbgLn 1$ " [lp02] after loop..."
   IV.get x
 
 -- [2013.08.05] RRN: I'm seeing this hang sometimes.  It live-locks
@@ -187,23 +186,23 @@ lp02 = runParIO$ do
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParIO$ do
-  logStrLn " [lp03] Starting parForTree loop..."
+  logDbgLn 1 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
-    logStrLn$ " [lp03]  iter "++show ix
+    logDbgLn 1$ " [lp03]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logStrLn$ " [lp03] after loop..."
+  logDbgLn 1$ " [lp03] after loop..."
   IV.get x
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParIO$ do
-  logStrLn " [lp04] Starting parForTiled loop..."
+  logDbgLn 1 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
   parForTiled 16 (0,10) $ \ ix -> do
-    logStrLn$ " [lp04]  iter "++show ix
+    logDbgLn 1$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logStrLn$ " [lp04] after loop..."
+  logDbgLn 1$ " [lp04] after loop..."
   IV.get x
 
 --------------------------------------------------------------------------------

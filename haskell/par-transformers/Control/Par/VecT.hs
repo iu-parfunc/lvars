@@ -28,6 +28,7 @@ module Control.Par.VecT
 
 import Control.Monad
 import Control.Monad.IO.Class
+import qualified Control.Monad.Trans as T
 import qualified Control.Monad.Trans.State.Strict as S
 import Control.Monad.ST        (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
@@ -140,6 +141,9 @@ dropST :: (MonadIO par) =>
           ST s a -> VecT s elt par a
 dropST = VecT . liftIO . unsafeSTToIO  
 
+instance T.MonadTrans (VecT s elt) where
+  lift m = VecT (lift m)
+    
 instance PC.ParIVar par =>
 -- instance PC.ParFuture par =>
          PC.ParFuture (VecT s elt par) where

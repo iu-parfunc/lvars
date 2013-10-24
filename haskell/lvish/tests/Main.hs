@@ -14,6 +14,7 @@ import qualified LogicalTests
 --import qualified SNZITests
 import qualified MapTests
 import qualified SetTests
+import qualified MaxCounterTests
 
 main :: IO ()
 main = defaultMain alltests
@@ -28,5 +29,6 @@ alltests =
        -- , SNZITests.tests -- These have failures still [2013.10.23]
        , MapTests.tests
        , SetTests.tests
+       , MaxCounterTests.tests
        ]
 
