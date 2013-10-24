@@ -118,14 +118,6 @@ runParLogged (WrapPar p) = L.runParLogged p
 runPar :: (forall s . Par Det s a) -> a
 runPar (WrapPar p) = L.runPar p 
 
--- logStrLn :: String -> Par d s ()
--- #ifdef DEBUG_LVAR
--- logStrLn = WrapPar . L.logStrLn
--- #else 
--- logStrLn _  = return ()
--- {-# INLINE logStrLn #-}
--- #endif
-
 -- | Log a line of debugging output.  This is only used when *compiled* in debugging
 -- mode.  It atomically adds a string onto an in-memory log.
 -- 
@@ -137,7 +129,7 @@ logDbgLn :: Int -> String -> Par d s ()
 logDbgLn n = WrapPar . L.liftIO . L.logLnAt_ n 
 #else 
 logDbgLn _ _  = return ()
-{-# INLINE logStrLn #-}
+{-# INLINE logDbgLn #-}
 #endif
 
 
@@ -147,7 +139,7 @@ logDbgLn_ :: Int -> String -> IO ()
 logDbgLn_ = L.logLnAt_ 
 #else 
 logDbgLn_ _ _  = return ()
-{-# INLINE logStrLn #-}
+{-# INLINE logDbgLn_ #-}
 #endif
 
 

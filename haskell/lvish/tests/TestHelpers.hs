@@ -250,8 +250,10 @@ timeOut interval act = do
         stat <- threadStatus tid
         case stat of
           ThreadFinished  -> readIORef result
-          ThreadBlocked _ -> return Nothing
-          ThreadDied      -> return Nothing
+          ThreadBlocked _ -> do putStrLn "Test timed out -- thread blocked!"
+                                return Nothing
+          ThreadDied      -> do putStrLn "Test timed out -- thread died!"
+                                return Nothing
           ThreadRunning   -> do 
             now <- getCurrentTime
             let delt :: Double
@@ -263,6 +265,7 @@ timeOut interval act = do
                       loop   
   loop
 
+{-# NOINLINE timeOutPure #-}
 -- | Evaluate a pure value to weak-head normal form, with timeout.
 --   This is NONDETERMINISTIC, so its type is sketchy:  
 timeOutPure :: Double -> a -> Maybe a

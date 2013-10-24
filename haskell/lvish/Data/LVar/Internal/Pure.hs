@@ -72,9 +72,12 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
     WrapPar $ LI.putLV iv putter
   where
     -- Careful, this must be idempotent...
-    putter _ = do 
+    putter !ref = do
+      -- In some cases direct CAS would be better than atomicModifyIORef here.
       logDbgLn_ 5 "  [Pure] Putting to pure LVar.."
-      return (Just new)
+      atomicModifyIORef' ref $ \ oldval -> (join oldval new, ())
+      -- We still publish the change for delta-thresh's to respond to:
+      return $! Just $! new
 
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
