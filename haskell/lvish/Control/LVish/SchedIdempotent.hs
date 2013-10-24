@@ -110,7 +110,9 @@ printLog = do
   -- Clear the log when we read it:
   lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
   mapM_ putStrLn $ reverse lines  
-  
+
+-- | The idea here is that while a runPar is underway, we periodically flush out the
+-- debug messages.
 printLogThread :: IO (IO ())
 printLogThread = do
   tid <- forkIO $
@@ -325,7 +327,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
 #else 
                   Sched.pushWork q (k b)                     
 #endif
-          
+          logLnAt_ 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 

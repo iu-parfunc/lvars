@@ -141,6 +141,17 @@ logDbgLn _ _  = return ()
 #endif
 
 
+-- | Same as `logDbgLn` except in the @IO@ rather than @Par@ monad.
+logDbgLn_ :: Int -> String -> IO ()
+#ifdef DEBUG_LVAR
+logDbgLn_ = L.logLnAt_ 
+#else 
+logDbgLn_ _ _  = return ()
+{-# INLINE logStrLn #-}
+#endif
+
+
+
 
 --------------------------------------------------------------------------------
 -- Extras

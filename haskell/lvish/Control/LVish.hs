@@ -77,7 +77,7 @@ module Control.LVish
     forkHP,
     
     -- * Debug facilities and internal bits
-    logDbgLn, runParLogged, 
+    logDbgLn, logDbgLn_, runParLogged, 
     LVar()
   ) where
 
