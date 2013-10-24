@@ -14,7 +14,8 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, assertOr, timeOut, timeOutPure, 
+   nTimes, assertOr, timeOut,
+   -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
  where 
@@ -250,9 +251,9 @@ timeOut interval act = do
         stat <- threadStatus tid
         case stat of
           ThreadFinished  -> readIORef result
-          ThreadBlocked _ -> do putStrLn "Test timed out -- thread blocked!"
+          ThreadBlocked _ -> do putStrLn " [lvish-tests] Test timed out -- thread blocked!"
                                 return Nothing
-          ThreadDied      -> do putStrLn "Test timed out -- thread died!"
+          ThreadDied      -> do putStrLn " [lvish-tests] Test timed out -- thread died!"
                                 return Nothing
           ThreadRunning   -> do 
             now <- getCurrentTime
@@ -267,7 +268,11 @@ timeOut interval act = do
 
 {-# NOINLINE timeOutPure #-}
 -- | Evaluate a pure value to weak-head normal form, with timeout.
---   This is NONDETERMINISTIC, so its type is sketchy:  
+--   This is NONDETERMINISTIC, so its type is sketchy:
+--
+-- WARNING: This doesn't seem to work properly yet!  I am seeing spurious failures.
+-- -RRN [2013.10.24]
+--
 timeOutPure :: Double -> a -> Maybe a
 timeOutPure tm thnk =
   unsafePerformIO (timeOut tm (evaluate thnk))
