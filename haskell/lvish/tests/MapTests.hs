@@ -9,6 +9,7 @@ import Test.Framework (Test, defaultMain, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
+import TestHelpers as T
 
 import Control.Concurrent (threadDelay)
 import Data.Traversable (traverse)
@@ -26,8 +27,6 @@ import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
 
-import TestHelpers as T
-
 --------------------------------------------------------------------------------
 
 tests :: Test
@@ -35,6 +34,8 @@ tests = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMain [tests]
+
+--------------------------------------------------------------------------------
 
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
