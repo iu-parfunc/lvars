@@ -548,6 +548,8 @@ yield = mkPar $ \k q -> do
   sched q
   
 {-# INLINE sched #-}
+-- | Contract: This scheduler function only returns when ALL worker threads have
+-- completed their work and idled.
 sched :: SchedState -> IO ()
 sched q = do
   n <- Sched.next q
@@ -610,6 +612,8 @@ runPar_internal2 c = do
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
   return ans
 #else
+  -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
+  ----------------------------------------------------------------------------------
   let runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
            then sched q

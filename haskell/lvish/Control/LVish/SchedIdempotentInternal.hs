@@ -93,7 +93,11 @@ next state@State{ workpool } = do
 -- Cilk time/space bounds if one is running strictly nested (series
 -- parallel) programs.
 
--- | Attempt to steal work or, failing that, give up and go idle.
+-- | Attempt to steal work or, failing that, give up and go idle (and then wake back
+-- up and keep stealing).
+--     
+--   This function does NOT return until the complete runPar session is complete (all
+--   workers idle).
 steal :: State a s -> IO (Maybe a)
 steal State{ idle, states, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no

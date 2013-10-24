@@ -40,6 +40,8 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 import Data.Word
 
+-- TODO: Remove most of this!  This file should not tests LVars other than IVars:
+
 import qualified Data.LVar.Generic as G
 import qualified Data.LVar.NatArray as NA
 import Data.LVar.PureSet as IS
@@ -552,18 +554,17 @@ v9d = runParIO$ do
   NA.put arr 5 5
   NA.get arr 6 
 
--- WARNING: I'm seeing some livelocks here that depend on the number of threads
--- (e.g. at -N4 but not -N2).  When deadlocked on -N4 it burns 250% cpu.
--- 
--- [2013.08.05] Update... it can pass 100 iterations at -N4 BY ITSELF,
--- but fails much more rapidly when run together with other 'v9'
--- tests.
-case_v9e :: Assertion
+in9e :: Int
+-- in9e = 100000  -- This was where lots of problems happen.
+in9e = 10000 -- Wait... still plenty of problems at this size.
 
-case_v9e = assertEqual "Scale up a bit" 5000050000 =<< v9e
+out9e :: Word64
+out9e = fromIntegral$ in9e * (in9e + 1) `quot` 2 -- 5000050000
+
+-- | Fill in all elements of a NatArray, and then sum them.
 v9e :: IO Word64
 v9e = runParIO$ do
-  let size = 100000
+  let size = in9e
   arr <- NA.newNatArray size
   fork $
     forM_ [0..size-1] $ \ix ->
@@ -573,18 +574,28 @@ v9e = runParIO$ do
                    | otherwise  = do v <- NA.get arr ix
                                      loop (acc+v) (ix+1)
   loop 0 0
--- NOTE: this test takes about 0.03 seconds.
+-- NOTE: this test takes about 0.03 seconds (with input size ?????)
 -- It is not faster with two threads, alas... but it is higher variance!
+
+-- WARNING: I'm seeing some livelocks here that depend on the number of threads
+-- (e.g. at -N4 but not -N2).  When deadlocked on -N4 it burns 250% cpu.
+-- 
+-- [2013.08.05] Update... it can pass 100 iterations at -N4 BY ITSELF,
+-- but fails much more rapidly when run together with other 'v9'
+-- tests.
+case_v9e_NatArr :: Assertion
+case_v9e_NatArr = assertEqual "Scale up a bit" out9e =<< v9e
+
 
 -- | Here's the same test with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
-case_v9f :: Assertion
+case_v9f_ivarArr :: Assertion
 -- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
 -- thread-blocked-indefinitely problem here.
-case_v9f = assertEqual "Array of ivars, compare effficiency:" 5000050000 =<< v9f
+case_v9f_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
-  let size = 100000
+  let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
   fork $
@@ -597,11 +608,11 @@ v9f = runParIO$ do
   loop 0 0
 
 -- | One more time with a full IStructure.
-case_v9g :: Assertion
-case_v9g = assertEqual "IStructure, compare effficiency:" 5000050000 =<< v9g
+case_v9g_istruct :: Assertion
+case_v9g_istruct = assertEqual "IStructure, compare effficiency:" out9e =<< v9g
 v9g :: IO Word64
 v9g = runParIO$ do
-  let size = 100000
+  let size = in9e
   arr <- ISt.newIStructure size      
   fork $
     forM_ [0..size-1] $ \ix ->
