@@ -139,7 +139,6 @@ library
                  ghc-prim,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
-
   if flag(generic)
     cpp-options: -DGENERIC_PAR
     build-depends: par-classes      <= 2.0
@@ -175,19 +174,36 @@ test-suite test-lvish
                     MaxCounterTests
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
-    build-depends:   base ==4.6.* && <= 4.8,
-                     containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
-                     random, deepseq, vector, bits-atomic, missing-foreign, time, ghc-prim, HUnit, 
-                     par-classes      <= 2.0, 
-                     par-transformers <= 2.0,
-                     test-framework, test-framework-hunit, test-framework-th
+
+    -- DUPLICATED: from above
+    build-depends: base    >= 4.6 && <= 4.8, 
+                   deepseq >= 1.3, 
+                   containers >= 0.5, 
+                   lattices   >= 1.2, 
+                   vector >=0.10,
+                   atomic-primops >= 0.4, 
+                   random, 
+                   transformers,
+                   ghc-prim,
+                   -- Used in NatArray:
+                   bits-atomic, missing-foreign
+    if flag(generic)
+      cpp-options: -DGENERIC_PAR
+      build-depends: par-classes      <= 2.0
+    -- END DUPLICATED
+
+    build-depends: test-framework, test-framework-hunit, test-framework-th, 
+                   HUnit, time, text
 -- And the self-dependency:  TODO -- how to get this to work? [2013.10.10]
 -- For now it gets compiled TWICE:
 --    build-depends:   lvish
     if flag(debug)
+       -- TEMP: depending on these for visualzing MemoCyc DAGs:
+       build-depends: fgl, graphviz, text
        cpp-options: -DDEBUG_LVAR
        cpp-options: -DDEBUG_MEMO
     if flag(chaselev)
+       build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
     if flag(getonce)
        cpp-options: -DGET_ONCE
