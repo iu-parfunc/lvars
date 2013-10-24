@@ -8,11 +8,12 @@ import Test.Framework (defaultMain, Test)
 
 import qualified MemoTests
 import qualified LVishAndIVar
-import qualified ArrayTests
+--import qualified ArrayTests
 import qualified LogicalTests
-import qualified SkipListTests
-
-import qualified SNZITests
+--import qualified SkipListTests
+--import qualified SNZITests
+import qualified MapTests
+import qualified SetTests
 
 main :: IO ()
 main = defaultMain alltests
@@ -20,10 +21,12 @@ main = defaultMain alltests
 alltests :: [Test]
 alltests = 
        [ LVishAndIVar.tests
-       , ArrayTests.tests
+       -- , ArrayTests.tests
        , MemoTests.tests
        , LogicalTests.tests
-       , SkipListTests.tests
-       -- , SNZITests.tests -- These have failures still [2013.10.23] 
+       -- , SkipListTests.tests
+       -- , SNZITests.tests -- These have failures still [2013.10.23]
+       , MapTests.tests
+       , SetTests.tests
        ]
 

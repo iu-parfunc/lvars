@@ -160,14 +160,18 @@ library
 
 
 --------------------------------------------------------------------------------
--- TODO: New tests here:
+
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
     hs-source-dirs: ./ tests/
     other-modules:  TestHelpers, 
-                    LVishAndIVar, MemoTests, LogicalTests, 
-                    ArrayTests
+                    LVishAndIVar,
+                    ArrayTests,
+                    MemoTests,
+                    LogicalTests,
+                    MapTests,
+                    SetTests
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 

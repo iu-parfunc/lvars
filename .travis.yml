@@ -20,6 +20,8 @@ before_install:
 
 install:
  - cabal-1.18 update
+# This is a hack to make Travis happy because it doesn't install happy/alex by default
+ - cabal-1.18 install happy alex
  - cabal-1.18 install ./haskell/par-classes/
  - cabal-1.18 install ./haskell/par-transformers/
  - cabal-1.18 install --only-dependencies --enable-tests --enable-benchmarks ./haskell/lvish/
