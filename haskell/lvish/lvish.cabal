@@ -171,7 +171,8 @@ test-suite test-lvish
                     MemoTests,
                     LogicalTests,
                     MapTests,
-                    SetTests
+                    SetTests,
+                    MaxCounterTests
                     
     ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends:   base ==4.6.*, containers ==0.5.*, transformers, atomic-primops, chaselev-deque, 
