@@ -62,6 +62,15 @@ flag getonce
                (by using extra synchronization)
   default: False
 
+-- We won't really support this until LVish 2.0:
+flag generic
+  description: Use (forthcoming) generic interfaces for Par monads.
+  default: False
+
+flag beta
+  description: These features are in beta and not fully supported yet.
+  default: True
+
 --------------------------------------------------------------------------------
 library
   Source-repository head
@@ -96,9 +105,11 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
-                    -- Not quite ready for prime-time yet:
-                    Data.LVar.NatArray
-                    Data.LVar.MaxCounter                    
+  if flag(beta)
+    exposed-modules: 
+                      -- Not quite ready for prime-time yet:
+                      Data.LVar.NatArray
+                      Data.LVar.MaxCounter
 
   -- Modules included in this library but not exported.
   other-modules:
@@ -126,16 +137,18 @@ library
                  random, 
                  transformers,
                  ghc-prim,
-                 par-classes      <= 2.0, 
-                 par-transformers <= 2.0,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
---  build-depends: HUnit, test-framework, test-framework-hunit, test-framework-th,
---                 bytestring-mmap
+
+  if flag(generic)
+    cpp-options: -DGENERIC_PAR
+    build-depends: par-classes      <= 2.0
+--                   par-transformers <= 2.0
 
   ghc-options: -O2 -rtsopts
 
   if flag(debug)
+     -- TEMP: depending on these for visualzing MemoCyc DAGs:
      build-depends: fgl, graphviz, text
      cpp-options: -DDEBUG_LVAR
      cpp-options: -DDEBUG_MEMO
