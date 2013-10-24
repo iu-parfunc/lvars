@@ -43,7 +43,6 @@ import Data.Word
   -- TODO: Remove most of this!  This file should not tests LVars other than IVars:
 
 import qualified Data.LVar.Generic as G
-import qualified Data.LVar.NatArray as NA
 import Data.LVar.PureSet as IS
 import Data.LVar.PureMap as IM
 
@@ -52,20 +51,17 @@ import qualified Data.LVar.SLSet as SS
 import Data.LVar.Memo  as Memo
 
 import qualified Data.LVar.IVar as IV
-import qualified Data.LVar.IStructure as ISt
 import qualified Data.LVar.Pair as IP
 
-import Control.LVish
-import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import           Control.LVish
+import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import           Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import qualified Control.LVish.SchedIdempotent as L
 
-import qualified Data.Concurrent.SNZI as SNZI
-import qualified Data.Concurrent.LinkedMap as LM
-import qualified Data.Concurrent.SkipListMap as SLM
+import           TestHelpers as T
 
-import TestHelpers as T
+--------------------------------------------------------------------------------
 
 runTests :: IO ()
 runTests = defaultMain [tests]
@@ -746,15 +742,6 @@ show03 = show$ runParThenFreeze $ do
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  
   return mp
-
-case_show04 :: Assertion
-case_show04 = assertEqual "show for IStructure" "{IStructure: Just 33, Just 44}" show04
-show04 :: String
-show04 = show$ runParThenFreeze $ do
-  ist <- ISt.newIStructure 2
-  ISt.put ist 0 (33::Int)
-  ISt.put ist 1 (44::Int)
-  return ist
 
 case_show05 :: Assertion
 case_show05 = assertEqual "show for PureSet" "{ISet: 33, 44}" (show show05)

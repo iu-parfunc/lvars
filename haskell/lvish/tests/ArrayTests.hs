@@ -212,4 +212,12 @@ v9g = runParIO$ do
   loop 0 0
 
 
+case_show04 :: Assertion
+case_show04 = assertEqual "show for IStructure" "{IStructure: Just 33, Just 44}" show04
+show04 :: String
+show04 = show$ runParThenFreeze $ do
+  ist <- ISt.newIStructure 2
+  ISt.put ist 0 (33::Int)
+  ISt.put ist 1 (44::Int)
+  return ist
 
