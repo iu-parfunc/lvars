@@ -73,5 +73,44 @@ p2 = do
   hello <- liftST$ readSTRef r
   return$ hello ++ show z
 
+{--
+
+-- | Given a vector of "unknown" length, find the length.
+printLength :: VecT s Float (LV.Par d s2) String
+printLength = do
+  initVecT 120
+  v <- getVecT
+  let len = (length v)
+  return$ show len
+
+tpr :: String
+tpr = LV.runPar $ runVecT printLength
+
+
+mergeSort :: VecT s Int (LV.Par d s2) ()
+mergeSort = do
+  vec <- getVecT
+  let len = length vec
+  
+  if len > 1 then do
+    forkWithVec (len / 2)
+      mergeSort
+      mergeSort
+    z <- liftST$ freeze vec
+    return$ show z          
+           
+msd :: String
+
+msd = LV.runPar $ runVecT $ do
+  initVecT 4
+  v <- getVecT
+  liftST$ do
+    write v 0 137
+    write v 1 5
+    write v 2 120
+    write v 3 42
+  mergeSort
+--}
 
 main = $(defaultMainGenerator)
+
