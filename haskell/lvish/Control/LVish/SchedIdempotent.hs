@@ -677,14 +677,17 @@ unsafeName x = unsafePerformIO $ do
    return (hashStableName sn)
 
 {-# INLINE hpMsg #-}
+hpMsg :: String -> HandlerPool -> IO ()
 hpMsg msg hp = 
   when (dbgLvl >= 3) $ do
     s <- hpId_ hp
     logLnAt_ 3 $ msg++", pool identity= " ++s
 
 {-# NOINLINE hpId #-}   
+hpId :: HandlerPool -> String
 hpId hp = unsafePerformIO (hpId_ hp)
 
+hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
   sn1 <- makeStableName cnt
   sn2 <- makeStableName bag
