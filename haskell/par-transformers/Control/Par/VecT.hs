@@ -143,6 +143,9 @@ dropST = VecT . liftIO . unsafeSTToIO
 
 instance T.MonadTrans (VecT s elt) where
   lift m = VecT (lift m)
+
+instance MonadIO m => MonadIO (VecT s elt m) where
+  liftIO io = VecT (liftIO io)
     
 instance PC.ParIVar par =>
 -- instance PC.ParFuture par =>

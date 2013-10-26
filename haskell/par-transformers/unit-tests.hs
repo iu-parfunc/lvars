@@ -3,6 +3,7 @@
 module Main where
 
 import Control.LVish      as LV
+import Control.LVish.Internal ()
 import Data.LVar.IVar () -- Instances.
 import Control.Par.VecT   as V
 import Control.Par.StateT as S
@@ -13,6 +14,8 @@ import qualified Control.Monad.Trans.State.Strict as S
 import Control.Monad.ST        (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import Control.Monad.Trans (lift)
+
+import Control.Concurrent (threadDelay)
 
 import Data.STRef
 import Data.Vector.Mutable as MV
@@ -121,6 +124,8 @@ case_t4 = assertEqual "test fetching a vector length"
           "120" t4
        
 -- | Try to forkWithVec on a stack of VecT
+-- 
+-- BUG: This could output two different results depending on data races.
 p5 :: VecT s2 Int (VecT s1 Int (LV.Par d s0)) String
 p5 = do
   initVecT 10
@@ -134,7 +139,11 @@ p5 = do
   forkWithVec 5
     (do vo1 <- getVecT
         liftST$ do write vo1 0 5
-        lift$ liftST$ write vi 1 120)
+        -- liftIO$ threadDelay $ 1  -- This will let us witness nondeterminism
+        --                          -- in a few hundred repetitions.
+        liftIO$ threadDelay $ 0  -- This is even better.
+        -- VERY BAD: this is a hole:
+        lift$ liftST$ write vi 0 99)
     (do vo2 <- getVecT
         liftST$ do write vo2 0 120
         lift$ liftST$ write vi 0 5)
