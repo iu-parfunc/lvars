@@ -35,9 +35,11 @@ Library
                  Control.Par.StateT
                  
                  Control.Par.VecT
+                 Control.LVish.ParVec
  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
+--                 Control.Par.Pedigree
 
                  -- Deprecated AList interface
    --              Control.Par.AList,
@@ -59,8 +61,7 @@ Library
                , transformers >= 0.2
                , vector       >= 0.9
                , ghc-prim 
-
---               , lvish
+               , lvish        >= 1.0.0.4
 
   ghc-options: -O2
   Other-modules:
