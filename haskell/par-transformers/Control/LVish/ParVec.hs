@@ -27,13 +27,12 @@ module Control.LVish.ParVec
          -- * Accessing the threaded Vector state
          getVec, initVec,
          
-         -- * Working with ST
-         liftST
+         -- * Working with ST and other lifts
+         liftST, liftPar
        -- , dropST
        )
        where
 
-import Control.LVish (Par)
 import Control.Monad
 import Control.Monad.IO.Class
 import qualified Control.Monad.Trans as T
@@ -50,9 +49,10 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
+import Control.LVish (Par)
 import qualified Control.Par.Class as PC
 import qualified Control.LVish as LV
--- import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
+import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 -- import Data.LVar.IVar ()
 
 --------------------------------------------------------------------------------
@@ -120,10 +120,10 @@ forkWithVec mid (ParVec lef) (ParVec rig) = ParVec $ do
   vec <- S.get
   let lvec = slice 0 mid vec
       rvec = slice mid (length vec - mid) vec
-  lv <- lift$ PC.spawn_$ S.evalStateT lef lvec
+  lv <- lift$ IV.spawn_$ S.evalStateT lef lvec
   S.put rvec
   rx <- rig                     -- Do the R one on this thread.
-  lx <- lift$ PC.get lv         -- Wait for the forked thread to finish.
+  lx <- lift$ IV.get lv         -- Wait for the forked thread to finish.
   S.put vec                     -- Put the whole vec back in place.
   return (lx,rx)
 
@@ -139,6 +139,10 @@ liftST st =
    -- But we can't assume that.
    thunk = unsafePerformIO io
    io    = unsafeSTToIO st 
+
+-- | Lift an ordinary `Par` computation into `VecPar`.
+liftPar :: Par d s a -> ParVec s1 elt d s a 
+liftPar m = ParVec (lift m)
 
 -- -- | Rather than lifting ST into the ParVec, drop it into the underlying `par` monad as IO.
 -- --   In some situations this might be more efficient.   

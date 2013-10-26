@@ -4,7 +4,7 @@ module Main where
 
 import Control.LVish      as LV
 import Control.LVish.Internal ()
-import Data.LVar.IVar () -- Instances.
+import qualified Data.LVar.IVar as IV
 import Control.Par.StateT as S
 
 import Control.Monad
@@ -205,37 +205,39 @@ v2_p2 = do
   hello <- V2.liftST$ readSTRef r
   return$ hello ++ show z
 
--- -- | Attempt to stack a VecT ontop of another VecT
--- p3 :: VecT s2 Float (VecT s1 Int (LV.Par d s0)) String 
--- p3 = do
---   initVecT 10
---   vo <- getVecT
---   vi <- lift$ do
---     initVecT 20
---     vi <- getVecT            
---     V1.liftST$ write vi 0 5
---     return vi
+-- | Use IVars mixed with VecPar:
+v2_p3 :: V2.ParVec s1 Float d s2 String 
+v2_p3 = do  
+  V2.initVec 10
+  v0 <- V2.getVec
+  let st = V2.liftST
+      pr = V2.liftPar
+  st$ set v0 10
+  iv <- V2.liftPar IV.new
+  V2.forkWithVec 5
+     (do v1 <- V2.getVec
+         st$ do write v1 2 33.3
+         tmp <- st$ read v1 2
+         pr$ IV.put iv tmp                       
+         st$ write v1 2 (tmp + 2))
+     (do v2 <- V2.getVec
+         st$ write v2 2 44.3
+         tmp <- st$ read v2 2
+         inp <- pr$ IV.get iv
+         st$ write v2 2 (tmp + inp))
+  -- After the barrier we can access v0 again:
+  z   <- st$ freeze v0
+  val <- pr$ IV.get iv
+  return$ show (val, z)
   
---   V1.liftST$ write vo 0 120.0
-    
---   -- this line doesn't have a meaning, it is just here to make sure it
---   -- typechecks
---   let len = length vi
-  
---   voh <- V1.liftST$ read vo 0
---   vih <- lift$ V1.liftST$ read vi 0
-  
---   return$ show voh ++ show vih
-  
--- t3 :: String
--- t3 = LV.runPar $
---      runVecT $ runVecT p3
+v2_t3 :: String
+v2_t3 = LV.runPar $
+        V2.runParVec v2_p3
      
--- case_t3 :: Assertion
--- case_t3 = assertEqual "simple stacked VecT"
---           "120.05" t3
-
-
+case_v2_t3 :: Assertion
+case_v2_t3 = assertEqual "stacked Vec, ST, and Par effects"
+          "(33.3,fromList [10.0,10.0,35.3,10.0,10.0,10.0,10.0,77.6,10.0,10.0])"
+          v2_t3
 
 -- -- | Given a vector of "unknown" length, find the length.
 -- printLength :: VecT s Float (LV.Par d s2) String
@@ -333,5 +335,5 @@ msd = LV.runPar $ runVecT $ do
   mergeSort
 --}
 
---main = $(defaultMainGenerator)
-main = do putStrLn t5
+main = $(defaultMainGenerator)
+-- main = do putStrLn t5
