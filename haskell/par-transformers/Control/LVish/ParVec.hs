@@ -58,27 +58,25 @@ import qualified Control.LVish as LV
 import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 -- import Data.LVar.IVar ()
 
+unsafeCast :: ST s1 a -> ST s2 a
+unsafeCast = unsafeIOToST . unsafeSTToIO
+
 --------------------------------------------------------------------------------
 
-class STSplittable (ty :: *) where
-  type SplitIdx ty :: * 
-  type Session  ty :: *  -- To extract the 's' param.
-  type StripSession ty :: *
-  type WithSession newS ty :: * 
-  splitST :: SplitIdx ty -> ty -> (ty,ty)
+class STSplittable (ty :: * -> * -> *) where
+  type SplitIdx ty :: *
 
-  unsafeCastSession :: ty -> WithSession s2 ty
+  splitST :: SplitIdx ty -> ty s a -> (ty s a, ty s a)
+
+  unsafeCastSession :: ty s1 a -> ty s2 a
 
 -- | Ways to split a vector.  For now we only allow splitting into two pieces at a
 -- given index.  In the future, other ways of partitioning the set of elements may be
 -- possible.
 newtype VecSplit = SplitTwo Int
 
-instance STSplittable (STVector s a) where
-  type SplitIdx (STVector s a) = Int
-  type Session  (STVector s a) = s
-  type StripSession (STVector s a) = STVector () a
-  type WithSession s2 (STVector s a) = STVector s2 a  
+instance STSplittable MVector where
+  type SplitIdx MVector = Int
   splitST mid vec = 
     let lvec = slice 0 mid vec
         rvec = slice mid (length vec - mid) vec
@@ -86,33 +84,36 @@ instance STSplittable (STVector s a) where
 
   unsafeCastSession = error "FINISHME - STVector unsafeCastSession"
 
--- instance (STSplittable a, STSplittable b) => STSplittable (a,b) where
---   type SplitIdx (a,b) = (SplitIdx a, SplitIdx b)
---   type Session  (a,b) = Session a
--- --  type Session  (a,b) = Session a ~ Session b
---   -- We need something like this:
--- --  type Session  (a,b) = ((Session b ~ Session a) => Session a)
---   splitST (spltA,spltB) (a,b) = 
---     let (a',a'') = splitST spltA a 
---         (b',b'') = splitST spltB b
---     in ((a',b'), (a'',b''))
+-- data STTup2 s (a,b) = (s ~ Session b, s ~ Session a) => STTup2 !a !b
 
+type family Fst ty :: *
+type instance Fst (a,b) = a
 
-data STTup2 s a b = (s ~ Session b, s ~ Session a) => STTup2 !a !b
+type family Snd ty :: *
+type instance Snd (a,b) = b
+
+-- data STTup2 s tup = (s ~ Session (Fst tup), s ~ Session (Snd tup)) => STTup2 !(Fst tup) !(Snd tup)
+data STTup2 s tup = STTup2 !(Fst tup) !(Snd tup)
 -- I haven't figured out how to get this to work with raw, naked tuples yet.  So for
 -- now, `STTup2`.
 
-instance (STSplittable a, STSplittable b) => STSplittable (STTup2 s a b) where
-  type SplitIdx (STTup2 s a b) = (SplitIdx a, SplitIdx b)
-  type Session  (STTup2 s a b) = s
-  type StripSession (STTup2 s a b) = (STTup2 () a b)
-  type WithSession s2 (STTup2 s a b) = (STTup2 s2 a b)
-  splitST (spltA,spltB) (STTup2 a b) = 
-    let (a',a'') = splitST spltA a 
-        (b',b'') = splitST spltB b
-    in ((STTup2 a' b'), (STTup2 a'' b''))
+instance (Show (Fst tup), Show (Snd tup)) => Show (STTup2 s tup) where
+  show (STTup2 a b) = "("++show a++","++show b++")"
 
-  unsafeCastSession = error "FINISHME - STTup2 unsafeCastSession"
+test0 :: STTup2 s (Char,String)
+test0 = STTup2 'i' "hi"
+
+
+-- instance (STSplittable (Fst tup), STSplittable (Snd tup)) => STSplittable STTup2 where
+--   type SplitIdx STTup2 = (SplitIdx (Fst tup), SplitIdx (Snd tup))
+
+  -- splitST (spltA,spltB) (STTup2 a b) = 
+  --   let (a',a'') = splitST spltA a 
+  --       (b',b'') = splitST spltB b
+  --   in ((STTup2 a' b'), (STTup2 a'' b''))
+  -- unsafeCastSession = error "FINISHME - STTup2 unsafeCastSession"
+
+{-
 
 -- TEST:
 -- type Tup s = (STVector s Int, STVector s Float)
@@ -120,6 +121,9 @@ type Tup s = STTup2 s (STVector s Int) (STVector s Float)
 type Foo = Session (Tup RealWorld)
 -- Make sure we can "roundtrip" and get out the right thing:
 _ = (undefined :: RealWorld) :: Foo
+-}
+
+{-
 
 --------------------------------------------------------------------------------
 
@@ -218,8 +222,8 @@ forkWithVec spltidx (ParVec lef) (ParVec rig) = ParVec $ do
   -- return (lx,rx)
   undefined
 
-unsafeCast :: ST s1 a -> ST s2 a
-unsafeCast = unsafeIOToST . unsafeSTToIO
+-}
+
 
 {-
 
@@ -294,3 +298,4 @@ p1 = do
   readSTRef r
 
 -}
+
