@@ -32,7 +32,8 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.LVish.MonadToss
 import Control.LVish (Par)
-  
+
+import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!  FIXME.  We can't keep this from escaping.
 import Data.IORef
 import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
