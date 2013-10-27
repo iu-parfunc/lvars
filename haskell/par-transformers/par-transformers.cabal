@@ -33,9 +33,10 @@ Library
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT
+                 Control.LVish.ParST
                  
                  Control.Par.VecT
-                 Control.LVish.ParVec
+
  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
