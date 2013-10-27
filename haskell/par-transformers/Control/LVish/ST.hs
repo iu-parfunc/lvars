@@ -22,21 +22,17 @@
 -- monad-transformer stack, and is hard-wired to use the "Control.LVish" version of
 -- the `Par` monad underneath.
 
-module Control.LVish.ParST
-       -- (
-       --   -- * The monad transformer: a dischargable effect
-       --   ParST, runParST,
+module Control.LVish.ST
+       (
+         -- * The monad transformer: a dischargable effect
+         ParST, runParST,
 
-       --   -- * An alternate fork operation 
-       --   forkWithVec,
+         -- * An alternate fork operation 
+         forkWithVec,
 
-       --   -- * Accessing the threaded Vector state
-       --   getVec, initVec,
-         
-       --   -- * Working with ST and other lifts
-       --   liftST, liftPar
-       -- -- , dropST
-       -- )
+         -- * Working with ST and other lifts
+         liftST, liftPar
+       )
        where
 
 import Control.Monad
@@ -223,23 +219,6 @@ instance PC.ParIVar (ParST sttt d s) where
       return res
   new       = ParST$ lift PC.new
   put_ iv v = ParST$ lift$ PC.put_ iv v
-
---------------------------------------------------------------------------------
--- Convenience interface ONE VECTOR state:
---------------------------------------------------------------------------------
-
-
--- | Restricted version of `runParST` which initialized the state with a single,
--- boxed vector of a given size.  All elements start uninitialized.
-runParVec :: forall elt s2 det ans .
-             Int
-             -> (forall s1 . ParST (MVectorFlp elt s1) det s2 ans)
-             -> Par det s2 ans
-runParVec size comp = 
-  runParST (error "runParVec -- this initial value should be unused.") $ do 
-    vec <- liftST $ MV.new size
-    ParST $ S.put (VFlp vec)
-    comp
 
 
 --------------------------------------------------------------------------------
