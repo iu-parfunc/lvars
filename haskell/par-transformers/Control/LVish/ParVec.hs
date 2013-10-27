@@ -5,6 +5,9 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
+{-# LANGUAGE GADTs #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -17,20 +20,20 @@
 -- the `Par` monad underneath.
 
 module Control.LVish.ParVec
-       (
-         -- * The monad transformer: a dischargable effect
-         ParVec, runParVec,
+       -- (
+       --   -- * The monad transformer: a dischargable effect
+       --   ParVec, runParVec,
 
-         -- * An alternate fork operation 
-         forkWithVec,
+       --   -- * An alternate fork operation 
+       --   forkWithVec,
 
-         -- * Accessing the threaded Vector state
-         getVec, initVec,
+       --   -- * Accessing the threaded Vector state
+       --   getVec, initVec,
          
-         -- * Working with ST and other lifts
-         liftST, liftPar
-       -- , dropST
-       )
+       --   -- * Working with ST and other lifts
+       --   liftST, liftPar
+       -- -- , dropST
+       -- )
        where
 
 import Control.Monad
@@ -38,7 +41,7 @@ import Control.Monad.IO.Class
 import qualified Control.Monad.Trans as T
 import qualified Control.Monad.Trans.State.Strict as S
 import Control.Monad.ST        (ST)
-import Control.Monad.ST.Unsafe (unsafeSTToIO)
+import Control.Monad.ST.Unsafe (unsafeSTToIO, unsafeIOToST)
 import Control.Monad.Trans (lift)
 
 import Data.STRef
@@ -57,6 +60,69 @@ import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 
 --------------------------------------------------------------------------------
 
+class STSplittable (ty :: *) where
+  type SplitIdx ty :: * 
+  type Session  ty :: *  -- To extract the 's' param.
+  type StripSession ty :: *
+  type WithSession newS ty :: * 
+  splitST :: SplitIdx ty -> ty -> (ty,ty)
+
+  unsafeCastSession :: ty -> WithSession s2 ty
+
+-- | Ways to split a vector.  For now we only allow splitting into two pieces at a
+-- given index.  In the future, other ways of partitioning the set of elements may be
+-- possible.
+newtype VecSplit = SplitTwo Int
+
+instance STSplittable (STVector s a) where
+  type SplitIdx (STVector s a) = Int
+  type Session  (STVector s a) = s
+  type StripSession (STVector s a) = STVector () a
+  type WithSession s2 (STVector s a) = STVector s2 a  
+  splitST mid vec = 
+    let lvec = slice 0 mid vec
+        rvec = slice mid (length vec - mid) vec
+    in (lvec,rvec)
+
+  unsafeCastSession = error "FINISHME - STVector unsafeCastSession"
+
+-- instance (STSplittable a, STSplittable b) => STSplittable (a,b) where
+--   type SplitIdx (a,b) = (SplitIdx a, SplitIdx b)
+--   type Session  (a,b) = Session a
+-- --  type Session  (a,b) = Session a ~ Session b
+--   -- We need something like this:
+-- --  type Session  (a,b) = ((Session b ~ Session a) => Session a)
+--   splitST (spltA,spltB) (a,b) = 
+--     let (a',a'') = splitST spltA a 
+--         (b',b'') = splitST spltB b
+--     in ((a',b'), (a'',b''))
+
+
+data STTup2 s a b = (s ~ Session b, s ~ Session a) => STTup2 !a !b
+-- I haven't figured out how to get this to work with raw, naked tuples yet.  So for
+-- now, `STTup2`.
+
+instance (STSplittable a, STSplittable b) => STSplittable (STTup2 s a b) where
+  type SplitIdx (STTup2 s a b) = (SplitIdx a, SplitIdx b)
+  type Session  (STTup2 s a b) = s
+  type StripSession (STTup2 s a b) = (STTup2 () a b)
+  type WithSession s2 (STTup2 s a b) = (STTup2 s2 a b)
+  splitST (spltA,spltB) (STTup2 a b) = 
+    let (a',a'') = splitST spltA a 
+        (b',b'') = splitST spltB b
+    in ((STTup2 a' b'), (STTup2 a'' b''))
+
+  unsafeCastSession = error "FINISHME - STTup2 unsafeCastSession"
+
+-- TEST:
+-- type Tup s = (STVector s Int, STVector s Float)
+type Tup s = STTup2 s (STVector s Int) (STVector s Float)
+type Foo = Session (Tup RealWorld)
+-- Make sure we can "roundtrip" and get out the right thing:
+_ = (undefined :: RealWorld) :: Foo
+
+--------------------------------------------------------------------------------
+
 -- | The ParVec monad.  It uses the StateT monad transformer to layer
 -- a state of type (STVector s elt) on top of an inner monad, `Control.LVish.Par`.
 --
@@ -66,42 +132,46 @@ import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 -- 
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
-newtype ParVec s1 elt det s2 ans = ParVec ((S.StateT (STVector s1 elt) (Par det s2)) ans)
+newtype ParVec stState det s2 ans =
+        ParVec ((S.StateT stState (Par det s2)) ans)
  deriving (Monad, Functor)
 
 -- | @runParVec@ discharges the extra state effect leaving the the underlying par
 -- Computation -- just like `runStateT`.  Here, using the standard trick runParVec has
 -- a rank-2 type, with a phantom type 's'
-runParVec :: forall s2 det ans elt .
-             (forall s1 . ParVec s1 elt det s2 ans) -> Par det s2 ans
+runParVec :: forall stt s2 det ans .
+             stt 
+             -> (forall s1 . (Session stt ~ s1) =>
+                             ParVec stt det s2 ans)
+             -> Par det s2 ans
 -- Here we're just using the ParVec value constructor tag to
 -- destructure the argument to runParVec.  The 'st' in (ParVec st) is
 -- of the type ((S.StateT (STVector s elt) ParIO) a).  The
 -- unsafePerformIO lets us get the needed 'a' out of an IO
 -- computation.
-runParVec (ParVec st) = unsafePerformIO io
+runParVec initVal (ParVec st) = unsafePerformIO io
  where
    -- Create a new mutable vector of length 0 and do a runStateT with
    -- it, getting back a monadic value of type ParIO, which we then
    -- run, getting a value and a final state.  We keep the value and
    -- throw away the state.
-   io = do vec <- MV.new 0 -- :: IO (STVector RealWorld elt)
-           let xm :: Par det s2 (ans, STVector RealWorld elt)
-               xm = S.runStateT st vec
+   io = do 
+           let xm :: Par det s2 (ans, stt)
+               xm = S.runStateT st initVal
                xm' = xm >>= (return . fst)
            return xm'
-           
+
 -- | getVec is a `ParVec` computation that results in the current
 -- value of the state, which is of type 'STVector s elt'.
-getVec :: ParVec s1 elt det s2 (STVector s1 elt)
-getVec = ParVec S.get
+reify :: ParVec stt det s2 stt
+reify = ParVec S.get
 
 -- | initVec creates a new mutable vector and returns a `ParVec`
 -- computation with that new mutable vector's state as its state.
-initVec :: Int -> ParVec s1 elt det s2 ()
-initVec size = do
-  vec <- liftST $ MV.new size
-  ParVec $ S.put vec
+install :: stt -> ParVec stt det s2 ()
+install val = ParVec (S.put val)
+
+
 
 -- | @forkWithVec@ takes a split point and two ParVec computations.  It
 -- gets the state of the current computation, which is a vector, and
@@ -111,21 +181,47 @@ initVec size = do
 --
 -- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
 -- `fork`.
-forkWithVec :: forall elt a b s0 s2 det . (Eq a) =>
-               Int
-            -> (forall sl . ParVec sl elt det s2 a) -- ^ Left child computation.
-            -> (forall sr . ParVec sr elt det s2 b) -- ^ Right child computation.
-            -> ParVec s0 elt det s2 (a,b)
-forkWithVec mid (ParVec lef) (ParVec rig) = ParVec $ do
-  vec <- S.get
-  let lvec = slice 0 mid vec
-      rvec = slice mid (length vec - mid) vec
-  lv <- lift$ IV.spawn_$ S.evalStateT lef lvec
-  S.put rvec
-  rx <- rig                     -- Do the R one on this thread.
-  lx <- lift$ IV.get lv         -- Wait for the forked thread to finish.
-  S.put vec                     -- Put the whole vec back in place.
-  return (lx,rx)
+forkWithVec :: forall a b s2 det stt stt1 stt2 .
+               (Eq a, STSplittable stt) =>
+               (SplitIdx stt)
+            -> (forall sl . ParVec (WithSession sl stt) det s2 a) -- ^ Left child computation.
+            -> (forall sr . ParVec (WithSession sr stt) det s2 b) -- ^ Right child computation.
+            -> ParVec stt det s2 (a,b)
+
+-- forkWithVec :: forall a b s2 det stt stt1 stt2 .
+--                (Eq a, STSplittable stt, STSplittable stt1, STSplittable stt2,
+--                       StripSession stt1 ~ StripSession stt,
+--                       StripSession stt2 ~ StripSession stt) =>
+--                (SplitIdx stt)
+--             -> (forall sl . (sl ~ Session stt1) =>
+--                             ParVec stt1 det s2 a) -- ^ Left child computation.
+--             -> (forall sr . (sr ~ Session stt2) =>
+--                             ParVec stt2 det s2 b) -- ^ Right child computation.
+--             -> ParVec stt det s2 (a,b)
+forkWithVec spltidx (ParVec lef) (ParVec rig) = ParVec $ do
+  snap <- S.get
+  let slice1, slice2 :: stt
+      (slice1,slice2) = splitST spltidx snap
+      
+  -- lv <- lift$ IV.spawn_$ S.evalStateT lef left
+  lv <- lift$ IV.spawn_$ S.evalStateT lef (unsafeCastSession slice1)
+  -- lv <- lift$ IV.spawn_$ S.evalStateT lef undefined
+  
+  -- S.put right
+  let -- rig' :: S.StateT (WithSession (Session stt) stt) (Par det s2) b
+      -- rig' :: S.StateT stt (Par det s2) b
+      -- rig' = rig
+      
+  -- rx <- rig                     -- Do the R one on this thread.
+  -- lx <- lift$ IV.get lv         -- Wait for the forked thread to finish.
+  -- S.put snap                    -- Put the whole state back in place.
+  -- return (lx,rx)
+  undefined
+
+unsafeCast :: ST s1 a -> ST s2 a
+unsafeCast = unsafeIOToST . unsafeSTToIO
+
+{-
 
 -- | Allow `ST` computations inside `ParVec` computations.
 --   This operation has some overhead. 
@@ -181,6 +277,8 @@ instance PC.ParIVar par =>
   put_ iv v = ParVec$ lift$ PC.put_ iv v
   
 -}
+
+
 --------------------------------------------------------------------------------
 -- Tests and Scrap:
 --------------------------------------------------------------------------------
@@ -195,3 +293,4 @@ p1 = do
   writeSTRef r "hello"
   readSTRef r
 
+-}
