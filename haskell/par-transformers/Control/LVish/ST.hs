@@ -28,7 +28,7 @@ module Control.LVish.ST
          ParST, runParST,
 
          -- * An alternate fork operation 
-         forkWithVec,
+         forkSTSplit,
 
          -- * Working with ST and other lifts
          liftST, liftPar,
@@ -184,13 +184,13 @@ install val = ParST (S.put val)
 -- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
 -- `fork`.  So the continuation of @forkWithVec@ will not run until both child
 -- computations return, and are thus done accessing the state.
-forkWithVec :: forall a b s0 s2 det stt.
+forkSTSplit :: forall a b s0 s2 det stt.
                (Eq a, STSplittable stt) =>
                (SplitIdx stt)
             -> (forall sl . ParST (stt sl) det s2 a) -- ^ Left child computation.
             -> (forall sr . ParST (stt sr) det s2 b) -- ^ Right child computation.
             -> ParST (stt s0) det s2 (a,b)
-forkWithVec spltidx (ParST lef) (ParST rig) = ParST $ do
+forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ do
   snap <- S.get
   let slice1, slice2 :: stt s0
       (slice1,slice2) = splitST spltidx snap

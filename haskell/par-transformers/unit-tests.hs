@@ -41,7 +41,7 @@ import qualified Control.LVish.ST.Vec as V2
 --------------------------------------------------------------------------------
 
 case_t2 :: Assertion
-case_t2 = assertEqual "basic forkWithVec usage"
+case_t2 = assertEqual "basic forkSTSplit usage"
             "hello fromList [0.0,0.0,35.3,0.0,0.0,0.0,0.0,46.3,0.0,0.0]" t2
 
 t2 :: String
@@ -57,7 +57,7 @@ p2 = do
 
   V1.liftST$ set v0 0
 
-  forkWithVec 5
+  V1.forkWithVec 5
      (do v1 <- getVecT
          -- We can't protect against this sort of out-of-bounds error
          -- at compile time -- for that we'd need dependent types.
@@ -129,7 +129,7 @@ case_t4 :: Assertion
 case_t4 = assertEqual "test fetching a vector length"
           "120" t4
        
--- | Try to forkWithVec on a stack of VecT
+-- | Try to forkSTSplit on a stack of VecT
 -- 
 -- BUG: This could output two different results depending on data races.
 p5 :: VecT s2 Int (VecT s1 Int (LV.Par d s0)) String
@@ -142,7 +142,7 @@ p5 = do
   vi <- lift$ getVecT
   lift$ V1.liftST$ set vi 1
   
-  forkWithVec 5
+  V1.forkWithVec 5
     (do vo1 <- getVecT
         V1.liftST$ do write vo1 0 5
         -- liftIO$ threadDelay $ 1  -- This will let us witness nondeterminism
@@ -168,7 +168,7 @@ t5 = LV.runPar $ runVecT $ runVecT p5
 --------------------------------------------------------------------------------
 
 case_v2_t2 :: Assertion
-case_v2_t2 = assertEqual "basic forkWithVec usage"
+case_v2_t2 = assertEqual "basic forkSTSplit usage"
             "hello fromList [0.0,0.0,35.3,0.0,0.0,0.0,0.0,46.3,0.0,0.0]" v2_t2
 
 v2_t2 :: String
@@ -183,7 +183,7 @@ v2_p2 = do
 
   V2.liftST$ set v0 0
 
-  V2.forkWithVec 5
+  V2.forkSTSplit 5
      (do V0.VFlp v1 <- get
          V2.liftST$ do write v1 2 33.3
                        tmp <- read v1 2
@@ -215,7 +215,7 @@ v2_p3 = do
   V2.set 10
   v0 <- V2.reify
   iv <- V2.liftPar IV.new
-  V2.forkWithVec 5
+  V2.forkSTSplit 5
      (do 
          V2.write 2 33.3
          tmp <- V2.read 2
@@ -247,7 +247,7 @@ v2_p3 = do
 -- case_t4 = assertEqual "test fetching a vector length"
 --           "120" t4
        
--- -- | Try to forkWithVec on a stack of VecT
+-- -- | Try to forkSTSplit on a stack of VecT
 -- -- 
 -- -- BUG: This could output two different results depending on data races.
 -- p5 :: VecT s2 Int (VecT s1 Int (LV.Par d s0)) String
@@ -260,7 +260,7 @@ v2_p3 = do
 --   vi <- lift$ getVecT
 --   lift$ V1.liftST$ set vi 1
   
---   forkWithVec 5
+--   forkSTSplit 5
 --     (do vo1 <- getVecT
 --         V1.liftST$ do write vo1 0 5
 --         -- liftIO$ threadDelay $ 1  -- This will let us witness nondeterminism
@@ -297,7 +297,7 @@ mergeSort = do
   if length vi <= 1 then
     return ()
    else do
-    forkWithVec 
+    forkSTSplit 
 
 -}
 
@@ -309,7 +309,7 @@ mergeSort = do
   let len = length vec
   
   if len > 1 then do
-    forkWithVec (len / 2)
+    forkSTSplit (len / 2)
       mergeSort
       mergeSort
     z <- liftST$ freeze vec

@@ -15,7 +15,7 @@ module Control.LVish.ST.Vec
          runParVec, runParVec',
 
          -- * Reexported from the generic interface
-         forkWithVec, liftPar, liftST, 
+         forkSTSplit, liftPar, liftST, 
          
          -- * Retrieving an explict pointer to the Vector
          reify, 
@@ -99,7 +99,7 @@ parMapM fn = do
         | otherwise = do
             let (iters2,extra) = iters `quotRem` 2
                 iters1 = iters2+extra
-            forkWithVec iters1
+            forkSTSplit iters1
               (loop iters1)
               (loop iters2)
             return ()
@@ -124,7 +124,7 @@ parMapM fn = do
 --       | otherwise = do
 --           let (iters2,extra) = iters `quotRem` 2
 --               iters1 = iters2+extra
---           forkWithVec iters1
+--           forkSTSplit iters1
 --                       (loop iters1)
 --                       (loop iters2)
 --           undefined

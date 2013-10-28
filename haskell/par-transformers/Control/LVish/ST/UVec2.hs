@@ -9,16 +9,16 @@
 --   threaded through the monad.
 
 module Control.LVish.ST.UVec2
-       -- ( -- * A type alias for parallel computations with @Vector@ state
-       --   ParVec2, 
-       --   runParVec2, runParVec2',
+       ( -- * A type alias for parallel computations with @Vector@ state
+         ParVec2, 
+         runParVec2, runParVec2',
 
-         -- -- * Reexported from the generic interface
-         -- forkWithVec, liftPar, liftST, 
+         -- * Reexported from the generic interface
+         forkSTSplit, liftPar, liftST, 
        
-       --   -- * Retrieving an explict pointer to the Vector
-       --   reify, liftST,
-       -- )
+         -- * Retrieving an explict pointer to the Vector
+         reify, 
+       )
        where
 
 import Control.LVish (Par, Determinism(Det), runPar)
