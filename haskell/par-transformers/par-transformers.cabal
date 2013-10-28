@@ -32,11 +32,13 @@ Library
 --                 Control.Par.Combinator,
 
                  -- State on top of Par is generally useful, but experimental
-                 Control.Par.StateT
-                 
+                 Control.Par.StateT                 
                  Control.Par.VecT
-                 Control.LVish.ParVec
- 
+
+                 Control.LVish.ST
+                 Control.LVish.ST.Vec
+                 Control.LVish.ST.Vec2
+                 
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
