@@ -3,7 +3,7 @@
 module Main where
 
 import Control.LVish      as LV
-import Control.LVish.Internal ()
+import Control.LVish.Unsafe ()
 import qualified Data.LVar.IVar as IV
 import Control.Par.StateT as S
 
@@ -13,6 +13,7 @@ import qualified Control.Monad.Trans.State.Strict as S
 import Control.Monad.ST        (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import Control.Monad.Trans (lift)
+import Control.Monad.State (get,put)
 
 import Control.Concurrent (threadDelay)
 
@@ -32,7 +33,8 @@ import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (defaultMainGenerator)
 
 import Control.Par.VecT as V1
-import qualified Control.LVish.ParVec as V2
+import qualified Control.LVish.ST     as V0
+import qualified Control.LVish.ST.Vec as V2
 
 --------------------------------------------------------------------------------
 -- Tests for VecT (V1)
@@ -171,73 +173,64 @@ case_v2_t2 = assertEqual "basic forkWithVec usage"
 
 v2_t2 :: String
 v2_t2 = LV.runPar $ 
-        V2.runParVec v2_p2
+        V2.runParVec 10 v2_p2
 
 -- | A simple test that modifies two locations in a vector, multiple times, in parallel.
 v2_p2 :: V2.ParVec s1 Float d s2 String
 v2_p2 = do
   r <- V2.liftST$ newSTRef "hi"
-  V2.initVec 10
-  v0 <- V2.getVec
+  V0.VFlp v0 <- get
 
   V2.liftST$ set v0 0
 
   V2.forkWithVec 5
-     (do v1 <- V2.getVec
-         -- We can't protect against this sort of out-of-bounds error
-         -- at compile time -- for that we'd need dependent types.
-         -- V2.liftST$ write v1 9 0 -- BAD! out of bounds
+     (do V0.VFlp v1 <- get
          V2.liftST$ do write v1 2 33.3
                        tmp <- read v1 2
-                       write v1 2 (tmp + 2)
-     )
-     (do v2 <- V2.getVec
-         -- This, we actually *can* protect against at compile time.
+                       write v1 2 (tmp + 2))
+     (do V0.VFlp v2 <- get
          V2.liftST$ do write v2 2 44.3
                        tmp <- read v2 2
-                       write v2 2 (tmp + 2)         
-     )
-
+                       write v2 2 (tmp + 2))
   -- After the barrier we can access v0 again:
   z <- V2.liftST$ freeze v0
-
   V2.liftST$ writeSTRef r "hello "
   hello <- V2.liftST$ readSTRef r
   return$ hello ++ show z
 
--- | Use IVars mixed with VecPar:
-v2_p3 :: V2.ParVec s1 Float d s2 String 
-v2_p3 = do  
-  V2.initVec 10
-  v0 <- V2.getVec
-  let st = V2.liftST
-      pr = V2.liftPar
-  st$ set v0 10
-  iv <- V2.liftPar IV.new
-  V2.forkWithVec 5
-     (do v1 <- V2.getVec
-         st$ do write v1 2 33.3
-         tmp <- st$ read v1 2
-         pr$ IV.put iv tmp                       
-         st$ write v1 2 (tmp + 2))
-     (do v2 <- V2.getVec
-         st$ write v2 2 44.3
-         tmp <- st$ read v2 2
-         inp <- pr$ IV.get iv
-         st$ write v2 2 (tmp + inp))
-  -- After the barrier we can access v0 again:
-  z   <- st$ freeze v0
-  val <- pr$ IV.get iv
-  return$ show (val, z)
-  
 v2_t3 :: String
 v2_t3 = LV.runPar $
-        V2.runParVec v2_p3
+        V2.runParVec 10 v2_p3
      
 case_v2_t3 :: Assertion
 case_v2_t3 = assertEqual "stacked Vec, ST, and Par effects"
           "(33.3,fromList [10.0,10.0,35.3,10.0,10.0,10.0,10.0,77.6,10.0,10.0])"
           v2_t3
+
+-- | Use IVars mixed with VecPar:
+v2_p3 :: V2.ParVec s1 Float d s2 String 
+v2_p3 = do  
+  let st = V2.liftST
+      pr = V2.liftPar
+  V2.set 10
+  v0 <- V2.reify
+  iv <- V2.liftPar IV.new
+  V2.forkWithVec 5
+     (do 
+         V2.write 2 33.3
+         tmp <- V2.read 2
+         pr$ IV.put iv tmp
+         V2.write 2 (tmp + 2))
+     (do 
+         V2.write 2 44.3
+         tmp <- V2.read 2
+         inp <- pr$ IV.get iv
+         V2.write 2 (tmp + inp))
+  -- After the barrier we can access v0 again:
+  z   <- st$ freeze v0
+  val <- pr$ IV.get iv
+  return$ show (val, z)
+  
 
 -- -- | Given a vector of "unknown" length, find the length.
 -- printLength :: VecT s Float (LV.Par d s2) String

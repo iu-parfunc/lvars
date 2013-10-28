@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | A convenience interface -- simply a restriction of `ParST` to the case
 --   of a single, boxed vector as the mutable state.
@@ -13,8 +14,11 @@ module Control.LVish.ST.Vec
          ParVec, 
          runParVec, runParVec',
 
+         -- * Reexported from the generic interface
+         forkWithVec, liftPar, liftST, 
+         
          -- * Retrieving an explict pointer to the Vector
-         reify, liftST,
+         reify, 
                 
          -- * Common vector operations
          write, read, length, swap,
@@ -22,10 +26,14 @@ module Control.LVish.ST.Vec
        )
        where
 
-import Control.LVish (Par, Determinism(Det), runPar)
+import Control.LVish (Par, Determinism(Det), runPar, for_)
 import Control.LVish.ST
 import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Mutable as MV
+
+import GHC.Conc (getNumProcessors)
+import System.IO.Unsafe (unsafeDupablePerformIO)
+
 import Prelude hiding (read, length, drop, take)
 
 --------------------------------------------------------------------------------
@@ -62,6 +70,74 @@ reify :: ParVec s1 elt det s2 (MV.STVector s1 elt)
 reify = do
   VFlp vec <- S.get
   return vec
+
+--------------------------------------------------------------------------------
+
+-- | Do an in-place parallel map on the vector state.
+--
+--   This function reserves the right to sequentialize some iterations.
+parMapM :: forall elt det s1 s2 .
+           (elt -> Par det s2 elt) -> ParVec s1 elt det s2 ()
+-- parMapM :: forall elt det s1 s2 .
+--            (forall s0 . elt -> ParVec s0 elt det s2 elt) -> ParVec s1 elt det s2 ()
+parMapM fn = do
+  VFlp vec <- S.get
+  -- vecParMap_ fn vec
+  -- return ()  
+  len <- length
+  let share = max 1 (len `quot` (numProcs * overPartition))
+      loop :: Int -> (forall s3 . ParVec s3 elt det s2 ())
+      loop iters
+        | iters <= share = 
+          -- Bottom out to a sequential loop:
+          for_ (0,iters) $ \ ind -> do  
+            x <- read ind
+            y <- liftPar $ fn x
+            write ind y
+            return ()
+          
+        | otherwise = do
+            let (iters2,extra) = iters `quotRem` 2
+                iters1 = iters2+extra
+            forkWithVec iters1
+              (loop iters1)
+              (loop iters2)
+            return ()
+  return ()
+  
+
+-- -- | In-place map over a mutable vector.
+-- vecParMap_ :: (elt -> ParST (stt s1) det s2 elt) -> MV.STVector s1 elt ->  ParVec s1 elt det s2 ()
+-- vecParMap_ fn vec = do  
+--   undefined
+--   where
+--     loop iters
+-- --      | end - strt < share =
+--       | iters <= share = 
+--         -- Bottom out to a sequential loop:
+-- --        for_ (strt,end) $ \ ind -> do
+--         for_ (0,iters) $ \ ind -> do  
+-- --          x <- read ind
+--           x <- liftST$ MV.read vec ind 
+--           y <- fn x
+--           liftST$ MV.write vec ind y
+--       | otherwise = do
+--           let (iters2,extra) = iters `quotRem` 2
+--               iters1 = iters2+extra
+--           forkWithVec iters1
+--                       (loop iters1)
+--                       (loop iters2)
+--           undefined
+    
+--     share = max 1 (len `quot` (numProcs * overPartition))
+--     -- (share,extra) = len `quotRem` (numProcs * overPartition)
+--     len = MV.length vec
+
+overPartition :: Int
+overPartition = 8
+
+numProcs :: Int
+numProcs = unsafeDupablePerformIO getNumProcessors
 
 --------------------------------------------------------------------------------
 
@@ -135,3 +211,5 @@ set val = do
 -- MV.unsafeCopy MV.unsafeNew MV.unsafeTake  
 unFlp :: MVectorFlp t t1 -> MV.MVector t1 t
 unFlp (VFlp v) = v
+
+

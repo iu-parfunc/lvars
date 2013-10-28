@@ -33,6 +33,9 @@ module Control.LVish.ST
          -- * Working with ST and other lifts
          liftST, liftPar,
 
+         --  Useful utilities
+--         vecParMap_, 
+         
          -- * Type class for valid states.
          STSplittable(..),
          
@@ -72,7 +75,7 @@ import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 
 unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
-
+  
 --------------------------------------------------------------------------------
 
 -- | The class of types that can be modified in ST computations, and whose state can
@@ -234,6 +237,9 @@ instance PC.ParIVar (ParST sttt d s) where
       return res
   new       = ParST$ lift PC.new
   put_ iv v = ParST$ lift$ PC.put_ iv v
+
+--------------------------------------------------------------------------------
+
 
 
 --------------------------------------------------------------------------------

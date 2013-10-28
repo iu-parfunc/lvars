@@ -13,6 +13,9 @@ module Control.LVish.ST.UVec
          ParVec, 
          runParVec, runParVec',
 
+         -- * Reexported from the generic interface
+         forkWithVec, liftPar, liftST, 
+         
          -- * Retrieving an explict pointer to the Vector
          reify, liftST,
                 

@@ -94,6 +94,9 @@ library
                     Data.LVar.Memo
                     Data.LVar.MemoCyc
                     -------------------------------------------
+                    -- Unsafe, only for debugging:
+                    Control.LVish.Unsafe                    
+                    -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:
                     Data.LVar.Internal.Pure
@@ -126,7 +129,6 @@ library
                     Control.LVish.Types
                     Control.LVish.Basics
                     Control.LVish.Logical
-                    Control.LVish.Unsafe
 
   -- Other library packages from which modules are imported.
   build-depends: base    >= 4.6 && <= 4.8, 
