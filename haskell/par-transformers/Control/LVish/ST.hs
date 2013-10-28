@@ -65,8 +65,8 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import Control.LVish (Par)
+import qualified Control.LVish.Internal as LI
 import qualified Control.Par.Class as PC
-import qualified Control.LVish as LV
 import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
 -- import Data.LVar.IVar ()
 
@@ -75,18 +75,22 @@ unsafeCastST = unsafeIOToST . unsafeSTToIO
 
 --------------------------------------------------------------------------------
 
+-- | The class of types that can be modified in ST computations, and whose state can
+-- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
+-- subcomputation.
 class STSplittable (ty :: * -> *) where
+  -- | Something of type `SplitIdx` describes where and how to split the data into two pieces.
   type SplitIdx ty :: *
-
+  -- | `splitST` does the actual splitting.
   splitST :: SplitIdx ty -> ty s -> (ty s, ty s)
 
---  unsafeCastSession :: ty s1 -> ty s2
-
--- | Ways to split a vector.  For now we only allow splitting into two pieces at a
+-- | The ways to split a vector.  For now we only allow splitting into two pieces at a
 -- given index.  In the future, other ways of partitioning the set of elements may be
 -- possible.
-newtype VecSplit = SplitTwo Int
+-- newtype VecSplit = SplitAt Int
 
+-- | An annoying type alias simply for the purpose of arranging for the 's' parameter
+-- to be last.
 newtype MVectorFlp a s = VFlp (MVector s a)
 
 instance STSplittable (MVectorFlp a) where
@@ -96,12 +100,10 @@ instance STSplittable (MVectorFlp a) where
         rvec = slice mid (length vec - mid) vec
     in (VFlp lvec, VFlp rvec)
 
-unsafeCastSession :: (STSplittable t) => t s1 -> t s2 
-unsafeCastSession = error "FINISHME - unsafeCastSession"
-
+-- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter
+-- to be last.  
 data STTup2 (a :: * -> *) (b :: * -> *) (s :: *) =
      STTup2 !(a s) !(b s)
-
 -- I haven't figured out how to get this to work with raw, naked tuples yet.  So for
 -- now, `STTup2`.
 
@@ -116,11 +118,10 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
 --------------------------------------------------------------------------------
 
 -- | The ParST monad.  It uses the StateT monad transformer to layer
--- a state of type (STVector s elt) on top of an inner monad, `Control.LVish.Par`.
+-- a state of type on top of an inner monad, `Control.LVish.Par`.
 --
--- It, alas, has many type parameters.  `s1` and `elt` are for the `STVector`
--- computation (session and element type respectively).  `det` and `s2` are for the
--- underlying
+-- The first type parameter determines the type of state held.  The parameters `det`
+-- and `s2` are for the underlying `Par` monad.
 -- 
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
@@ -128,9 +129,9 @@ newtype ParST stState det s2 ans =
         ParST ((S.StateT stState (Par det s2)) ans)
  deriving (Monad, Functor)
 
--- | @runParST@ discharges the extra state effect leaving the the underlying par
--- Computation -- just like `runStateT`.  Here, using the standard trick runParST has
--- a rank-2 type, with a phantom type 's'
+-- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
+-- computation only -- just like `runStateT`.  Here, using the standard trick
+-- runParST has a rank-2 type, with a phantom type @s1@.
 runParST :: forall stt s0 s2 det ans .
              stt s0
              -> (forall s1 . ParST (stt s1) det s2 ans)
@@ -143,6 +144,7 @@ runParST initVal (ParST st) = unsafePerformIO io
                xm' = xm >>= (return . fst)
            return xm'
 
+-- | We use the generic interface for `put` and `get` on the entire (mutable) state.
 instance S.MonadState stts (ParST stts det s2) where
   get = reify
   put = install
@@ -158,20 +160,19 @@ install :: stt -> ParST stt det s2 ()
 install val = ParST (S.put val)
 
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
--- gets the state of the current computation, which is a vector, and
+-- gets the state of the current computation, for example a vector, and
 -- then divides up that state between the two other computations.
--- Writes to those two computations actually mutate the original
--- vector.
 --
+-- Writes in those two computations may actually mutate the original vector.  But
 -- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
--- `fork`.
+-- `fork`.  So the continuation of @forkWithVec@ will not run until both child
+-- computations return, and are thus done accessing the state.
 forkWithVec :: forall a b s0 s2 det stt.
                (Eq a, STSplittable stt) =>
                (SplitIdx stt)
             -> (forall sl . ParST (stt sl) det s2 a) -- ^ Left child computation.
             -> (forall sr . ParST (stt sr) det s2 b) -- ^ Right child computation.
             -> ParST (stt s0) det s2 (a,b)
-
 forkWithVec spltidx (ParST lef) (ParST rig) = ParST $ do
   snap <- S.get
   let slice1, slice2 :: stt s0
@@ -184,17 +185,11 @@ forkWithVec spltidx (ParST lef) (ParST rig) = ParST $ do
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead. 
 liftST :: ST s1 a -> ParST (stt s1) det s2 a
-liftST st =
-  seq thunk (return thunk)
+liftST st = ParST (lift (LI.liftIO io))
  where
-   -- WARNING: this requires locking on EACH unsafePerformIO.
-   -- This is inefficient IF the underlying 'par' actually would
-   -- have the capability to peform IO more efficiently.
-   -- But we can't assume that.
-   thunk = unsafePerformIO io
    io    = unsafeSTToIO st 
 
--- | Lift an ordinary `Par` computation into `VecPar`.
+-- | Lift an ordinary `Par` computation into `ParST`.
 liftPar :: Par d s a -> ParST stt1 d s a 
 liftPar m = ParST (lift m)
 
@@ -202,7 +197,7 @@ liftPar m = ParST (lift m)
 instance MonadIO (Par det s2) => MonadIO (ParST stt1 det s2) where
   liftIO io = ParST (liftIO io)
 
--- | An instance of `ParFuture` for @ParST@ does let us do arbitrary `fork`s at the
+-- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
 instance PC.ParFuture (ParST sttt d s) where
   -- | The `Future` type and `FutContents` constraint are the same as the underlying `Par` monad.
