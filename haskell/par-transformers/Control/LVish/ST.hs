@@ -24,14 +24,20 @@
 
 module Control.LVish.ST
        (
-         -- * The monad transformer: a dischargable effect
+         -- * The monad: a dischargable effect
          ParST, runParST,
 
          -- * An alternate fork operation 
          forkWithVec,
 
          -- * Working with ST and other lifts
-         liftST, liftPar
+         liftST, liftPar,
+
+         -- * Type class for valid states.
+         STSplittable(..),
+         
+         -- * Annoying newtypes and wrappers to take the @s@ param last:
+         MVectorFlp(..), STTup2(..)
        )
        where
 
