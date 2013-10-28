@@ -37,7 +37,7 @@ module Control.LVish.ST
          STSplittable(..),
          
          -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), STTup2(..)
+         MVectorFlp(..), UVectorFlp(..), STTup2(..)
        )
        where
 
@@ -57,7 +57,8 @@ import Control.Monad.ST.Unsafe (unsafeSTToIO, unsafeIOToST)
 import Control.Monad.Trans (lift)
 
 import Data.STRef
-import Data.Vector.Mutable as MV
+import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector.Unboxed.Mutable as MU
 import Data.Vector       (freeze)
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
@@ -68,7 +69,6 @@ import Control.LVish (Par)
 import qualified Control.LVish.Internal as LI
 import qualified Control.Par.Class as PC
 import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
--- import Data.LVar.IVar ()
 
 unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
@@ -91,14 +91,16 @@ class STSplittable (ty :: * -> *) where
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
-newtype MVectorFlp a s = VFlp (MVector s a)
+newtype MVectorFlp a s = VFlp (MV.MVector s a)
 
 instance STSplittable (MVectorFlp a) where
   type SplitIdx (MVectorFlp a) = Int
   splitST mid (VFlp vec) = 
-    let lvec = slice 0 mid vec
-        rvec = slice mid (length vec - mid) vec
+    let lvec = MV.slice 0 mid vec
+        rvec = MV.slice mid (MV.length vec - mid) vec
     in (VFlp lvec, VFlp rvec)
+
+------------------------------------------------------------
 
 -- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter
 -- to be last.  
@@ -114,6 +116,18 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
 
+------------------------------------------------------------
+
+-- | An annoying type alias simply for the purpose of arranging for the 's' parameter
+-- to be last.
+data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)  
+
+instance STSplittable (UVectorFlp a) where
+  type SplitIdx (UVectorFlp a) = Int
+  splitST mid (UFlp vec) = 
+    let lvec = MU.slice 0 mid vec
+        rvec = MU.slice mid (MU.length vec - mid) vec
+    in (UFlp lvec, UFlp rvec)
 
 --------------------------------------------------------------------------------
 
@@ -235,6 +249,4 @@ p1 = do
   r <- newSTRef "hi"
   writeSTRef r "hello"
   readSTRef r
-
-
 
