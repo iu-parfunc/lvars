@@ -37,9 +37,7 @@ Library
   Exposed-modules: 
            -- A class generalizing different levels of monad-par functionality:
            Control.Par.Class
-
-           -- A class providing unsafe functionality:
---           , Control.Par.Unsafe
+           Control.Par.Class.Unsafe
 
   Build-depends: base >= 4 && < 5
                , deepseq >= 1.1, ghc-prim

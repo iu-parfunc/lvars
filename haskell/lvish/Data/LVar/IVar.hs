@@ -62,6 +62,7 @@ import           GHC.Prim (unsafeCoerce#)
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PC
 #endif
 
 ------------------------------------------------------------------------------
@@ -207,5 +208,7 @@ instance PC.ParIVar (Par d s) where
   put_ = put_
   new = new
 
+instance PC.ParThreadSafe (Par d s) where
+  unsafeParIO = I.liftIO
 #endif
 

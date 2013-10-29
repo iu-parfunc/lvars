@@ -36,11 +36,15 @@ module Control.Par.Class
     --  Channels (Streams)
     --  , ParChan(..)
 
+  -- * Simple tracking of WHICH Par monads permit only threadsafe effects
+  , ParThreadSafe()
+    
   , NFData() -- This is reexported.
   )
 where
 
 import Control.DeepSeq
+import Control.Par.Class.Unsafe
 import GHC.Prim (Constraint)
 
 --------------------------------------------------------------------------------
