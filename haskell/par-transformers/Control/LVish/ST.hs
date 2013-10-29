@@ -68,10 +68,13 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
-import Control.LVish (Par)
+import Control.LVish (Par, for_)
 import qualified Control.LVish.Internal as LI
 import qualified Control.Par.Class as PC
 import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
+
+import GHC.Conc (getNumProcessors)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
@@ -241,6 +244,48 @@ instance PC.ParIVar (ParST sttt d s) where
 --------------------------------------------------------------------------------
 
 
+-- | Generic way to build an in-place map operation for a collection state.
+--
+--   This function reserves the right to sequentialize some iterations.
+mkParMapM :: forall elt det s1 s2 stt . (STSplittable stt) =>
+           -- (Int -> ST s1 elt) ->
+           -- (Int -> elt -> ST s1 ()) ->
+           -- (stt s1 -> ST s1 Int) ->
+              (forall s4 . Int ->        ParST (stt s4) det s2 elt)  -- ^ Reader
+           -> (forall s4 . Int -> elt -> ParST (stt s4) det s2 ())   -- ^ Writer 
+           -> (forall s4 .               ParST (stt s4) det s2 Int)  -- ^ Length
+           -> (Int -> SplitIdx stt)                                  -- ^ Split elements
+           -> (elt -> Par det s2 elt)                                -- ^ Fn to map over elmts.
+           -> ParST (stt s1) det s2 ()
+{-# INLINE mkParMapM #-}
+mkParMapM reader writer getsize mksplit fn = do
+  stt <- S.get
+  len <- getsize 
+  let share = max 1 (len `quot` (numProcs * overPartition))
+      loopmpm :: Int -> (forall s3 . ParST (stt s3) det s2 ())
+      loopmpm iters
+        | iters <= share = 
+          -- Bottom out to a sequential loop:
+          for_ (0,iters) $ \ ind -> do  
+            x <- reader ind
+            y <- liftPar$ fn x
+            writer ind y
+            return ()
+          
+        | otherwise = do
+            let (iters2,extra) = iters `quotRem` 2
+                iters1 = iters2+extra
+            forkSTSplit (mksplit iters1)
+              (loopmpm iters1)
+              (loopmpm iters2)
+            return ()
+  return ()
+
+overPartition :: Int
+overPartition = 8
+
+numProcs :: Int
+numProcs = unsafeDupablePerformIO getNumProcessors
 
 --------------------------------------------------------------------------------
 -- Tests and Scrap:

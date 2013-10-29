@@ -73,6 +73,8 @@ reify = do
 
 --------------------------------------------------------------------------------
 
+-- TODO: Redo this with the generic mkParMapM:
+
 -- | Do an in-place parallel map on the vector state.
 --
 --   This function reserves the right to sequentialize some iterations.
@@ -105,6 +107,10 @@ parMapM fn = do
             return ()
   return ()
   
+
+-- TODO: Parallel Fold!
+-- Actually, that's not inplace so it should go in generic "parallel-containers" module.
+
 
 -- -- | In-place map over a mutable vector.
 -- vecParMap_ :: (elt -> ParST (stt s1) det s2 elt) -> MV.STVector s1 elt ->  ParVec s1 elt det s2 ()
