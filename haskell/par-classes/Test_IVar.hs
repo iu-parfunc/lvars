@@ -8,7 +8,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
 
-{-# LANGUAGE GADTs #-} 
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE UndecidableInstances #-} 
 
 {-|
 
@@ -62,7 +63,8 @@ import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)
 
-import  Control.Par.Class as PC
+import Control.Par.Class (LVarSched(..), Proxy(..))
+import qualified Control.Par.Class as PC
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -150,10 +152,12 @@ new = do x <- PC.newLV (Proxy::Proxy (m(),(IORef (Maybe elm)),elm)) (newIORef No
 -- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- IVar.
-get :: LVarSched m => IVar m s a -> m a
-get (IVar iv) = getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
-        deltaThresh  x     = return $ Just x  -- always past threshold
+get :: forall m s elt . LVarSched m => IVar m s elt -> m elt
+get (IVar iv) = act
+  where
+    (Proxy::Proxy(m(),(IORef (Maybe elt)),elt),act) = getLV iv globalThresh deltaThresh
+    globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
+    deltaThresh  x     = return $ Just x  -- always past threshold
 
 
 {-# INLINE put_ #-}
@@ -179,15 +183,11 @@ freezeIVar :: forall m s elt . LVarSched m => IVar m s elt -> m (Maybe elt)
 freezeIVar (IVar (lv :: LVar m (IORef (Maybe elt)) elt)) = 
    do
       (Proxy::Proxy (m(),(IORef (Maybe elt)),elt)) <- freezeLV lv
-      -- (x::Maybe (Maybe elt)) <- getLV lv globalThresh deltaThresh
-      -- (x::elt) <- getLV lv globalThresh deltaThresh      
-      undefined
+      let (_::Proxy(m(),(IORef (Maybe elt)),elt),doGet) = getLV lv globalThresh deltaThresh
+      doGet
   where
-  --  globalThresh :: (IORef (Maybe elt)) -> Bool -> IO (Maybe (Maybe elt))
-    globalThresh :: (IORef elt) -> Bool -> IO (Maybe elt)
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
-    deltaThresh :: elt -> IO (Maybe elt)
     deltaThresh _ = return Nothing
 
 {-
@@ -219,32 +219,31 @@ whenFull mh (IVar (WrapLVar lv)) fn =
 spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
 spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
 
-{-# INLINE spawn_ #-}
--- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
-spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
-spawn_ p = do r <- new;  LV.fork (p >>= put_ r);  return r
-
 {-# INLINE spawnP #-}
 spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
 spawnP a = spawn (return a)
 
+-}
+
+{-# INLINE spawn_ #-}
+-- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
+spawn_ :: LVarSched m => Eq a => m a -> m (IVar m s a)
+spawn_ p = do r <- new;  forkLV (p >>= put_ r);  return r
+
 {-# INLINE put #-}
 -- | Fill an `IVar`.
-put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
+put :: LVarSched m => (Eq a, NFData a) => IVar m s a -> a -> m ()
 put v a = deepseq a (put_ v a)
 
-#ifdef GENERIC_PAR
-instance PC.ParFuture (Par d s) where
-  type Future (Par d s) = IVar s
-  type FutContents (Par d s) a = (Eq a)
+instance LVarSched m => PC.ParFuture m where
+  type Future m = IVar m (GetSession m)
+  type FutContents m a = (Eq a)
   spawn_ = spawn_
   get = get
 
-instance PC.ParIVar (Par d s) where
-  fork = LV.fork  
+instance LVarSched m => PC.ParIVar m where
+  fork = forkLV
   put_ = put_
   new = new
 
-#endif
 
--}

@@ -163,10 +163,12 @@ class (Monad m, Functor m) => LVarSched m  where
    -- | An alternate form of the monad for quasi-deterministic computations.
    type QPar m :: * -> *
 
---   newLV :: Proxy (m d) -> IO a -> m (LVar m a d)
+   type GetSession m :: *
+
+   forkLV :: m () -> m ()
+
    newLV :: Proxy (m (),a,d) -> IO a -> m (LVar m a d)        
 
---   stateLV :: (LVar m a d) -> Proxy (m d) -> a
    stateLV :: (LVar m a d) -> (Proxy (m d), a)
 
    putLV :: LVar m a d             -- ^ the LVar
@@ -178,10 +180,12 @@ class (Monad m, Functor m) => LVarSched m  where
          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
                                         -- The @Bool@ indicates whether the LVar is FROZEN.
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
-         -> m b
+         -> (Proxy (m(),a,d), m b)
 
 --   freezeLV :: LVar m a d -> QPar m ()
    freezeLV :: LVar m a d -> m (Proxy (m(),a,d))
+
+   -- addHandler
 
 --------------------------------------------------------------------------------
 
