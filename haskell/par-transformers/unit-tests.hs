@@ -3,7 +3,7 @@
 module Main where
 
 import Control.LVish      as LV
-import Control.LVish.Unsafe ()
+--import Control.LVish.Unsafe ()
 import qualified Data.LVar.IVar as IV
 import Control.Par.StateT as S
 
@@ -33,8 +33,9 @@ import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (defaultMainGenerator)
 
 import Control.Par.VecT as V1
-import qualified Control.LVish.ST     as V0
-import qualified Control.LVish.ST.Vec as V2
+--import qualified Control.LVish.ST     as V0
+--import qualified Control.LVish.ST.Vec as V2
+import qualified Control.Par.Vec as V2
 
 --------------------------------------------------------------------------------
 -- Tests for VecT (V1)
@@ -179,16 +180,16 @@ v2_t2 = LV.runPar $
 v2_p2 :: V2.ParVec s1 Float d s2 String
 v2_p2 = do
   r <- V2.liftST$ newSTRef "hi"
-  V0.VFlp v0 <- get
+  V2.VFlp v0 <- get
 
   V2.liftST$ set v0 0
 
   V2.forkSTSplit 5
-     (do V0.VFlp v1 <- get
+     (do V2.VFlp v1 <- get
          V2.liftST$ do write v1 2 33.3
                        tmp <- read v1 2
                        write v1 2 (tmp + 2))
-     (do V0.VFlp v2 <- get
+     (do V2.VFlp v2 <- get
          V2.liftST$ do write v2 2 44.3
                        tmp <- read v2 2
                        write v2 2 (tmp + 2))

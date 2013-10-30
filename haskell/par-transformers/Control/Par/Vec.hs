@@ -1,6 +1,15 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-} 
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE GADTs #-}
 
 -- | A convenience interface -- simply a restriction of `ParST` to the case
 --   of a single, boxed vector as the mutable state.
@@ -9,7 +18,7 @@
 --   "Data.Vector.Mutable", which operate directly on the implicit vector state
 --   threaded through the monad.
 
-module Control.LVish.ST.Vec
+module Control.Par.Vec
        ( -- * A type alias for parallel computations with @Vector@ state
          ParVec, 
          runParVec, runParVec',
@@ -26,8 +35,13 @@ module Control.LVish.ST.Vec
        )
        where
 
-import Control.LVish (Par, Determinism(Det), runPar, for_)
-import Control.LVish.ST
+--import Control.LVish (Par, Determinism(Det), runPar, for_)
+--import Control.LVish.ST
+import Control.Par.ST
+
+--import Control.Monad
+--import Control.Monad.IO.Class
+
 import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Mutable as MV
 
@@ -42,6 +56,7 @@ import Prelude hiding (read, length, drop, take)
 
 -- | A type alias for parallel computations with an `MVector` state.
 type ParVec s1 elt det s2 ans = ParST (MVectorFlp elt s1) det s2 ans
+newtype ParVec 
 
 -- | Restricted version of `runParST` which initialized the state with a single,
 -- boxed vector of a given size.  All elements start uninitialized.
