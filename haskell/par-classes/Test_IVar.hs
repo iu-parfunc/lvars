@@ -79,26 +79,17 @@ data IVar m s a = (PC.LVarSched m) => IVar (PC.LVar m (IORef (Maybe a)) a)
 -- | Physical equality, just as with `IORef`s.
 instance Eq (IVar m s a) where
    (==) = eq
---  (==) (IVar lv1) (IVar lv2) = PC.stateLV lv1 == PC.stateLV lv2
 
 eq :: forall m s elt . -- (PC.LVarSched m) =>
       IVar m s elt -> IVar m s elt -> Bool
 eq (IVar lv1) (IVar lv2) =
-#if 1
   snd x == snd y  
  where
-   x :: (PC.Proxy (m elt), (IORef (Maybe elt)))
+   x :: (PC.Proxy (m ()), IORef (Maybe elt))
    x = (PC.stateLV (lv1 :: PC.LVar m (IORef (Maybe elt)) elt))
-   y :: (PC.Proxy (m elt), (IORef (Maybe elt)))
+   y :: (PC.Proxy (m ()), (IORef (Maybe elt)))
    y = (PC.stateLV (lv2 :: PC.LVar m (IORef (Maybe elt)) elt))
-#else   
-  x == y
- where   
-   x :: (IORef (Maybe elt))
-   x = PC.stateLV (Proxy::Proxy (m elt)) (lv1 :: PC.LVar m (IORef (Maybe elt)) elt)
-   y :: (IORef (Maybe elt))
-   y = PC.stateLV (Proxy::Proxy (m elt)) (lv2 :: PC.LVar m (IORef (Maybe elt)) elt)
-#endif
+
 
    {- 
 
@@ -241,5 +232,4 @@ instance LVarSched m => PC.ParIVar m where
   fork = forkLV
   put_ = put_
   new = new
-
 

@@ -170,8 +170,7 @@ class (Monad m, Functor m) => LVarSched m  where
 
    newLV :: IO a -> m (LVar m a d)
 
-   stateLV :: (LVar m a d) -> (Proxy (m d), a)
- --  stateLV :: (LVar m a d) -> a
+   stateLV :: (LVar m a d) -> (Proxy (m ()), a)
 
    putLV :: LVar m a d             -- ^ the LVar
          -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
