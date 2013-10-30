@@ -36,6 +36,8 @@ module Control.Par.Class
 
   --  Monotonically growing finite maps
 --  , ParIMap(..)
+
+  , LVarSched(..), Proxy(Proxy)
     
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
@@ -150,6 +152,29 @@ class ParFuture m  => ParIVar m  where
         	  return v
 
 --------------------------------------------------------------------------------
+
+data Proxy a = Proxy
+
+class (Monad m, Functor m) => LVarSched m  where
+   type LVar m a d :: *
+
+   newLV :: IO a -> m (LVar m a d)
+
+--   stateLV :: (LVar m a d) -> Proxy (m d) -> a
+   stateLV :: (LVar m a d) -> (Proxy (m d), a)
+
+   putLV :: LVar m a d             -- ^ the LVar
+         -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
+                                  -- value changed
+         -> m ()
+
+   getLV :: (LVar m a d)                -- ^ the LVar 
+         -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
+                                        -- The @Bool@ indicates whether the LVar is FROZEN.
+         -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
+         -> m b
+
+   freezeLV :: LVar m a d -> m ()
 
 --------------------------------------------------------------------------------
 
