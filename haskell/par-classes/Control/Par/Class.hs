@@ -156,8 +156,12 @@ class ParFuture m  => ParIVar m  where
 -- | Carry a phantom type argument.
 data Proxy a = Proxy
 
+-- TODO: Move to Control.LVish.Class:
+
 class (Monad m, Functor m) => LVarSched m  where
    type LVar m a d :: *
+   -- | An alternate form of the monad for quasi-deterministic computations.
+   type QPar m :: * -> *
 
 --   newLV :: Proxy (m d) -> IO a -> m (LVar m a d)
    newLV :: Proxy (m (),a,d) -> IO a -> m (LVar m a d)        
@@ -176,10 +180,10 @@ class (Monad m, Functor m) => LVarSched m  where
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
          -> m b
 
-   freezeLV :: LVar m a d -> m ()
+--   freezeLV :: LVar m a d -> QPar m ()
+   freezeLV :: LVar m a d -> m (Proxy (m(),a,d))
 
 --------------------------------------------------------------------------------
-
 
 --  | A commonly desired monotonic data structure an insertion-only Map or Set.
 --   This captures Par monads which are able to provide that capability.
@@ -203,7 +207,7 @@ class (Functor m, Monad m) => ParIMap m  where
 
   -- TODO: freezing?  How can we assert quasideterminism?
 
-  type QPar m :: * -> *
+--  type QPar m :: * -> *
 
 --   freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
 

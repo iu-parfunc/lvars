@@ -173,19 +173,25 @@ put_ (IVar iv) !x = putLV iv putter
                                error ("Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
 
+-- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).        
+-- freezeIVar :: IVar m s a -> QPar m s (Maybe a)
+freezeIVar :: forall m s elt . LVarSched m => IVar m s elt -> m (Maybe elt)
+freezeIVar (IVar (lv :: LVar m (IORef (Maybe elt)) elt)) = 
+   do
+      (Proxy::Proxy (m(),(IORef (Maybe elt)),elt)) <- freezeLV lv
+      -- (x::Maybe (Maybe elt)) <- getLV lv globalThresh deltaThresh
+      -- (x::elt) <- getLV lv globalThresh deltaThresh      
+      undefined
+  where
+  --  globalThresh :: (IORef (Maybe elt)) -> Bool -> IO (Maybe (Maybe elt))
+    globalThresh :: (IORef elt) -> Bool -> IO (Maybe elt)
+    globalThresh _  False = return Nothing
+    globalThresh ref True = fmap Just $ readIORef ref
+    deltaThresh :: elt -> IO (Maybe elt)
+    deltaThresh _ = return Nothing
 
 {-
 
--- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
-freezeIVar :: IVar s a -> I.Par QuasiDet s (Maybe a)
-freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
-   do freezeLV lv
-      getLV lv globalThresh deltaThresh
-  where
-    globalThresh _  False = return Nothing
-    globalThresh ref True = fmap Just $ readIORef ref
-    deltaThresh _ = return Nothing
-    
 -- | Unpack a frozen IVar (as produced by a generic `freeze` operation) as a more
 -- palatable data structure.
 fromIVar :: IVar Frzn a -> Maybe a
