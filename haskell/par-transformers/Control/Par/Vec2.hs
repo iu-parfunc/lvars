@@ -122,3 +122,55 @@ setL val = do
 
 --unFlp :: ST t t1 -> MV.MVector t1 t
 --unFlp (VFlp v) = v
+
+-- | Write to the (implicit) vector state.
+writeR :: ParThreadSafe parM => Int -> eltR -> ParVec2 s eltL eltR parM ()
+writeR ind val = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  liftST$ MV.write vecR ind val
+
+-- | Read the (implicit) vector state.
+readR :: ParThreadSafe parM => Int -> ParVec2 s eltL eltR parM eltR
+readR ind = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  liftST$ MV.read vecR ind 
+
+-- | Return the length of the (implicit) vector state.
+lengthR :: ParThreadSafe parM => ParVec2 s1 eltL eltR parM Int
+lengthR = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  return $ MV.length vecR
+
+-- | Update the vector state by swapping two elements.
+swapR :: ParThreadSafe parM => Int -> Int -> ParVec2 s1 eltL eltR parM ()
+swapR x y = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get  
+  liftST$ MV.swap vecR x y
+
+-- | Update the vector state by dropping the first @n@ elements.
+dropR :: ParThreadSafe parM => Int -> ParVec2 s1 eltL eltR parM ()
+dropR n = do 
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  S.put$ STTup2 (VFlp vecL) (VFlp (MV.drop n vecR))
+
+-- | Update the vector state by taking the first @n@ elements, discarding the rest.
+takeR :: ParThreadSafe parM => Int -> ParVec2 s1 eltL eltR parM ()
+takeR n = do 
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  S.put$ STTup2 (VFlp vecL) (VFlp (MV.take n vecR))
+
+
+-- | Destructively replace the vector with a bigger vector, adding the given number
+-- of elements.  The new elements are uninitialized and will result in errors if
+-- read.
+growR :: ParThreadSafe parM => Int -> ParVec2 s1 eltL eltR parM ()
+growR n = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  vecR' <- liftST$ MV.grow vecR n
+  S.put$ STTup2 (VFlp vecL) (VFlp vecR')
+
+-- | Mutate all the elements of the vector, setting them to the given value.
+setR :: ParThreadSafe parM => eltR -> ParVec2 s1 eltL eltR parM ()
+setR val = do 
+  STTup2 (VFlp vecL) (VFlp vecR) <- S.get
+  liftST $ MV.set vecR val
