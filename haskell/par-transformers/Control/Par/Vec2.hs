@@ -24,7 +24,7 @@ module Control.Par.Vec2
          runParVec2, --runParVec2',
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, liftST, 
+         forkSTSplit, liftPar, 
          
          -- * Retrieving an explict pointer to the Vector
          reify, liftST,
@@ -79,10 +79,11 @@ reify = do
 --------------------------------------------------------------------------------
 
 -- | Write to the (implicit) vector state.
-writel :: ParThreadSafe parM => Int -> elt -> ParVec2 s1 elt1 elt2 parM ()
-writel ind val = do
-  (VFlp vecl, VFlp vecr) <- S.get
+writeL :: ParThreadSafe parM => Int -> elt1 -> ParVec2 s1 elt1 elt2 parM ()
+writeL ind val = do
+  STTup2 (VFlp vecl) (VFlp vecr) <- S.get
   liftST$ MV.write vecl ind val
+
 {-
 -- | Read the (implicit) vector state.
 readl :: ParThreadSafe parM => Int -> ParVec2 s1 elt1 elt2 parM elt
