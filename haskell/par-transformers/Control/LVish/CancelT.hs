@@ -52,7 +52,7 @@ cancelMe' :: StateT CState t ()
 cancelMe' = unCancelT cancelMe
 
 instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
-  type LVar (CancelT m) a d = LVar m a d
+  type LVar (CancelT m) = LVar m 
 
   type QPar (CancelT m) = CancelT (QPar m)
 

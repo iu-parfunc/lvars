@@ -143,19 +143,16 @@ instance Show a => Show (IVar Trvrsbl a) where
 -- -- | A new IVar that starts out empty. 
 {-# INLINE new #-}
 new :: forall m s elm . LVarSched m => m (IVar m s elm)
-new = do x <- PC.newLV (Proxy::Proxy (m(),(IORef (Maybe elm)),elm)) (newIORef Nothing)
--- new = do x <- PC.newLV (Proxy::Proxy (m elm)) (newIORef Nothing)
+new = do x <- PC.newLV (newIORef Nothing)
          return (IVar x)      
-
 
 {-# INLINE get #-}
 -- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- IVar.
 get :: forall m s elt . LVarSched m => IVar m s elt -> m elt
-get (IVar iv) = act
+get (IVar iv) = getLV iv globalThresh deltaThresh
   where
-    (Proxy::Proxy(m(),(IORef (Maybe elt)),elt),act) = getLV iv globalThresh deltaThresh
     globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
     deltaThresh  x     = return $ Just x  -- always past threshold
 
@@ -182,9 +179,8 @@ put_ (IVar iv) !x = putLV iv putter
 freezeIVar :: forall m s elt . LVarSched m => IVar m s elt -> m (Maybe elt)
 freezeIVar (IVar (lv :: LVar m (IORef (Maybe elt)) elt)) = 
    do
-      (Proxy::Proxy (m(),(IORef (Maybe elt)),elt)) <- freezeLV lv
-      let (_::Proxy(m(),(IORef (Maybe elt)),elt),doGet) = getLV lv globalThresh deltaThresh
-      doGet
+      freezeLV lv
+      getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref

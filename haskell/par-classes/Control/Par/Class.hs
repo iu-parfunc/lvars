@@ -159,7 +159,8 @@ data Proxy a = Proxy
 -- TODO: Move to Control.LVish.Class:
 
 class (Monad m, Functor m) => LVarSched m  where
-   type LVar m a d :: *
+--    type LVar m a d :: *
+   type LVar m :: * -> * -> *
    -- | An alternate form of the monad for quasi-deterministic computations.
    type QPar m :: * -> *
 
@@ -167,9 +168,10 @@ class (Monad m, Functor m) => LVarSched m  where
 
    forkLV :: m () -> m ()
 
-   newLV :: Proxy (m (),a,d) -> IO a -> m (LVar m a d)        
+   newLV :: IO a -> m (LVar m a d)
 
    stateLV :: (LVar m a d) -> (Proxy (m d), a)
+ --  stateLV :: (LVar m a d) -> a
 
    putLV :: LVar m a d             -- ^ the LVar
          -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
@@ -180,10 +182,10 @@ class (Monad m, Functor m) => LVarSched m  where
          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
                                         -- The @Bool@ indicates whether the LVar is FROZEN.
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
-         -> (Proxy (m(),a,d), m b)
+         -> m b
 
 --   freezeLV :: LVar m a d -> QPar m ()
-   freezeLV :: LVar m a d -> m (Proxy (m(),a,d))
+   freezeLV :: LVar m a d -> m ()
 
    -- addHandler
 
