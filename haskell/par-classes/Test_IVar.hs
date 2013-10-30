@@ -139,37 +139,42 @@ instance Show a => Show (IVar Trvrsbl a) where
 --------------------------------------
 
 -- -- | A new IVar that starts out empty. 
--- new :: LVarSched m => m (IVar m a d)
--- new = do x <- PC.newLV $ newIORef Nothing
---          return (IVar x)      
-
-
-{-
 {-# INLINE new #-}
+new :: forall m s elm . LVarSched m => m (IVar m s elm)
+new = do x <- PC.newLV (Proxy::Proxy (m(),(IORef (Maybe elm)),elm)) (newIORef Nothing)
+-- new = do x <- PC.newLV (Proxy::Proxy (m elm)) (newIORef Nothing)
+         return (IVar x)      
+
 
 {-# INLINE get #-}
 -- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- IVar.
-get :: IVar s a -> Par d s a
-get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
+get :: LVarSched m => IVar m s a -> m a
+get (IVar iv) = getLV iv globalThresh deltaThresh
   where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
         deltaThresh  x     = return $ Just x  -- always past threshold
+
 
 {-# INLINE put_ #-}
 -- | Put a value into an IVar.  Multiple 'put's to the same IVar
 -- are not allowed, and result in a runtime error, unless the values put happen to be @(==)@.
 --         
 -- This function is always at least strict up to WHNF in the element put.
-put_ :: Eq a => IVar s a -> a -> Par d s ()
-put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
+put_ :: Eq a => IVar m s a -> a -> m ()
+put_ (IVar iv) !x = putLV iv putter
   where putter ref      = atomicModifyIORef ref update
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
+                               -- FIXME
+                               -- throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
+                               error ("Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
+
+
+{-
 
 -- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
 freezeIVar :: IVar s a -> I.Par QuasiDet s (Maybe a)

@@ -153,12 +153,14 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
+-- | Carry a phantom type argument.
 data Proxy a = Proxy
 
 class (Monad m, Functor m) => LVarSched m  where
    type LVar m a d :: *
 
-   newLV :: IO a -> m (LVar m a d)
+--   newLV :: Proxy (m d) -> IO a -> m (LVar m a d)
+   newLV :: Proxy (m (),a,d) -> IO a -> m (LVar m a d)        
 
 --   stateLV :: (LVar m a d) -> Proxy (m d) -> a
    stateLV :: (LVar m a d) -> (Proxy (m d), a)
