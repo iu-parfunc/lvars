@@ -72,6 +72,10 @@ import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
 
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
+#endif
+
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
 ------------------------------------------------------------------------------
@@ -372,4 +376,19 @@ instance (Show k, Show a) => Show (IMap k Frzn a) where
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
   show lv = show (castFrzn lv)
+
+
+--------------------------------------------------------------------------------
+  
+-- #ifdef GENERIC_PAR
+-- Not exported yet: 
+#if 0  
+instance PC.ParIMap (Par d s) where
+  type PC.IMap (Par d s) k = IMap k s
+  type PC.IMapContents (Par d s) k v = (Ord k, Eq v)
+  PC.waitSize    = waitSize
+  PC.newEmptyMap = newEmptyMap
+  PC.insert      = insert
+  PC.getKey      = getKey
+#endif
 

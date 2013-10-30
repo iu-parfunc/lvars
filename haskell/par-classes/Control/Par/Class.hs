@@ -1,8 +1,10 @@
-{- LANGUAGE MultiParamTypeClasses, FunctionalDependencies, CPP,
+{- LANGUAGE MultiParamTypeClasses, FunctionalDependencies, 
              FlexibleInstances, UndecidableInstances -}
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+-- {-# LANGUAGE GADTs #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -32,6 +34,9 @@ module Control.Par.Class
   -- * IVars
   , ParIVar(..)
 
+  --  Monotonically growing finite maps
+--  , ParIMap(..)
+    
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
     --  , ParChan(..)
@@ -42,6 +47,8 @@ where
 
 import Control.DeepSeq
 import GHC.Prim (Constraint)
+
+import qualified Data.Foldable as F
 
 --------------------------------------------------------------------------------
 
@@ -144,10 +151,36 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
 
---  A commonly desired monotonic data structure an insertion-only Map or Set.
---  This captures Par monads which are able to provide that capability.
--- class ParMap ivar m | m -> ivar where
+
+--  | A commonly desired monotonic data structure an insertion-only Map or Set.
+--   This captures Par monads which are able to provide that capability.
+class (Functor m, Monad m) => ParIMap m  where
+  -- | The type of a future that goes along with the particular `Par`
+  -- monad the user chooses.
+  type IMap m k :: * -> *
+
+  -- | Different implementations may place different constraints on
+  -- what is allowable inside a Future.  For example, some
+  -- implementations require an Eq Constraint.
+  type IMapContents m k v :: Constraint
+
+  waitSize :: Int -> IMap m k v -> m ()
+
+  newEmptyMap :: m (IMap m k v)
+
+  insert :: (IMapContents m k v) => k -> v -> IMap m k v -> m ()
+
+  getKey :: (IMapContents m k v) => k -> IMap m k v -> m v
+
+  -- TODO: freezing?  How can we assert quasideterminism?
+
+  type QPar m :: * -> *
+
+--   freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
+
+-- data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 --------------------------------------------------------------------------------
 
