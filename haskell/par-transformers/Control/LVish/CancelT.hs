@@ -44,9 +44,31 @@ poll = CancelT$ do
   CPair flg _ <- liftIO$ readIORef ref
   return flg
 
+pollAndCancel :: (MonadIO m, LVarSched m) => CancelT m ()
+pollAndCancel = do
+  b <- poll
+  unless b $ cancelMe
+
 -- Need some ContT magic here to return to the scheduler...
 cancelMe :: CancelT m ()
 cancelMe = undefined
+
+type ThreadId = CState
+
+forkCancelable :: CancelT m () -> CancelT m ThreadId
+forkCancelable = undefined
+
+cancel :: (MonadIO m, Monad m) => ThreadId -> CancelT m ()
+cancel (CState ref) = do
+  -- To cancel a tree of threads, we atomically mark the root as canceled and then
+  -- start chasing the children.  After we cancel any node, no further children may
+  -- be added to that node.
+  chldrn <- liftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) -> 
+    if flg 
+     then (CPair False [], ls)
+     else (orig, [])
+  -- We could do this traversal in parallel if we liked...
+  forM_ chldrn cancel
 
 cancelMe' :: StateT CState t ()
 cancelMe' = unCancelT cancelMe
@@ -75,38 +97,23 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
        lift $ forkLV (evalStateT act (CState childRef))
       else cancelMe'
     
-  newLV (_:: Proxy(CancelT m (),a,d)) act =
-    lift$ newLV (Proxy::Proxy(m (),a,d)) act
+  newLV act = lift$ newLV act
   
---    stateLV :: (LVar m a d) -> (Proxy (m d), a)
   stateLV lvar =
---  stateLV lvar = -- (lvar :: LVar m a d) = 
-    let -- (_::Proxy(m d), a) = stateLV lvar
-    in undefined
-       -- (lvar:: (LVar m a d ~ LVar (CancelT m) a d) => LVar m a d)
-     -- (Proxy::Proxy((CancelT m) d), a)
+    let (_::Proxy (m ()), a) = stateLV lvar
+    in (Proxy::Proxy((CancelT m) ()), a)
 
-  putLV lv putter = do 
-     b <- poll
-     if b
-       then lift $ putLV lv putter
-       else cancelMe
-     
---    putLV :: LVar m a d             -- ^ the LVar
---          -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
---                                   -- value changed
---          -> m ()
-  
-  getLV lv globThresh deltThresh =
-    -- Poll liveness
-    undefined
-    
---    getLV :: (LVar m a d)                -- ^ the LVar 
---          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
---                                         -- The @Bool@ indicates whether the LVar is FROZEN.
---          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
---          -> (Proxy (m(),a,d), m b)
+  putLV lv putter = do
+    pollAndCancel
+    lift $ putLV lv putter    
 
--- --   freezeLV :: LVar m a d -> QPar m ()
---    freezeLV :: LVar m a d -> m (Proxy (m(),a,d))
+  getLV lv globThresh deltThresh = do
+     pollAndCancel
+     x <- lift $ getLV lv globThresh deltThresh
+    -- FIXME: repoll after blocking ONLY:
+     pollAndCancel
+     return x
 
+  freezeLV lvar = do
+    pollAndCancel
+    lift$ freezeLV lvar
