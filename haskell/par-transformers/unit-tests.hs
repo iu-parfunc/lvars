@@ -36,6 +36,9 @@ import Control.Par.VecT as V1
 --import qualified Control.LVish.ST     as V0
 --import qualified Control.LVish.ST.Vec as V2
 import qualified Control.Par.Vec as V2
+import qualified Control.Par.ST as PST
+
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
 
 --------------------------------------------------------------------------------
 -- Tests for VecT (V1)
@@ -177,19 +180,19 @@ v2_t2 = LV.runPar $
         V2.runParVec 10 v2_p2
 
 -- | A simple test that modifies two locations in a vector, multiple times, in parallel.
-v2_p2 :: V2.ParVec s1 Float d s2 String
+v2_p2 :: ParThreadSafe parM => V2.ParVec s1 Float parM String
 v2_p2 = do
   r <- V2.liftST$ newSTRef "hi"
-  V2.VFlp v0 <- get
+  PST.VFlp v0 <- get
 
   V2.liftST$ set v0 0
 
   V2.forkSTSplit 5
-     (do V2.VFlp v1 <- get
+     (do PST.VFlp v1 <- get
          V2.liftST$ do write v1 2 33.3
                        tmp <- read v1 2
                        write v1 2 (tmp + 2))
-     (do V2.VFlp v2 <- get
+     (do PST.VFlp v2 <- get
          V2.liftST$ do write v2 2 44.3
                        tmp <- read v2 2
                        write v2 2 (tmp + 2))
@@ -209,7 +212,7 @@ case_v2_t3 = assertEqual "stacked Vec, ST, and Par effects"
           v2_t3
 
 -- | Use IVars mixed with VecPar:
-v2_p3 :: V2.ParVec s1 Float d s2 String 
+v2_p3 :: ParThreadSafe parM => V2.ParVec s1 Float parM String 
 v2_p3 = do  
   let st = V2.liftST
       pr = V2.liftPar
