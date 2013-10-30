@@ -31,9 +31,6 @@ module Control.Par.Vec2
        )
        where
 
---import Control.LVish (Par, Determinism(Det), runPar)
---import Control.LVish.ST
-
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
 
@@ -120,8 +117,7 @@ setL val = do
   STTup2 (VFlp vecL) (VFlp vecR) <- S.get
   liftST $ MV.set vecL val
 
---unFlp :: ST t t1 -> MV.MVector t1 t
---unFlp (VFlp v) = v
+-- Helpers for the other vector in the state.
 
 -- | Write to the (implicit) vector state.
 writeR :: ParThreadSafe parM => Int -> eltR -> ParVec2 s eltL eltR parM ()
