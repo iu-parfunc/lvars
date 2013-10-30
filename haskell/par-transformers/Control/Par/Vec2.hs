@@ -76,3 +76,61 @@ reify = do
   (STTup2 (VFlp vec1) (VFlp vec2)) <- S.get
   return (vec1,vec2)
 
+--------------------------------------------------------------------------------
+
+-- | Write to the (implicit) vector state.
+writel :: ParThreadSafe parM => Int -> elt -> ParVec2 s1 elt1 elt2 parM ()
+writel ind val = do
+  (VFlp vecl, VFlp vecr) <- S.get
+  liftST$ MV.write vecl ind val
+{-
+-- | Read the (implicit) vector state.
+readl :: ParThreadSafe parM => Int -> ParVec2 s1 elt1 elt2 parM elt
+readl ind = do
+  VFlp vec <- fst S.get
+  liftST$ MV.read vec ind 
+
+-- | Return the length of the (implicit) vector state.
+lengthl :: ParThreadSafe parM => ParVec2 s1 elt1 elt2 parM Int
+--lengthl = (fst S.get) >>= (return . MV.length . unFlp)
+lengthl = do
+  VFlp vec <- fst S.get
+  return $ MV.length vec
+
+-- | Update the vector state by swapping two elements.
+swapl :: ParThreadSafe parM => Int -> Int -> ParVec2 s1 elt1 elt2 parM ()
+-- swap x y = S.get >>= ((\ v -> MV.swap v x y) . unFlp)
+swapl x y = do
+  VFlp vec <- fst S.get
+  liftST$ MV.swap vec x y
+
+-- | Update the vector state by dropping the first @n@ elements.
+dropl :: ParThreadSafe parM => Int -> ParVec2 s1 elt1 elt2 parM ()
+dropl n = do 
+  VFlp vec <- fst S.get
+  S.put (VFlp (MV.drop n vec))
+
+-- | Update the vector state by taking the first @n@ elements, discarding the rest.
+takel :: ParThreadSafe parM => Int -> ParVec2 s1 elt1 elt2 parM ()
+takel n = do 
+  VFlp vec <- fst S.get
+  S.put (VFlp (MV.take n vec))
+
+
+-- | Destructively replace the vector with a bigger vector, adding the given number
+-- of elements.  The new elements are uninitialized and will result in errors if
+-- read.
+growl :: ParThreadSafe parM => Int -> ParVec2 s1 elt1 elt2 parM ()
+growl n = do
+  VFlp vec <- fst S.get
+  vec' <- liftST$ MV.grow vec n
+  S.put (VFlp vec')
+
+-- | Mutate all the elements of the vector, setting them to the given value.
+setl :: ParThreadSafe parM => elt -> ParVec2 s1 elt1 elt2 parM ()
+setl val = do 
+  VFlp vec <- fst S.get
+  liftST $ MV.set vec val
+-}
+--unFlp :: ST t t1 -> MV.MVector t1 t
+--unFlp (VFlp v) = v
