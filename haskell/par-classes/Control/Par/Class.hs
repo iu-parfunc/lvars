@@ -1,8 +1,10 @@
-{- LANGUAGE MultiParamTypeClasses, FunctionalDependencies, 
-             FlexibleInstances, UndecidableInstances -}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, 
+             FlexibleInstances, UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# LANGUAGE FlexibleContexts #-}
 
 -- {-# LANGUAGE GADTs #-}
 
@@ -36,6 +38,8 @@ module Control.Par.Class
 
   --  Monotonically growing finite maps
 --  , ParIMap(..)
+
+  , LVarSched(..), Proxy(Proxy)
     
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
@@ -151,6 +155,34 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
+data Proxy a = Proxy
+
+class (Monad m, Functor m) =>
+      LVarSched m qm lvar | m -> lvar, lvar -> m, m -> qm  where
+
+   type GetLVar m :: * -> * -> *
+   type GetSession m :: *
+        
+--   type QPar m :: * -> *
+   toQPar :: m a -> qm a
+   
+   newLV :: IO a -> m (lvar a d)
+
+   stateLV :: (lvar a d) -> a
+
+   putLV :: lvar a d            -- ^ the LVar
+         -> (a -> IO (Maybe d))   -- ^ how to do the put, and whether the LVar's
+                                  -- value changed
+         -> m ()
+
+   getLV :: (lvar a d)                  -- ^ the LVar 
+         -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
+                                        -- The @Bool@ indicates whether the LVar is FROZEN.
+         -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
+         -> m b
+
+   freezeLV :: lvar a d -> m ()
+
 --------------------------------------------------------------------------------
 
 
@@ -176,7 +208,7 @@ class (Functor m, Monad m) => ParIMap m  where
 
   -- TODO: freezing?  How can we assert quasideterminism?
 
-  type QPar m :: * -> *
+--  type QPar m :: * -> *
 
 --   freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
 
