@@ -31,6 +31,9 @@ Library
                  -- patterns and data structure traversals:
 --                 Control.Par.Combinator,
 
+                 -- A scheduler-transformer that adds cancellation:
+                 Control.LVish.CancelT
+
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT                 
                  Control.Par.VecT

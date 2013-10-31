@@ -1,5 +1,6 @@
-{- LANGUAGE MultiParamTypeClasses, FunctionalDependencies, 
-             FlexibleInstances, UndecidableInstances -}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+-- FlexibleInstances, UndecidableInstances
+
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -164,8 +165,13 @@ data Proxy a = Proxy
 --   (See Kuper et al. POPL 2014).
 class (Monad m, Functor m) => ParQuasi m  where
    -- | An alternate form of the monad for quasi-deterministic computations.
-   type QPar m :: * -> *  
+   type QPar m :: * -> *
+   -- | Lift a deterministic computation to a quasi-deterministic one.
+   toQPar :: m a -> QPar m a 
 
+class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi2 m qm | m -> qm where
+   toQPar2 :: m a -> qm a 
+  
 -- | All proper @Par@ monads should have an @s@ parameter that seals them so that
 -- live Futures, IVars, etc cannot escape from a Par computation.  Membership in this
 -- class provides a uniform way to extract these @s@ parameters where needed.

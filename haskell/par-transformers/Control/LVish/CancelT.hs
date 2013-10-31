@@ -50,37 +50,13 @@ pollAndCancel = do
   unless b $ cancelMe
 
 -- Need some ContT magic here to return to the scheduler...
-cancelMe :: CancelT m ()
-cancelMe = undefined
+cancelMe :: (LVarSched m) => CancelT m ()
+cancelMe = lift $ returnToSched
 
 type ThreadId = CState
 
-forkCancelable :: CancelT m () -> CancelT m ThreadId
-forkCancelable = undefined
-
-cancel :: (MonadIO m, Monad m) => ThreadId -> CancelT m ()
-cancel (CState ref) = do
-  -- To cancel a tree of threads, we atomically mark the root as canceled and then
-  -- start chasing the children.  After we cancel any node, no further children may
-  -- be added to that node.
-  chldrn <- liftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) -> 
-    if flg 
-     then (CPair False [], ls)
-     else (orig, [])
-  -- We could do this traversal in parallel if we liked...
-  forM_ chldrn cancel
-
-cancelMe' :: StateT CState t ()
-cancelMe' = unCancelT cancelMe
-
-instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
-  type LVar (CancelT m) = LVar m 
-
-  type QPar (CancelT m) = CancelT (QPar m)
-
-  type GetSession (CancelT m) = GetSession m
-
-  forkLV (CancelT act) = CancelT$ do
+forkCancelable :: (MonadIO m, LVarSched m) => CancelT m () -> CancelT m ThreadId
+forkCancelable (CancelT act) = CancelT$ do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     CState parentRef <- S.get
@@ -96,6 +72,34 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
     if live then
        lift $ forkLV (evalStateT act (CState childRef))
       else cancelMe'
+    return (CState parentRef)
+
+cancel :: (MonadIO m, Monad m) => ThreadId -> CancelT m ()
+cancel (CState ref) = do
+  -- To cancel a tree of threads, we atomically mark the root as canceled and then
+  -- start chasing the children.  After we cancel any node, no further children may
+  -- be added to that node.
+  chldrn <- liftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) -> 
+    if flg 
+     then (CPair False [], ls)
+     else (orig, [])
+  -- We could do this traversal in parallel if we liked...
+  forM_ chldrn cancel
+
+cancelMe' :: LVarSched m => StateT CState m ()
+cancelMe' = unCancelT cancelMe
+
+instance (ParQuasi m) => ParQuasi (CancelT m) where
+  type QPar (CancelT m) = CancelT (QPar m)
+--  toQPar (CancelT m) = CancelT undefined
+
+instance (ParSealed m) => ParSealed (CancelT m) where
+  type GetSession (CancelT m) = GetSession m
+  
+instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
+  type LVar (CancelT m) = LVar m 
+
+  forkLV act = do _ <- forkCancelable act; return ()
     
   newLV act = lift$ newLV act
   
@@ -113,7 +117,12 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
     -- FIXME: repoll after blocking ONLY:
      pollAndCancel
      return x
+     
+  returnToSched = lift returnToSched
 
+{-
   freezeLV lvar = do
-    pollAndCancel
-    lift$ freezeLV lvar
+    toQPar pollAndCancel
+--    lift$ freezeLV lvar
+    undefined
+-}
