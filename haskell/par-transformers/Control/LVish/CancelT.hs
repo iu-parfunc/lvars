@@ -9,7 +9,19 @@
 --   In its raw form, this is unsafe, because cancelating could cancel something that
 --   would have performed a visible side effect.
 
-module Control.LVish.CancelT where
+module Control.LVish.CancelT
+       (
+         -- * The transformer that adds thecancellation capability
+         CancelT(), ThreadId,
+         
+         -- * Operations specific to CancelT
+         runCancelT,
+         forkCancelable,
+         cancel,         
+         pollForCancel,
+         cancelMe
+       )
+       where
 
 import Control.Monad.State as S
 import Control.Monad.IO.Class 
@@ -41,6 +53,7 @@ data CPair = CPair !Bool ![CState]
 
 --------------------------------------------------------------------------------
 
+-- | Run a Par monad with the cancellation effect.  Within this computation 
 runCancelT :: MonadIO m => CancelT m a -> m a
 runCancelT (CancelT st) = do
   ref <- liftIO $ newIORef (CPair True []) 
@@ -52,17 +65,22 @@ poll = CancelT$ do
   CPair flg _ <- liftIO$ readIORef ref
   return flg
 
+-- | Check with the scheduler to see if the current thread has been canceled, if so
+-- stop computing immediately.
 pollForCancel :: (MonadIO m, LVarSched m) => CancelT m ()
 pollForCancel = do
   b <- poll
   unless b $ cancelMe
 
--- Need some ContT magic here to return to the scheduler...
+-- | Self cancellation.  Equivalent to the parent calling `cancel`.
 cancelMe :: (LVarSched m) => CancelT m ()
 cancelMe = lift $ returnToSched
 
+-- | The type of cancellable thread identifiers.
 type ThreadId = CState
 
+-- | Fork a computation while retaining a handle on it that can be used to cancel it
+-- (and all its descendents).
 forkCancelable :: (MonadIO m, LVarSched m) => CancelT m () -> CancelT m ThreadId
 forkCancelable (CancelT act) = CancelT$ do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
@@ -82,6 +100,9 @@ forkCancelable (CancelT act) = CancelT$ do
       else cancelMe'
     return (CState parentRef)
 
+-- | Issue a cancellation request for a given sub-computation.  It will not be
+-- fulfilled immediately, because the cancellation process is cooperative and only
+-- happens when the thread(s) check in with the scheduler.
 cancel :: (MonadIO m, Monad m) => ThreadId -> CancelT m ()
 cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then

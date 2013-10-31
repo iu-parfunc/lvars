@@ -63,7 +63,7 @@ cancel03 = runParIO $ runCancelT $ do
   return ()
 
 
-appreciableDelay = threadDelay (200 * 1000)
+appreciableDelay = threadDelay (100 * 1000)
 
 
 main = cancel02
