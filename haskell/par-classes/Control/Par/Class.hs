@@ -161,12 +161,11 @@ data Proxy a = Proxy
 class (Monad m, Functor m) => LVarSched m  where
 --    type LVar m a d :: *
    type LVar m :: * -> * -> *
+        
    -- | An alternate form of the monad for quasi-deterministic computations.
    type QPar m :: * -> *
 
    type GetSession m :: *
-
-   forkLV :: m () -> m ()
 
    newLV :: IO a -> m (LVar m a d)
 
@@ -187,6 +186,23 @@ class (Monad m, Functor m) => LVarSched m  where
    freezeLV :: LVar m a d -> m ()
 
    -- addHandler
+
+   forkLV :: m () -> m ()
+
+   -- | Put ourselves at the bottom of the work-pile for the current thread, allowing
+   -- others a chance to run.
+   yield :: m ()
+   yield = return ()
+
+   -- | Usually a no-op.  This checks in with the scheduler, so that it might perform
+   -- any tasks which need to be performed periodically.
+   schedCheck :: m ()
+   schedCheck = return ()
+
+   -- | Drop the current continuation and return to the scheduler.
+   returnToSched :: m a
+
+   -- TODO: should we expose a MonadCont instance?
 
 --------------------------------------------------------------------------------
 
