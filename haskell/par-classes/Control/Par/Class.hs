@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -199,7 +199,7 @@ class (ParQuasi m, ParSealed m) => LVarSched m  where
          -> m b
 
    -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
-   freezeLV :: LVar m a d -> m ()
+   freezeLV :: LVar m a d -> QPar m ()
    -- It is the implementor's responsibility to expose this as quasi-deterministic.
 
    -- | Extract a handle on the raw, mutable state within an LVar.
@@ -239,21 +239,42 @@ class (Functor m, Monad m) => ParIMap m  where
   -- implementations require an Eq Constraint.
   type IMapContents m k v :: Constraint
 
+  -- | Wait on the /size/ of the map, not its contents.
   waitSize :: Int -> IMap m k v -> m ()
 
+  -- | Create a fresh map with nothing in it.
   newEmptyMap :: m (IMap m k v)
 
+  -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
+  -- 
+  --   As with other container LVars, if a key is inserted multiple times, the values had
+  --   better be equal @(==)@, or a multiple-put error is raised.
   insert :: (IMapContents m k v) => k -> v -> IMap m k v -> m ()
 
+  -- | Wait for the map to contain a specified key, and return the associated value.
   getKey :: (IMapContents m k v) => k -> IMap m k v -> m v
 
-  -- TODO: freezing?  How can we assert quasideterminism?
+  -- FINISHME -- other methods
+  -- newMap newFromList
+  -- modify, forEach, copy, union...
 
---  type QPar m :: * -> *
+-- | Normal @IMap@ capabilities plus the additional capability of freezing @IMap@s.
+class (ParQuasi m, ParIMap m) => ParIMapFrz m where
+  -- | Get the exact contents of the map.  As with any
+  -- quasi-deterministic operation, using `freezeMap` may cause your
+  -- program to exhibit a limited form of nondeterminism: it will never
+  -- return the wrong answer, but it may include synchronization bugs
+  -- that can (nondeterministically) cause exceptions.
+  --
+  -- This "Data.Map"-based implementation has the special property that
+  -- you can retrieve the full map without any `IO`, and without
+  -- nondeterminism leaking.  (This is because the internal order is
+  -- fixed for the tree-based representation of maps that "Data.Map"
+  -- uses.)
+  freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
+  -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
 
---   freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
-
--- data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
+data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 --------------------------------------------------------------------------------
 

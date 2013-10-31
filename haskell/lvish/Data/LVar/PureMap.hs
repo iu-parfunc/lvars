@@ -220,13 +220,13 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map.  As with any
--- quasi-deterministic operation, using `freezeSet` may cause your
+-- quasi-deterministic operation, using `freezeMap` may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 --
 -- This "Data.Map"-based implementation has the special property that
--- you can retrieve the full set without any `IO`, and without
+-- you can retrieve the full map without any `IO`, and without
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of maps that "Data.Map"
 -- uses.)
