@@ -31,14 +31,16 @@ module Control.Par.Class
   (
   -- * Futures: the most basic functionality
     ParFuture(..)
-  -- * IVars
+  -- * IVars: futures that anyone can fill
   , ParIVar(..)
 
   --  Monotonically growing finite maps
 --  , ParIMap(..)
 
-  , LVarSched(..), Proxy(Proxy)
-    
+   -- * (Internal) Abstracting LVar Schedulers.
+  , LVarSched(..), ParQuasi (..), ParSealed(..)
+  , Proxy(Proxy)
+                   
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
     --  , ParChan(..)
@@ -158,35 +160,54 @@ data Proxy a = Proxy
 
 -- TODO: Move to Control.LVish.Class:
 
-class (Monad m, Functor m) => LVarSched m  where
---    type LVar m a d :: *
-   type LVar m :: * -> * -> *
-        
+-- | Par monads which can be switched into a "quasi-deterministic" variant.
+--   (See Kuper et al. POPL 2014).
+class (Monad m, Functor m) => ParQuasi m  where
    -- | An alternate form of the monad for quasi-deterministic computations.
-   type QPar m :: * -> *
+   type QPar m :: * -> *  
 
+-- | All proper @Par@ monads should have an @s@ parameter that seals them so that
+-- live Futures, IVars, etc cannot escape from a Par computation.  Membership in this
+-- class provides a uniform way to extract these @s@ parameters where needed.
+class ParSealed (m :: * -> *) where
+   -- | Extract the @s@ parameter from a Par monad type.
    type GetSession m :: *
 
+-- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
+class (ParQuasi m, ParSealed m) => LVarSched m  where
+   -- | The type of raw LVars, shared among all specific data structures (Map, Set, etc).
+   type LVar m :: * -> * -> *
+
+   -- | Create an LVar, including the extra state that required for scheduling and
+   -- synchronization.
    newLV :: IO a -> m (LVar m a d)
 
-   stateLV :: (LVar m a d) -> (Proxy (m ()), a)
-
-   putLV :: LVar m a d             -- ^ the LVar
+   -- | Update an LVar.  The change itself happens as an IO action, but any state
+   -- changes must be linearizable and must respect the lattice semantics for the LVar.
+   putLV :: LVar m a d           -- ^ the LVar
          -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
-                                  -- value changed
+                                 --   value changed
          -> m ()
 
+   -- | Do a threshold read on an LVar.  This requires both a "global" and "delta"
+   -- handler, and if the underlying Par monad assumes idempotency, both could even
+   -- execute for the same value.
    getLV :: (LVar m a d)                -- ^ the LVar 
          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
                                         -- The @Bool@ indicates whether the LVar is FROZEN.
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
          -> m b
 
---   freezeLV :: LVar m a d -> QPar m ()
+   -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
    freezeLV :: LVar m a d -> m ()
+   -- It is the implementor's responsibility to expose this as quasi-deterministic.
+
+   -- | Extract a handle on the raw, mutable state within an LVar.
+   stateLV :: (LVar m a d) -> (Proxy (m ()), a)
 
    -- addHandler
 
+   -- | Fork a child thread.   
    forkLV :: m () -> m ()
 
    -- | Put ourselves at the bottom of the work-pile for the current thread, allowing

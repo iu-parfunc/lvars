@@ -99,10 +99,14 @@ import Data.IORef
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 
+instance PC.ParQuasi (Par d s) where
+  type QPar (Par d s) = Par 'QuasiDet s
+  
+instance PC.ParSealed (Par d s) where
+  type GetSession (Par d s) = s
+  
 instance PC.LVarSched (Par d s) where
   type LVar (Par d s) = L.LVar 
-  type QPar (Par d s) = Par 'QuasiDet s
-  type GetSession (Par d s) = s
 
   forkLV = fork
   newLV  = WrapPar . L.newLV

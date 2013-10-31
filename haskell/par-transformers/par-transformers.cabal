@@ -40,13 +40,10 @@ Library
                  Control.LVish.ST.Vec2
                  Control.LVish.ST.UVec
                  Control.LVish.ST.UVec2
-                 
+
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
-
-                 -- Deprecated AList interface
-   --              Control.Par.AList,
 
   Other-modules:
                  -- Pedigree is experimental, but potentially useful for
