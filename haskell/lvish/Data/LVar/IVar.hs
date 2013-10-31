@@ -53,8 +53,7 @@ import           Control.Exception (throw)
 import qualified Control.LVish.Types as LV 
 import qualified Control.LVish.Basics as LV 
 import           Control.LVish.DeepFrz.Internal
-import qualified Control.LVish.Internal as I
-import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), Determinism(QuasiDet))
+import           Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.LVar.Generic
@@ -76,7 +75,7 @@ newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 
 -- | Physical equality, just as with `IORef`s.
 instance Eq (IVar s a) where
-  (==) (IVar lv1) (IVar lv2) = I.state lv1 == I.state lv2
+  (==) (IVar lv1) (IVar lv2) = state lv1 == state lv2
 
 -- | An `IVar` can be treated as a generic container LVar which happens to
 -- contain at most one value!  Note, however, that the polymorphic operations are
@@ -101,13 +100,13 @@ instance DeepFrz a => DeepFrz (IVar s a) where
 -- a fixed order.
 instance F.Foldable (IVar Trvrsbl) where
   foldr fn zer (IVar lv) =
-    case unsafeDupablePerformIO$ readIORef (I.state lv) of
+    case unsafeDupablePerformIO$ readIORef (state lv) of
       Just x  -> fn x zer
       Nothing -> zer
 
 instance (Show a) => Show (IVar Frzn a) where
   show (IVar lv) =
-    show $ unsafeDupablePerformIO $ readIORef (I.state lv)
+    show $ unsafeDupablePerformIO $ readIORef (state lv)
 
 -- | For convenience only; the user could define this.
 instance Show a => Show (IVar Trvrsbl a) where
@@ -158,7 +157,7 @@ freezeIVar (IVar (WrapLVar lv)) = WrapPar $
 -- | Unpack a frozen IVar (as produced by a generic `freeze` operation) as a more
 -- palatable data structure.
 fromIVar :: IVar Frzn a -> Maybe a
-fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (I.state lv)
+fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (state lv)
 
 {-# INLINE whenFull #-}
 -- | Register a handler that fires when the IVar is filled, which, of course, only
@@ -167,7 +166,7 @@ whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
-    fn' x = return (Just (I.unWrapPar (fn x)))
+    fn' x = return (Just (unWrapPar (fn x)))
     globalCB ref = do
       mx <- readIORef ref -- Snapshot
       case mx of
