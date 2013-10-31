@@ -31,6 +31,7 @@
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP #-}
 
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
@@ -92,10 +93,11 @@ import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 
-import qualified Control.Par.Class as PC
-
 import Data.IORef
 --------------------------------------------------------------------------------
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
 
 instance PC.LVarSched (Par d s) where
   type LVar (Par d s) = L.LVar 
@@ -104,7 +106,6 @@ instance PC.LVarSched (Par d s) where
 
   forkLV = fork
   newLV  = WrapPar . L.newLV
-
   getLV lv glob delt = WrapPar $ L.getLV lv glob delt
   putLV lv putter    = WrapPar $ L.putLV lv putter
 
@@ -113,6 +114,7 @@ instance PC.LVarSched (Par d s) where
   freezeLV = WrapPar . L.freezeLV
 
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched 
+#endif
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
