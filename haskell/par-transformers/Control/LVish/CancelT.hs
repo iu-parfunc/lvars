@@ -22,6 +22,7 @@ import Control.Par.Class as PC
 newtype CancelT m a = CancelT ((StateT CState m) a)
   deriving (Monad, Functor)
 
+unCancelT :: CancelT t t1 -> StateT CState t t1
 unCancelT (CancelT m) = m
 
 -- | Each computation has a boolean flag that stays True while it is still live.
@@ -38,14 +39,21 @@ instance MonadIO m => MonadIO (CancelT m) where
 
 data CPair = CPair !Bool ![CState]
 
+--------------------------------------------------------------------------------
+
+runCancelT :: MonadIO m => CancelT m a -> m a
+runCancelT (CancelT st) = do
+  ref <- liftIO $ newIORef (CPair True []) 
+  evalStateT st (CState ref) 
+
 poll :: (MonadIO m, LVarSched m) => CancelT m Bool
 poll = CancelT$ do
   CState ref  <- S.get
   CPair flg _ <- liftIO$ readIORef ref
   return flg
 
-pollAndCancel :: (MonadIO m, LVarSched m) => CancelT m ()
-pollAndCancel = do
+pollForCancel :: (MonadIO m, LVarSched m) => CancelT m ()
+pollForCancel = do
   b <- poll
   unless b $ cancelMe
 
@@ -108,21 +116,21 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
     in (Proxy::Proxy((CancelT m) ()), a)
 
   putLV lv putter = do
-    pollAndCancel
+    pollForCancel
     lift $ putLV lv putter    
 
   getLV lv globThresh deltThresh = do
-     pollAndCancel
+     pollForCancel
      x <- lift $ getLV lv globThresh deltThresh
     -- FIXME: repoll after blocking ONLY:
-     pollAndCancel
+     pollForCancel
      return x
      
   returnToSched = lift returnToSched
 
 {-
   freezeLV lvar = do
-    toQPar pollAndCancel
+    toQPar pollForCancel
 --    lift$ freezeLV lvar
     undefined
 -}
