@@ -6,7 +6,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE MagicHash #-} 
+{-# LANGUAGE MagicHash #-}
+
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE UndecidableInstances #-} 
 
 {-|
 
@@ -31,8 +34,8 @@ takes the least upper bound of the old and new values.
 
  -}
 
-module Data.LVar.IVar
-       (
+module Test_IVar
+       {-(
          IVar(..),
          -- * Basic IVar operations, same as in monad-par
          new, get, put, put_,
@@ -41,7 +44,7 @@ module Data.LVar.IVar
         spawn, spawn_, spawnP,
 
         -- * LVar-style operations
-        freezeIVar, fromIVar, whenFull)
+        freezeIVar, fromIVar, whenFull)-}
        where
 
 import           Data.IORef
@@ -50,33 +53,45 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 import qualified Data.Foldable    as F
 import           Control.Exception (throw)
-import qualified Control.LVish.Types as LV 
-import qualified Control.LVish.Basics as LV 
-import           Control.LVish.DeepFrz.Internal
-import qualified Control.LVish.Internal as I
-import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), Determinism(QuasiDet))
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
-import qualified Control.LVish.SchedIdempotent as LI 
+-- import qualified Control.LVish as LV 
+-- import           Control.LVish.DeepFrz.Internal
+-- import qualified Control.LVish.Internal as I
+-- import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), Determinism(QuasiDet))
+-- import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
+-- import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)
 
-#ifdef GENERIC_PAR
+import Control.Par.Class (LVarSched(..), Proxy(..))
 import qualified Control.Par.Class as PC
-#endif
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
 ------------------------------------------------------------------------------
-       
+
 -- | An `IVar` is the simplest form of `LVar`.
-newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
+data IVar m s a = (PC.LVarSched m) => IVar (PC.LVar m (IORef (Maybe a)) a)
+
 -- the global data for an IVar a is a reference to Maybe a, while deltas are
 -- simply values of type a (taking the IVar from Nothing to Just):
 
 -- | Physical equality, just as with `IORef`s.
-instance Eq (IVar s a) where
-  (==) (IVar lv1) (IVar lv2) = I.state lv1 == I.state lv2
+instance Eq (IVar m s a) where
+   (==) = eq
+
+eq :: forall m s elt . -- (PC.LVarSched m) =>
+      IVar m s elt -> IVar m s elt -> Bool
+eq (IVar lv1) (IVar lv2) =
+  snd x == snd y  
+ where
+   x :: (PC.Proxy (m ()), IORef (Maybe elt))
+   x = (PC.stateLV (lv1 :: PC.LVar m (IORef (Maybe elt)) elt))
+   y :: (PC.Proxy (m ()), (IORef (Maybe elt)))
+   y = (PC.stateLV (lv2 :: PC.LVar m (IORef (Maybe elt)) elt))
+
+
+   {- 
 
 -- | An `IVar` can be treated as a generic container LVar which happens to
 -- contain at most one value!  Note, however, that the polymorphic operations are
@@ -112,49 +127,58 @@ instance (Show a) => Show (IVar Frzn a) where
 -- | For convenience only; the user could define this.
 instance Show a => Show (IVar Trvrsbl a) where
   show = show . castFrzn 
+-}
 
 --------------------------------------
 
+-- -- | A new IVar that starts out empty. 
 {-# INLINE new #-}
--- | A new IVar that starts out empty. 
-new :: Par d s (IVar s a)
-new = WrapPar$ fmap (IVar . WrapLVar) $
-      newLV $ newIORef Nothing
+new :: forall m s elm . LVarSched m => m (IVar m s elm)
+new = do x <- PC.newLV (newIORef Nothing)
+         return (IVar x)      
 
 {-# INLINE get #-}
 -- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- IVar.
-get :: IVar s a -> Par d s a
-get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
-        deltaThresh  x     = return $ Just x  -- always past threshold
+get :: forall m s elt . LVarSched m => IVar m s elt -> m elt
+get (IVar iv) = getLV iv globalThresh deltaThresh
+  where
+    globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
+    deltaThresh  x     = return $ Just x  -- always past threshold
+
 
 {-# INLINE put_ #-}
 -- | Put a value into an IVar.  Multiple 'put's to the same IVar
 -- are not allowed, and result in a runtime error, unless the values put happen to be @(==)@.
 --         
 -- This function is always at least strict up to WHNF in the element put.
-put_ :: Eq a => IVar s a -> a -> Par d s ()
-put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
+put_ :: Eq a => IVar m s a -> a -> m ()
+put_ (IVar iv) !x = putLV iv putter
   where putter ref      = atomicModifyIORef ref update
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
+                               -- FIXME
+                               -- throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
+                               error ("Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
         update Nothing  = (Just x, Just x)
 
--- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
-freezeIVar :: IVar s a -> I.Par QuasiDet s (Maybe a)
-freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
-   do freezeLV lv
+-- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).        
+-- freezeIVar :: IVar m s a -> QPar m s (Maybe a)
+freezeIVar :: forall m s elt . LVarSched m => IVar m s elt -> m (Maybe elt)
+freezeIVar (IVar (lv :: LVar m (IORef (Maybe elt)) elt)) = 
+   do
+      freezeLV lv
       getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
-    
+
+{-
+
 -- | Unpack a frozen IVar (as produced by a generic `freeze` operation) as a more
 -- palatable data structure.
 fromIVar :: IVar Frzn a -> Maybe a
@@ -182,31 +206,30 @@ whenFull mh (IVar (WrapLVar lv)) fn =
 spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
 spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
 
-{-# INLINE spawn_ #-}
--- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
-spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
-spawn_ p = do r <- new;  LV.fork (p >>= put_ r);  return r
-
 {-# INLINE spawnP #-}
 spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
 spawnP a = spawn (return a)
 
+-}
+
+{-# INLINE spawn_ #-}
+-- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
+spawn_ :: LVarSched m => Eq a => m a -> m (IVar m s a)
+spawn_ p = do r <- new;  forkLV (p >>= put_ r);  return r
+
 {-# INLINE put #-}
 -- | Fill an `IVar`.
-put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
+put :: LVarSched m => (Eq a, NFData a) => IVar m s a -> a -> m ()
 put v a = deepseq a (put_ v a)
 
-#ifdef GENERIC_PAR
-instance PC.ParFuture (Par d s) where
-  type Future (Par d s) = IVar s
-  type FutContents (Par d s) a = (Eq a)
+instance LVarSched m => PC.ParFuture m where
+  type Future m = IVar m (GetSession m)
+  type FutContents m a = (Eq a)
   spawn_ = spawn_
   get = get
 
-instance PC.ParIVar (Par d s) where
-  fork = LV.fork  
+instance LVarSched m => PC.ParIVar m where
+  fork = forkLV
   put_ = put_
   new = new
-
-#endif
 

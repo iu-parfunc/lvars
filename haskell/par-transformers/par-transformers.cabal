@@ -31,6 +31,9 @@ Library
                  -- patterns and data structure traversals:
 --                 Control.Par.Combinator,
 
+                 -- A scheduler-transformer that adds cancellation:
+                 Control.LVish.CancelT
+
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT                 
                  Control.Par.VecT
@@ -40,13 +43,10 @@ Library
                  Control.LVish.ST.Vec2
                  Control.LVish.ST.UVec
                  Control.LVish.ST.UVec2
-                 
+
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
-
-                 -- Deprecated AList interface
-   --              Control.Par.AList,
 
   Other-modules:
                  -- Pedigree is experimental, but potentially useful for

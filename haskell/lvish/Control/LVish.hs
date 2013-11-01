@@ -29,6 +29,10 @@
 
  -}
 
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP #-}
+
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
@@ -81,9 +85,43 @@ module Control.LVish
     LVar()
   ) where
 
--- NOTE : This is an aggregation module ONLY:
+-- NOTE : This is an aggregation module:
 import           Control.LVish.Types
 import           Control.LVish.Internal
-import           Control.LVish.Basics
+import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.SchedIdempotentInternal (State)
+
+import Data.IORef
+--------------------------------------------------------------------------------
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
+
+instance PC.ParQuasi (Par d s) where
+  type QPar (Par d s) = Par 'QuasiDet s
+  
+instance PC.ParSealed (Par d s) where
+  type GetSession (Par d s) = s
+  
+instance PC.LVarSched (Par d s) where
+  type LVar (Par d s) = L.LVar 
+
+  forkLV = fork
+  newLV  = WrapPar . L.newLV
+  getLV lv glob delt = WrapPar $ L.getLV lv glob delt
+  putLV lv putter    = WrapPar $ L.putLV lv putter
+
+  stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
+
+  freezeLV = WrapPar . L.freezeLV
+
+  returnToSched = WrapPar $ mkPar $ \_k -> L.sched 
+#endif
+
+------ DUPLICATED: -----
+mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
+mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
+type SchedState = State L.ClosedPar LVarID
+type LVarID = IORef ()
