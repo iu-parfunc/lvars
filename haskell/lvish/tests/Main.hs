@@ -1,4 +1,6 @@
-#!/usr/bin/env runghc -i..
+-- #!/usr/bin/env runghc -i..
+
+{-# LANGUAGE CPP #-}
 
 -- | This module aggregates all the unit tests in this directory.
 
@@ -16,6 +18,10 @@ import qualified MapTests
 import qualified SetTests
 import qualified MaxCounterTests
 
+#ifdef GENERIC_PAR
+import qualified GenericTests
+#endif
+
 main :: IO ()
 main = defaultMain alltests
 
@@ -30,5 +36,7 @@ alltests =
        , MapTests.tests
        , SetTests.tests
        , MaxCounterTests.tests
+#ifdef GENERIC_PAR         
+       , GenericTests.tests
+#endif
        ]
-

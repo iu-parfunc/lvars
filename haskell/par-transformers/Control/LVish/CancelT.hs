@@ -149,9 +149,8 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
      
   returnToSched = lift returnToSched
 
-{-
-  freezeLV lvar = do
-    toQPar pollForCancel
+  freezeLV (lvar :: LVar (CancelT m) a d) = do
+--    toQPar pollForCancel
+--    pollForCancel
 --    lift$ freezeLV lvar
     undefined
--}

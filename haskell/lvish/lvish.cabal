@@ -194,6 +194,8 @@ test-suite test-lvish
       cpp-options: -DGENERIC_PAR
       build-depends: par-classes      <= 2.0
     -- END DUPLICATED
+    if flag(generic)
+      other-modules:  GenericTests
 
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    HUnit, time, text
