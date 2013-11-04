@@ -64,53 +64,54 @@ reify = do
 
 --------------------------------------------------------------------------------
 
--- | Write to the (implicit) vector state.
+-- | Write to the (implicit) left vector state.
 writeL :: ParThreadSafe parM => Int -> eltL -> ParVec2T s eltL eltR parM ()
 writeL ind val = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   liftST$ MU.write vecL ind val
 
--- | Read the (implicit) vector state.
+-- | Read the (implicit) left vector state.
 readL :: ParThreadSafe parM => Int -> ParVec2T s eltL eltR parM eltL
 readL ind = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   liftST$ MU.read vecL ind 
 
--- | Return the length of the (implicit) vector state.
+-- | Return the length of the (implicit) left vector state.
 lengthL :: ParThreadSafe parM => ParVec2T s1 eltL eltR parM Int
 lengthL = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   return $ MU.length vecL
 
--- | Update the vector state by swapping two elements.
+-- | Update the left vector state by swapping two elements.
 swapL :: ParThreadSafe parM => Int -> Int -> ParVec2T s1 eltL eltR parM ()
 swapL x y = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get  
   liftST$ MU.swap vecL x y
 
--- | Update the vector state by dropping the first @n@ elements.
+-- | Update the left vector state by dropping the first @n@ elements.
 dropL :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 dropL n = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   S.put$ STTup2 (UFlp (MU.drop n vecL)) (UFlp vecR)
 
--- | Update the vector state by taking the first @n@ elements, discarding the rest.
+-- | Update the left vector state by taking the first @n@ elements, discarding the rest.
 takeL :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 takeL n = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   S.put$ STTup2 (UFlp (MU.take n vecL)) (UFlp vecR)
 
 
--- | Destructively replace the vector with a bigger vector, adding the given number
--- of elements.  The new elements are uninitialized and will result in errors if
--- read.
+-- | Destructively replace the left vector with a bigger vector,
+-- adding the given number of elements.  The new elements are
+-- uninitialized and will result in errors if read.
 growL :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 growL n = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   vecL' <- liftST$ MU.grow vecL n
   S.put$ STTup2 (UFlp vecL') (UFlp vecR)
 
--- | Mutate all the elements of the vector, setting them to the given value.
+-- | Mutate all the elements of the left vector, setting them to the
+-- given value.
 setL :: ParThreadSafe parM => eltL -> ParVec2T s1 eltL eltR parM ()
 setL val = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
@@ -118,19 +119,19 @@ setL val = do
 
 -- Helpers for the other vector in the state.
 
--- | Write to the (implicit) vector state.
+-- | Write to the (implicit) right vector state.
 writeR :: ParThreadSafe parM => Int -> eltR -> ParVec2T s eltL eltR parM ()
 writeR ind val = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   liftST$ MU.write vecR ind val
 
--- | Read the (implicit) vector state.
+-- | Read the (implicit) right vector state.
 readR :: ParThreadSafe parM => Int -> ParVec2T s eltL eltR parM eltR
 readR ind = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   liftST$ MU.read vecR ind 
 
--- | Return the length of the (implicit) vector state.
+-- | Return the length of the (implicit) right vector state.
 lengthR :: ParThreadSafe parM => ParVec2T s1 eltL eltR parM Int
 lengthR = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
@@ -142,29 +143,31 @@ swapR x y = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get  
   liftST$ MU.swap vecR x y
 
--- | Update the vector state by dropping the first @n@ elements.
+-- | Update the right vector state by dropping the first @n@ elements.
 dropR :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 dropR n = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   S.put$ STTup2 (UFlp vecL) (UFlp (MU.drop n vecR))
 
--- | Update the vector state by taking the first @n@ elements, discarding the rest.
+-- | Update the right vector state by taking the first @n@ elements,
+-- discarding the rest.
 takeR :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 takeR n = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   S.put$ STTup2 (UFlp vecL) (UFlp (MU.take n vecR))
 
 
--- | Destructively replace the vector with a bigger vector, adding the given number
--- of elements.  The new elements are uninitialized and will result in errors if
--- read.
+-- | Destructively replace the right vector with a bigger vector,
+-- adding the given number of elements.  The new elements are
+-- uninitialized and will result in errors if read.
 growR :: ParThreadSafe parM => Int -> ParVec2T s1 eltL eltR parM ()
 growR n = do
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
   vecR' <- liftST$ MU.grow vecR n
   S.put$ STTup2 (UFlp vecL) (UFlp vecR')
 
--- | Mutate all the elements of the vector, setting them to the given value.
+-- | Mutate all the elements of the right vector, setting them to the
+-- given value.
 setR :: ParThreadSafe parM => eltR -> ParVec2T s1 eltL eltR parM ()
 setR val = do 
   STTup2 (UFlp vecL) (UFlp vecR) <- S.get
