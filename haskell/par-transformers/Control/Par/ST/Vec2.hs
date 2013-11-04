@@ -18,10 +18,10 @@
 --   "Data.Vector.Mutable", which operate directly on the implicit vector state
 --   threaded through the monad.
 
-module Control.Par.Vec2
+module Control.Par.ST.Vec2
        ( -- * A type alias for parallel computations with @Vector@ state
          ParVec2, 
-         runParVec2, --runParVec2',
+         runParVec2,
 
          -- * Reexported from the generic interface
          forkSTSplit, liftPar, 

@@ -18,7 +18,7 @@
 --   "Data.Vector.Mutable", which operate directly on the implicit vector state
 --   threaded through the monad.
 
-module Control.Par.Vec
+module Control.Par.ST.Vec
        ( -- * A type alias for parallel computations with @Vector@ state
          ParVec, 
          runParVec, --runParVec',
@@ -35,12 +35,7 @@ module Control.Par.Vec
        )
        where
 
---import Control.LVish (Par, Determinism(Det), runPar, for_)
---import Control.LVish.ST
 import Control.Par.ST
-
---import Control.Monad
---import Control.Monad.IO.Class
 
 import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Mutable as MV
@@ -72,15 +67,6 @@ runParVec size comp =
     S.put (VFlp vec)
     comp
 
-{-
--- | A shortcut for the common case of discharging both the vector computation and
--- the underlying `Par` monad at the same time.
-runParVec' :: forall elt ans .
-              Int
-              -> (forall s1 s2 . ParVec s1 elt 'Det s2 ans)
-              -> ans
-runParVec' n m = runPar (runParVec n m)
--}
 -- | Extract a pointer to the whole Vector in its normal, usable @STVector@ form.
 --   Use the `liftST` operator to act on it.
 reify :: (ParThreadSafe parM) => ParVec s1 elt parM (MV.STVector s1 elt)
@@ -124,37 +110,6 @@ parMapM fn = do
             return ()
   return ()
   -}
-
--- TODO: Parallel Fold!
--- Actually, that's not inplace so it should go in generic "parallel-containers" module.
-
-
--- -- | In-place map over a mutable vector.
--- vecParMap_ :: (elt -> ParST (stt s1) det s2 elt) -> MV.STVector s1 elt ->  ParVec s1 elt det s2 ()
--- vecParMap_ fn vec = do  
---   undefined
---   where
---     loop iters
--- --      | end - strt < share =
---       | iters <= share = 
---         -- Bottom out to a sequential loop:
--- --        for_ (strt,end) $ \ ind -> do
---         for_ (0,iters) $ \ ind -> do  
--- --          x <- read ind
---           x <- liftST$ MV.read vec ind 
---           y <- fn x
---           liftST$ MV.write vec ind y
---       | otherwise = do
---           let (iters2,extra) = iters `quotRem` 2
---               iters1 = iters2+extra
---           forkSTSplit iters1
---                       (loop iters1)
---                       (loop iters2)
---           undefined
-    
---     share = max 1 (len `quot` (numProcs * overPartition))
---     -- (share,extra) = len `quotRem` (numProcs * overPartition)
---     len = MV.length vec
 
 overPartition :: Int
 overPartition = 8
@@ -228,8 +183,8 @@ set val = do
 
 -- And here are the unsafe ops:
 ----------------------------------------
---    MV.unsafeDrop MV.unsafeRead MV.unsafeWrite  
---  MV.unsafeGrow MV.unsafeSlice MV.unsafeSwap
+-- MV.unsafeDrop MV.unsafeRead MV.unsafeWrite  
+-- MV.unsafeGrow MV.unsafeSlice MV.unsafeSwap
 -- MV.unsafeMove MV.unsafeTail
 -- MV.unsafeCopy MV.unsafeNew MV.unsafeTake  
 unFlp :: MVectorFlp t t1 -> MV.MVector t1 t

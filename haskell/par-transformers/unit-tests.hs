@@ -31,7 +31,7 @@ import Test.Framework.Providers.HUnit
 import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (defaultMainGenerator)
 
-import qualified Control.Par.Vec as V
+import qualified Control.Par.ST.Vec as V
 import qualified Control.Par.ST as PST
 
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
@@ -60,3 +60,5 @@ p0 = do
   return$ show frozen
 
 main = $(defaultMainGenerator)
+
+

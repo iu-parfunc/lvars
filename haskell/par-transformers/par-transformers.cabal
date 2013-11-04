@@ -33,11 +33,11 @@ Library
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT                 
-                 Control.Par.VecT
+--                 Control.Par.VecT
 
                  Control.Par.ST
-                 -- Control.LVish.ST.Vec
-                 -- Control.LVish.ST.Vec2
+                 Control.Par.ST.Vec
+                 Control.Par.ST.Vec2
                  -- Control.LVish.ST.UVec
                  -- Control.LVish.ST.UVec2
                  
