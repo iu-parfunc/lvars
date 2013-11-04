@@ -2,9 +2,8 @@ Name:                par-transformers
 Version:             1.0
 Synopsis:            Extend Par monads with additional capabilities
 
-
 -- Version history:
---  1.0     : Initial release replaced deprecated monad-par-transformers.
+--  1.0     : Initial release to replace deprecated monad-par-transformers.
 
 Description:         The modules below provide additional
                      data structures, and other added capabilities
@@ -12,9 +11,9 @@ Description:         The modules below provide additional
 
 License:             BSD3
 License-file:        LICENSE
-Author:              Ryan Newton, Simon Marlow
-Maintainer:          Ryan Newton <rrnewton@gmail.com>
-Copyright:           (c) Ryan Newton 2012
+Author:              Ryan Newton, Aaron Todd
+Maintainer:          Aaron Todd <toddaaro@gmail.com>
+Copyright:           (c) Ryan Newton, Aaron Todd 2013
 Stability:           Experimental
 Category:            Control,Parallelism,Monads
 Build-type:          Simple
