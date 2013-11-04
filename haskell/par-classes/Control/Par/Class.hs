@@ -39,7 +39,8 @@ module Control.Par.Class
 --  , ParIMap(..)
 
    -- * (Internal) Abstracting LVar Schedulers.
-  , LVarSched(..), ParQuasi (..), ParSealed(..)
+  , LVarSched(..), LVarSchedQ(..)
+  , ParQuasi (..), ParSealed(..)
   , Proxy(Proxy)
                    
     -- RRN: Not releasing this interface until there is a nice implementation of it:
@@ -167,14 +168,9 @@ data Proxy a = Proxy
 
 -- | Par monads which can be switched into a "quasi-deterministic" variant.
 --   (See Kuper et al. POPL 2014).
-class (Monad m, Functor m) => ParQuasi m  where
-   -- | An alternate form of the monad for quasi-deterministic computations.
-   type QPar m :: * -> *
-   -- | Lift a deterministic computation to a quasi-deterministic one.
-   toQPar :: m a -> QPar m a 
-
-class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi2 m qm | m -> qm where
-   toQPar2 :: m a -> qm a 
+class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi m qm | m -> qm where
+   -- | Lift a deterministic computation to a quasi-deterministic one.  
+   toQPar :: m a -> qm a 
   
 -- | All proper @Par@ monads should have an @s@ parameter that seals them so that
 -- live Futures, IVars, etc cannot escape from a Par computation.  Membership in this
@@ -184,7 +180,7 @@ class ParSealed (m :: * -> *) where
    type GetSession m :: *
 
 -- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
-class (ParQuasi m, ParSealed m) => LVarSched m  where
+class (Monad m, ParSealed m) => LVarSched m  where
    -- | The type of raw LVars, shared among all specific data structures (Map, Set, etc).
    type LVar m :: * -> * -> *
 
@@ -208,10 +204,6 @@ class (ParQuasi m, ParSealed m) => LVarSched m  where
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
          -> m b
 
-   -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
-   freezeLV :: LVar m a d -> QPar m ()
-   -- It is the implementor's responsibility to expose this as quasi-deterministic.
-
    -- | Extract a handle on the raw, mutable state within an LVar.
    stateLV :: (LVar m a d) -> (Proxy (m ()), a)
 
@@ -234,6 +226,15 @@ class (ParQuasi m, ParSealed m) => LVarSched m  where
    returnToSched :: m a
 
    -- TODO: should we expose a MonadCont instance?
+
+-- | An LVar scheduler with the quasi-determinism capability.  This interface is
+--   complicated by the fact that there are two monads (deterministic and
+--   quasideterministic).
+class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
+  
+   -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
+   freezeLV :: LVar m a d -> (Proxy (m()), qm ())
+   -- It is the implementor's responsibility to expose this as quasi-deterministic.
 
 --------------------------------------------------------------------------------
 
@@ -269,7 +270,7 @@ class (Functor m, Monad m) => ParIMap m  where
   -- modify, forEach, copy, union...
 
 -- | Normal @IMap@ capabilities plus the additional capability of freezing @IMap@s.
-class (ParQuasi m, ParIMap m) => ParIMapFrz m where
+class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
   -- | Get the exact contents of the map.  As with any
   -- quasi-deterministic operation, using `freezeMap` may cause your
   -- program to exhibit a limited form of nondeterminism: it will never
@@ -281,7 +282,7 @@ class (ParQuasi m, ParIMap m) => ParIMapFrz m where
   -- nondeterminism leaking.  (This is because the internal order is
   -- fixed for the tree-based representation of maps that "Data.Map"
   -- uses.)
-  freezeMap :: IMap m k v -> QPar m (SomeFoldable (k,v))
+  freezeMap :: IMap m k v -> qm (SomeFoldable (k,v))
   -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
 
 data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)

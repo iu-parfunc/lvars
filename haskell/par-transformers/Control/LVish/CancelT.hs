@@ -3,6 +3,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, InstanceSigs #-}
 
 -- | A module for adding the cancellation capability.
 -- 
@@ -117,11 +119,7 @@ cancel (CState ref) = do
 
 cancelMe' :: LVarSched m => StateT CState m ()
 cancelMe' = unCancelT cancelMe
-
-instance (ParQuasi m) => ParQuasi (CancelT m) where
-  type QPar (CancelT m) = CancelT (QPar m)
---  toQPar (CancelT m) = CancelT undefined
-
+  
 instance (ParSealed m) => ParSealed (CancelT m) where
   type GetSession (CancelT m) = GetSession m
   
@@ -149,9 +147,21 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
      
   returnToSched = lift returnToSched
 
-{-
-  freezeLV lvar = do
-    toQPar pollForCancel
---    lift$ freezeLV lvar
-    undefined
--}
+instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
+  toQPar :: (CancelT m) a -> (CancelT qm) a 
+  toQPar (CancelT (S.StateT{runStateT})) =
+    CancelT $ S.StateT $ toQPar . runStateT
+
+instance (Functor qm, Monad qm, MonadIO m,
+          LVarSched m, LVarSchedQ m qm, ParQuasi (CancelT m) (CancelT qm) ) =>
+         LVarSchedQ (CancelT m) (CancelT qm) where
+
+  freezeLV :: forall a d . LVar (CancelT m) a d -> (Proxy ((CancelT m) ()), (CancelT qm) ())
+  freezeLV lvar = (Proxy, (do
+    let lvar2 :: LVar m a d
+        lvar2 = lvar -- This works because of the specific def for "type LVar" in the instance above...
+    toQPar (pollForCancel :: CancelT m ())
+    let frz :: LVar m a d -> (Proxy (m()), qm ())
+        frz x = freezeLV x 
+    CancelT (lift (snd (frz lvar2)))
+    return ()))

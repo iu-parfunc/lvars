@@ -43,3 +43,4 @@ Library
                , deepseq >= 1.1, ghc-prim
                -- TEMP: for ghc-mod
 --               , lvish, monad-par, ghc-prim, mtl
+

@@ -33,6 +33,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE CPP #-}
 
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
@@ -99,8 +102,9 @@ import Data.IORef
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 
-instance PC.ParQuasi (Par d s) where
-  type QPar (Par d s) = Par 'QuasiDet s
+instance PC.ParQuasi (Par d s) (Par QuasiDet s) where
+  -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
+  toQPar act = unsafeConvert act
   
 instance PC.ParSealed (Par d s) where
   type GetSession (Par d s) = s
@@ -115,9 +119,9 @@ instance PC.LVarSched (Par d s) where
 
   stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
 
-  freezeLV = WrapPar . L.freezeLV
+  returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
-  returnToSched = WrapPar $ mkPar $ \_k -> L.sched 
+--  freezeLV = WrapPar . L.freezeLV  
 #endif
 
 ------ DUPLICATED: -----
