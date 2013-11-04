@@ -113,9 +113,7 @@ wait_clocks clocks = do
 #endif  
   let loop !n = do
         now <- rdtsc
-        if now - myT >= clocks
-        then return n   
-        else loop (n+1)
+        if now - myT >= clocks then return n else loop (n+1)
   cnt <- loop 0
   return (fromIntegral cnt)
 
