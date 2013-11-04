@@ -8,7 +8,8 @@
 
 module Control.Par.Class.Unsafe 
   (
-   ParThreadSafe(unsafeParIO)
+   ParThreadSafe(unsafeParIO),
+   PrivateMonadIO(internalLiftIO)
   ) 
 where
 
@@ -20,3 +21,13 @@ class Monad p => ParThreadSafe p where
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
   unsafeParIO :: IO a -> p a
+
+
+-- | This class serves a different purpose than either `MonadIO` or `ParThreadSafe`.
+-- Unlike the latter, ALL Par monads should be a member of this class.  Unlike the
+-- former, the user should not be able to access the lift operation of this class
+-- from @Safe@ code.  
+class Monad p => PrivateMonadIO p where 
+  -- | Lift an IO operation.  This should only be used by other infrastructure-level
+  -- components, e.g. the implementation of monad transformers or LVars.
+  internalLiftIO :: IO a -> p a

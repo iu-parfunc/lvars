@@ -26,10 +26,10 @@ module Control.LVish.CancelT
        where
 
 import Control.Monad.State as S
-import Control.Monad.IO.Class 
 import Data.IORef
 
 import Control.Par.Class as PC
+import Control.Par.Class.Unsafe (PrivateMonadIO(..))
 
 --------------------------------------------------------------------------------
 
@@ -47,29 +47,32 @@ newtype CState = CState (IORef CPair)
 instance MonadTrans CancelT where
   lift m = CancelT (lift m)
 
--- TODO/FIXME: Replace MonadIO with something the user can't safely access.
-instance MonadIO m => MonadIO (CancelT m) where
-  liftIO m = CancelT (lift (liftIO m))
+-- TODO/FIXME: Replace PrivateMonadIO with something the user can't safely access.
+instance PrivateMonadIO m => PrivateMonadIO (CancelT m) where
+  internalLiftIO m = CancelT (lift (internalLiftIO m))
+
+instance PrivateMonadIO m => PrivateMonadIO (StateT s m) where
+  internalLiftIO io = lift (internalLiftIO io)
 
 data CPair = CPair !Bool ![CState]
 
 --------------------------------------------------------------------------------
 
 -- | Run a Par monad with the cancellation effect.  Within this computation 
-runCancelT :: MonadIO m => CancelT m a -> m a
+runCancelT :: PrivateMonadIO m => CancelT m a -> m a
 runCancelT (CancelT st) = do
-  ref <- liftIO $ newIORef (CPair True []) 
+  ref <- internalLiftIO $ newIORef (CPair True []) 
   evalStateT st (CState ref) 
 
-poll :: (MonadIO m, LVarSched m) => CancelT m Bool
+poll :: (PrivateMonadIO m, LVarSched m) => CancelT m Bool
 poll = CancelT$ do
   CState ref  <- S.get
-  CPair flg _ <- liftIO$ readIORef ref
+  CPair flg _ <- internalLiftIO$ readIORef ref
   return flg
 
 -- | Check with the scheduler to see if the current thread has been canceled, if so
 -- stop computing immediately.
-pollForCancel :: (MonadIO m, LVarSched m) => CancelT m ()
+pollForCancel :: (PrivateMonadIO m, LVarSched m) => CancelT m ()
 pollForCancel = do
   b <- poll
   unless b $ cancelMe
@@ -83,14 +86,14 @@ type ThreadId = CState
 
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
 -- (and all its descendents).
-forkCancelable :: (MonadIO m, LVarSched m) => CancelT m () -> CancelT m ThreadId
+forkCancelable :: (PrivateMonadIO m, LVarSched m) => CancelT m () -> CancelT m ThreadId
 forkCancelable (CancelT act) = CancelT$ do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     CState parentRef <- S.get
     -- Create new child state:
-    childRef <- liftIO$ newIORef (CPair True [])    
-    live <- liftIO $ 
+    childRef <- internalLiftIO$ newIORef (CPair True [])    
+    live <- internalLiftIO $ 
       atomicModifyIORef' parentRef $ \ orig@(CPair bl ls) ->
         if bl then
           -- Extend the tree by pointing to our child:
@@ -105,12 +108,12 @@ forkCancelable (CancelT act) = CancelT$ do
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (MonadIO m, Monad m) => ThreadId -> CancelT m ()
+cancel :: (PrivateMonadIO m, Monad m) => ThreadId -> CancelT m ()
 cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
   -- be added to that node.
-  chldrn <- liftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) -> 
+  chldrn <- internalLiftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) -> 
     if flg 
      then (CPair False [], ls)
      else (orig, [])
@@ -123,7 +126,7 @@ cancelMe' = unCancelT cancelMe
 instance (ParSealed m) => ParSealed (CancelT m) where
   type GetSession (CancelT m) = GetSession m
   
-instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
+instance (PrivateMonadIO m, LVarSched m) => LVarSched (CancelT m) where
   type LVar (CancelT m) = LVar m 
 
   forkLV act = do _ <- forkCancelable act; return ()
@@ -152,7 +155,7 @@ instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
   toQPar (CancelT (S.StateT{runStateT})) =
     CancelT $ S.StateT $ toQPar . runStateT
 
-instance (Functor qm, Monad qm, MonadIO m,
+instance (Functor qm, Monad qm, PrivateMonadIO m,
           LVarSched m, LVarSchedQ m qm, ParQuasi (CancelT m) (CancelT qm) ) =>
          LVarSchedQ (CancelT m) (CancelT qm) where
 

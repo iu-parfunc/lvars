@@ -90,7 +90,7 @@ module Control.LVish
 
 -- NOTE : This is an aggregation module:
 import           Control.LVish.Types
-import           Control.LVish.Internal
+import           Control.LVish.Internal as I
 import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
@@ -101,6 +101,7 @@ import Data.IORef
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PU
 
 instance PC.ParQuasi (Par d s) (Par QuasiDet s) where
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
@@ -121,7 +122,15 @@ instance PC.LVarSched (Par d s) where
 
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
---  freezeLV = WrapPar . L.freezeLV  
+instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
+--  freezeLV = WrapPar . L.freezeLV
+
+instance PU.ParThreadSafe (Par d s) where
+  unsafeParIO = I.liftIO
+
+instance PU.PrivateMonadIO (Par d s) where
+  internalLiftIO = I.liftIO  
+
 #endif
 
 ------ DUPLICATED: -----

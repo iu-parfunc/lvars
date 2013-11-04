@@ -1,3 +1,5 @@
+{-# LANGUAGE Trustworthy #-}
+
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 -- FlexibleInstances, UndecidableInstances
 
