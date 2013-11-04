@@ -233,7 +233,7 @@ class (Monad m, ParSealed m) => LVarSched m  where
 class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
   
    -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
-   freezeLV :: LVar m a d -> qm ()
+   freezeLV :: LVar m a d -> (Proxy (m()), qm ())
    -- It is the implementor's responsibility to expose this as quasi-deterministic.
 
 --------------------------------------------------------------------------------

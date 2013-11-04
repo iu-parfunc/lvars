@@ -147,25 +147,21 @@ instance (MonadIO m, LVarSched m) => LVarSched (CancelT m) where
      
   returnToSched = lift returnToSched
 
--- instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
---   toQPar :: (CancelT m) a -> (CancelT qm) a 
---   toQPar (CancelT (S.StateT{runStateT})) =
---     CancelT $ S.StateT $ toQPar . runStateT
+instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
+  toQPar :: (CancelT m) a -> (CancelT qm) a 
+  toQPar (CancelT (S.StateT{runStateT})) =
+    CancelT $ S.StateT $ toQPar . runStateT
 
 instance (Functor qm, Monad qm, MonadIO m,
           LVarSched m, LVarSchedQ m qm, ParQuasi (CancelT m) (CancelT qm) ) =>
          LVarSchedQ (CancelT m) (CancelT qm) where
 
-  freezeLV :: LVar (CancelT m) a d -> (CancelT qm) ()  
-  freezeLV (lvar :: LVar (CancelT m) a d) = do
+  freezeLV :: forall a d . LVar (CancelT m) a d -> (Proxy ((CancelT m) ()), (CancelT qm) ())
+  freezeLV lvar = (Proxy, (do
     let lvar2 :: LVar m a d
-        lvar2 = lvar -- <-- LINE X 
+        lvar2 = lvar -- This works because of the specific def for "type LVar" in the instance above...
     toQPar (pollForCancel :: CancelT m ())
---    pollForCancel
---    CancelT$ lift$ freezeLV lvar
-
--- UNCOMMENt here to make line X fail:
---    let _ = (freezeLV lvar2 :: qm ())
-    undefined
-
--- pollForCancel :: (MonadIO m, LVarSched m) => CancelT m ()
+    let frz :: LVar m a d -> (Proxy (m()), qm ())
+        frz x = freezeLV x 
+    CancelT (lift (snd (frz lvar2)))
+    return ()))
