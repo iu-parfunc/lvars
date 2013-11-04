@@ -39,7 +39,8 @@ module Control.Par.Class
 --  , ParIMap(..)
 
    -- * (Internal) Abstracting LVar Schedulers.
-  , LVarSched(..), ParQuasi (..), ParSealed(..)
+  , LVarSched(..), LVarSchedQ(..)
+  , ParQuasi (..), ParSealed(..)
   , Proxy(Proxy)
                    
     -- RRN: Not releasing this interface until there is a nice implementation of it:
@@ -229,7 +230,7 @@ class (Monad m, ParSealed m) => LVarSched m  where
 -- | An LVar scheduler with the quasi-determinism capability.  This interface is
 --   complicated by the fact that there are two monads (deterministic and
 --   quasideterministic).
-class (Monad qm, LVarSched m) => LVarSchedQ m qm | m -> qm where
+class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
   
    -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
    freezeLV :: LVar m a d -> qm ()
