@@ -27,16 +27,11 @@ Library
     subdir:   haskell/par-transformers
 
   Exposed-modules: 
-                 -- A collection of combinators for common parallel
-                 -- patterns and data structure traversals:
---                 Control.Par.Combinator,
-
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT                 
---                 Control.Par.VecT
 
                  Control.Par.ST
                  Control.Par.ST.Vec
@@ -48,13 +43,6 @@ Library
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
 
-  Other-modules:
-                 -- Pedigree is experimental, but potentially useful for
-                 -- many purposes such as assigning unique, reproducable
-                 -- identifiers to IVars
---                 Control.Monad.Par.Pedigree
-
-
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
                , par-classes  >= 1.0 && < 2.0
@@ -65,9 +53,8 @@ Library
                , transformers >= 0.2
                , vector       >= 0.9
                , ghc-prim 
---               , lvish        >= 1.0.0.4
 
   ghc-options: -O2
-  Other-modules:
+
 
 
