@@ -6,3 +6,5 @@ docs_examples
 *.hi
 *.chi
 *.chs.h
+.DS_Store
+*~
