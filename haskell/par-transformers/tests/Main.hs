@@ -43,9 +43,9 @@ case_v_t0 = assertEqual "basic forkSTSplit usage"
             "fromList [5,0,0,0,0,120,0,0,0,0]" t0
             
 t0 :: String            
-t0 = LV.runPar $ V.runParVec 10 p0
+t0 = LV.runPar $ V.runParVecT 10 p0
 
-p0 :: V.ParVec s1 Int (LV.Par d s0) String
+p0 :: V.ParVecT s1 Int (LV.Par d s0) String
 p0 = do
   
   V.set 0
