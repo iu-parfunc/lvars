@@ -7,9 +7,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-
 {-# LANGUAGE FlexibleInstances #-}
-
+{-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE GADTs #-}
 
 -- |
@@ -22,7 +21,7 @@
 -- monad-transformer stack, and is hard-wired to use the "Control.LVish" version of
 -- the `Par` monad underneath.
 
-module Control.LVish.ST
+module Control.Par.ST
        (
          -- * The monad: a dischargable effect
          ParST, runParST,
@@ -68,10 +67,8 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
-import Control.LVish (Par, for_)
-import qualified Control.LVish.Internal as LI
 import qualified Control.Par.Class as PC
-import qualified Data.LVar.IVar as IV -- ParFuture/ParIVar Instances.
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -145,38 +142,36 @@ instance STSplittable (UVectorFlp a) where
 -- 
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
-newtype ParST stState det s2 ans =
-        ParST ((S.StateT stState (Par det s2)) ans)
+newtype ParST stState parM ans =
+        ParST ((S.StateT stState parM) ans)
  deriving (Monad, Functor)
 
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
 -- runParST has a rank-2 type, with a phantom type @s1@.
-runParST :: forall stt s0 s2 det ans .
+runParST :: forall stt s0 parM ans . (ParThreadSafe parM) => 
              stt s0
-             -> (forall s1 . ParST (stt s1) det s2 ans)
-             -> Par det s2 ans
-runParST initVal (ParST st) = unsafePerformIO io
- where
-   io = do 
-           let xm :: Par det s2 (ans, stt s0)
-               xm = S.runStateT st initVal
-               xm' = xm >>= (return . fst)
-           return xm'
+             -> (forall s1 . ParST (stt s1) parM ans)
+             -> parM ans
+runParST initVal (ParST st) = do
+  let xm :: parM (ans, stt s0)
+      xm = S.runStateT st initVal
+  xm >>= (return . fst)
 
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
-instance S.MonadState stts (ParST stts det s2) where
+instance ParThreadSafe parM =>
+         S.MonadState stts (ParST stts parM) where
   get = reify
   put = install
-  
+
 -- | A `ParST` computation that results in the current value of the state, which is
 -- typically some combination of `STRef` and `STVector`s.  These require `ST`
 -- computation to do anything with the state.
-reify :: ParST stt det s2 stt
+reify :: ParThreadSafe parM => ParST stt parM stt
 reify = ParST S.get
 
 -- | Installs a new piece of ST-mutable state.
-install :: stt -> ParST stt det s2 ()
+install :: ParThreadSafe parM => stt -> ParST stt parM ()
 install val = ParST (S.put val)
 
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
@@ -187,52 +182,52 @@ install val = ParST (S.put val)
 -- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
 -- `fork`.  So the continuation of @forkWithVec@ will not run until both child
 -- computations return, and are thus done accessing the state.
-forkSTSplit :: forall a b s0 s2 det stt.
-               (Eq a, STSplittable stt) =>
-               (SplitIdx stt)
-            -> (forall sl . ParST (stt sl) det s2 a) -- ^ Left child computation.
-            -> (forall sr . ParST (stt sr) det s2 b) -- ^ Right child computation.
-            -> ParST (stt s0) det s2 (a,b)
+forkSTSplit :: forall a b s0 parM stt.
+               (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM a,
+                Eq a, STSplittable stt) =>
+               (SplitIdx stt)                      -- ^ Where to split the data.
+            -> (forall sl . ParST (stt sl) parM a) -- ^ Left child computation.
+            -> (forall sr . ParST (stt sr) parM b) -- ^ Right child computation.
+            -> ParST (stt s0) parM (a,b)
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ do
   snap <- S.get
   let slice1, slice2 :: stt s0
       (slice1,slice2) = splitST spltidx snap
-  lift$ do lv <- IV.spawn_$ S.evalStateT lef slice1
+  lift$ do lv <- PC.spawn_$ S.evalStateT lef slice1
            rx <- S.evalStateT rig slice2
-           lx <- IV.get lv         -- Wait for the forked thread to finish.
+           lx <- PC.get lv  -- Wait for the forked thread to finish.
            return (lx,rx)
 
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead. 
-liftST :: ST s1 a -> ParST (stt s1) det s2 a
-liftST st = ParST (lift (LI.liftIO io))
+liftST :: ParThreadSafe parM => ST s1 a -> ParST (stt s1) parM a
+liftST st = ParST (lift (unsafeParIO io))
  where
-   io    = unsafeSTToIO st 
+   io = unsafeSTToIO st 
 
 -- | Lift an ordinary `Par` computation into `ParST`.
-liftPar :: Par d s a -> ParST stt1 d s a 
+liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
 liftPar m = ParST (lift m)
 
 -- | A conditional instance which will only be usable if unsafe imports are made.
-instance MonadIO (Par det s2) => MonadIO (ParST stt1 det s2) where
+instance MonadIO parM => MonadIO (ParST stt1 parM) where
   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
-instance PC.ParFuture (ParST sttt d s) where
+instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
   -- | The `Future` type and `FutContents` constraint are the same as the underlying `Par` monad.
-  type Future      (ParST sttt d s)   = PC.Future      (Par d s)
-  type FutContents (ParST sttt d s) a = PC.FutContents (Par d s) a
-  spawn_ (ParST task) = ParST $ 
-    do iv <- lift $ PC.new
-       lift $ PC.fork $ do
+  type Future      (ParST sttt parM)   = PC.Future      parM
+  type FutContents (ParST sttt parM) a = PC.FutContents parM a
+  spawn_ (ParST task) = ParST $
+     lift $ PC.spawn_ $ do
            (res,_) <- S.runStateT task
                       (error "spawn_: This child thread does not have permission to touch the array!")
-           PC.put_ iv res
-       return iv
+           return res     
   get iv = ParST $ lift $ PC.get iv
 
-instance PC.ParIVar (ParST sttt d s) where
+
+instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
   fork (ParST task) = ParST $ 
     lift $ PC.fork $ do
       (res,_) <- S.runStateT task
@@ -247,22 +242,21 @@ instance PC.ParIVar (ParST sttt d s) where
 -- | Generic way to build an in-place map operation for a collection state.
 --
 --   This function reserves the right to sequentialize some iterations.
-mkParMapM :: forall elt det s1 s2 stt . (STSplittable stt) =>
-           -- (Int -> ST s1 elt) ->
-           -- (Int -> elt -> ST s1 ()) ->
-           -- (stt s1 -> ST s1 Int) ->
-              (forall s4 . Int ->        ParST (stt s4) det s2 elt)  -- ^ Reader
-           -> (forall s4 . Int -> elt -> ParST (stt s4) det s2 ())   -- ^ Writer 
-           -> (forall s4 .               ParST (stt s4) det s2 Int)  -- ^ Length
-           -> (Int -> SplitIdx stt)                                  -- ^ Split elements
-           -> (elt -> Par det s2 elt)                                -- ^ Fn to map over elmts.
-           -> ParST (stt s1) det s2 ()
+mkParMapM :: forall elt s1 stt parM .
+             (STSplittable stt, ParThreadSafe parM,
+              PC.ParFuture parM, PC.FutContents parM ()) =>
+              (forall s4 . Int ->        ParST (stt s4) parM elt) -- ^ Reader
+           -> (forall s4 . Int -> elt -> ParST (stt s4) parM ())  -- ^ Writer 
+           -> (forall s4 .               ParST (stt s4) parM Int) -- ^ Length
+           -> (Int -> SplitIdx stt)                               -- ^ Split elements
+           -> (elt -> parM elt)                                   -- ^ Fn to map over elmts.
+           -> ParST (stt s1) parM ()
 {-# INLINE mkParMapM #-}
 mkParMapM reader writer getsize mksplit fn = do
   stt <- S.get
   len <- getsize 
   let share = max 1 (len `quot` (numProcs * overPartition))
-      loopmpm :: Int -> (forall s3 . ParST (stt s3) det s2 ())
+      loopmpm :: Int -> (forall s3 . ParST (stt s3) parM ())
       loopmpm iters
         | iters <= share = 
           -- Bottom out to a sequential loop:
@@ -287,17 +281,13 @@ overPartition = 8
 numProcs :: Int
 numProcs = unsafeDupablePerformIO getNumProcessors
 
---------------------------------------------------------------------------------
--- Tests and Scrap:
---------------------------------------------------------------------------------
 
--- Little tests:
-t1 :: IO String
-t1 = unsafeSTToIO p1
-
-p1 :: ST s String
-p1 = do
-  r <- newSTRef "hi"
-  writeSTRef r "hello"
-  readSTRef r
-
+-- | A simple for loop for numeric ranges (not requiring deforestation
+-- optimizations like `forM`).  Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) _fn | start > end = error "for_: start is greater than end"
+for_ (start, end) fn = loop start
+ where
+  loop !i | i == end  = return ()
+          | otherwise = do fn i; loop (i+1)

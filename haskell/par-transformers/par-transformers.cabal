@@ -36,14 +36,14 @@ Library
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT                 
-                 Control.Par.VecT
+--                 Control.Par.VecT
 
-                 Control.LVish.ST
-                 Control.LVish.ST.Vec
-                 Control.LVish.ST.Vec2
-                 Control.LVish.ST.UVec
-                 Control.LVish.ST.UVec2
-
+                 Control.Par.ST
+                 Control.Par.ST.Vec
+                 Control.Par.ST.Vec2
+                 -- Control.LVish.ST.UVec
+                 -- Control.LVish.ST.UVec2
+                 
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
@@ -65,7 +65,7 @@ Library
                , transformers >= 0.2
                , vector       >= 0.9
                , ghc-prim 
-               , lvish        >= 1.0.0.4
+--               , lvish        >= 1.0.0.4
 
   ghc-options: -O2
   Other-modules:

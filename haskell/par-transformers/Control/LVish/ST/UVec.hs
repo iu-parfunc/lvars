@@ -85,7 +85,6 @@ length = S.get >>= (return . MU.length . unFlp)
 
 -- | Update the vector state by swapping two elements.
 swap :: Int -> Int -> ParVec s1 elt det s2 ()
--- swap x y = S.get >>= ((\ v -> MU.swap v x y) . unFlp)
 swap x y = do
   UFlp vec <- S.get
   liftST$ MU.swap vec x y
