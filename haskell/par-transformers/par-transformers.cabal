@@ -35,8 +35,8 @@ Library
                  Control.Par.ST
                  Control.Par.ST.Vec
                  Control.Par.ST.Vec2
-                 -- Control.LVish.ST.UVec
-                 -- Control.LVish.ST.UVec2
+                 Control.Par.ST.UVec
+                 Control.Par.ST.UVec2
                  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
