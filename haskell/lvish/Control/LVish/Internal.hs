@@ -98,5 +98,6 @@ unsafeDet (WrapPar p) = (WrapPar p)
 instance MonadToss (Par d s) where
   toss = WrapPar L.toss
 
+-- | Unsafe internal operation to lift IO into the Par monad.
 liftIO :: IO a -> Par d s a
 liftIO = WrapPar . L.liftIO   

@@ -209,7 +209,5 @@ instance PC.ParIVar (Par d s) where
   put_ = put_
   new = new
 
-instance PC.ParThreadSafe (Par d s) where
-  unsafeParIO = I.liftIO
 #endif
 
