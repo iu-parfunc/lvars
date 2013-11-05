@@ -110,6 +110,30 @@ case_and4 = assertEqual "" False $ runPar $ runCancelT $ do
               CT.asyncAnd (return False) (return True) (PC.put v)
               PC.get v
 
+
+case_andTreeF :: Assertion
+case_andTreeF = assertEqual "" False $ runPar $ runCancelT $ andTreeF 16
+
+case_andTreeT :: Assertion
+case_andTreeT = assertEqual "" True $ runPar $ runCancelT $ andTreeT 16
+
+-- | Takes a depth N and does 2^N operations in a binary tree
+andTreeF :: Int -> CancelT (Par d s) Bool
+andTreeF 0 = return False
+andTreeF depth = do
+  v <- PC.new
+  CT.asyncAnd (andTreeF (depth-1)) (andTreeF (depth-1)) (PC.put v)
+  PC.get v
+
+andTreeT :: Int -> CancelT (Par d s) Bool
+andTreeT 0 = return True
+andTreeT depth = do
+  v <- PC.new
+  CT.asyncAnd (andTreeT (depth-1)) (andTreeT (depth-1)) (PC.put v)
+  PC.get v
+
+
+
 -- TODO: tree of ANDs with cancellation..
 
 -- case_or1 :: Assertion
