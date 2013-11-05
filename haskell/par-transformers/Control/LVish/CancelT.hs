@@ -127,12 +127,12 @@ cancelMe' = unCancelT cancelMe
 instance (ParSealed m) => ParSealed (CancelT m) where
   type GetSession (CancelT m) = GetSession m
   
-instance (PrivateMonadIO m, LVarSched m) => LVarSched (CancelT m) where
+instance (PrivateMonadIO m, ParIVar m, LVarSched m) => LVarSched (CancelT m) where
   type LVar (CancelT m) = LVar m 
 
 -- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
-  forkLV act = do _ <- forkCancelable act; return ()
---  forkLV act = PC.fork act
+--  forkLV act = do _ <- forkCancelable act; return ()
+  forkLV act = PC.fork act
     
   newLV act = lift$ newLV act
   
@@ -158,7 +158,7 @@ instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
   toQPar (CancelT (S.StateT{runStateT})) =
     CancelT $ S.StateT $ toQPar . runStateT
 
-instance (Functor qm, Monad qm, PrivateMonadIO m,
+instance (Functor qm, Monad qm, PrivateMonadIO m, ParIVar m, 
           LVarSched m, LVarSchedQ m qm, ParQuasi (CancelT m) (CancelT qm) ) =>
          LVarSchedQ (CancelT m) (CancelT qm) where
 
@@ -197,11 +197,11 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 --------------------------------------------------------------------------------
 
 -- UNFINISHED:
-asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
-            => (p Bool) -> (p Bool) -> (Bool -> p ()) -> p ()
-
 -- asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
---             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()  
+--             => (p Bool) -> (p Bool) -> (Bool -> p ()) -> p ()
+
+asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
+            => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()  
 asyncAnd trueM falseM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
