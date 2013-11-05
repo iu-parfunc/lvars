@@ -31,6 +31,7 @@ import Data.IORef
 import Control.Par.Class as PC
 import Control.Par.Class.Unsafe (PrivateMonadIO(..))
 
+import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
 newtype CancelT m a = CancelT ((StateT CState m) a)
@@ -129,7 +130,9 @@ instance (ParSealed m) => ParSealed (CancelT m) where
 instance (PrivateMonadIO m, LVarSched m) => LVarSched (CancelT m) where
   type LVar (CancelT m) = LVar m 
 
+-- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
   forkLV act = do _ <- forkCancelable act; return ()
+--  forkLV act = PC.fork act
     
   newLV act = lift$ newLV act
   
@@ -168,3 +171,57 @@ instance (Functor qm, Monad qm, PrivateMonadIO m,
         frz x = freezeLV x 
     CancelT (lift (snd (frz lvar2)))
     return ()))
+
+
+instance ParFuture m => ParFuture (CancelT m) where
+  type Future (CancelT m) = Future m
+  type FutContents (CancelT m) a = PC.FutContents m a
+  spawn_ (CancelT task) = CancelT $ do
+     s0 <- S.get
+     lift $ PC.spawn_ $ do
+           -- This spawned computation is part of the same tree for purposes of
+           -- cancellation:
+           (res,_) <- S.runStateT task s0
+           return res     
+  get iv = CancelT $ lift $ PC.get iv
+
+instance PC.ParIVar m => PC.ParIVar (CancelT m) where
+  fork (CancelT task) = CancelT $ do
+    s0 <- S.get
+    lift $ PC.fork $ do      
+      (res,_) <- S.runStateT task s0
+      return res
+  new       = CancelT$ lift PC.new
+  put_ iv v = CancelT$ lift$ PC.put_ iv v
+
+--------------------------------------------------------------------------------
+
+-- UNFINISHED:
+asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
+            => (p Bool) -> (p Bool) -> (Bool -> p ()) -> p ()
+
+-- asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
+--             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()  
+asyncAnd trueM falseM kont = do
+  -- Atomic counter, if we are the second True we write the result:
+  cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
+  let launch m = PC.fork $
+                   do b <- m
+                      case b of
+                        True  -> do n <- internalLiftIO$ C.incrCounter 1 cnt
+                                    if n==2
+                                      then kont True
+                                      else return ()
+                        False -> -- We COULD assume idempotency and execute kont False twice,
+                                 -- but since we have the counter anyway let us dedup:
+                                 do n <- internalLiftIO$ C.incrCounter 100 cnt
+                                    if n < 200 -- Zero ops or one True.
+                                      then kont False
+                                      else return ()
+                      undefined
+  launch trueM
+  launch falseM
+
+  return ()
+
+
