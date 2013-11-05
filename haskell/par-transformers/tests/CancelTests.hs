@@ -3,11 +3,11 @@
 module CancelTests (tests, runTests) where
 
 import Control.LVish
-import Control.LVish.CancelT
--- import Control.Par.Class
+import Control.LVish.CancelT as CT
+import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (PrivateMonadIO(internalLiftIO))
 import Control.LVish.Unsafe
-import Data.LVar.IVar
+import Data.LVar.IVar as IV
 
 import Control.Concurrent
 import Control.Monad.Trans
@@ -86,29 +86,31 @@ appreciableDelay = threadDelay (100 * 1000)
 -- -- BOOLEAN TESTS:
 -- --------------------------------------------------------------------------------
   
--- case_and1 :: Assertion
--- case_and1 = assertEqual "" False $ runPar $ do
---               v <- IV.new
---               asyncAnd Nothing (return True) (return False) (IV.put v)
---               IV.get v
+case_and1 :: Assertion
+case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
+              v <- PC.new
+              CT.asyncAnd (return True) (return False) (PC.put v)
+              PC.get v
 
--- case_and2 :: Assertion
--- case_and2 = assertEqual "" False $ runPar $ do
---               v <- IV.new
---               asyncAnd Nothing (return False) (return False) (IV.put v)
---               IV.get v
+case_and2 :: Assertion
+case_and2 = assertEqual "" False $ runPar $ runCancelT $ do
+              v <- PC.new
+              CT.asyncAnd (return False) (return False) (PC.put v)
+              PC.get v
 
--- case_and3 :: Assertion
--- case_and3 = assertEqual "" True $ runPar $ do
---               v <- IV.new
---               asyncAnd Nothing (return True) (return True) (IV.put v)
---               IV.get v                        
+case_and3 :: Assertion
+case_and3 = assertEqual "" True $ runPar $ runCancelT $ do
+              v <- PC.new
+              CT.asyncAnd (return True) (return True) (PC.put v)
+              PC.get v                        
 
--- case_and4 :: Assertion
--- case_and4 = assertEqual "" False $ runPar $ do
---               v <- IV.new
---               asyncAnd Nothing (return False) (return True) (IV.put v)
---               IV.get v
+case_and4 :: Assertion
+case_and4 = assertEqual "" False $ runPar $ runCancelT $ do
+              v <- PC.new
+              CT.asyncAnd (return False) (return True) (PC.put v)
+              PC.get v
+
+-- TODO: tree of ANDs with cancellation..
 
 -- case_or1 :: Assertion
 -- case_or1 = assertEqual "" True $ runPar $ do

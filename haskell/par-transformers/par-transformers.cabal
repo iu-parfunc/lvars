@@ -83,4 +83,5 @@ Test-suite test-par-transformers
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
+  ghc-options: -threaded
 

@@ -21,7 +21,10 @@ module Control.LVish.CancelT
          forkCancelable,
          cancel,         
          pollForCancel,
-         cancelMe
+         cancelMe,
+
+         -- * Boolean operations with cancellation
+         asyncAnd
        )
        where
 
@@ -86,14 +89,32 @@ cancelMe = lift $ returnToSched
 type ThreadId = CState
 
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
--- (and all its descendents).
+-- (and all its descendents).  This is equivalent to `createTid` followed by `forkCancelableWithTid`.
 forkCancelable :: (PrivateMonadIO m, LVarSched m) => CancelT m () -> CancelT m ThreadId
-forkCancelable (CancelT act) = CancelT$ do
+forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
+    tid <- createTid
+    forkCancelableWithTid tid act
+    return tid
+
+-- | Sometimes it is necessary to have a TID in scope *before* forking the
+-- computations in question.  For that purpose, we provide a two-phase interface:
+-- `createTid` followed by `forkCancelableWithTid`.
+createTid :: (PrivateMonadIO m, LVarSched m) => CancelT m ThreadId
+{-# INLINE createTid #-}
+createTid = CancelT$ do
+    newSt <- internalLiftIO$ newIORef (CPair True [])
+    return (CState newSt)
+
+-- | Fork a thread whil emaking it cancelable with the provided threadId argument.
+--   Forking multiple computations with the same Tid are permitted; all threads will
+--   be canceled as a group.
+forkCancelableWithTid :: (PrivateMonadIO m, LVarSched m) => ThreadId -> CancelT m () -> CancelT m ()
+{-# INLINE forkCancelableWithTid #-}
+forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
     CState parentRef <- S.get
-    -- Create new child state:
-    childRef <- internalLiftIO$ newIORef (CPair True [])    
+    -- Create new child state:  
     live <- internalLiftIO $ 
       atomicModifyIORef' parentRef $ \ orig@(CPair bl ls) ->
         if bl then
@@ -104,7 +125,8 @@ forkCancelable (CancelT act) = CancelT$ do
     if live then
        lift $ forkLV (evalStateT act (CState childRef))
       else cancelMe'
-    return (CState parentRef)
+    return ()
+
 
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
@@ -200,12 +222,13 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 -- asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
 --             => (p Bool) -> (p Bool) -> (Bool -> p ()) -> p ()
 
-asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p)
+asyncAnd :: forall p . (PrivateMonadIO p, ParIVar p, LVarSched p)
             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()  
 asyncAnd trueM falseM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
-  let launch m = PC.fork $
+  let launch mine theirs m =
+             forkCancelableWithTid mine $
                    do b <- m
                       case b of
                         True  -> do n <- internalLiftIO$ C.incrCounter 1 cnt
@@ -215,12 +238,15 @@ asyncAnd trueM falseM kont = do
                         False -> -- We COULD assume idempotency and execute kont False twice,
                                  -- but since we have the counter anyway let us dedup:
                                  do n <- internalLiftIO$ C.incrCounter 100 cnt
-                                    if n < 200 -- Zero ops or one True.
-                                      then kont False
+                                    if n < 200 -- Zero ops or one True.  (If false, nothing to do)
+                                      then do -- logDbgLn 1 "asyncAnd: False result, cancelling other..." 
+                                              cancel theirs
+                                              kont False
                                       else return ()
-                      undefined
-  launch trueM
-  launch falseM
+  tid1 <- createTid
+  tid2 <- createTid  
+  launch tid1 tid2 trueM
+  launch tid2 tid1 falseM
 
   return ()
 
