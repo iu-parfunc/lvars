@@ -18,7 +18,7 @@ module Control.LVish.CancelT
          
          -- * Operations specific to CancelT
          runCancelT,
-         forkCancelable,
+         forkCancelable, createTid, forkCancelableWithTid,
          cancel,         
          pollForCancel,
          cancelMe,
