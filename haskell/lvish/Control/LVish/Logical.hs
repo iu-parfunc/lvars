@@ -5,7 +5,7 @@ module Control.LVish.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
 import Control.LVish.Basics
 import Control.LVish.Internal (Par(WrapPar), unsafeDet)
-import Control.LVish.SchedIdempotent (liftIO, HandlerPool)
+import Control.LVish.Sched    (liftIO, HandlerPool)
 import Data.LVar.IVar    as IV
 
 import qualified Data.Atomics.Counter as C
