@@ -24,13 +24,11 @@ module Control.LVish.Internal
     
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
-    unsafeConvert, state,
-    liftIO
-
+    unsafeConvert, unsafeDet,
+    state, liftIO
   )
   where
 
-import           Control.Monad.IO.Class
 import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Control.LVish.Sched as L
@@ -91,8 +89,15 @@ state = L.state . unWrapLVar
 unsafeConvert :: Par d1 s1 a -> Par d2 s2 a
 unsafeConvert (WrapPar p) = (WrapPar p)
 
-instance MonadIO (Par d s) where
-  liftIO = WrapPar . L.liftIO   
+-- | Unsafe coercion from quasi-deterministic to deterministic.  The user is
+-- promising that code is carefully constructed so that put/freeze races will not
+-- occur.
+unsafeDet :: Par QuasiDet s1 a -> Par d s2 a
+unsafeDet (WrapPar p) = (WrapPar p)
 
 instance MonadToss (Par d s) where
   toss = WrapPar L.toss
+
+-- | Unsafe internal operation to lift IO into the Par monad.
+liftIO :: IO a -> Par d s a
+liftIO = WrapPar . L.liftIO   

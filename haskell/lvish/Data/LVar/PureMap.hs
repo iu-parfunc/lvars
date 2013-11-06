@@ -4,11 +4,11 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+-- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE IncoherentInstances #-}
+-- {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 {-|
 
@@ -26,7 +26,10 @@ module Data.LVar.PureMap
          IMap(..), 
          newEmptyMap, newMap, newFromList,
          insert, 
-         getKey, waitValue, waitSize, modify, 
+         getKey, waitValue, waitSize, modify,
+
+         -- * Generic routines and convenient aliases
+         gmodify, getOrInit,
          
          -- * Iteration and callbacks
          forEach, forEachHP,
@@ -34,93 +37,30 @@ module Data.LVar.PureMap
 
          -- * Quasi-deterministic operations
          freezeMap, fromIMap,
+         traverseFrzn_,
 
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_,  union,
          
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
-         traverseMapHP, traverseMapHP_, unionHP
+         traverseMapHP, traverseMapHP_, unionHP                                        
        ) where
 
-import           Control.Monad (void)
-import           Control.Exception (throw)
-import           Control.Applicative (Applicative, (<$>),(*>), pure, getConst, Const(Const))
-import           Data.Monoid (Monoid(..))
-import           Data.IORef
-import qualified Data.Map.Strict as M
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable as F
-import           Data.LVar.Generic
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           Data.UtilInternal (traverseWithKey_)
-import           Data.List (intersperse)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
 import           Control.LVish.Sched (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
 import qualified Control.LVish.Sched as L
+import qualified Data.LVar.IVar as IV
+import           Data.LVar.Generic as G
+import           Data.LVar.PureMap.Unsafe
+import           Data.UtilInternal (traverseWithKey_)
+
+import           Control.Exception (throw)
+import           Data.IORef
+import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
-
-------------------------------------------------------------------------------
--- IMaps implemented on top of LVars:
-------------------------------------------------------------------------------
-
--- | The map datatype itself.  Like all other LVars, it has an @s@ parameter (think
---  `STRef`) in addition to the @a@ parameter that describes the type of elements
--- in the set.
--- 
--- Performance note: There is only /one/ mutable location in this implementation.  Thus
--- it is not a scalable implementation.
-newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
-
--- | Equality is physical equality, as with @IORef@s.
-instance Eq (IMap k s v) where
-  IMap lv1 == IMap lv2 = state lv1 == state lv2 
-
--- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
--- operations are less useful than the monomorphic ones exposed by this module.
-instance LVarData1 (IMap k) where
-  freeze orig@(IMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-  -- Unlike the Map-specific forEach variants, this takes only values, not keys.
-  addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
-  sortFrzn (IMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
-
--- | The `IMap`s in this module also have the special property that they support an
--- /O(1)/ freeze operation which immediately yields a `Foldable` container
--- (`snapFreeze`).
-instance OrderedLVarData1 (IMap k) where
-  snapFreeze is = unsafeCoerceLVar <$> freeze is
-
--- As with all LVars, after freezing, map elements can be consumed. In
--- the case of this `IMap` implementation, it need only be `Frzn`, not
--- `Trvrsbl`.
-instance F.Foldable (IMap k Frzn) where
-  foldr fn zer (IMap lv) =
-    let set = unsafeDupablePerformIO (readIORef (state lv)) in
-    F.foldr fn zer set 
-
--- Of course, the stronger `Trvrsbl` state is still fine for folding.
-instance F.Foldable (IMap k Trvrsbl) where
-  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
-
--- `IMap` values can be returned as the result of a
---  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
---  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
-instance DeepFrz a => DeepFrz (IMap k s a) where
-  type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
-  frz = unsafeCoerceLVar
-
-instance (Show k, Show a) => Show (IMap k Frzn a) where
-  show (IMap lv) =
-    let mp' = unsafeDupablePerformIO (readIORef (state lv)) in
-    "{IMap: " ++
-    (concat $ intersperse ", " $ map show $
-     M.toList mp') ++ "}"
-
--- | For convenience only; the user could define this.
-instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
-  show lv = show (castFrzn lv)
 
 --------------------------------------------------------------------------------
 
@@ -163,21 +103,6 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
--- | Add an (asynchronous) callback that listens for all new key/value pairs added to
--- the map, optionally enrolled in a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
-          -> IMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par d s ())      -- ^ callback
-          -> Par d s ()
-forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
-    L.addHandler mh lv globalCB deltaCB
-    return ()
-  where
-    deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
-    globalCB ref = do
-      mp <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ 
-        traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
@@ -233,9 +158,26 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
                            (Just (key, bot), 
                             do L.logStrLn$ " [Map.modify] key absent, adding the new one."
                                unWrapPar$ fn bot))
-      
       act <- putLV_ (unWrapLVar lv) putter
       act
+
+{-# INLINE gmodify #-}
+-- | A generic version of `modify` that does not require a `newBottom` argument,
+-- rather, it uses the generic version of that function.
+gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+          IMap key s (f s a)
+          -> key                  -- ^ The key to lookup.
+          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
+          -> Par d s b
+gmodify map key fn = modify map key G.newBottom fn
+
+{-# INLINE getOrInit #-}
+-- | Return the preexisting value for a key if it exists, and otherwise return
+-- 
+--   This is a convenience routine that can easily be defined in terms of `gmodify`
+getOrInit :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+          key -> IMap key s (f s a) -> Par d s (f s a)
+getOrInit key mp = gmodify mp key return
 
 -- | Wait for the map to contain a specified key, and return the associated value.
 getKey :: Ord k => k -> IMap k s v -> Par d s v
@@ -278,13 +220,13 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map.  As with any
--- quasi-deterministic operation, using `freezeSet` may cause your
+-- quasi-deterministic operation, using `freezeMap` may cause your
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
 --
 -- This "Data.Map"-based implementation has the special property that
--- you can retrieve the full set without any `IO`, and without
+-- you can retrieve the full map without any `IO`, and without
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of maps that "Data.Map"
 -- uses.)
@@ -302,6 +244,14 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
 fromIMap :: IMap k Frzn a -> M.Map k a 
 fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
+
+-- | Traverse a frozen map for side effect.  This is useful (in comparison with more
+-- generic operations) because the function passed in may see the key as well as the
+-- value.
+traverseFrzn_ :: (Ord k) =>
+                 (k -> a -> Par d s ()) -> IMap k Frzn a -> Par d s ()
+traverseFrzn_ fn mp =
+ traverseWithKey_ fn (fromIMap mp)
 
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.

@@ -35,6 +35,7 @@ module Data.LVar.SLMap
 
          -- * Quasi-deterministic operations
          freezeMap,
+         traverseFrzn_,
          -- waitValue, 
 
          -- * Iteration and callbacks
@@ -71,6 +72,10 @@ import           System.Random (randomIO)
 import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
+#endif
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -278,6 +283,16 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   -- the freezeLV part....  
   return (unsafeCoerce# x)
 
+
+-- | Traverse a frozen map for side effect.  This is useful (in comparison with more
+-- generic operations) because the function passed in may see the key as well as the
+-- value.
+traverseFrzn_ :: (Ord k) =>
+                 (k -> a -> Par d s ()) -> IMap k Frzn a -> Par d s ()
+traverseFrzn_ fn (IMap (WrapLVar lv)) = 
+  SLM.foldlWithKey (\ () k v -> fn k v)
+                   () (L.state lv)
+
 --------------------------------------------------------------------------------
 -- Higher level routines that could (mostly) be defined using the above interface.
 --------------------------------------------------------------------------------
@@ -362,4 +377,19 @@ instance (Show k, Show a) => Show (IMap k Frzn a) where
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
   show lv = show (castFrzn lv)
+
+
+--------------------------------------------------------------------------------
+  
+-- #ifdef GENERIC_PAR
+-- Not exported yet: 
+#if 0  
+instance PC.ParIMap (Par d s) where
+  type PC.IMap (Par d s) k = IMap k s
+  type PC.IMapContents (Par d s) k v = (Ord k, Eq v)
+  PC.waitSize    = waitSize
+  PC.newEmptyMap = newEmptyMap
+  PC.insert      = insert
+  PC.getKey      = getKey
+#endif
 

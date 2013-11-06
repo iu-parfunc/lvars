@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP #-}
+{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables #-}
 
 -- | To make it easier to build (multithreaded) tests
 
@@ -11,12 +11,23 @@ module TestHelpers
    setTestThreads,
 
    -- * Test initialization, reading common configs
-   stdTestHarness
+   stdTestHarness,
+
+   -- * Misc utilities
+   nTimes, assertOr, timeOut,
+   -- timeOutPure, 
+   exceptionOrTimeOut, allowSomeExceptions, assertException
  )
  where 
 
-import Data.IORef
 import Control.Monad
+import Control.Exception
+--import Control.Concurrent
+--import Control.Concurrent.MVar
+import GHC.Conc
+import Data.IORef
+import Data.Time.Clock
+import Data.List (isInfixOf, intersperse)
 import qualified Data.Set as S
 import Text.Printf
 import Control.Concurrent (forkOS, forkIO, ThreadId)
@@ -29,6 +40,7 @@ import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 import Test.HUnit as HU
 
+import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -183,4 +195,95 @@ dbgPrint lvl str = if dbg < lvl then return () else do
 
 dbgPrintLn :: Int -> String -> IO ()
 dbgPrintLn lvl str = dbgPrint lvl (str++"\n")
+
+
+------------------------------------------------------------------------------------------
+-- Misc Helpers
+------------------------------------------------------------------------------------------
+
+-- | Ensure that executing an action returns an exception
+-- containing one of the expected messages.
+assertException  :: [String] -> IO a -> IO ()
+assertException msgs action = do
+ x <- catch (do action; return Nothing) 
+            (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
+                      return (Just $ show e))
+ case x of 
+  Nothing -> error "Failed to get an exception!"
+  Just s -> 
+   if  any (`isInfixOf` s) msgs
+   then return () 
+   else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+        ++ "\nInstead got this exception:\n  " ++ show s
+
+-- | For testing quasi-deterministic programs: programs that always
+-- either raise a particular exception or produce a particular answer.
+allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
+allowSomeExceptions msgs action = do
+ catch (do a <- action; evaluate a; return (Right a))
+       (\e ->
+         let estr = show e in
+         if  any (`isInfixOf` estr) msgs
+          then do when (dbgLvl>=1) $
+                    putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
+                  return (Left e)
+          else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+               ++ "\nInstead got this exception:\n  " ++ show estr)
+
+exceptionOrTimeOut :: Double -> [String] -> IO a -> IO ()
+exceptionOrTimeOut time msgs action = do
+  x <- timeOut time $
+       allowSomeExceptions msgs action
+  case x of
+    Just (Right _val) -> error "exceptionOrTimeOut: action returned successfully!" 
+    Just (Left _exn)  -> return () -- Error, yay!
+    Nothing           -> return () -- Timeout.
+
+-- | Time-out an IO action by running it on a separate thread, which is killed when
+-- the timer expires.  This requires that the action do allocation, otherwise it will
+-- be non-preemptable.
+timeOut :: Double -> IO a -> IO (Maybe a)
+timeOut interval act = do
+  result <- newIORef Nothing
+  tid <- forkIO (act >>= writeIORef result . Just)
+  t0  <- getCurrentTime
+  let loop = do
+        stat <- threadStatus tid
+        case stat of
+          ThreadFinished  -> readIORef result
+          ThreadBlocked _ -> do putStrLn " [lvish-tests] Test timed out -- thread blocked!"
+                                return Nothing
+          ThreadDied      -> do putStrLn " [lvish-tests] Test timed out -- thread died!"
+                                return Nothing
+          ThreadRunning   -> do 
+            now <- getCurrentTime
+            let delt :: Double
+                delt = fromRational$ toRational$ diffUTCTime now t0
+            if delt >= interval
+              then do killThread tid -- TODO: should probably wait for it to show up as dead.
+                      return Nothing
+              else do threadDelay (10 * 1000)
+                      loop   
+  loop
+
+{-# NOINLINE timeOutPure #-}
+-- | Evaluate a pure value to weak-head normal form, with timeout.
+--   This is NONDETERMINISTIC, so its type is sketchy:
+--
+-- WARNING: This doesn't seem to work properly yet!  I am seeing spurious failures.
+-- -RRN [2013.10.24]
+--
+timeOutPure :: Double -> a -> Maybe a
+timeOutPure tm thnk =
+  unsafePerformIO (timeOut tm (evaluate thnk))
+
+assertOr :: Assertion -> Assertion -> Assertion
+assertOr act1 act2 = 
+  catch act1 
+        (\(e::SomeException) -> act2)
+
+
+nTimes :: Int -> (Int -> IO a) -> IO ()
+nTimes 0 _ = return ()
+nTimes n c = c n >> nTimes (n-1) c
 

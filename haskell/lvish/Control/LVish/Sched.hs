@@ -34,7 +34,7 @@ module Control.LVish.Sched
     quiesce, quiesceAll,
 
     -- * Debug facilities
-    logStrLn, dbgLvl,
+    logStrLn, logLnAt_, dbgLvl,
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
@@ -64,6 +64,10 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           Text.Printf (printf)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
+
+#ifdef DEBUG_LVAR               
+import           Text.Printf (printf)
+#endif
 
 -- import Control.Compose ((:.), unO)
 import           Data.Traversable 
@@ -106,7 +110,9 @@ printLog = do
   -- Clear the log when we read it:
   lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
   mapM_ putStrLn $ reverse lines  
-  
+
+-- | The idea here is that while a runPar is underway, we periodically flush out the
+-- debug messages.
 printLogThread :: IO (IO ())
 printLogThread = do
   tid <- forkIO $
@@ -137,6 +143,7 @@ theEnv = unsafePerformIO getEnvironment
 -- | Debugging flag shared by several modules.
 --   This is activated by setting the environment variable @DEBUG=1..5@.
 dbgLvl :: Int
+#ifdef DEBUG_LVAR
 dbgLvl = case lookup "DEBUG" theEnv of
        Nothing  -> defaultDbg
        Just ""  -> defaultDbg
@@ -145,6 +152,9 @@ dbgLvl = case lookup "DEBUG" theEnv of
          case reads s of
            ((n,_):_) -> trace (" [!] Responding to env Var: DEBUG="++show n) n
            [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
+#else 
+dbgLvl = 0
+#endif
 
 defaultDbg :: Int
 defaultDbg = 0
@@ -334,6 +344,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                   B.remove tok
                   enableCont b
           
+          logLnAt_ 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 
@@ -596,6 +607,8 @@ yield = mkPar $ \k q -> do
   sched q
   
 {-# INLINE sched #-}
+-- | Contract: This scheduler function only returns when ALL worker threads have
+-- completed their work and idled.
 sched :: SchedState -> IO ()
 sched q = do
   n <- Queue.next q
@@ -658,6 +671,8 @@ runPar_internal2 c = do
   logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
   return ans
 #else
+  -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
+  ----------------------------------------------------------------------------------
   let runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
            then sched q
@@ -719,14 +734,17 @@ unsafeName x = unsafePerformIO $ do
    return (hashStableName sn)
 
 {-# INLINE hpMsg #-}
+hpMsg :: String -> HandlerPool -> IO ()
 hpMsg msg hp = 
   when (dbgLvl >= 3) $ do
     s <- hpId_ hp
     logLnAt_ 3 $ msg++", pool identity= " ++s
 
 {-# NOINLINE hpId #-}   
+hpId :: HandlerPool -> String
 hpId hp = unsafePerformIO (hpId_ hp)
 
+hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
   sn1 <- makeStableName cnt
   sn2 <- makeStableName bag
@@ -746,7 +764,7 @@ forkWithExceptions forkit descr action = do
            case E.fromException e of 
              Just E.ThreadKilled -> do
 -- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
-#ifdef DEBUG_LVAR               
+#ifdef DEBUG_LVAR
                printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
 #endif
                return ()

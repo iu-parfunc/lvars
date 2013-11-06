@@ -1,8 +1,13 @@
-{- LANGUAGE MultiParamTypeClasses, FunctionalDependencies, CPP,
-             FlexibleInstances, UndecidableInstances -}
+{-# LANGUAGE Trustworthy #-}
+
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+-- FlexibleInstances, UndecidableInstances
+
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# LANGUAGE GADTs #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -29,19 +34,33 @@ module Control.Par.Class
   (
   -- * Futures: the most basic functionality
     ParFuture(..)
-  -- * IVars
+  -- * IVars: futures that anyone can fill
   , ParIVar(..)
 
+  --  Monotonically growing finite maps
+--  , ParIMap(..)
+
+   -- * (Internal) Abstracting LVar Schedulers.
+  , LVarSched(..), LVarSchedQ(..)
+  , ParQuasi (..), ParSealed(..)
+  , Proxy(Proxy)
+                   
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
     --  , ParChan(..)
 
+  -- * Simple tracking of WHICH Par monads permit only threadsafe effects
+  , ParThreadSafe()
+    
   , NFData() -- This is reexported.
   )
 where
 
 import Control.DeepSeq
+import Control.Par.Class.Unsafe
 import GHC.Prim (Constraint)
+
+import qualified Data.Foldable as F
 
 --------------------------------------------------------------------------------
 
@@ -144,10 +163,131 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
+-- | Carry a phantom type argument.
+data Proxy a = Proxy
 
---  A commonly desired monotonic data structure an insertion-only Map or Set.
---  This captures Par monads which are able to provide that capability.
--- class ParMap ivar m | m -> ivar where
+-- TODO: Move to Control.LVish.Class:
+
+-- | Par monads which can be switched into a "quasi-deterministic" variant.
+--   (See Kuper et al. POPL 2014).
+class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi m qm | m -> qm where
+   -- | Lift a deterministic computation to a quasi-deterministic one.  
+   toQPar :: m a -> qm a 
+  
+-- | All proper @Par@ monads should have an @s@ parameter that seals them so that
+-- live Futures, IVars, etc cannot escape from a Par computation.  Membership in this
+-- class provides a uniform way to extract these @s@ parameters where needed.
+class ParSealed (m :: * -> *) where
+   -- | Extract the @s@ parameter from a Par monad type.
+   type GetSession m :: *
+
+-- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
+class (Monad m, ParSealed m) => LVarSched m  where
+   -- | The type of raw LVars, shared among all specific data structures (Map, Set, etc).
+   type LVar m :: * -> * -> *
+
+   -- | Create an LVar, including the extra state that required for scheduling and
+   -- synchronization.
+   newLV :: IO a -> m (LVar m a d)
+
+   -- | Update an LVar.  The change itself happens as an IO action, but any state
+   -- changes must be linearizable and must respect the lattice semantics for the LVar.
+   putLV :: LVar m a d           -- ^ the LVar
+         -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
+                                 --   value changed
+         -> m ()
+
+   -- | Do a threshold read on an LVar.  This requires both a "global" and "delta"
+   -- handler, and if the underlying Par monad assumes idempotency, both could even
+   -- execute for the same value.
+   getLV :: (LVar m a d)                -- ^ the LVar 
+         -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
+                                        -- The @Bool@ indicates whether the LVar is FROZEN.
+         -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
+         -> m b
+
+   -- | Extract a handle on the raw, mutable state within an LVar.
+   stateLV :: (LVar m a d) -> (Proxy (m ()), a)
+
+   -- addHandler
+
+   -- | Fork a child thread.   
+   forkLV :: m () -> m ()
+
+   -- | Put ourselves at the bottom of the work-pile for the current thread, allowing
+   -- others a chance to run.
+   yield :: m ()
+   yield = return ()
+
+   -- | Usually a no-op.  This checks in with the scheduler, so that it might perform
+   -- any tasks which need to be performed periodically.
+   schedCheck :: m ()
+   schedCheck = return ()
+
+   -- | Drop the current continuation and return to the scheduler.
+   returnToSched :: m a
+
+   -- TODO: should we expose a MonadCont instance?
+
+-- | An LVar scheduler with the quasi-determinism capability.  This interface is
+--   complicated by the fact that there are two monads (deterministic and
+--   quasideterministic).
+class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
+  
+   -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
+   freezeLV :: LVar m a d -> (Proxy (m()), qm ())
+   -- It is the implementor's responsibility to expose this as quasi-deterministic.
+
+--------------------------------------------------------------------------------
+
+--  | A commonly desired monotonic data structure an insertion-only Map or Set.
+--   This captures Par monads which are able to provide that capability.
+class (Functor m, Monad m) => ParIMap m  where
+  -- | The type of a future that goes along with the particular `Par`
+  -- monad the user chooses.
+  type IMap m k :: * -> *
+
+  -- | Different implementations may place different constraints on
+  -- what is allowable inside a Future.  For example, some
+  -- implementations require an Eq Constraint.
+  type IMapContents m k v :: Constraint
+
+  -- | Wait on the /size/ of the map, not its contents.
+  waitSize :: Int -> IMap m k v -> m ()
+
+  -- | Create a fresh map with nothing in it.
+  newEmptyMap :: m (IMap m k v)
+
+  -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
+  -- 
+  --   As with other container LVars, if a key is inserted multiple times, the values had
+  --   better be equal @(==)@, or a multiple-put error is raised.
+  insert :: (IMapContents m k v) => k -> v -> IMap m k v -> m ()
+
+  -- | Wait for the map to contain a specified key, and return the associated value.
+  getKey :: (IMapContents m k v) => k -> IMap m k v -> m v
+
+  -- FINISHME -- other methods
+  -- newMap newFromList
+  -- modify, forEach, copy, union...
+
+-- | Normal @IMap@ capabilities plus the additional capability of freezing @IMap@s.
+class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
+  -- | Get the exact contents of the map.  As with any
+  -- quasi-deterministic operation, using `freezeMap` may cause your
+  -- program to exhibit a limited form of nondeterminism: it will never
+  -- return the wrong answer, but it may include synchronization bugs
+  -- that can (nondeterministically) cause exceptions.
+  --
+  -- This "Data.Map"-based implementation has the special property that
+  -- you can retrieve the full map without any `IO`, and without
+  -- nondeterminism leaking.  (This is because the internal order is
+  -- fixed for the tree-based representation of maps that "Data.Map"
+  -- uses.)
+  freezeMap :: IMap m k v -> qm (SomeFoldable (k,v))
+  -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
+
+data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 --------------------------------------------------------------------------------
 

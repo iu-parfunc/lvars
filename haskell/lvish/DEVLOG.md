@@ -147,3 +147,65 @@ And I even went back before Aaron's most recent bugfix and still got:
 
 It is particularly unusual that the counter goes negative.
 
+
+[2013.10.24] {Making progress in debugging}
+-------------------------------------------
+
+Just fixed Pure/MaxCounter.  Starting to try to isolate the unit-test
+flakiness.
+
+Right now, all 48 tests pass for me most of the time.  If I try to run
+the full thing 50 times, I can see a deadlock (when running tests in
+parallel).
+
+Interestingly test-framework IS getting a substantial parallel speedup
+if I do NOT pass -j1.  If I pass -j1 I am NOT able to reproduce the
+deadlock currently (at -N1).
+
+When the tests are running in parallel, it does seem that the wrong
+test gets the exception, for example, this:
+
+      i3c: [Failed]
+    ERROR: Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "ConflictingPutExn \"Multiple puts to an IVar! (obj 20 was 19)\""
+
+It can now pass many dozens of complete tests (48 tests) like this:
+
+    rep 30 ./dist/build/test-lvish/test-lvish -j1 +RTS -N1
+    
+And with -N4 it actually passes as well!  (Keep in mind, however, that
+my current build has `-fdebug` enabled at compile time, even if I am
+not setting the DEBUG env var! )
+
+So where'd the problems go?
+Are they ONLY appearing when we remove `-j1`?  In fact, I'm also
+having trouble reproducing the above mismatched error problems even
+with NO `-j1` but also `+RTS -N4` added.  (Is the best reproducer
+something like `-j8 +RTS -N1`?  No, now I'm having trouble reproducing
+the i3c failure from a moment ago under any conditions...)
+
+Indeed... debugging assertions seem to have something to do with it.
+If I recompile with `-f-debug -f-chaselev`, then I quite quickly (9
+iterations) produce a deadlock when running tests in parallel.
+Subsequent tries took longer... but `+RTS -N4` seems to help and it is
+definitely possible to consistently get these deadlocks.
+
+That's something!  Let's toggle back to debug one more time to double
+check... `-fdebug -f-chaselev`.  Now I can do 50 full reps with
+`-N4`... but wait, here's an error:
+
+      v3e: [Failed]
+    ERROR: LVarSpecificExn "EXCEPTION in runPar(ThreadId 5): PutAfterFreezeExn \"Attempt to change a frozen LVar\""
+
+
+Or sometimes it pops up elsewhere, say v2a.  I must be careful here because
+setting `+RTS -N1` behaves very differently from setting no thread setting at
+all.  The reason is that we are passing `-N4` by default in the cabal settings:
+
+     -O2 -threaded -rtsopts -with-rtsopts=-N4
+
+And this setting for numCapabilities seems to effect the
+test-framework driver as well.
+
+

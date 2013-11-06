@@ -56,10 +56,14 @@ waitPureLVar :: (JoinSemiLattice t, Eq t) =>
                 PureLVar s t -> t -> Par d s ()
 waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
    WrapPar$ LI.getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = do x <- readIORef ref
-                                deltaThresh x
-        deltaThresh x | thrsh `joinLeq` x = return $ Just ()
-                      | otherwise         = return Nothing 
+  where globalThresh ref _ = do
+          x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] checking global thresh..."
+          deltaThresh x
+        deltaThresh x | thrsh `joinLeq` x = do logDbgLn_ 5 "  [Pure] Delta thresh met!"
+                                               return $ Just ()
+                      | otherwise         = do logDbgLn_ 5 "  [Pure] Check Delta thresh.. Not yet."
+                                               return Nothing 
 
 -- | Put a new value which will be joined with the old.
 putPureLVar :: JoinSemiLattice t =>
@@ -68,7 +72,12 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
     WrapPar $ LI.putLV iv putter
   where
     -- Careful, this must be idempotent...
-    putter _ = return (Just new)
+    putter !ref = do
+      -- In some cases direct CAS would be better than atomicModifyIORef here.
+      logDbgLn_ 5 "  [Pure] Putting to pure LVar.."
+      atomicModifyIORef' ref $ \ oldval -> (join oldval new, ())
+      -- We still publish the change for delta-thresh's to respond to:
+      return $! Just $! new
 
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
