@@ -152,7 +152,13 @@ new n s = do
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
-        return State { no = i, idemp = False, workpool, idle, status, states, prng }
+        return State { no = i,
+#ifdef LVISH_DEDUP
+                       idemp = False,
+#else    
+                       idemp = True,
+#endif
+                       workpool, idle, status, states, prng }
   rec states <- forM [0..(n-1)] $ mkState states
   return states
 

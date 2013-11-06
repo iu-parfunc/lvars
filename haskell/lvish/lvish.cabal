@@ -57,8 +57,8 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: True
 
-flag getonce
-  description: Ensure that continuations of get run at most once 
+flag dedup
+  description: Ensure that both handlers and continuations of get run at most once 
                (by using extra synchronization)
   default: False
 
@@ -159,8 +159,8 @@ library
   if flag(chaselev)
      build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
-  if flag(getonce)
-     cpp-options: -DGET_ONCE
+  if flag(dedup)
+     cpp-options: -DLVISH_DEDUP
 
 
 --------------------------------------------------------------------------------
@@ -212,6 +212,5 @@ test-suite test-lvish
     if flag(chaselev)
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
-    if flag(getonce)
-       cpp-options: -DGET_ONCE
-
+    if flag(dedup)
+       cpp-options: -DLVISH_DEDUP
