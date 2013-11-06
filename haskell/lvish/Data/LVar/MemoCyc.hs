@@ -8,27 +8,20 @@
 
 {-|
 
-In contrast with "Data.LVar.Memo", this module provides..............
+In contrast with "Data.LVar.Memo", this module provides a way to run a computation
+for each node of a graph WITH support for cycles.
 
  -}
 
 module Data.LVar.MemoCyc
-{-       
        (
-         -- * Memo tables and defered lookups 
-         Memo, MemoFuture, 
-         
-         -- * Basic operations
-         getLazy, getMemo, force,
-
-         -- * Graph reachability 
-         getReachable,
-
          -- * An idiom for fixed point computations
-         makeMemoFixedPoint,
-         Response(..)   
+         makeMemoFixedPoint_seq,
+         Response(..),
+
+         -- * A parallel version
+         makeMemoFixedPoint, NodeValue(..), NodeAction
        )
--}
        where
 -- Standard:
 import Data.Set (Set)
@@ -113,59 +106,6 @@ data NodeRecord s k v = NodeRecord
   , in_cycle :: !(IVar s Bool)
   , result   :: !(IVar s v)
   } deriving (Eq)
-
--- | A result from a lookup in a Memo-table, unforced.
---   The two-stage `getLazy`/`force` lookup is useful to separate
---   spawning the work from demanding its result.
-newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
-
---------------------------------------------------------------------------------
-
-
--- | Read from the memo-table.  If the value must be computed, do that right away and
--- block until its complete.
-getMemo :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s b 
-getMemo tab key =
-  do fut <- getLazy tab key
-     force fut
-
--- | Begin to read from the memo-table.  Initiate the computation if the key is not
--- already present.  Don't block on the computation being complete, rather, return a
--- future.
-getLazy :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s (MemoFuture d s b)
-getLazy (Memo st mp) key = do 
-  IS.insert key st
-  NodeRecord{result} <- IM.getKey key mp
-  return $! MemoFuture (IV.get result)
-
-{-
-getReachable :: (Ord k, Eq v) => Memo d s k v -> k -> Par d s (S.Set k)
-getReachable (Memo st mp) key = do 
-  IS.insert key st -- Execute it, if it hasn't already.
-  NodeRecord{reachme,result} <- IM.getKey key mp
-  _ <- IV.get result
-  -- readSetAcc set
-  return S.empty -- TEMP / FIXME
--}
-
--- | This will throw exceptions that were raised during the computation, INCLUDING
--- multiple put.
-force :: MemoFuture d s b -> Par d s b 
-force (MemoFuture pr) = pr
--- FIXME!!! Where do errors in the memoized function (e.g. multiple put) surface?
--- We must pick a determined, consistent place.
--- 
--- Multiple put errors may not be able to wait until this point to get
--- thrown.  Otherwise we'd have to be at least quasideterministic here.  If you have
--- a MemoFuture you never force, it and an outside computation may be racing to do a
--- put.  If the outside one wins the MemoFuture is the one that gets the exception
--- (and hides it), otherwise the exception is exposed.  Quasideterminism.
-
--- It may be fair to distinguish between internal problems with the MemoFuture
--- (deferred exceptions), and problematic interactions with the outside world (double
--- put) which would then not be deferred.  Such futures can't be canceled anyway, so
--- there's really no need to defer the exceptions.
-
 
 --------------------------------------------------------------------------------
 -- Cycle-detecting memoized computations
@@ -259,6 +199,16 @@ type NodeAction d s k v =
 data NodeValue k v = FinalValue !v | Defer k 
   deriving (Show,Eq,Ord)
 
+
+-- | This combinator provides parallel exploration of a graph that contains cycles.
+-- The limitation is that the work to be performed at each node (`NodeAction`) is not
+-- invoked until the graph is fully traversed, i.e. after a barrier.  Thus the graph
+-- explored is not a "dynamic graph" in the sense of being computed on the fly by the
+-- `NodeAction`.
+--
+-- The algorithm used in this function is fairly expensive.  For each node, it uses a
+-- monotonic data structure to track the full set of other nodes that can reach it in
+-- the graph.
 #ifdef DEBUG_MEMO
 makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
 #else
