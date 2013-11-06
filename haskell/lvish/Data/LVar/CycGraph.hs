@@ -9,18 +9,19 @@
 {-|
 
 In contrast with "Data.LVar.Memo", this module provides a way to run a computation
-for each node of a graph WITH support for cycles.
+for each node of a graph WITH support for cycles.  Cycles are explicitly recognized
+and then may be handled in an application specific fashion.
 
  -}
 
-module Data.LVar.MemoCyc
+module Data.LVar.CycGraph
        (
          -- * An idiom for fixed point computations
-         makeMemoFixedPoint_seq,
+         exploreGraph_seq,
          Response(..),
 
          -- * A parallel version
-         makeMemoFixedPoint, NodeValue(..), NodeAction
+         exploreGraph, NodeValue(..), NodeAction
        )
        where
 -- Standard:
@@ -92,8 +93,9 @@ unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
 data Memo (d::Determinism) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo !(IS.ISet s k)
 --       !(IM.IMap k s (SetAcc k, IVar s v))
+  
+  Memo !(IS.ISet s k)
        -- EXPENSIVE version:
        !(IM.IMap k s (NodeRecord s k v))
          -- ^ Store all the keys that we know *can reach this key*
@@ -102,15 +104,21 @@ data Memo (d::Determinism) s k v =
 data NodeRecord s k v = NodeRecord
   { mykey    :: k
   , chldrn   :: [k]
-  , reachme  :: !(IS.ISet s k)
-  , in_cycle :: !(IVar s Bool)
-  , result   :: !(IVar s v)
+  , reachme  :: !(IS.ISet s k)  -- ^ Which keys are upstream of me in the graph
+  , in_cycle :: !(IVar s Bool)  -- ^ Does this node participate in any cycle?
+  , result   :: !(IVar s v)     -- ^ The result of the per-node computation.
   } deriving (Eq)
 
 --------------------------------------------------------------------------------
--- Cycle-detecting memoized computations
+-- Cycle-detecting mapping of a computation over graph neighborhoods
 --------------------------------------------------------------------------------
 
+-- | A means of building a dynamic graph.  The node computation returns a response
+-- which may either be a final value, or a request to explore more nodes (together
+-- with a continuation for the resulting value).
+--
+-- Note that because only one key is requested at a time, this cannot express
+-- parallel graph traversals.
 data Response par key ans =
     Done !ans
   | Request !key (RequestCont par key ans)
@@ -132,7 +140,7 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- from the starting key.  When a cycle is detected at any leaf of this tree, an
 -- alternate cycle handler is called instead of running the normal computation for
 -- that key.
-makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
+exploreGraph_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
                           (k -> Par d s (Response (Par d s) k v)) -- ^ The computation to perform for new requests
                        -> (k -> Par d s v)  -- ^ Handler for a cycle on @k@.  The
                                             -- value it returns is in lieu of running
@@ -140,7 +148,7 @@ makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
                                             -- particular node in the graph.
                           -> k              -- ^ Key to lookup.
                        -> Par d s v
-makeMemoFixedPoint_seq initCont cycHndlr initKey = do
+exploreGraph_seq initCont cycHndlr initKey = do
   -- Start things off:
   resp <- initCont initKey
   v <- loop initKey (S.singleton initKey) resp return
@@ -210,16 +218,15 @@ data NodeValue k v = FinalValue !v | Defer k
 -- monotonic data structure to track the full set of other nodes that can reach it in
 -- the graph.
 #ifdef DEBUG_MEMO
-makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
+exploreGraph :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
 #else
-makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
+exploreGraph :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
 #endif
                       (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
-                   -> NodeAction QuasiDet s k v
-                   -> k   
+                   -> NodeAction QuasiDet s k v  -- ^ The computation to run at each graph node.
+                   -> k                          -- ^ The initial node (key) from which to explore.
                    -> Par QuasiDet s v
-                   -- (Memo QuasiDet s k v)
-makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
+exploreGraph keyNbrs nodeHndlr initKey = do
 
   -- First: propogate key requests.
   -- This will not diverge because the Set here suppressed duplicate callbacks:

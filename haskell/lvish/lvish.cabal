@@ -91,8 +91,10 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
-                    Data.LVar.Memo
-                    Data.LVar.MemoCyc
+                    -------------------------------------------
+                    -- New / Experimental:
+                    Data.LVar.Memo                    
+                    Data.LVar.CycGraph
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
