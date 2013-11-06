@@ -18,7 +18,8 @@ library
   other-extensions:    CPP, BangPatterns, OverloadedStrings, ScopedTypeVariables, NamedFieldPuns
   build-depends:       base >=4.6 && <4.7, lvish >=1.0 && <2.0, process==1.1.0.2, directory ==1.2.0.1,
                        vector >=0.10 && <0.11, time ==1.4.0.1, monad-par-extras >=0.3 && <0.5,
-                       pbbs-haskell, containers >=0.5 && <0.6
+                       -- pbbs-haskell, 
+                       containers >=0.5 && <0.6
   hs-source-dirs:      src
   default-language:    Haskell2010
 
