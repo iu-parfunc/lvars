@@ -8,27 +8,21 @@
 
 {-|
 
-In contrast with "Data.LVar.Memo", this module provides..............
+In contrast with "Data.LVar.Memo", this module provides a way to run a computation
+for each node of a graph WITH support for cycles.  Cycles are explicitly recognized
+and then may be handled in an application specific fashion.
 
  -}
 
-module Data.LVar.MemoCyc
-{-       
+module Data.LVar.CycGraph
        (
-         -- * Memo tables and defered lookups 
-         Memo, MemoFuture, 
-         
-         -- * Basic operations
-         getLazy, getMemo, force,
-
-         -- * Graph reachability 
-         getReachable,
-
          -- * An idiom for fixed point computations
-         makeMemoFixedPoint,
-         Response(..)   
+         exploreGraph_seq,
+         Response(..),
+
+         -- * A parallel version
+         exploreGraph, NodeValue(..), NodeAction
        )
--}
        where
 -- Standard:
 import Data.Set (Set)
@@ -99,8 +93,9 @@ unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
 data Memo (d::Determinism) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
-  Memo !(IS.ISet s k)
 --       !(IM.IMap k s (SetAcc k, IVar s v))
+  
+  Memo !(IS.ISet s k)
        -- EXPENSIVE version:
        !(IM.IMap k s (NodeRecord s k v))
          -- ^ Store all the keys that we know *can reach this key*
@@ -109,68 +104,21 @@ data Memo (d::Determinism) s k v =
 data NodeRecord s k v = NodeRecord
   { mykey    :: k
   , chldrn   :: [k]
-  , reachme  :: !(IS.ISet s k)
-  , in_cycle :: !(IVar s Bool)
-  , result   :: !(IVar s v)
+  , reachme  :: !(IS.ISet s k)  -- ^ Which keys are upstream of me in the graph
+  , in_cycle :: !(IVar s Bool)  -- ^ Does this node participate in any cycle?
+  , result   :: !(IVar s v)     -- ^ The result of the per-node computation.
   } deriving (Eq)
 
--- | A result from a lookup in a Memo-table, unforced.
---   The two-stage `getLazy`/`force` lookup is useful to separate
---   spawning the work from demanding its result.
-newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
-
+--------------------------------------------------------------------------------
+-- Cycle-detecting mapping of a computation over graph neighborhoods
 --------------------------------------------------------------------------------
 
-
--- | Read from the memo-table.  If the value must be computed, do that right away and
--- block until its complete.
-getMemo :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s b 
-getMemo tab key =
-  do fut <- getLazy tab key
-     force fut
-
--- | Begin to read from the memo-table.  Initiate the computation if the key is not
--- already present.  Don't block on the computation being complete, rather, return a
--- future.
-getLazy :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s (MemoFuture d s b)
-getLazy (Memo st mp) key = do 
-  IS.insert key st
-  NodeRecord{result} <- IM.getKey key mp
-  return $! MemoFuture (IV.get result)
-
-{-
-getReachable :: (Ord k, Eq v) => Memo d s k v -> k -> Par d s (S.Set k)
-getReachable (Memo st mp) key = do 
-  IS.insert key st -- Execute it, if it hasn't already.
-  NodeRecord{reachme,result} <- IM.getKey key mp
-  _ <- IV.get result
-  -- readSetAcc set
-  return S.empty -- TEMP / FIXME
--}
-
--- | This will throw exceptions that were raised during the computation, INCLUDING
--- multiple put.
-force :: MemoFuture d s b -> Par d s b 
-force (MemoFuture pr) = pr
--- FIXME!!! Where do errors in the memoized function (e.g. multiple put) surface?
--- We must pick a determined, consistent place.
--- 
--- Multiple put errors may not be able to wait until this point to get
--- thrown.  Otherwise we'd have to be at least quasideterministic here.  If you have
--- a MemoFuture you never force, it and an outside computation may be racing to do a
--- put.  If the outside one wins the MemoFuture is the one that gets the exception
--- (and hides it), otherwise the exception is exposed.  Quasideterminism.
-
--- It may be fair to distinguish between internal problems with the MemoFuture
--- (deferred exceptions), and problematic interactions with the outside world (double
--- put) which would then not be deferred.  Such futures can't be canceled anyway, so
--- there's really no need to defer the exceptions.
-
-
---------------------------------------------------------------------------------
--- Cycle-detecting memoized computations
---------------------------------------------------------------------------------
-
+-- | A means of building a dynamic graph.  The node computation returns a response
+-- which may either be a final value, or a request to explore more nodes (together
+-- with a continuation for the resulting value).
+--
+-- Note that because only one key is requested at a time, this cannot express
+-- parallel graph traversals.
 data Response par key ans =
     Done !ans
   | Request !key (RequestCont par key ans)
@@ -192,7 +140,7 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- from the starting key.  When a cycle is detected at any leaf of this tree, an
 -- alternate cycle handler is called instead of running the normal computation for
 -- that key.
-makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
+exploreGraph_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
                           (k -> Par d s (Response (Par d s) k v)) -- ^ The computation to perform for new requests
                        -> (k -> Par d s v)  -- ^ Handler for a cycle on @k@.  The
                                             -- value it returns is in lieu of running
@@ -200,7 +148,7 @@ makeMemoFixedPoint_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
                                             -- particular node in the graph.
                           -> k              -- ^ Key to lookup.
                        -> Par d s v
-makeMemoFixedPoint_seq initCont cycHndlr initKey = do
+exploreGraph_seq initCont cycHndlr initKey = do
   -- Start things off:
   resp <- initCont initKey
   v <- loop initKey (S.singleton initKey) resp return
@@ -259,17 +207,26 @@ type NodeAction d s k v =
 data NodeValue k v = FinalValue !v | Defer k 
   deriving (Show,Eq,Ord)
 
+
+-- | This combinator provides parallel exploration of a graph that contains cycles.
+-- The limitation is that the work to be performed at each node (`NodeAction`) is not
+-- invoked until the graph is fully traversed, i.e. after a barrier.  Thus the graph
+-- explored is not a "dynamic graph" in the sense of being computed on the fly by the
+-- `NodeAction`.
+--
+-- The algorithm used in this function is fairly expensive.  For each node, it uses a
+-- monotonic data structure to track the full set of other nodes that can reach it in
+-- the graph.
 #ifdef DEBUG_MEMO
-makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
+exploreGraph :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
 #else
-makeMemoFixedPoint :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
+exploreGraph :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
 #endif
                       (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
-                   -> NodeAction QuasiDet s k v
-                   -> k   
+                   -> NodeAction QuasiDet s k v  -- ^ The computation to run at each graph node.
+                   -> k                          -- ^ The initial node (key) from which to explore.
                    -> Par QuasiDet s v
-                   -- (Memo QuasiDet s k v)
-makeMemoFixedPoint keyNbrs nodeHndlr initKey = do
+exploreGraph keyNbrs nodeHndlr initKey = do
 
   -- First: propogate key requests.
   -- This will not diverge because the Set here suppressed duplicate callbacks:

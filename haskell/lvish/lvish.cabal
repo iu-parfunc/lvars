@@ -91,8 +91,10 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
-                    Data.LVar.Memo
-                    Data.LVar.MemoCyc
+                    -------------------------------------------
+                    -- New / Experimental:
+                    Data.LVar.Memo                    
+                    Data.LVar.CycGraph
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
@@ -166,7 +168,7 @@ library
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
-    hs-source-dirs: ./ tests/
+    hs-source-dirs: tests/
     other-modules:  TestHelpers, 
                     LVishAndIVar,
                     ArrayTests,
@@ -201,7 +203,7 @@ test-suite test-lvish
                    HUnit, time, text
 -- And the self-dependency:  TODO -- how to get this to work? [2013.10.10]
 -- For now it gets compiled TWICE:
---    build-depends:   lvish
+    build-depends:   lvish
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
        build-depends: fgl, graphviz, text

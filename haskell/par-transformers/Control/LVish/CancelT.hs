@@ -37,6 +37,9 @@ import Control.Par.Class.Unsafe (PrivateMonadIO(..))
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
+-- | A Par-monad scheduler transformer that adds the cancellation capability.  To do
+-- this, it must track, and periodically poll, extra mutable state for each
+-- cancellable computation in the fork-tree.
 newtype CancelT m a = CancelT ((StateT CState m) a)
   deriving (Monad, Functor)
 
@@ -62,7 +65,8 @@ data CPair = CPair !Bool ![CState]
 
 --------------------------------------------------------------------------------
 
--- | Run a Par monad with the cancellation effect.  Within this computation 
+-- | Run a Par monad with the cancellation effect.  Within this computation, it is
+-- possible to cancel subtrees of computations.
 runCancelT :: PrivateMonadIO m => CancelT m a -> m a
 runCancelT (CancelT st) = do
   ref <- internalLiftIO $ newIORef (CPair True []) 
