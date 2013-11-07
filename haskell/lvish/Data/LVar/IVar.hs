@@ -205,7 +205,6 @@ instance PC.ParFuture (Par d s) where
   get = get
 
 instance PC.ParIVar (Par d s) where
-  fork = LV.fork  
   put_ = put_
   new = new
 

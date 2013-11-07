@@ -133,9 +133,6 @@ instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
 instance PU.ParThreadSafe (Par d s) where
   unsafeParIO = I.liftIO
 
-instance PU.PrivateMonadIO (Par d s) where
-  internalLiftIO = I.liftIO  
-
 #endif
 
 ------ DUPLICATED: -----

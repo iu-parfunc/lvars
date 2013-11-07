@@ -8,6 +8,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -32,8 +33,10 @@
 
 module Control.Par.Class
   (
-  -- * Futures: the most basic functionality
-    ParFuture(..)
+  -- * The essence of Par monads: forking control flow
+    ParMonad(fork)
+  -- * Futures: basic parallelism with communication
+  , ParFuture(..)
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
 
@@ -71,9 +74,9 @@ import qualified Data.Foldable as F
 --   A minimal implementation consists of `spawn_` and `get`.
 --   However, for monads that are also a member of `ParIVar` it is
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
--- 
--- class Monad m => ParFuture future m | m -> future where
-class (Functor m, Monad m) => ParFuture m where
+--
+class ParMonad m => ParFuture m where
+-- class (Monad m, Functor m) => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
   type Future m :: * -> *
@@ -93,10 +96,10 @@ class (Functor m, Monad m) => ParFuture m where
   -- >    return r
   --
   spawn  :: (NFData a, FutContents m a) => m a -> m (Future m a)
-  
-  -- | Like 'spawn', but the result is only head-strict, not fully-strict.
-  spawn_ :: FutContents m a => m a -> m (Future m a)
 
+-- | Like 'spawn', but the result is only head-strict, not fully-strict.
+  spawn_ :: FutContents m a => m a -> m (Future m a)
+              
   -- | Wait for the result of a future, and then return it.
   get    :: Future m a -> m a
 
@@ -109,6 +112,9 @@ class (Functor m, Monad m) => ParFuture m where
   spawn  p = spawn_ (do x <- p; deepseq x (return x))
   spawnP a = spawn (return a)
 
+  default spawn_ :: (ParIVar m, FutContents m a) => m a -> m (Future m a)
+  spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
+
 --------------------------------------------------------------------------------
 
 -- | A simple type alias.  A hint.
@@ -120,11 +126,6 @@ type IVar m a = Future m a
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
 class ParFuture m  => ParIVar m  where
   
-  -- | Forks a computation to happen in parallel.  The forked
-  -- computation may exchange values with other computations using
-  -- @IVar@s.
-  fork :: m () -> m ()
-
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
   new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
