@@ -17,6 +17,12 @@ instance STSplittable (Tree a) where
   splitST () Empty = error "splitST: cannot split empty tree!"
   splitST () (Node root left right) = (left,right)
 
+-- A generic, safe library would have to take an inialization procedure of type
+-- (forall s . ST s a), then it could use that, together with a description of the
+-- shape of tree desired, to safely produce a tree populated with initial values.
+-- The structure description process could be something like a zipper, operating only
+-- "with gloves on".
+
 p0 :: ParST (Tree Int s0) (LV.Par d s1) String
 p0 = do
 
@@ -37,5 +43,6 @@ p0 = do
   a2 <- liftST$ readSTRef z'
   return$ show (a1,a2)
 
+main :: IO ()
 main = putStrLn $ runPar$ runParST undefined p0 
 
