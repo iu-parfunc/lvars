@@ -74,9 +74,9 @@ import qualified Data.Foldable as F
 --   A minimal implementation consists of `spawn_` and `get`.
 --   However, for monads that are also a member of `ParIVar` it is
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
--- 
--- class Monad m => ParFuture future m | m -> future where
+--
 class ParMonad m => ParFuture m where
+-- class (Monad m, Functor m) => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
   type Future m :: * -> *
