@@ -61,12 +61,13 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (8,8) $ do
+wrapper = LV.runPar $ V.runParVec2T (4,4) $ do
   -- hack: put our input vector into the state
 --  vecR <- PST.liftST$ MV.new $ length vecL
 --  SS.put (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR))
   
-  V.setL 8.0
+  V.setL 1.0
+  V.setR 0.1
   
   -- toy vector to start with
   V.writeL 0 120.0
@@ -74,10 +75,10 @@ wrapper = LV.runPar $ V.runParVec2T (8,8) $ do
   V.writeL 2 3.0
   V.writeL 3 222.0
   
-  V.writeR 0 42.0
-  V.writeR 1 4.2
-  V.writeR 2 34.5
-  V.writeR 3 22.2  
+--  V.writeR 0 42.0
+--  V.writeR 1 4.2
+--  V.writeR 2 34.5
+--  V.writeR 3 22.2  
     
   -- input: unsorted array in Left position
   -- output: sorted array in Left position
@@ -90,24 +91,32 @@ wrapper = LV.runPar $ V.runParVec2T (8,8) $ do
   return$ show frozenL ++ show frozenR
 
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
-              PC.ParFuture parM, Ord elt) => 
+              PC.ParFuture parM, Ord elt, Show elt) => 
              V.ParVec2T s1 elt elt parM ()  
 mergeSort = do
   len <- V.lengthL
   
-  if len < 3 then do
+  if len < 2 then do
     -- input: unsorted Left, output: sorted Left
     seqSortL
    else do  
     let sp = (len `quot` 2)      
     PST.forkSTSplit (sp,sp)
       mergeSort -- output: sorted *left half* of Left
-      mergeSort -- output: sorted *right half* of Left
+      mergeSort -- output: sorted *right half* of Left          
     merge sp len -- output: sorted Left
     
 merge sp len = do
+  (vecL, vecR) <- V.reify
+  lf <- PST.liftST$ freeze vecL
+  rf <- PST.liftST$ freeze vecR
+  trace ("merge input: " ++ show lf ++ " " ++ show rf) return ()
   trace (show sp ++ " " ++ show len) $ mergeK 0 sp sp (len - 1) 0 -- output: sorted Right
   trace "swapping state" $ V.swapState -- output: sorted Left
+  (vecL, vecR) <- V.reify                                                                      
+  lf <- PST.liftST$ freeze vecL                                                                
+  rf <- PST.liftST$ freeze vecR
+  trace ("merge output: " ++ show lf ++ " " ++ show rf) return ()     
       
 mergeK lBot rBot sp top index
   | lBot == sp && rBot <= top = do
@@ -130,7 +139,8 @@ mergeK lBot rBot sp top index = do
   -- given two slices of a vec1, merge them into vec2
   left <- V.readL lBot
   right <- V.readL rBot
-  lf <- PST.liftST$ freeze left
+--  (vecL, vecR) <- V.reify
+--  lf <- PST.liftST$ freeze vecL
 --  trace (show lf) $ return ()
   if left < right then do
     V.writeR index left
