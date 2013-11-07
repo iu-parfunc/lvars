@@ -5,7 +5,7 @@ module CancelTests (tests, runTests) where
 import Control.LVish
 import Control.LVish.CancelT as CT
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (PrivateMonadIO(internalLiftIO))
+import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
 import Control.LVish.Unsafe
 import Data.LVar.IVar as IV
 
@@ -20,7 +20,7 @@ import Test.Framework.TH (testGroupGenerator)
 
 --------------------------------------------------------------------------------
 
-io :: PrivateMonadIO m => IO a -> m a
+io :: ParMonad m => IO a -> m a
 io = internalLiftIO
 
 -- FIXME: Need to replace this with something that will work when NOT in debug mode.

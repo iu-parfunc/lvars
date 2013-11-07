@@ -68,7 +68,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), ParMonad(..))
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -209,9 +209,17 @@ liftST st = ParST (lift (unsafeParIO io))
 liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
 liftPar m = ParST (lift m)
 
+instance ParMonad parM => ParMonad (ParST stt1 parM) where
+  internalLiftIO io = ParST (lift (internalLiftIO io))
+  fork (ParST task) = ParST $ 
+    lift $ PC.fork $ do
+      (res,_) <- S.runStateT task
+                 (error "fork: This child thread does not have permission to touch the array!")
+      return res
+
 -- | A conditional instance which will only be usable if unsafe imports are made.
-instance MonadIO parM => MonadIO (ParST stt1 parM) where
-  liftIO io = ParST (liftIO io)
+-- instance MonadIO parM => MonadIO (ParST stt1 parM) where
+--   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
@@ -228,11 +236,6 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
 
 
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
-  fork (ParST task) = ParST $ 
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task
-                 (error "fork: This child thread does not have permission to touch the array!")
-      return res
   new       = ParST$ lift PC.new
   put_ iv v = ParST$ lift$ PC.put_ iv v
 
