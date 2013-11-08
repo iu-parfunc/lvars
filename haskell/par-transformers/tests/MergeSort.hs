@@ -72,7 +72,7 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (1,1) $ do
+wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
   -- hack: put our input vector into the state
 --  vecR <- PST.liftST$ MV.new $ length vecL
 --  randVec <- SS.liftIO$ mkRandomVec 10
