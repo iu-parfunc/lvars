@@ -15,10 +15,18 @@
 module Data.Par
   (
     -- * Naive parallel maps on traversable structures.
+    
+    -- | Because these operations assume only `Traversable`, the best they can do is
+    -- to fork one parallel computation per element.
     parMap, parMapM, parMapM_
 
-    -- * More efficient, balanced parallel traversals for splittable structures
-    -- TODO 
+    -- * More efficient, balanced parallel traversals for splittable structures                     
+
+    -- | These operations require an instance of `Data.Splittable.Split`, but in
+    -- return they can perform more balanced traversals that are more tolerant of
+    -- fine-granularity.
+                     
+    -- TODO: 
   )
 where 
 
