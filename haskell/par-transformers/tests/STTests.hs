@@ -61,6 +61,31 @@ p0 = do
          
   return$ show frozen
 
+{-
+case_v_t1 :: Assertion
+case_v_t1 = assertEqual "testing transmute"
+            "120" t1
+            
+t1 :: String
+t1 = LV.runPar $ V.runParVecT 10 p0
+
+p1 :: V.ParVecT s1 Int (LV.Par d s0) String
+p1 = do
+  
+  V.set 0
+  
+  PST.transmute (\v -> PST.STTup2 v v) 
+    (do 
+        let foo :: (ParThreadSafe p
+            foo = V.reify
+--        (rawL, rawR) <- V.reify
+--        frozenL <- PST.liftST$ freeze rawL
+--        frozenR <- PST.liftST$ freeze rawR
+--        return$ show frozenL ++ show frozenR)
+        return "120")
+-}                                         
+  
+
 --------------------------------------------------------------------------------
   
 tests :: Test
