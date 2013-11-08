@@ -31,6 +31,9 @@ module Control.Par.ST
 
          -- * Working with ST and other lifts
          liftST, liftPar,
+         
+         -- * Convert between state types
+         transmute,
 
          --  Useful utilities
 --         vecParMap_, 
@@ -209,6 +212,18 @@ liftST st = ParST (lift (unsafeParIO io))
 liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
 liftPar m = ParST (lift m)
 
+transmute :: forall a b s parM ans . 
+             (ParThreadSafe parM, 
+              STSplittable a,
+              STSplittable b)              
+              => (b s -> a s) -> ParST (a s) parM ans -> ParST (b s) parM ans
+transmute fn (ParST comp) = ParST$ do
+  orig <- S.get
+  let newSt :: a s
+      newSt = fn orig
+  (res,_) <- lift$ S.runStateT comp newSt
+  return $! res
+  
 instance ParMonad parM => ParMonad (ParST stt1 parM) where
   internalLiftIO io = ParST (lift (internalLiftIO io))
   fork (ParST task) = ParST $ 
