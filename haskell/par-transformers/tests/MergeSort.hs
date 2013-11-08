@@ -3,12 +3,15 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}                                                    
 {-# LANGUAGE TypeFamilies #-}                                                                  
 {-# LANGUAGE ConstraintKinds #-}                                                               
-{-# LANGUAGE Rank2Types #-}                                                                    
-{-# LANGUAGE FlexibleContexts #-}                                                              
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}                                                             
-{-# LANGUAGE BangPatterns  #-}                                                                  
-{-# LANGUAGE GADTs #-}                                                                         
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE CPP #-}
+
+
 
 module Main where
 
@@ -33,9 +36,14 @@ import Control.Monad.State (get,put)
 import Control.Concurrent (threadDelay)
 
 import Data.STRef
+#ifdef UNBOXED
+
+#else
 import Data.Vector.Mutable as MV
 import Data.Vector       (freeze)
-import qualified Data.Vector.Storable as IMV
+import qualified Data.Vector as IMV
+#endif
+
 import qualified Data.Vector.Algorithms.Intro as VA
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
@@ -64,12 +72,11 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
+wrapper = LV.runPar $ V.runParVec2T (1,1) $ do
   -- hack: put our input vector into the state
 --  vecR <- PST.liftST$ MV.new $ length vecL
---  SS.put (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR))
-  
-
+--  randVec <- SS.liftIO$ mkRandomVec 10
+--  SS.put (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR))  
   
   V.setL 1.0
   V.setR 0.1
@@ -200,3 +207,21 @@ seqSortL = do
   PST.liftST$ VA.sort vecL
 
 main = putStrLn wrapper
+
+-- | Create a vector containing the numbers [0,N) in random order.
+mkRandomVec :: Int -> IO (MV.IOVector Float)
+mkRandomVec len =  
+  -- Annoyingly there is no MV.generate:
+  do g <- create
+     v <- IMV.thaw $ IMV.generate len fromIntegral
+     loop 0 v g
+     return v
+ where 
+  -- Note: creating 2^24 elements takes 1.6 seconds under -O2 but 36
+  -- seconds under -O0.  This sorely needs optimization!
+  loop n vec g | n == len  = return vec
+	       | otherwise = do 
+--    let (offset,g') = randomR (0, len - n - 1) g
+    offset <- uniformR (0, len - n - 1) g
+    MV.swap vec n (n + offset)
+    loop (n+1) vec g
