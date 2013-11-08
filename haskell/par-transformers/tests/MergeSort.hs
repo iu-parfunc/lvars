@@ -225,3 +225,55 @@ mkRandomVec len =
     offset <- uniformR (0, len - n - 1) g
     MV.swap vec n (n + offset)
     loop (n+1) vec g
+
+{-
+pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+           PC.ParFuture parM) => 
+          Int -> Int -> V.ParVec2T s elt elt parM ()
+pMerge sp threshold = do
+  len <- V.lengthL
+  if len < threshold then
+    merge sp len
+   else do
+    (splitL, splitR) <- findSplit sp len V.readL
+    PST.forkSTSplit (splitL, splitR) 
+      (pMerge splitL threshold)
+      (pMerge splitR threshold)
+-}      
+
+findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => Int -> Int -> 
+             (Int -> V.ParVec2T s elt elt parM elt) -> 
+             V.ParVec2T s elt elt parM (Int,Int)
+findSplit sp len indexFunc = split 0 sp sp len
+  where 
+--      split :: (ParThreadSafe parM, Ord elt, Show elt) =>
+--    split :: (ParThreadSafe parM, Ord elt, Show elt) => 
+--             Int -> Int -> Int -> Int -> V.ParVec2T s elt elt parM (Int, Int)
+    split lLow lHigh rLow rHigh = do
+        let lIndex = (lLow + lHigh) `div` 2
+            rIndex = ((rLow + rHigh) `div` 2) - rLow
+            
+        leftSub1 <- indexFunc (lIndex - 1)
+        left <- indexFunc lIndex
+        rightSub1 <- indexFunc (rIndex - 1)
+        right <- indexFunc rIndex
+        
+        if (lIndex == 0)
+        then if (rightSub1 < left)
+          then return (lIndex, rIndex)
+          else split 0 0 rLow rIndex
+        else if (rIndex == 0)
+        then if (leftSub1 < right)
+          then return (lIndex, rIndex)
+          else split lLow lIndex sp sp
+        else if (leftSub1 < right) && (rightSub1 < left)
+          then return (lIndex, rIndex)
+          else if (leftSub1 < right)
+            then split lIndex lHigh rLow rIndex
+            else split lLow lIndex rIndex rHigh
+                
+      
+      
+      
+
+        
