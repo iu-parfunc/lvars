@@ -58,7 +58,7 @@ import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (defaultMainGenerator)
 
 import qualified Control.Par.ST.Vec2 as V
-import qualified Control.Par.ST as PST
+import Control.Par.ST
 
 import qualified Control.Monad.State.Strict as SS
 
@@ -74,9 +74,9 @@ runTests = True
 wrapper :: String
 wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
   -- hack: put our input vector into the state
---  vecR <- PST.liftST$ MV.new $ length vecL
+--  vecR <- liftST$ MV.new $ length vecL
 --  randVec <- SS.liftIO$ mkRandomVec 10
---  SS.put (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR))  
+--  SS.put (STTup2 (VFlp vecL) (VFlp vecR))  
   
   V.setL 1.0
   V.setR 0.1
@@ -92,7 +92,7 @@ wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
   mergeSort
     
   (rawL, rawR) <- V.reify
-  frozenL <- PST.liftST$ freeze rawL
+  frozenL <- liftST$ freeze rawL
   
   return$ show frozenL
 
@@ -106,16 +106,16 @@ mergeSort = do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
-    PST.forkSTSplit (sp,sp)
+    forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
-          PST.forkSTSplit (sp,sp)
+          forkSTSplit (sp,sp)
             mergeSort
             mergeSort
           mergeTo2 4 sp)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
-          PST.forkSTSplit (sp,sp)                             
+          forkSTSplit (sp,sp)                             
             mergeSort         
             mergeSort
           mergeTo2 4 sp)                           
@@ -124,8 +124,8 @@ mergeSort = do
 
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
 seqSortL = do
-  PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR) <- SS.get
-  PST.liftST$ VA.sort vecL
+  STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
+  liftST$ VA.sort vecL
 
 main = putStrLn wrapper
 
@@ -154,10 +154,10 @@ mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
                 Int -> Int -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
-  PST.transmute (\(PST.STTup2 (PST.VFlp vec1) (PST.VFlp vec2)) ->
+  transmute (\(STTup2 (VFlp vec1) (VFlp vec2)) ->
                   let l1 = MV.slice 0 sp vec1
                       r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
-                  PST.STTup2 (PST.STTup2 (PST.VFlp l1) (PST.VFlp r1)) (PST.VFlp vec2))
+                  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp vec2))
      (pMergeTo2 threshold)
                   
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
@@ -165,7 +165,7 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
           Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
   -- threshold check here
-  PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
   let len = MV.length vec2
   if len < threshold then
     sMergeTo2
@@ -174,7 +174,7 @@ pMergeTo2 threshold = do
     let mid = len `div` 2
     (splitL, splitR) <- findSplit indexL1 indexL1
     
-    PST.forkSTSplit ((splitL, splitR), mid)
+    forkSTSplit ((splitL, splitR), mid)
       (pMergeTo2 threshold)
       (pMergeTo2 threshold)
     return ()
@@ -182,7 +182,7 @@ pMergeTo2 threshold = do
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
             ParVec21T s elt parM ()
 sMergeTo2 = do
-  PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
   let lenL = MV.length vecL
       lenR = MV.length vecR
   sMergeTo2K 0 lenL 0 lenR 0
@@ -216,11 +216,12 @@ sMergeTo2K lBot lLen rBot rLen index = do
 mergeTo1 = undefined    
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
-             STIndexFunction s elt parM -> STIndexFunction s elt parM ->
+             (Int -> ParVec21T s elt parM elt) ->
+             (Int -> ParVec21T s elt parM elt)->
              ParVec21T s elt parM (Int, Int)
 
 findSplit indexLeft indexRight = do                                 
-    PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+    STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
     let lLen = MV.length vecL
         rLen = MV.length vecR
     
@@ -251,24 +252,57 @@ findSplit indexLeft indexRight = do
               else split lLow lIndex rIndex rHigh
                 
       
-type ParVec21T s elt parM ans = PST.ParST (PST.STTup2 (PST.STTup2 (PST.MVectorFlp elt) 
-                                                       (PST.MVectorFlp elt))
-                                           (PST.MVectorFlp elt) s) parM ans
+type ParVec21T s elt parM ans = ParST (STTup2 
+                                       (STTup2 (MVectorFlp elt) 
+                                               (MVectorFlp elt))
+                                       (MVectorFlp elt) s)
+                                      parM ans
                                               
-type STIndexFunction s elt parM = Int -> ParVec21T s elt parM elt 
+type ParVec12T s elt parM ans = ParST (STTup2 
+                                       (MVectorFlp elt)
+                                       (STTup2 (MVectorFlp elt) 
+                                               (MVectorFlp elt)) s)
+                                      parM ans
+    
                        
-                       
-indexL1 :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
-indexL1 = undefined
+indexL1 :: (ParThreadSafe parM) => Int -> ParVec21T s elt parM elt
+indexL1 index = do
+  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
+  liftST$ MV.read l1 index
 
-indexR1 :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
-indexR1 = undefined
+indexR1 :: (ParThreadSafe parM) => Int -> ParVec21T s elt parM elt
+indexR1 index = do
+  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
+  liftST$ MV.read r1 index
+
+indexL2 :: (ParThreadSafe parM) => Int -> ParVec12T s elt parM elt
+indexL2 index = do
+  STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
+  liftST$ MV.read l2 index
+
+indexR2 :: (ParThreadSafe parM) => Int -> ParVec12T s elt parM elt
+indexR2 index = do
+  STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
+  liftST$ MV.read r2 index
+
+write1 :: (ParThreadSafe parM) => Int -> elt -> ParVec12T s elt parM ()
+write1 index value = do
+  STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
+  liftST$ MV.write v1 index value
              
-lengthR :: (ParThreadSafe parM) => ParVec21T s elt parM Int      
-lengthR = do
-    PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
-    return $ MV.length vec2
-        
 write2 :: (ParThreadSafe parM) => Int -> elt -> ParVec21T s elt parM ()
-write2 = undefined
+write2 index value = do
+  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
+  liftST$ MV.write v2 index value
+
+length2 :: (ParThreadSafe parM) => ParVec21T s elt parM Int      
+length2 = do
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
+  return $ MV.length vec2
+        
+length1 :: (ParThreadSafe parM) => ParVec12T s elt parM Int
+length1 = do
+  STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
+  return$ MV.length v1
       
+
