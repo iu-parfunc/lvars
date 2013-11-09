@@ -305,4 +305,14 @@ length1 = do
   STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
   return$ MV.length v1
       
+-----
+  
+morphToVec21 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
+  let l1 = MV.slice 0 sp vec1
+      r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
+  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp vec2)
 
+morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
+  let l2 = MV.slice 0 sp vec2
+      r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
+  STTup2 (VFlp vec1) (STTup2 (VFlp l2) (VFlp r2))
