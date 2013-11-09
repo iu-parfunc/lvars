@@ -154,11 +154,7 @@ mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
                 Int -> Int -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
-  transmute (\(STTup2 (VFlp vec1) (VFlp vec2)) ->
-                  let l1 = MV.slice 0 sp vec1
-                      r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
-                  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp vec2))
-     (pMergeTo2 threshold)
+  transmute (morphToVec21 sp) (pMergeTo2 threshold)
                   
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
            PC.ParFuture parM) =>
