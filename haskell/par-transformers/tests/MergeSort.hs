@@ -226,19 +226,19 @@ mkRandomVec len =
     MV.swap vec n (n + offset)
     loop (n+1) vec g
 
+---------------
+
 mergeWrapper :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
                 PC.ParFuture parM) => 
                 Int -> Int -> V.ParVec2T s elt elt parM ()
-mergeWrapper sp threshold = undefined
-  -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec)
-  
-  -- This is done by slicing the left vector into two parts using sp
-  
-
-
---pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
---           PC.ParFuture parM) => 
---          Int -> Int -> V.ParVec2T s elt elt parM ()
+mergeWrapper sp threshold = do
+  -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
+  PST.transmute (\(PST.STTup2 (PST.VFlp vec1) (PST.VFlp vec2)) ->
+                  let l1 = MV.slice 0 sp vec1
+                      r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
+                  PST.STTup2 (PST.STTup2 (PST.VFlp l1) (PST.VFlp r1)) (PST.VFlp vec2))
+     (pMerge threshold)
+                  
 pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
            PC.ParFuture parM) =>
           Int -> ParVec21T s elt parM ()
@@ -261,9 +261,6 @@ pMerge threshold = do
       
 mergeNew = undefined
       
---findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => Int -> Int -> 
---             (Int -> V.ParVec2T s elt elt parM elt) -> 
---             V.ParVec2T s elt elt parM (Int,Int)
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
              STIndexFunction s elt parM -> STIndexFunction s elt parM ->
