@@ -161,8 +161,7 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
           Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
   -- threshold check here
-  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
-  let len = MV.length vec2
+  len <- length2
   if len < threshold then
     sMergeTo2
    else do
@@ -178,9 +177,7 @@ pMergeTo2 threshold = do
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
             ParVec21T s elt parM ()
 sMergeTo2 = do
-  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
-  let lenL = MV.length vecL
-      lenR = MV.length vecR
+  (lenL, lenR) <- lengthLR1
   sMergeTo2K 0 lenL 0 lenR 0
       
 sMergeTo2K lBot lLen rBot rLen index 
@@ -217,11 +214,10 @@ findSplit :: (ParThreadSafe parM, Ord elt, Show elt) =>
              ParVec21T s elt parM (Int, Int)
 
 findSplit indexLeft indexRight = do                                 
-    STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
-    let lLen = MV.length vecL
-        rLen = MV.length vecR
+  
+  (lLen, rLen) <- lengthLR1    
     
-    split 0 lLen 0 rLen 
+  split 0 lLen 0 rLen 
       where
 
         split lLow lHigh rLow rHigh = do
@@ -301,6 +297,20 @@ length1 = do
   STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
   return$ MV.length v1
       
+lengthLR1 :: (ParThreadSafe parM) => ParVec21T s elt parM (Int,Int)
+lengthLR1 = do
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
+  let lenL = MV.length vecL
+      lenR = MV.length vecR
+  return$ (lenL, lenR)
+
+lengthLR2 :: (ParThreadSafe parM) => ParVec12T s elt parM (Int,Int)
+lengthLR2 = do
+  STTup2 (VFlp v1) (STTup2 (VFlp vecL) (VFlp vecR)) <- SS.get
+  let lenL = MV.length vecL
+      lenR = MV.length vecR
+  return$ (lenL, lenR)
+
 -----
   
 morphToVec21 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
