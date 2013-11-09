@@ -251,16 +251,46 @@ pMerge threshold = do
    else do
     -- find the split points
     let mid = len `div` 2
-    (splitL, splitR) <- findSplit indexLL indexLR
+    (splitL, splitR) <- findSplit indexL1 indexL1
     
     PST.forkSTSplit ((splitL, splitR), mid)
       (pMerge threshold)
       (pMerge threshold)
     return ()
       
+mergeNew :: (ParThreadSafe parM, Ord elt, Show elt) =>       
+            ParVec21T s elt parM ()
+mergeNew = do
+  PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+  let lenL = MV.length vecL
+      lenR = MV.length vecR
+  mergeNK 0 lenL 0 lenR 0
       
-mergeNew = undefined
-      
+mergeNK lBot lLen rBot rLen index 
+  | lBot == lLen && rBot <= rLen = do
+    value <- indexR1 rBot
+    write2 index value
+    mergeNK lBot lLen (rBot + 1) rLen (index + 1)      
+
+mergeNK lBot lLen rBot rLen index 
+  | rBot > rLen && lBot < lLen = do
+    value <- indexL1 lBot
+    write2 index value
+    mergeNK (lBot + 1) lLen rBot rLen (index + 1)
+    
+mergeNK lBot lLen rBot rLen index     
+  | index > (lLen + rLen) = do
+    return ()
+
+mergeNK lBot lLen rBot rLen index = do
+  left <- indexL1 lBot
+  right <- indexR1 rBot
+  if left < right then do
+    write2 index left
+    mergeNK (lBot + 1) lLen rBot rLen (index + 1)
+   else do
+    write2 index right
+    mergeNK lBot lLen (rBot + 1) rLen (index + 1)    
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
              STIndexFunction s elt parM -> STIndexFunction s elt parM ->
@@ -305,14 +335,18 @@ type ParVec21T s elt parM ans = PST.ParST (PST.STTup2 (PST.STTup2 (PST.MVectorFl
 type STIndexFunction s elt parM = Int -> ParVec21T s elt parM elt 
                        
                        
-indexLL :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
-indexLL = undefined
+indexL1 :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
+indexL1 = undefined
 
-indexLR :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
-indexLR = undefined
+indexR1 :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
+indexR1 = undefined
              
 lengthR :: (ParThreadSafe parM) => ParVec21T s elt parM Int      
 lengthR = do
     PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
     return $ MV.length vec2
         
+write2 :: (ParThreadSafe parM) => Int -> elt -> ParVec21T s elt parM ()
+write2 = undefined
+      
+      
