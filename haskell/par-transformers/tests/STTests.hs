@@ -32,6 +32,7 @@ import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (testGroupGenerator)
 
 import qualified Control.Par.ST.Vec as V
+import qualified Control.Par.ST.Vec2 as VV
 import qualified Control.Par.ST as PST
 
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
@@ -61,13 +62,13 @@ p0 = do
          
   return$ show frozen
 
-{-
+
 case_v_t1 :: Assertion
 case_v_t1 = assertEqual "testing transmute"
-            "120" t1
+            "fromList [0]fromList [0]" t1
             
 t1 :: String
-t1 = LV.runPar $ V.runParVecT 10 p0
+t1 = LV.runPar $ V.runParVecT 1 p1
 
 p1 :: V.ParVecT s1 Int (LV.Par d s0) String
 p1 = do
@@ -76,14 +77,10 @@ p1 = do
   
   PST.transmute (\v -> PST.STTup2 v v) 
     (do 
-        let foo :: (ParThreadSafe p
-            foo = V.reify
---        (rawL, rawR) <- V.reify
---        frozenL <- PST.liftST$ freeze rawL
---        frozenR <- PST.liftST$ freeze rawR
---        return$ show frozenL ++ show frozenR)
-        return "120")
--}                                         
+        (rawL, rawR) <- VV.reify
+        frozenL <- PST.liftST$ freeze rawL
+        frozenR <- PST.liftST$ freeze rawR
+        return$ show frozenL ++ show frozenR)
   
 
 --------------------------------------------------------------------------------
