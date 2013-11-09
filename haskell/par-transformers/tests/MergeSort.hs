@@ -226,54 +226,96 @@ mkRandomVec len =
     MV.swap vec n (n + offset)
     loop (n+1) vec g
 
-{-
-pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
-           PC.ParFuture parM) => 
-          Int -> Int -> V.ParVec2T s elt elt parM ()
-pMerge sp threshold = do
-  len <- V.lengthL
-  if len < threshold then
-    merge sp len
-   else do
-    (splitL, splitR) <- findSplit sp len V.readL
-    PST.forkSTSplit (splitL, splitR) 
-      (pMerge splitL threshold)
-      (pMerge splitR threshold)
--}      
+mergeWrapper :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+                PC.ParFuture parM) => 
+                Int -> Int -> V.ParVec2T s elt elt parM ()
+mergeWrapper sp threshold = undefined
+  -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec)
+  
+  -- This is done by slicing the left vector into two parts using sp
+  
 
-findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => Int -> Int -> 
-             (Int -> V.ParVec2T s elt elt parM elt) -> 
-             V.ParVec2T s elt elt parM (Int,Int)
-findSplit sp len indexFunc = split 0 sp sp len
-  where 
---      split :: (ParThreadSafe parM, Ord elt, Show elt) =>
---    split :: (ParThreadSafe parM, Ord elt, Show elt) => 
---             Int -> Int -> Int -> Int -> V.ParVec2T s elt elt parM (Int, Int)
-    split lLow lHigh rLow rHigh = do
-        let lIndex = (lLow + lHigh) `div` 2
-            rIndex = ((rLow + rHigh) `div` 2) - rLow
+
+--pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+--           PC.ParFuture parM) => 
+--          Int -> Int -> V.ParVec2T s elt elt parM ()
+pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+           PC.ParFuture parM) =>
+          Int -> ParVec21T s elt parM ()
+pMerge threshold = do
+  -- threshold check here
+  PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+  let len = MV.length vec2
+  if len < threshold then
+    mergeNew
+   else do
+    -- find the split points
+    let mid = len `div` 2
+    (splitL, splitR) <- findSplit indexLL indexLR
+    
+    PST.forkSTSplit ((splitL, splitR), mid)
+      (pMerge threshold)
+      (pMerge threshold)
+    return ()
+      
+      
+mergeNew = undefined
+      
+--findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => Int -> Int -> 
+--             (Int -> V.ParVec2T s elt elt parM elt) -> 
+--             V.ParVec2T s elt elt parM (Int,Int)
+    
+findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
+             STIndexFunction s elt parM -> STIndexFunction s elt parM ->
+             ParVec21T s elt parM (Int, Int)
+
+findSplit indexLeft indexRight = do                                 
+    PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+    let lLen = MV.length vecL
+        rLen = MV.length vecR
+    
+    split 0 lLen 0 rLen 
+      where
+
+        split lLow lHigh rLow rHigh = do
+          let lIndex = (lLow + lHigh) `div` 2
+              rIndex = (rLow + rHigh) `div` 2
             
-        leftSub1 <- indexFunc (lIndex - 1)
-        left <- indexFunc lIndex
-        rightSub1 <- indexFunc (rIndex - 1)
-        right <- indexFunc rIndex
+          leftSub1 <- indexLeft (lIndex - 1)
+          left <- indexLeft lIndex
+          rightSub1 <- indexRight (rIndex - 1)
+          right <- indexRight rIndex
         
-        if (lIndex == 0)
-        then if (rightSub1 < left)
-          then return (lIndex, rIndex)
-          else split 0 0 rLow rIndex
-        else if (rIndex == 0)
-        then if (leftSub1 < right)
-          then return (lIndex, rIndex)
-          else split lLow lIndex sp sp
-        else if (leftSub1 < right) && (rightSub1 < left)
-          then return (lIndex, rIndex)
-          else if (leftSub1 < right)
-            then split lIndex lHigh rLow rIndex
-            else split lLow lIndex rIndex rHigh
+          if (lIndex == 0)
+          then if (rightSub1 < left)
+            then return (lIndex, rIndex)
+            else split 0 0 rLow rIndex
+          else if (rIndex == 0)
+          then if (leftSub1 < right)
+            then return (lIndex, rIndex)
+            else split lLow lIndex 0 0
+          else if (leftSub1 < right) && (rightSub1 < left)
+            then return (lIndex, rIndex)
+            else if (leftSub1 < right)
+              then split lIndex lHigh rLow rIndex
+              else split lLow lIndex rIndex rHigh
                 
       
-      
-      
+type ParVec21T s elt parM ans = PST.ParST (PST.STTup2 (PST.STTup2 (PST.MVectorFlp elt) 
+                                                       (PST.MVectorFlp elt))
+                                           (PST.MVectorFlp elt) s) parM ans
+                                              
+type STIndexFunction s elt parM = Int -> ParVec21T s elt parM elt 
+                       
+                       
+indexLL :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
+indexLL = undefined
 
+indexLR :: (ParThreadSafe parM, Ord elt, Show elt) => STIndexFunction s elt parM
+indexLR = undefined
+             
+lengthR :: (ParThreadSafe parM) => ParVec21T s elt parM Int      
+lengthR = do
+    PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
+    return $ MV.length vec2
         
