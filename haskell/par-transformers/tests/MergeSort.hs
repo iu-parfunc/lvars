@@ -112,95 +112,16 @@ mergeSort = do
           PST.forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          merge sp len)
+          mergeTo2 4 sp)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           PST.forkSTSplit (sp,sp)                             
             mergeSort         
             mergeSort
-          merge sp len)                           
-    merge2 sp len
+          mergeTo2 4 sp)                           
+    mergeTo1 sp
     
-merge sp len = do
-  (vecL, vecR) <- V.reify
-  lf <- PST.liftST$ freeze vecL
-  rf <- PST.liftST$ freeze vecR
-  trace ("merge input: " ++ show lf ++ " " ++ show rf) return ()
-  trace (show sp ++ " " ++ show len) $ mergeK 0 sp sp (len - 1) 0 -- output: sorted Right
-  (vecL, vecR) <- V.reify                                                                      
-  lf <- PST.liftST$ freeze vecL                                                                
-  rf <- PST.liftST$ freeze vecR
-  trace ("merge output: " ++ show lf ++ " " ++ show rf) return ()     
-      
-mergeK lBot rBot sp top index
-  | lBot == sp && rBot <= top = do
-    value <- V.readL rBot
-    V.writeR index value
-    trace "@" mergeK lBot (rBot + 1) sp top (index + 1)
 
-mergeK lBot rBot sp top index 
-  | rBot > top && lBot < sp = do -- just copy over left
-    value <- V.readL lBot
-    V.writeR index value
-    trace (">" ++ show lBot ++ " " ++ show rBot ++ " " ++ show index) $ mergeK (lBot + 1) rBot sp top (index + 1)
-
-mergeK lBot rBot sp top index
-  | index > top = do
-    -- there is no more copying to do, so we are done
-    trace "< returning >" $ return ()
-  
-mergeK lBot rBot sp top index = do
-  -- given two slices of a vec1, merge them into vec2
-  left <- V.readL lBot
-  right <- V.readL rBot
-  if left < right then do
-    V.writeR index left
-    trace ("#" ++ show lBot ++ " " ++ show rBot) $ mergeK (lBot + 1) rBot sp top (index + 1)
-   else do
-    V.writeR index right
-    trace ("!" ++ show lBot ++ " " ++ show rBot) $ mergeK lBot (rBot + 1) sp top (index + 1)
-    
-merge2 sp len = do
-  (vecL, vecR) <- V.reify
-  lf <- PST.liftST$ freeze vecL
-  rf <- PST.liftST$ freeze vecR
-  trace ("merge input: " ++ show lf ++ " " ++ show rf) return ()
-  trace (show sp ++ " " ++ show len) $ mergeK2 0 sp sp (len - 1) 0 -- output: sorted Right
-  (vecL, vecR) <- V.reify                                                                      
-  lf <- PST.liftST$ freeze vecL                                                                
-  rf <- PST.liftST$ freeze vecR
-  trace ("merge output: " ++ show lf ++ " " ++ show rf) return ()     
-      
-mergeK2 lBot rBot sp top index
-  | lBot == sp && rBot <= top = do
-    value <- V.readR rBot
-    V.writeL index value
-    trace "@" mergeK2 lBot (rBot + 1) sp top (index + 1)
-
-mergeK2 lBot rBot sp top index 
-  | rBot > top && lBot < sp = do -- just copy over left
-    value <- V.readR lBot
-    V.writeL index value
-    trace (">" ++ show lBot ++ " " ++ show rBot ++ " " ++ show index) $ mergeK2 (lBot + 1) rBot sp top (index + 1)
-
-mergeK2 lBot rBot sp top index
-  | index > top = do
-    -- there is no more copying to do, so we are done
-    trace "< returning >" $ return ()
-  
-mergeK2 lBot rBot sp top index = do
-  -- given two slices of a vec1, merge them into vec2
-  left <- V.readR lBot
-  right <- V.readR rBot
-  if left < right then do
-    V.writeL index left
-    trace ("#" ++ show lBot ++ " " ++ show rBot) $ mergeK2 (lBot + 1) rBot sp top (index + 1)
-   else do
-    V.writeL index right
-    trace ("!" ++ show lBot ++ " " ++ show rBot) $ mergeK2 lBot (rBot + 1) sp top (index + 1)
-
-    
-    
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
 seqSortL = do
   PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR) <- SS.get
@@ -228,69 +149,71 @@ mkRandomVec len =
 
 ---------------
 
-mergeWrapper :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
                 PC.ParFuture parM) => 
                 Int -> Int -> V.ParVec2T s elt elt parM ()
-mergeWrapper sp threshold = do
+mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   PST.transmute (\(PST.STTup2 (PST.VFlp vec1) (PST.VFlp vec2)) ->
                   let l1 = MV.slice 0 sp vec1
                       r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
                   PST.STTup2 (PST.STTup2 (PST.VFlp l1) (PST.VFlp r1)) (PST.VFlp vec2))
-     (pMerge threshold)
+     (pMergeTo2 threshold)
                   
-pMerge :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
+pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
            PC.ParFuture parM) =>
           Int -> ParVec21T s elt parM ()
-pMerge threshold = do
+pMergeTo2 threshold = do
   -- threshold check here
   PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
   let len = MV.length vec2
   if len < threshold then
-    mergeNew
+    sMergeTo2
    else do
     -- find the split points
     let mid = len `div` 2
     (splitL, splitR) <- findSplit indexL1 indexL1
     
     PST.forkSTSplit ((splitL, splitR), mid)
-      (pMerge threshold)
-      (pMerge threshold)
+      (pMergeTo2 threshold)
+      (pMergeTo2 threshold)
     return ()
       
-mergeNew :: (ParThreadSafe parM, Ord elt, Show elt) =>       
+sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
             ParVec21T s elt parM ()
-mergeNew = do
+sMergeTo2 = do
   PST.STTup2 (PST.STTup2 (PST.VFlp vecL) (PST.VFlp vecR)) (PST.VFlp vec2) <- SS.get
   let lenL = MV.length vecL
       lenR = MV.length vecR
-  mergeNK 0 lenL 0 lenR 0
+  sMergeTo2K 0 lenL 0 lenR 0
       
-mergeNK lBot lLen rBot rLen index 
+sMergeTo2K lBot lLen rBot rLen index 
   | lBot == lLen && rBot <= rLen = do
     value <- indexR1 rBot
     write2 index value
-    mergeNK lBot lLen (rBot + 1) rLen (index + 1)      
+    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)      
 
-mergeNK lBot lLen rBot rLen index 
+sMergeTo2K lBot lLen rBot rLen index 
   | rBot > rLen && lBot < lLen = do
     value <- indexL1 lBot
     write2 index value
-    mergeNK (lBot + 1) lLen rBot rLen (index + 1)
+    sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
     
-mergeNK lBot lLen rBot rLen index     
+sMergeTo2K lBot lLen rBot rLen index     
   | index > (lLen + rLen) = do
     return ()
 
-mergeNK lBot lLen rBot rLen index = do
+sMergeTo2K lBot lLen rBot rLen index = do
   left <- indexL1 lBot
   right <- indexR1 rBot
   if left < right then do
     write2 index left
-    mergeNK (lBot + 1) lLen rBot rLen (index + 1)
+    sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
    else do
     write2 index right
-    mergeNK lBot lLen (rBot + 1) rLen (index + 1)    
+    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
+    
+mergeTo1 = undefined    
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
              STIndexFunction s elt parM -> STIndexFunction s elt parM ->
@@ -348,5 +271,4 @@ lengthR = do
         
 write2 :: (ParThreadSafe parM) => Int -> elt -> ParVec21T s elt parM ()
 write2 = undefined
-      
       
