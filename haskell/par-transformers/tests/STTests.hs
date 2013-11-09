@@ -82,7 +82,38 @@ p1 = do
         frozenR <- PST.liftST$ freeze rawR
         return$ show frozenL ++ show frozenR)
   
+case_v_t2 :: Assertion
+case_v_t2 = assertEqual "testing transmute with effects"
+            "fromList [0]fromList [0]" t2
+            
+t2 :: String
+t2 = LV.runPar $ V.runParVecT 2 p2
 
+p2 :: V.ParVecT s1 Int (LV.Par d s0) String
+p2 = do
+  
+  V.set 0
+  
+  str <- PST.transmute (\v -> PST.STTup2 v v)
+    (do 
+        VV.writeL 0 120
+        VV.writeR 0 5
+        (rawL,rawR) <- VV.reify
+        frozenL <- PST.liftST$ freeze rawL
+        frozenR <- PST.liftST$ freeze rawR
+        return$ show frozenL ++ show frozenR)
+           
+  raw <- V.reify
+  frozen <- PST.liftST$ freeze raw
+  return$ show frozen ++ " " ++ str
+{-
+splitVec v = (PST.STTup2 (PST.VFlp l) (PST.VFlp r))
+  where
+    len = length v
+    mid = len `quot` 2
+    l = MV.slice 0 mid v
+    r = MV.slice mid (len - mid) v
+-}
 --------------------------------------------------------------------------------
   
 tests :: Test
