@@ -62,7 +62,7 @@ import Control.Par.ST
 
 import qualified Control.Monad.State.Strict as SS
 
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), internalLiftIO)
 
 import System.Random.MWC (create, uniformVector, uniformR)
 
@@ -72,7 +72,7 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (7,7) $ do
+wrapper = LV.runPar $ V.runParVec2T (8,8) $ do
   -- hack: put our input vector into the state
 --  vecR <- liftST$ MV.new $ length vecL
 --  randVec <- SS.liftIO$ mkRandomVec 10
@@ -101,26 +101,29 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              V.ParVec2T s1 elt elt parM ()  
 mergeSort = do
+--  vec2printState "start ms"
   len <- V.lengthL
   
   if len < 2 then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
-    forkSTSplit (sp,sp)
+    trace "fork outer" $ forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
-          forkSTSplit (sp,sp)
+          trace "!fork inner" $ forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          mergeTo2 sp 8)
+          trace "mt2" $ mergeTo2 sp 4)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
-          forkSTSplit (sp,sp)                             
+          trace "!fork inner" $ forkSTSplit (sp,sp)                             
             mergeSort         
             mergeSort
-          mergeTo2 sp 8)                           
-    mergeTo1 sp 8
+          trace "mt2" $mergeTo2 sp 4)                           
+    trace "mt1" mergeTo1 sp 4
+--  vec2printState "end ms"
+--    mergeTo2 sp 8
     
 
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
@@ -155,13 +158,16 @@ mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
             Int -> Int -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
+--  vec2printState "mt2"
   transmute (morphToVec21 sp) (pMergeTo2 threshold)
+--  vec2printState "mt2f"
                   
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
-  -- threshold check here
+  vec21printState "start"
+  -- threshold check here  
   len <- length2
   if len < threshold then
     sMergeTo2
@@ -172,8 +178,8 @@ pMergeTo2 threshold = do
     trace "split returned" $ return ()
     
     forkSTSplit ((splitL, splitR), mid)
-      (pMergeTo2 threshold)
-      (pMergeTo2 threshold)
+      (trace "pmerge" pMergeTo2 threshold)
+      (trace "pmerge" pMergeTo2 threshold)
     return ()
       
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
@@ -209,8 +215,12 @@ sMergeTo2K lBot lLen rBot rLen index = do
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
     
 mergeTo1 sp threshold = do
+--  vec2printState "mt1"
   V.swapState
+--  vec2printState "mt1m"
   (mergeTo2 sp threshold)
+  V.swapState
+--  vec2printState "mt1f"
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
              (Int -> ParVec21T s elt parM elt) ->
@@ -346,4 +356,26 @@ morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
   let l2 = MV.slice 0 sp vec2
       r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
   STTup2 (VFlp vec1) (STTup2 (VFlp l2) (VFlp r2))
+
+-----
+
+vec2printState :: (ParThreadSafe parM, Show elt, PC.ParFuture parM,
+                   PC.FutContents parM ()) =>
+                  String -> V.ParVec2T s elt elt parM ()
+vec2printState str = do
+  STTup2 (VFlp v1) (VFlp v2) <- SS.get
+  f1 <- liftST$ freeze v1
+  f2 <- liftST$ freeze v2
+  internalLiftIO$ putStrLn$ str ++ " " ++ show f1 ++ " " ++ show f2
+  
+vec21printState :: (ParThreadSafe parM, Show elt, PC.ParFuture parM,
+                   PC.FutContents parM ()) =>
+                  String -> ParVec21T s elt parM ()
+vec21printState str = do
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
+  f1 <- liftST$ freeze v1
+  f2 <- liftST$ freeze v2
+  f3 <- liftST$ freeze v3
+  internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
+
 
