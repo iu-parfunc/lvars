@@ -72,7 +72,7 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
+wrapper = LV.runPar $ V.runParVec2T (7,7) $ do
   -- hack: put our input vector into the state
 --  vecR <- liftST$ MV.new $ length vecL
 --  randVec <- SS.liftIO$ mkRandomVec 10
@@ -93,8 +93,9 @@ wrapper = LV.runPar $ V.runParVec2T (17,17) $ do
     
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ freeze rawL
+  frozenR <- liftST$ freeze rawR
   
-  return$ show frozenL
+  return$ show frozenL ++ show frozenR
 
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
@@ -102,7 +103,7 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
 mergeSort = do
   len <- V.lengthL
   
-  if len < 4 then do
+  if len < 2 then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
@@ -112,14 +113,14 @@ mergeSort = do
           forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          mergeTo2 4 sp)
+          mergeTo2 sp 8)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           forkSTSplit (sp,sp)                             
             mergeSort         
             mergeSort
-          mergeTo2 4 sp)                           
-    mergeTo1 sp
+          mergeTo2 sp 8)                           
+    mergeTo1 sp 8
     
 
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
@@ -150,15 +151,15 @@ mkRandomVec len =
 ---------------
 
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
-                PC.ParFuture parM) => 
-                Int -> Int -> V.ParVec2T s elt elt parM ()
+             PC.ParFuture parM) => 
+            Int -> Int -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold)
                   
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
-           PC.ParFuture parM) =>
-          Int -> ParVec21T s elt parM ()
+              PC.ParFuture parM) =>
+             Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
   -- threshold check here
   len <- length2
@@ -167,7 +168,8 @@ pMergeTo2 threshold = do
    else do
     -- find the split points
     let mid = len `div` 2
-    (splitL, splitR) <- findSplit indexL1 indexL1
+    (splitL, splitR) <- findSplit indexL1 indexR1
+    trace "split returned" $ return ()
     
     forkSTSplit ((splitL, splitR), mid)
       (pMergeTo2 threshold)
@@ -181,19 +183,19 @@ sMergeTo2 = do
   sMergeTo2K 0 lenL 0 lenR 0
       
 sMergeTo2K lBot lLen rBot rLen index 
-  | lBot == lLen && rBot <= rLen = do
+  | lBot == lLen && rBot < rLen = do
     value <- indexR1 rBot
     write2 index value
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)      
 
 sMergeTo2K lBot lLen rBot rLen index 
-  | rBot > rLen && lBot < lLen = do
+  | rBot >= rLen && lBot < lLen = do
     value <- indexL1 lBot
     write2 index value
     sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
     
 sMergeTo2K lBot lLen rBot rLen index     
-  | index > (lLen + rLen) = do
+  | index >= (lLen + rLen) = do
     return ()
 
 sMergeTo2K lBot lLen rBot rLen index = do
@@ -206,7 +208,9 @@ sMergeTo2K lBot lLen rBot rLen index = do
     write2 index right
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
     
-mergeTo1 = undefined    
+mergeTo1 sp threshold = do
+  V.swapState
+  (mergeTo2 sp threshold)
     
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt) => 
              (Int -> ParVec21T s elt parM elt) ->
@@ -217,18 +221,37 @@ findSplit indexLeft indexRight = do
   
   (lLen, rLen) <- lengthLR1    
     
-  split 0 lLen 0 rLen 
+  trace "splits fault" $ split 0 lLen 0 rLen 
       where
-
         split lLow lHigh rLow rHigh = do
           let lIndex = (lLow + lHigh) `div` 2
               rIndex = (rLow + rHigh) `div` 2
             
-          leftSub1 <- indexLeft (lIndex - 1)
+--          leftSub1 <- indexLeft (lIndex - 1)
           left <- indexLeft lIndex
-          rightSub1 <- indexRight (rIndex - 1)
+--          rightSub1 <- indexRight (rIndex - 1)
           right <- indexRight rIndex
         
+          if (lIndex == 0) then do
+            rightSub1 <- indexRight (rIndex - 1)
+            if (rightSub1 < left)
+               then return (lIndex, rIndex)
+               else trace "top" split 0 0 rLow rIndex
+          else if (rIndex == 0) then do
+            leftSub1 <- indexLeft (lIndex - 1)
+            if (leftSub1 < right)
+              then return (lIndex, rIndex)
+              else trace "middle" $ split lLow lIndex 0 0
+          else do
+            rightSub1 <- indexRight (rIndex - 1)
+            leftSub1 <- indexLeft (lIndex - 1)
+            if (leftSub1 < right) && (rightSub1 < left)
+              then return (lIndex, rIndex)
+              else if (leftSub1 < right)
+                then trace "above bot case" $ split lIndex lHigh rLow rIndex
+                else trace "bot case" $ split lLow lIndex rIndex rHigh
+             
+{-        
           if (lIndex == 0)
           then if (rightSub1 < left)
             then return (lIndex, rIndex)
@@ -241,8 +264,9 @@ findSplit indexLeft indexRight = do
             then return (lIndex, rIndex)
             else if (leftSub1 < right)
               then split lIndex lHigh rLow rIndex
-              else split lLow lIndex rIndex rHigh
-                
+              else split lLow lIndex rIndex rHigh              
+-}
+
       
 type ParVec21T s elt parM ans = ParST (STTup2 
                                        (STTup2 (MVectorFlp elt) 
@@ -322,3 +346,4 @@ morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
   let l2 = MV.slice 0 sp vec2
       r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
   STTup2 (VFlp vec1) (STTup2 (VFlp l2) (VFlp r2))
+
