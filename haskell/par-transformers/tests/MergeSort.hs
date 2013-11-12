@@ -71,33 +71,22 @@ import Debug.Trace
 runTests :: Bool
 runTests = True
 
-wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (32,32) $ do
-  -- hack: put our input vector into the state
---  vecR <- liftST$ MV.new $ length vecL
---  randVec <- SS.liftIO$ mkRandomVec 10
---  SS.put (STTup2 (VFlp vecL) (VFlp vecR))  
+wrapper :: Int -> String
+wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
+
+  -- test setup: 
+  randVec <- liftST$ mkRandomVec size
   
---  randVec <- SS.liftIO$ mkRandomVec 10
+  STTup2 (VFlp left) (VFlp right) <- SS.get
+  SS.put (STTup2 (VFlp randVec) (VFlp right))
   
-  V.setL 1.0
-  V.setR 0.1
-  
-  -- toy vector to start with
-  V.writeL 0 120.0
-  V.writeL 1 5.0
-  V.writeL 2 3.0
-  V.writeL 3 0.222
-  
-  -- input: unsorted array in Left position
-  -- output: sorted array in Left position
+  -- post condition: left array is sorted
   mergeSort
     
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ freeze rawL
-  frozenR <- liftST$ freeze rawR
   
-  return$ show frozenL -- ++ show frozenR
+  return$ show frozenL
 
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
@@ -139,10 +128,11 @@ seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST$ VA.sort vecL
 
-main = putStrLn wrapper
+main = putStrLn $ wrapper 32
 
 -- | Create a vector containing the numbers [0,N) in random order.
-mkRandomVec :: Int -> IO (MV.IOVector Float)
+--mkRandomVec :: Int -> IO (MV.IOVector Float)
+mkRandomVec :: Int -> ST s (MV.STVector s Float)
 mkRandomVec len =  
   -- Annoyingly there is no MV.generate:
   do g <- create
