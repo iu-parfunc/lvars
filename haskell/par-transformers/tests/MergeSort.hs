@@ -166,7 +166,7 @@ mkRandomVec len =
     
 checkSorted :: IMV.Vector Int -> Bool
 --checkSorted vec = and $ IMV.zipWith (<=) vec (IMV.drop 1 vec)
-checkSorted vec = IMV.foldl (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
+checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
 
   
 
@@ -204,31 +204,29 @@ sMergeTo2 = do
   (lenL, lenR) <- lengthLR1
   sMergeTo2K 0 lenL 0 lenR 0
       
-sMergeTo2K lBot lLen rBot rLen index 
+sMergeTo2K !lBot !lLen !rBot !rLen !index
   | lBot == lLen && rBot < rLen = do
     value <- indexR1 rBot
     write2 index value
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)      
 
-sMergeTo2K lBot lLen rBot rLen index 
   | rBot >= rLen && lBot < lLen = do
     value <- indexL1 lBot
     write2 index value
     sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
     
-sMergeTo2K lBot lLen rBot rLen index     
   | index >= (lLen + rLen) = do
     return ()
 
-sMergeTo2K lBot lLen rBot rLen index = do
-  left <- indexL1 lBot
-  right <- indexR1 rBot
-  if left < right then do
-    write2 index left
-    sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
-   else do
-    write2 index right
-    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
+  | otherwise = do 
+    left <- indexL1 lBot
+    right <- indexR1 rBot
+    if left < right then do
+      write2 index left
+      sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
+     else do
+      write2 index right
+      sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
     
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
