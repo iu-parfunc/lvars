@@ -37,11 +37,17 @@ import Control.Concurrent (threadDelay)
 
 import Data.STRef
 #ifdef UNBOXED
-
+import qualified Data.Vector.Unboxed as IMV
+import qualified Data.Vector.Unboxed.Mutable as MV
+import qualified Control.Par.ST.UVec2 as V
+#define VFlp UFlp
+#define MVectorFlp UVectorFlp
+import Data.Vector.Unboxed (freeze)
 #else
 import Data.Vector.Mutable as MV
-import Data.Vector       (freeze)
 import qualified Data.Vector as IMV
+import qualified Control.Par.ST.Vec2 as V
+import Data.Vector (freeze)
 #endif
 
 import qualified Data.Vector.Algorithms.Intro as VA
@@ -58,7 +64,6 @@ import Test.Framework.Providers.HUnit
 import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (defaultMainGenerator)
 
-import qualified Control.Par.ST.Vec2 as V
 import Control.Par.ST
 
 import qualified Control.Monad.State.Strict as SS

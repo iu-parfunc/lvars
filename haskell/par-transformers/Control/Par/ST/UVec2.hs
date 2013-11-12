@@ -28,6 +28,11 @@ module Control.Par.ST.UVec2
        
          -- * Retrieving an explict pointer to the Vector
          reify, 
+         
+         -- * Useful vector helpers
+         writeL, writeR, readL, readR, lengthL, lengthR,
+         swapL, swapR, dropL, dropR, takeL, takeR,
+         growL, growR, setL, setR, swapState
        )
        where
 
@@ -63,6 +68,12 @@ reify = do
   return (vec1,vec2)
 
 --------------------------------------------------------------------------------
+
+-- | Swap the two state vectors.
+swapState :: ParThreadSafe parM => ParVec2T s elt elt parM ()
+swapState = do
+  STTup2 (UFlp vecL) (UFlp vecR) <- S.get
+  S.put$ STTup2 (UFlp vecR) (UFlp vecL)
 
 -- | Write to the (implicit) left vector state.
 writeL :: ParThreadSafe parM => Int -> eltL -> ParVec2T s eltL eltR parM ()
