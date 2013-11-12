@@ -72,11 +72,13 @@ runTests :: Bool
 runTests = True
 
 wrapper :: String
-wrapper = LV.runPar $ V.runParVec2T (8,8) $ do
+wrapper = LV.runPar $ V.runParVec2T (32,32) $ do
   -- hack: put our input vector into the state
 --  vecR <- liftST$ MV.new $ length vecL
 --  randVec <- SS.liftIO$ mkRandomVec 10
 --  SS.put (STTup2 (VFlp vecL) (VFlp vecR))  
+  
+  randVec <- SS.liftIO$ mkRandomVec 10
   
   V.setL 1.0
   V.setR 0.1
@@ -114,14 +116,14 @@ mergeSort = do
           trace "!fork inner" $ forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          trace "mt2" $ mergeTo2 sp 4)
+          trace "mt2" $ mergeTo2 sp 8)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           trace "!fork inner" $ forkSTSplit (sp,sp)                             
             mergeSort         
             mergeSort
-          trace "mt2" $mergeTo2 sp 4)                           
-    trace "mt1" mergeTo1 sp 4
+          trace "mt2" $mergeTo2 sp 8)                           
+    trace "mt1" mergeTo1 sp 8
 --  vec2printState "end ms"
 --    mergeTo2 sp 8
     
