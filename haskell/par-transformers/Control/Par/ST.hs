@@ -42,7 +42,7 @@ module Control.Par.ST
          STSplittable(..),
          
          -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), UVectorFlp(..), STTup2(..)
+         MVectorFlp(..), UVectorFlp(..), STTup2(..), STUnit(..)
        )
        where
 
@@ -121,6 +121,15 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
     let (a',a'') = splitST spltA a 
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
+
+-- | A splittable type which contains no information.
+data STUnit s = STUnit
+-- newtype STUnit s = STUnit ()
+  
+
+instance STSplittable STUnit where
+  type SplitIdx STUnit = ()
+  splitST () STUnit = (STUnit,STUnit)
 
 ------------------------------------------------------------
 
