@@ -111,7 +111,7 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
 mergeSort = do
   len <- V.lengthL
   
-  if len < 2 then do
+  if len < 8192 then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
