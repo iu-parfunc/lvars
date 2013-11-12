@@ -50,7 +50,7 @@ import qualified Control.Par.ST.Vec2 as V
 import Data.Vector (freeze)
 #endif
 
-import qualified Data.Vector.Algorithms.Intro as VA
+import qualified Data.Vector.Algorithms.Merge as VA
 import Prelude hiding (read, length)
 import qualified Prelude
 import System.IO.Unsafe (unsafePerformIO)
@@ -119,7 +119,7 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
 mergeSort = do
   len <- V.lengthL
   
-  if len < 8192 then do
+  if len < 819200000000000000 then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
