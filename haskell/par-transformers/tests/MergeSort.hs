@@ -71,6 +71,8 @@ import Debug.Trace
 runTests :: Bool
 runTests = True
 
+-- | Generate a random vector of length N and sort it using parallel
+-- in-place merge sort. 
 wrapper :: Int -> String
 wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
 
@@ -88,6 +90,8 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   
   return$ show frozenL
 
+-- | Given a vector in left position, and an available buffer of equal
+-- size in the right position, sort the left vector.
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              V.ParVec2T s1 elt elt parM ()  
@@ -113,6 +117,7 @@ mergeSort = do
           mergeTo2 sp 8)
     mergeTo1 sp 8
 
+-- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
 seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
@@ -140,6 +145,8 @@ mkRandomVec len =
 
 ---------------
 
+-- | Outer wrapper for a function that merges input vectors in the
+-- left position into the vector in right position.
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
              PC.ParFuture parM) => 
             Int -> Int -> V.ParVec2T s elt elt parM ()
@@ -147,6 +154,7 @@ mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold)
                   
+-- | Parallel merge kernel.
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> ParVec21T s elt parM ()
@@ -162,6 +170,7 @@ pMergeTo2 threshold = do
       (pMergeTo2 threshold)
     return ()
       
+-- | Sequential merge kernel.      
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
             ParVec21T s elt parM ()
 sMergeTo2 = do
@@ -194,6 +203,8 @@ sMergeTo2K lBot lLen rBot rLen index = do
     write2 index right
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
     
+-- | Mergeing from right-to-left works by swapping the states before
+-- and after calling the left-to-right merge.
 mergeTo1 sp threshold = do
   V.swapState
   (mergeTo2 sp threshold)
@@ -244,13 +255,15 @@ findSplit indexLeft indexRight = do
               else if (leftSub1 <= right)
                 then split lIndex lHigh rLow rIndex
                 else split lLow lIndex rIndex rHigh
-             
+
+-- | Type alias for a ParST state of ((Vec,Vec), Vec)             
 type ParVec21T s elt parM ans = ParST (STTup2 
                                        (STTup2 (MVectorFlp elt) 
                                                (MVectorFlp elt))
                                        (MVectorFlp elt) s)
                                       parM ans
                                               
+-- | Type alias for a ParST state of (Vec, (Vec, Vec))                                
 type ParVec12T s elt parM ans = ParST (STTup2 
                                        (MVectorFlp elt)
                                        (STTup2 (MVectorFlp elt) 
@@ -258,6 +271,8 @@ type ParVec12T s elt parM ans = ParST (STTup2
                                       parM ans
     
                        
+-- | Helpers for manipulating ParVec12T and ParVec21T                                
+                                
 indexL1 :: (ParThreadSafe parM) => Int -> ParVec21T s elt parM elt
 indexL1 index = do
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
