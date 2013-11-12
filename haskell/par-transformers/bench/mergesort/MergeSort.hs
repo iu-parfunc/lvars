@@ -9,9 +9,7 @@
 {-# LANGUAGE FlexibleInstances #-}                                                             
 {-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
-
-
+{-# LANGUAGE CPP, ForeignFunctionInterface #-}
 
 module Main where
 
@@ -22,20 +20,16 @@ module Main where
 --       where
 
 import Control.LVish      as LV
-import qualified Data.LVar.IVar as IV
-import Control.Par.StateT as S
+import Control.Par.ST
+import Control.Par.Class.Unsafe (ParThreadSafe(), internalLiftIO)
+import qualified Control.Par.Class as PC
 
 import Control.Monad
-import Control.Monad.IO.Class
-import qualified Control.Monad.Trans.State.Strict as S
 import Control.Monad.ST        (ST)
-import Control.Monad.ST.Unsafe (unsafeSTToIO)
-import Control.Monad.Trans (lift)
-import Control.Monad.State (get,put)
-
-import Control.Concurrent (threadDelay)
-
-import Data.STRef
+import qualified Control.Monad.State.Strict as SS
+import Data.Word
+import Data.Time.Clock
+-- #define UNBOXED
 #ifdef UNBOXED
 import qualified Data.Vector.Unboxed as IMV
 import qualified Data.Vector.Unboxed.Mutable as MV
@@ -43,7 +37,14 @@ import qualified Control.Par.ST.UVec2 as V
 #define VFlp UFlp
 #define MVectorFlp UVectorFlp
 import Data.Vector.Unboxed (freeze)
+#elif defined(STORABLE)
+-- import qualified Data.Vector.Storable as V 
+-- import qualified Data.Vector.Storable.Mutable as MV
+import Foreign.Ptr
+import Foreign.C.Types
+import Foreign.Marshal.Array (allocaArray)
 #else
+-- No reason to use the boxed version moving forward:
 import Data.Vector.Mutable as MV
 import qualified Data.Vector as IMV
 import qualified Control.Par.ST.Vec2 as V
@@ -53,30 +54,36 @@ import Data.Vector (freeze)
 import qualified Data.Vector.Algorithms.Merge as VA
 import Prelude hiding (read, length)
 import qualified Prelude
-import System.IO.Unsafe (unsafePerformIO)
 
-import GHC.Prim (RealWorld)
-
-import qualified Control.Par.Class as PC
-
-import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
-import Test.Framework.Providers.HUnit
-import Test.Framework -- (Test, defaultMain, testGroup)
-import Test.Framework.TH (defaultMainGenerator)
-
-import Control.Par.ST
-
-import qualified Control.Monad.State.Strict as SS
-
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), internalLiftIO)
-
-import System.Random.MWC (create, uniformVector, uniformR)
+import System.Random.MWC (create, uniformR) -- uniformVector,
 import System.Environment (getArgs)
-
-import Data.Time.Clock
 import Text.Printf
 
-import Debug.Trace
+
+--------------------------------------------------------------------------------
+
+#define SAFE
+#ifndef SAFE
+thawit  x     = IMV.unsafeThaw   x
+newMV   x     = MV.unsafeNew   x
+readMV  x y   = MV.unsafeRead  x y
+writeMV x y z = MV.unsafeWrite x y z
+sliceMV x y z = MV.unsafeSlice x y z
+copyMV  x y   = MV.unsafeCopy  x y 
+#else
+thawit  x     = IMV.thaw   x
+newMV   x     = MV.new   x
+readMV  x y   = MV.read  x y
+writeMV x y z = MV.write x y z
+sliceMV x y z = MV.slice x y z
+copyMV  x y   = MV.copy  x y 
+#endif
+{-# INLINE thawit #-}
+{-# INLINE newMV #-}
+{-# INLINE readMV #-}
+{-# INLINE writeMV #-}
+{-# INLINE sliceMV #-}
+{-# INLINE copyMV #-}
 
 --------------------------------------------------------------------------------
 
@@ -397,4 +404,51 @@ vec21printState str = do
   f3 <- liftST$ freeze v3
   internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
 
+
+--------------------------------------------------------------------------------
+-- #if defined(CILK_SEQ) || defined (CILK_PAR)
+#if 0
+-- Requires that we selected STORABLE vectors above!
+    
+foreign import ccall unsafe "wrap_seqquick"
+  c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
+
+-- | Sequential Cilk sort
+cilkSeqSort :: IMV.Vector ElmT -> Par (IMV.Vector ElmT)
+cilkSeqSort v = liftIO $ do
+  mutv <- IMV.thaw v
+  MV.unsafeWith mutv $ \vptr ->
+    c_seqquick (castPtr vptr) (fromIntegral $ IMV.length v)
+  IMV.unsafeFreeze mutv
+
+foreign import ccall unsafe "wrap_cilksort"
+  c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
+
+foreign import ccall unsafe "wrap_seqmerge"
+  c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
+
+cilkSeqMerge :: IMV.Vector ElmT -> IMV.Vector ElmT -> IMV.Vector ElmT
+cilkSeqMerge v1 v2 = unsafePerformIO $ do
+    mutv1 <- thawit v1
+    mutv2 <- thawit v2
+    let len1 = IMV.length v1
+	len2 = IMV.length v2
+--    IMV.create $ do 
+    do
+       dest <- newMV (len1 + len2)
+--       dest <- MIMV.unsafeNew (len1 + len2)
+       MV.unsafeWith mutv1 $ \vptr1 ->
+	MV.unsafeWith mutv2 $ \vptr2 ->         
+	 MV.unsafeWith dest $ \vdest ->
+	    c_seqmerge (castPtr vptr1) (fromIntegral len1) 
+		       (castPtr vptr2) (fromIntegral len2) 
+		       (castPtr vdest)
+--       return dest
+       IMV.unsafeFreeze dest
+#endif
+-- End CILK block.
+  
+-- Element type being sorted:
+type ElmT  = Word32
+type CElmT = CUInt
 
