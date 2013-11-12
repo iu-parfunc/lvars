@@ -226,11 +226,18 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 asyncAnd :: forall p . (ParMonad p, LVarSched p)
             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
-asyncAnd trueM falseM kont = do
+asyncAnd leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch mine theirs m =
              forkCancelableWithTid mine $
+             -- Here are the possible states:
+             -- T?   -- 1
+             -- TT   -- 2
+             -- F?   -- 100
+             -- FT   -- 101
+             -- TF   -- 101
+             -- FF   -- 200
                    do b <- m
                       case b of
                         True  -> do n <- internalLiftIO$ C.incrCounter 1 cnt
@@ -239,16 +246,15 @@ asyncAnd trueM falseM kont = do
                                       else return ()
                         False -> -- We COULD assume idempotency and execute kont False twice,
                                  -- but since we have the counter anyway let us dedup:
-                                 do n <- internalLiftIO$ C.incrCounter 100 cnt
-                                    if n < 200 -- Zero ops or one True.  (If false, nothing to do)
-                                      then do -- logDbgLn 1 "asyncAnd: False result, cancelling other..." 
-                                              cancel theirs
-                                              kont False
-                                      else return ()
+                                 do n <- internalLiftIO$ C.incrCounter 100 cnt                                    
+                                    case n of
+                                      100 -> do cancel theirs; kont False
+                                      101 -> kont False
+                                      200 -> return ()
   tid1 <- createTid
   tid2 <- createTid  
-  launch tid1 tid2 trueM
-  launch tid2 tid1 falseM
+  launch tid1 tid2 leftM
+  launch tid2 tid1 rightM
 
   return ()
 
