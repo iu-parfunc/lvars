@@ -40,8 +40,9 @@ data DeadlockT (p:: * -> *) a = DeadlockT
 -- type EffectsSig = (Putting, Freezing, Bumping)
 -- data EffectsSig (a::Putting) (b::Freezing) (c::Bumping) -- = EffectsSig -- a b c
 
-data EffectsSig  = Ef Putting Freezing Bumping
+data EffectsSig  = Ef Putting Getting Freezing Bumping
 data Putting  = P | NP
+data Getting  = G | NG
 data Freezing = F | NF
 data Bumping  = B | NB
 -- data IOing  = YesIO   | NoIO
@@ -54,8 +55,8 @@ data Bumping  = B | NB
 
 -- Experimental... these won't work:
 #if 0
-type ReadOnly  = (forall f b . Ef NP f b )
-type DoesWrite = (forall f b . Ef P  f b )
+type ReadOnly  = (forall f b . Ef NP g f b )
+type DoesWrite = (forall f b . Ef P  g f b )
 -- How do we do an OR:
 -- type Deterministic = (forall b . E NP F b )
 --                    | (forall b . E P NF b )
@@ -98,7 +99,7 @@ runTillDeadlock = undefined
 
 runTillDeadlockWithWrites :: 
   (forall s1 .
-   (DeadlockT (Par (Ef p f b) s2) a -> DeadlockT (Par (Ef p f b) s1) a) -- ^ Lifter function.
+   (DeadlockT (Par (Ef p g f b) s2) a -> DeadlockT (Par (Ef p f b) s1) a) -- ^ Lifter function.
    -> DeadlockT (Par (Ef p f b) s1) res)
   -> Par e s (Maybe res)
 
