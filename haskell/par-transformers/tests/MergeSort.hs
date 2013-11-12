@@ -227,7 +227,8 @@ mergeTo1 sp threshold = do
 -- lengths and gets stuck. It might be a general problem with the
 -- parallel merge algorithm, but is most likely something wrong about
 -- how this function operates. We are being *very dangerous* and just
--- not using a small threshold that triggers this issue.
+-- not using a small threshold that triggers this issue. t=4 breaks
+-- it, but t=8 seems to work.
 --         
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
               PC.ParMonad parM) => 
