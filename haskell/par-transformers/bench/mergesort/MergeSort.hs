@@ -111,6 +111,12 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   return "done"
 --  return$ show frozenL
 
+seqsortThresh :: Int
+seqsortThresh = 2048
+
+seqmergeThresh :: Int
+seqmergeThresh = seqsortThresh
+
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
@@ -118,8 +124,9 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
              V.ParVec2T s1 elt elt parM ()  
 mergeSort = do
   len <- V.lengthL
-  
-  if len < 819200000000000000 then do
+
+-- SET THRESHOLD
+  if len < seqsortThresh then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
@@ -129,14 +136,14 @@ mergeSort = do
           forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          mergeTo2 sp 8192)
+          mergeTo2 sp seqmergeThresh)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           forkSTSplit (sp,sp)
             mergeSort         
             mergeSort
-          mergeTo2 sp 8192)
-    mergeTo1 sp 8192
+          mergeTo2 sp seqmergeThresh)
+    mergeTo1 sp seqmergeThresh
 
 -- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
