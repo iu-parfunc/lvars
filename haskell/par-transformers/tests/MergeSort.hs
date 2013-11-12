@@ -78,7 +78,7 @@ wrapper = LV.runPar $ V.runParVec2T (32,32) $ do
 --  randVec <- SS.liftIO$ mkRandomVec 10
 --  SS.put (STTup2 (VFlp vecL) (VFlp vecR))  
   
-  randVec <- SS.liftIO$ mkRandomVec 10
+--  randVec <- SS.liftIO$ mkRandomVec 10
   
   V.setL 1.0
   V.setR 0.1
