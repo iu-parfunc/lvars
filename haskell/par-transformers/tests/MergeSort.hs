@@ -97,7 +97,7 @@ wrapper = LV.runPar $ V.runParVec2T (32,32) $ do
   frozenL <- liftST$ freeze rawL
   frozenR <- liftST$ freeze rawR
   
-  return$ show frozenL ++ show frozenR
+  return$ show frozenL -- ++ show frozenR
 
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
@@ -110,21 +110,27 @@ mergeSort = do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
-    trace "fork outer" $ forkSTSplit (sp,sp)
+--    trace "fork outer" $ forkSTSplit (sp,sp)
+    forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
-          trace "!fork inner" $ forkSTSplit (sp,sp)
+--          trace "!fork inner" $ forkSTSplit (sp,sp)
+          forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          trace "mt2" $ mergeTo2 sp 8)
+--          trace "mt2" $ mergeTo2 sp 8)
+          mergeTo2 sp 8)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
-          trace "!fork inner" $ forkSTSplit (sp,sp)                             
+--          trace "!fork inner" $ forkSTSplit (sp,sp)                             
+          forkSTSplit (sp,sp)
             mergeSort         
             mergeSort
-          trace "mt2" $mergeTo2 sp 8)                           
-    trace "mt1" mergeTo1 sp 8
---  vec2printState "end ms"
+--          trace "mt2" $mergeTo2 sp 8)                           
+          mergeTo2 sp 8)
+--    trace "mt1" mergeTo1 sp 8
+    mergeTo1 sp 8
+       --  vec2printState "end ms"
 --    mergeTo2 sp 8
     
 
@@ -168,7 +174,7 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
-  vec21printState "start"
+--  vec21printState "start"
   -- threshold check here  
   len <- length2
   if len < threshold then
@@ -177,11 +183,13 @@ pMergeTo2 threshold = do
     -- find the split points
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
-    trace "split returned" $ return ()
+--    trace "split returned" $ return ()
     
     forkSTSplit ((splitL, splitR), mid)
-      (trace "pmerge" pMergeTo2 threshold)
-      (trace "pmerge" pMergeTo2 threshold)
+      (pMergeTo2 threshold)
+      (pMergeTo2 threshold)
+--      (trace "pmerge" pMergeTo2 threshold)
+--      (trace "pmerge" pMergeTo2 threshold)
     return ()
       
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
@@ -234,13 +242,14 @@ findSplit indexLeft indexRight = do
   
   (lLen, rLen) <- lengthLR1    
     
-  trace "splits fault" $ split 0 lLen 0 rLen 
+--  trace "splits fault" $ split 0 lLen 0 rLen 
+  split 0 lLen 0 rLen
       where
         split lLow lHigh rLow rHigh = do
           let lIndex = (lLow + lHigh) `div` 2
               rIndex = (rLow + rHigh) `div` 2
               
-          vec21printState ("(" ++ show lIndex ++ ", " ++ show rIndex ++ ")")
+--          vec21printState ("(" ++ show lIndex ++ ", " ++ show rIndex ++ ")")
             
 --          leftSub1 <- indexLeft (lIndex - 1)
           left <- indexLeft lIndex
@@ -251,22 +260,21 @@ findSplit indexLeft indexRight = do
           else if (lIndex == 0) then do
             rightSub1 <- indexRight (rIndex - 1)
             if (rightSub1 <= left)
-               then trace "top ret" $ return (lIndex, rIndex)
-               else trace "top" split 0 0 rLow rIndex
+               then return (lIndex, rIndex)
+               else split 0 0 rLow rIndex
           else if (rIndex == 0) then do
             leftSub1 <- indexLeft (lIndex - 1)
             if (leftSub1 <= right)
-              then trace "mid ret" $ return (lIndex, rIndex)
-              else trace "middle" $ split lLow lIndex 0 0
+              then return (lIndex, rIndex)
+              else split lLow lIndex 0 0
           else do
-            trace "about to sub" $ return ()
             rightSub1 <- indexRight (rIndex - 1)
             leftSub1 <- indexLeft (lIndex - 1)
             if (leftSub1 <= right) && (rightSub1 <= left)
-              then trace "bot ret" $ return (lIndex, rIndex)
+              then return (lIndex, rIndex)
               else if (leftSub1 <= right)
-                then trace "above bot case" $ split lIndex lHigh rLow rIndex
-                else trace "bot case" $ split lLow lIndex rIndex rHigh
+                then split lIndex lHigh rLow rIndex
+                else split lLow lIndex rIndex rHigh
              
 {-        
           if (lIndex == 0)
