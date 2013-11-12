@@ -46,6 +46,7 @@ import qualified Data.Vector as IMV
 
 import qualified Data.Vector.Algorithms.Intro as VA
 import Prelude hiding (read, length)
+import qualified Prelude
 import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
@@ -65,11 +66,14 @@ import qualified Control.Monad.State.Strict as SS
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), internalLiftIO)
 
 import System.Random.MWC (create, uniformVector, uniformR)
+import System.Environment (getArgs)
 
 import Data.Time.Clock
 import Text.Printf
 
 import Debug.Trace
+
+--------------------------------------------------------------------------------
 
 runTests :: Bool
 runTests = True
@@ -85,11 +89,9 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   STTup2 (VFlp left) (VFlp right) <- SS.get
   SS.put (STTup2 (VFlp randVec) (VFlp right))
   
-  start <- internalLiftIO$ getCurrentTime
-  
+  start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
-  mergeSort
-  
+  mergeSort  
   end <- internalLiftIO$ getCurrentTime
   
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
@@ -97,7 +99,7 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ freeze rawL
   
-  internalLiftIO$ putStrLn $ show $ checkSorted frozenL
+  internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
   
   return "done"
@@ -136,7 +138,13 @@ seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST$ VA.sort vecL
 
-main = putStrLn $ wrapper (2^16)
+main :: IO ()
+main = do
+  args <- getArgs
+  let sz = case args of
+            []   -> 2^16
+            [sz] -> 2^(Prelude.read sz)
+  putStrLn $ wrapper sz
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int)
