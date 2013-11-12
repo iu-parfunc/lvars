@@ -266,23 +266,6 @@ findSplit indexLeft indexRight = do
                 then split lIndex lHigh rLow rIndex
                 else split lLow lIndex rIndex rHigh
              
-{-        
-          if (lIndex == 0)
-          then if (rightSub1 < left)
-            then return (lIndex, rIndex)
-            else split 0 0 rLow rIndex
-          else if (rIndex == 0)
-          then if (leftSub1 < right)
-            then return (lIndex, rIndex)
-            else split lLow lIndex 0 0
-          else if (leftSub1 < right) && (rightSub1 < left)
-            then return (lIndex, rIndex)
-            else if (leftSub1 < right)
-              then split lIndex lHigh rLow rIndex
-              else split lLow lIndex rIndex rHigh              
--}
-
-      
 type ParVec21T s elt parM ans = ParST (STTup2 
                                        (STTup2 (MVectorFlp elt) 
                                                (MVectorFlp elt))
