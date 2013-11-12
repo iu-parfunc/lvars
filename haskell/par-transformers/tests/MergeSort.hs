@@ -66,6 +66,9 @@ import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), internalLiftIO)
 
 import System.Random.MWC (create, uniformVector, uniformR)
 
+import Data.Time.Clock
+import Text.Printf
+
 import Debug.Trace
 
 runTests :: Bool
@@ -77,20 +80,28 @@ wrapper :: Int -> String
 wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
 
   -- test setup: 
-  randVec <- liftST$ mkRandomVec size
+  randVec <- liftST$ mkRandomVec size    
   
   STTup2 (VFlp left) (VFlp right) <- SS.get
   SS.put (STTup2 (VFlp randVec) (VFlp right))
   
+  start <- internalLiftIO$ getCurrentTime
+  
   -- post condition: left array is sorted
   mergeSort
+  
+  end <- internalLiftIO$ getCurrentTime
+  
+  let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
     
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ freeze rawL
   
   internalLiftIO$ putStrLn $ show $ checkSorted frozenL
+  internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
   
-  return$ show frozenL
+  return "done"
+--  return$ show frozenL
 
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
@@ -110,14 +121,14 @@ mergeSort = do
           forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          mergeTo2 sp 8)
+          mergeTo2 sp 8192)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           forkSTSplit (sp,sp)
             mergeSort         
             mergeSort
-          mergeTo2 sp 8)
-    mergeTo1 sp 8
+          mergeTo2 sp 8192)
+    mergeTo1 sp 8192
 
 -- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
@@ -125,7 +136,7 @@ seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST$ VA.sort vecL
 
-main = putStrLn $ wrapper 32
+main = putStrLn $ wrapper (2^16)
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int)
