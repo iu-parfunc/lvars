@@ -92,36 +92,26 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              V.ParVec2T s1 elt elt parM ()  
 mergeSort = do
---  vec2printState "start ms"
   len <- V.lengthL
   
   if len < 2 then do
     seqSortL
    else do  
     let sp = (len `quot` 2)              
---    trace "fork outer" $ forkSTSplit (sp,sp)
     forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
---          trace "!fork inner" $ forkSTSplit (sp,sp)
           forkSTSplit (sp,sp)
             mergeSort
             mergeSort
---          trace "mt2" $ mergeTo2 sp 8)
           mergeTo2 sp 8)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
---          trace "!fork inner" $ forkSTSplit (sp,sp)                             
           forkSTSplit (sp,sp)
             mergeSort         
             mergeSort
---          trace "mt2" $mergeTo2 sp 8)                           
           mergeTo2 sp 8)
---    trace "mt1" mergeTo1 sp 8
     mergeTo1 sp 8
-       --  vec2printState "end ms"
---    mergeTo2 sp 8
-    
 
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
 seqSortL = do
@@ -131,7 +121,6 @@ seqSortL = do
 main = putStrLn $ wrapper 32
 
 -- | Create a vector containing the numbers [0,N) in random order.
---mkRandomVec :: Int -> IO (MV.IOVector Float)
 mkRandomVec :: Int -> ST s (MV.STVector s Float)
 mkRandomVec len =  
   -- Annoyingly there is no MV.generate:
@@ -156,30 +145,21 @@ mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
             Int -> Int -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
---  vec2printState "mt2"
   transmute (morphToVec21 sp) (pMergeTo2 threshold)
---  vec2printState "mt2f"
                   
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> ParVec21T s elt parM ()
 pMergeTo2 threshold = do
---  vec21printState "start"
-  -- threshold check here  
   len <- length2
   if len < threshold then
     sMergeTo2
    else do
-    -- find the split points
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
---    trace "split returned" $ return ()
-    
     forkSTSplit ((splitL, splitR), mid)
       (pMergeTo2 threshold)
       (pMergeTo2 threshold)
---      (trace "pmerge" pMergeTo2 threshold)
---      (trace "pmerge" pMergeTo2 threshold)
     return ()
       
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
@@ -215,13 +195,9 @@ sMergeTo2K lBot lLen rBot rLen index = do
     sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
     
 mergeTo1 sp threshold = do
---  vec2printState "mt1"
   V.swapState
---  vec2printState "mt1m"
   (mergeTo2 sp threshold)
   V.swapState
---  vec2printState "mt1f"
-    
 
 -- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
 -- lengths and gets stuck. It might be a general problem with the
@@ -240,18 +216,13 @@ findSplit indexLeft indexRight = do
   
   (lLen, rLen) <- lengthLR1    
     
---  trace "splits fault" $ split 0 lLen 0 rLen 
   split 0 lLen 0 rLen
       where
         split lLow lHigh rLow rHigh = do
           let lIndex = (lLow + lHigh) `div` 2
               rIndex = (rLow + rHigh) `div` 2
               
---          vec21printState ("(" ++ show lIndex ++ ", " ++ show rIndex ++ ")")
-            
---          leftSub1 <- indexLeft (lIndex - 1)
           left <- indexLeft lIndex
---          rightSub1 <- indexRight (rIndex - 1)
           right <- indexRight rIndex
           if (lIndex == 0) && (rIndex == 0) then do
             return (lIndex, rIndex)                    
