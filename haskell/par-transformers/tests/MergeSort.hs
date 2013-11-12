@@ -88,6 +88,8 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ freeze rawL
   
+  internalLiftIO$ putStrLn $ show $ checkSorted frozenL
+  
   return$ show frozenL
 
 -- | Given a vector in left position, and an available buffer of equal
@@ -126,7 +128,7 @@ seqSortL = do
 main = putStrLn $ wrapper 32
 
 -- | Create a vector containing the numbers [0,N) in random order.
-mkRandomVec :: Int -> ST s (MV.STVector s Float)
+mkRandomVec :: Int -> ST s (MV.STVector s Int)
 mkRandomVec len =  
   -- Annoyingly there is no MV.generate:
   do g <- create
@@ -142,6 +144,12 @@ mkRandomVec len =
     offset <- uniformR (0, len - n - 1) g
     MV.swap vec n (n + offset)
     loop (n+1) vec g
+    
+checkSorted :: IMV.Vector Int -> Bool
+--checkSorted vec = and $ IMV.zipWith (<=) vec (IMV.drop 1 vec)
+checkSorted vec = IMV.foldl (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
+
+  
 
 ---------------
 
