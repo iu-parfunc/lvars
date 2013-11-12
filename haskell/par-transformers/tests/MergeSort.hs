@@ -222,6 +222,13 @@ mergeTo1 sp threshold = do
   V.swapState
 --  vec2printState "mt1f"
     
+
+-- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
+-- lengths and gets stuck. It might be a general problem with the
+-- parallel merge algorithm, but is most likely something wrong about
+-- how this function operates. We are being *very dangerous* and just
+-- not using a small threshold that triggers this issue.
+--         
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
               PC.ParMonad parM) => 
              (Int -> ParVec21T s elt parM elt) ->
