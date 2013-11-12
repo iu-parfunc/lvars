@@ -106,6 +106,7 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   
   internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
+  internalLiftIO$ printf "SELFTIMED: %0.3f\n" runningTime  
   
   return "done"
 --  return$ show frozenL
