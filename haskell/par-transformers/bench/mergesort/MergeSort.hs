@@ -134,7 +134,7 @@ computation size = do
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ IMV.freeze rawL
   
---  internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
+  internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
   internalLiftIO$ printf "SELFTIMED: %0.3f\n" runningTime  
   
@@ -208,8 +208,9 @@ mkRandomVec len =
     MV.swap vec n (n + offset)
     loop (n+1) vec g
     
---checkSorted :: IMV.Vector Int32 -> Bool
---checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
+checkSorted :: IMV.Vector Int32 -> Bool
+checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ 
+                  IMV.imap (\i elem -> (fromIntegral i == elem)) vec
 
   
 
