@@ -107,8 +107,8 @@ runTests = True
 wrapper :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
                 PC.ParFuture parM) => 
                Int -> Int -> Int ->
-               ParVec21T s Int32 parM () ->
-               V.ParVec2T s Int32 Int32 parM () -> 
+               ParVec21T s1 Int32 parM () ->
+               V.ParVec2T s2 Int32 Int32 parM () -> 
                String
 wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg = 
   LV.runPar $ V.runParVec2T (0,size) $ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg
@@ -255,8 +255,8 @@ pMergeTo2 threshold sma = do
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
     forkSTSplit ((splitL, splitR), mid)
-      (pMergeTo2 threshold)
-      (pMergeTo2 threshold)
+      (pMergeTo2 threshold sma)
+      (pMergeTo2 threshold sma)
     return ()
       
 -- | Sequential merge kernel.      
@@ -306,9 +306,9 @@ mergeTo1 sp threshold sma = do
 --         
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
               PC.ParMonad parM) => 
-             (Int -> ParVec21T s elt parM elt) ->
-             (Int -> ParVec21T s elt parM elt)->
-             ParVec21T s elt parM (Int, Int)
+             (Int -> ParVec21T s2 elt parM elt) ->
+             (Int -> ParVec21T s1 elt parM elt)->
+             ParVec21T s3 elt parM (Int, Int)
 
 findSplit indexLeft indexRight = do                                 
   
