@@ -26,19 +26,27 @@ import qualified Control.Par.Class as PC
 
 import Control.Monad
 import Control.Monad.ST        (ST)
+import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.State.Strict as SS
 import Data.Word
 import Data.Time.Clock
--- #define UNBOXED
-#define STORABLE
-#ifdef UNBOXED
+
+#ifdef BOXED
+-- No reason to use the boxed version moving forward:
+import Data.Vector.Mutable as MV
+import qualified Data.Vector as IMV
+import qualified Control.Par.ST.Vec2 as V
+import Data.Vector (freeze)
+#elif defined(UNBOXED)
+#warning "Using Unboxed Vectors."
 #define VFlp UFlp
 #define MVectorFlp UVectorFlp
 import qualified Data.Vector.Unboxed as IMV
 import qualified Data.Vector.Unboxed.Mutable as MV
 import qualified Control.Par.ST.UVec2 as V
 import Data.Vector.Unboxed (freeze)
-#elif defined(STORABLE)
+#else
+#warning "Using Storable Vectors."
 #define VFlp SFlp
 #define MVectorFlp SVectorFlp
 import qualified Data.Vector.Storable as IMV
@@ -47,12 +55,6 @@ import qualified Control.Par.ST.StorableVec2 as V
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.Marshal.Array (allocaArray)
-#else
--- No reason to use the boxed version moving forward:
-import Data.Vector.Mutable as MV
-import qualified Data.Vector as IMV
-import qualified Control.Par.ST.Vec2 as V
-import Data.Vector (freeze)
 #endif
 
 import qualified Data.Vector.Algorithms.Merge as VA
@@ -61,6 +63,7 @@ import qualified Prelude
 
 import System.Random.MWC (create, uniformR) -- uniformVector,
 import System.Environment (getArgs)
+import System.IO.Unsafe (unsafePerformIO)
 import Text.Printf
 
 
@@ -410,16 +413,16 @@ vec21printState str = do
 
 
 --------------------------------------------------------------------------------
--- #if defined(CILK_SEQ) || defined (CILK_PAR)
-#if 0
+#define CILK_SEQ
+#ifdef CILK_SEQ
 -- Requires that we selected STORABLE vectors above!
     
 foreign import ccall unsafe "wrap_seqquick"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
 -- | Sequential Cilk sort
-cilkSeqSort :: IMV.Vector ElmT -> Par (IMV.Vector ElmT)
-cilkSeqSort v = liftIO $ do
+cilkSeqSort :: IMV.Vector ElmT -> Par d s (IMV.Vector ElmT)
+cilkSeqSort v = internalLiftIO $ do
   mutv <- IMV.thaw v
   MV.unsafeWith mutv $ \vptr ->
     c_seqquick (castPtr vptr) (fromIntegral $ IMV.length v)
@@ -456,4 +459,3 @@ type CElmT = CUInt
 #endif
 -- End CILK block.
   
-
