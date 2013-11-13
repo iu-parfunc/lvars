@@ -104,7 +104,12 @@ runTests = True
 
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort. 
---wrapper :: Int -> String
+wrapper :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
+                PC.ParFuture parM) => 
+               Int -> Int -> Int ->
+               ParVec21T s Int32 parM () ->
+               V.ParVec2T s Int32 Int32 parM () -> 
+               String
 wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg = 
   LV.runPar $ V.runParVec2T (0,size) $ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg
 
