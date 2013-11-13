@@ -30,16 +30,20 @@ import qualified Control.Monad.State.Strict as SS
 import Data.Word
 import Data.Time.Clock
 -- #define UNBOXED
+#define STORABLE
 #ifdef UNBOXED
+#define VFlp UFlp
+#define MVectorFlp UVectorFlp
 import qualified Data.Vector.Unboxed as IMV
 import qualified Data.Vector.Unboxed.Mutable as MV
 import qualified Control.Par.ST.UVec2 as V
-#define VFlp UFlp
-#define MVectorFlp UVectorFlp
 import Data.Vector.Unboxed (freeze)
 #elif defined(STORABLE)
--- import qualified Data.Vector.Storable as V 
--- import qualified Data.Vector.Storable.Mutable as MV
+#define VFlp SFlp
+#define MVectorFlp SVectorFlp
+import qualified Data.Vector.Storable as IMV
+import qualified Data.Vector.Storable.Mutable as MV
+import qualified Control.Par.ST.StorableVec2 as V
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.Marshal.Array (allocaArray)
@@ -109,7 +113,7 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
     
   (rawL, rawR) <- V.reify
-  frozenL <- liftST$ freeze rawL
+  frozenL <- liftST$ IMV.freeze rawL
   
   internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
@@ -391,17 +395,17 @@ vec2printState :: (ParThreadSafe parM, Show elt, PC.ParFuture parM,
                   String -> V.ParVec2T s elt elt parM ()
 vec2printState str = do
   STTup2 (VFlp v1) (VFlp v2) <- SS.get
-  f1 <- liftST$ freeze v1
-  f2 <- liftST$ freeze v2
+  f1 <- liftST$ IMV.freeze v1
+  f2 <- liftST$ IMV.freeze v2
   internalLiftIO$ putStrLn$ str ++ " " ++ show f1 ++ " " ++ show f2
   
 vec21printState :: (ParThreadSafe parM, Show elt, PC.ParMonad parM) =>
                   String -> ParVec21T s elt parM ()
 vec21printState str = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
-  f1 <- liftST$ freeze v1
-  f2 <- liftST$ freeze v2
-  f3 <- liftST$ freeze v3
+  f1 <- liftST$ IMV.freeze v1
+  f2 <- liftST$ IMV.freeze v2
+  f3 <- liftST$ IMV.freeze v3
   internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
 
 
