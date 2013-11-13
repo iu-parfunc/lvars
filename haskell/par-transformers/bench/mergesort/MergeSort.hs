@@ -144,6 +144,7 @@ mergeSort = do
 -- SET THRESHOLD
   if len < seqsortThresh then do
     seqSortL
+--    cilkSeqSort
    else do  
     let sp = (len `quot` 2)              
     forkSTSplit (sp,sp)
@@ -194,7 +195,6 @@ mkRandomVec len =
     loop (n+1) vec g
     
 checkSorted :: IMV.Vector Int -> Bool
---checkSorted vec = and $ IMV.zipWith (<=) vec (IMV.drop 1 vec)
 checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
 
   
@@ -218,6 +218,7 @@ pMergeTo2 threshold = do
   len <- length2
   if len < threshold then
     sMergeTo2
+    --cilkSeqMerge
    else do
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
@@ -443,24 +444,24 @@ foreign import ccall unsafe "wrap_cilksort"
 foreign import ccall unsafe "wrap_seqmerge"
   c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
 
-cilkSeqMerge :: IMV.Vector ElmT -> IMV.Vector ElmT -> IMV.Vector ElmT
-cilkSeqMerge v1 v2 = unsafePerformIO $ do
-    mutv1 <- thawit v1
-    mutv2 <- thawit v2
-    let len1 = IMV.length v1
-	len2 = IMV.length v2
---    IMV.create $ do 
-    do
-       dest <- newMV (len1 + len2)
---       dest <- MIMV.unsafeNew (len1 + len2)
-       MV.unsafeWith mutv1 $ \vptr1 ->
-	MV.unsafeWith mutv2 $ \vptr2 ->         
-	 MV.unsafeWith dest $ \vdest ->
-	    c_seqmerge (castPtr vptr1) (fromIntegral len1) 
-		       (castPtr vptr2) (fromIntegral len2) 
-		       (castPtr vdest)
---       return dest
-       IMV.unsafeFreeze dest
+cilkSeqMerge :: (Ord elt, ParThreadSafe parM, PC.ParMonad parM) =>
+                ParVec21T s elt parM ()
+cilkSeqMerge = do
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
+  let (fptr1,_) = MV.unsafeToForeignPtr0 v1
+      (fptr2,_) = MV.unsafeToForeignPtr0 v2
+      (fptr3,_) = MV.unsafeToForeignPtr0 v3
+
+  internalLiftIO$ do
+    let len1 = MV.length v1  
+        len2 = MV.length v2
+    withForeignPtr fptr1 $ \vptr1 ->
+     withForeignPtr fptr2 $ \vptr2 ->
+      withForeignPtr fptr3 $ \vptr3 ->
+        c_seqmerge (castPtr vptr1) (fromIntegral len1)
+                   (castPtr vptr2) (fromIntegral len2)
+                   (castPtr vptr3)
+  return ()
 
 -- Element type being sorted:
 type ElmT  = Word32
