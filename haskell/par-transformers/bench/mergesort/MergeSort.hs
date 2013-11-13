@@ -53,6 +53,7 @@ import qualified Data.Vector.Storable as IMV
 import qualified Data.Vector.Storable.Mutable as MV
 import qualified Control.Par.ST.StorableVec2 as V
 import Foreign.Ptr
+import Foreign.ForeignPtr (withForeignPtr)
 import Foreign.C.Types
 import Foreign.Marshal.Array (allocaArray)
 #endif
@@ -64,6 +65,7 @@ import qualified Prelude
 import System.Random.MWC (create, uniformR) -- uniformVector,
 import System.Environment (getArgs)
 import System.IO.Unsafe (unsafePerformIO)
+import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Text.Printf
 
 
@@ -420,13 +422,20 @@ vec21printState str = do
 foreign import ccall unsafe "wrap_seqquick"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
--- | Sequential Cilk sort
-cilkSeqSort :: IMV.Vector ElmT -> Par d s (IMV.Vector ElmT)
-cilkSeqSort v = internalLiftIO $ do
-  mutv <- IMV.thaw v
-  MV.unsafeWith mutv $ \vptr ->
-    c_seqquick (castPtr vptr) (fromIntegral $ IMV.length v)
-  IMV.unsafeFreeze mutv
+-- | Sequential Cilk sort, on the left vector, inplace.
+cilkSeqSort :: (Ord eltL, ParThreadSafe parM, PC.ParMonad parM) =>
+               V.ParVec2T s eltL eltR parM ()
+-- This has the same signature & contract as seqSortL.
+cilkSeqSort = do
+  STTup2 (VFlp vecL) (VFlp _) <- SS.get
+  internalLiftIO$ do
+    let len = MV.length vecL
+    let (fptr,_) = MV.unsafeToForeignPtr0 vecL
+    withForeignPtr fptr $ \ vptr -> do
+      -- No allocation, C operates on this memory in-place:
+      c_seqquick (castPtr vptr) (fromIntegral len)
+      return ()
+    return ()
 
 foreign import ccall unsafe "wrap_cilksort"
   c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
