@@ -104,13 +104,17 @@ runTests = True
 
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort. 
-wrapper :: Int -> String
-wrapper size = LV.runPar $ V.runParVec2T (0,size) $ computation size
+--wrapper :: Int -> String
+wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg = 
+  LV.runPar $ V.runParVec2T (0,size) $ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg
 
 computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
                 PC.ParFuture parM) => 
-               Int -> V.ParVec2T s Int32 Int32 parM String
-computation size = do
+               Int -> Int -> Int ->
+               ParVec21T s Int32 parM () ->
+               V.ParVec2T s Int32 Int32 parM () ->
+               V.ParVec2T s Int32 Int32 parM String
+computation size mergeThreshold sortThreshold sMergeAlg sSortAlg = do
 
   -- test setup: 
   randVec <- liftST$ mkRandomVec size    
@@ -123,7 +127,7 @@ computation size = do
   internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
-  mergeSort  
+  mergeSort size mergeThreshold sortThreshold sMergeAlg sSortAlg
   end <- internalLiftIO$ getCurrentTime
 
   internalLiftIO$ printf "finished run\n"
@@ -151,14 +155,16 @@ seqmergeThresh = seqsortThresh
 -- size in the right position, sort the left vector.
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
+             Int -> Int -> 
+             ParVec21T s2 elt parM () ->
+             ParVec2T s3 elt elt parM () ->
              V.ParVec2T s1 elt elt parM ()  
-mergeSort = do
+mergeSort mt st sma ssa = do
   len <- V.lengthL
 
 -- SET THRESHOLD
-  if len < seqsortThresh then do
---    seqSortL
-    cilkSeqSort
+  if len < st then do
+    ssa
    else do  
     let sp = (len `quot` 2)              
     forkSTSplit (sp,sp)
@@ -167,14 +173,14 @@ mergeSort = do
           forkSTSplit (sp,sp)
             mergeSort
             mergeSort
-          mergeTo2 sp seqmergeThresh)
+          mergeTo2 sp mt sma)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           forkSTSplit (sp,sp)
             mergeSort         
             mergeSort
-          mergeTo2 sp seqmergeThresh)
-    mergeTo1 sp seqmergeThresh
+          mergeTo2 sp mt sma)
+    mergeTo1 sp mt sma
 
 -- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
@@ -185,10 +191,17 @@ seqSortL = do
 main :: IO ()
 main = do
   args <- getArgs
-  let sz = case args of
-            []   -> 2^16
-            [sz] -> 2^(Prelude.read sz)
-  putStrLn $ wrapper sz
+  let (size, mergeThreshold, sortThreshold, sMergeAlg, sSortAlg) = case args of
+            []   -> (2^16, 2048, 2048, sMergeTo2, seqSortL)
+            [s, mt, st, "cilk", "cilk"] -> 
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, clikSeqMerge, cilkSeqSort)
+            [s, mt, st, "haskell", "cilk"] -> 
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, sMergeTo2, cilkSeqSort)
+            [s, mt, st, "cilk", "haskell"] -> 
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, clikSeqMerge, seqSortL)
+            [s, mt, st, "haskell", "haskell"] -> 
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, sMergeTo2, seqSortL)  
+  putStrLn $ wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int32)
@@ -220,20 +233,19 @@ checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
 -- left position into the vector in right position.
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
              PC.ParFuture parM) => 
-            Int -> Int -> V.ParVec2T s elt elt parM ()
-mergeTo2 sp threshold = do
+            Int -> Int -> -> ParVec21T s1 elt parM () -> V.ParVec2T s elt elt parM ()
+mergeTo2 sp threshold sma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
-  transmute (morphToVec21 sp) (pMergeTo2 threshold)
+  transmute (morphToVec21 sp) (pMergeTo2 threshold sma)
                   
 -- | Parallel merge kernel.
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
-             Int -> ParVec21T s elt parM ()
-pMergeTo2 threshold = do
+             Int -> ParVec21T s1 elt parM () -> ParVec21T s elt parM ()
+pMergeTo2 threshold sma = do
   len <- length2
   if len < threshold then
-    sMergeTo2
---    cilkSeqMerge
+    sma
    else do
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
@@ -275,9 +287,9 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
     
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
-mergeTo1 sp threshold = do
+mergeTo1 sp threshold sma = do
   V.swapState
-  (mergeTo2 sp threshold)
+  (mergeTo2 sp threshold sma)
   V.swapState
 
 -- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
