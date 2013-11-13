@@ -105,22 +105,22 @@ runTests = True
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort. 
 wrapper :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
-                PC.ParFuture parM) => 
-               Int -> Int -> Int ->
-               ParVec21T s1 Int32 parM () ->
-               V.ParVec2T s2 Int32 Int32 parM () -> 
-               String
+            PC.ParFuture parM) => 
+           Int -> Int -> Int ->
+           (forall s1 . ParVec21T s1 Int32 parM ()) ->
+           (forall s2 . V.ParVec2T s2 Int32 Int32 parM ()) -> 
+           String
 wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg = 
   LV.runPar $ V.runParVec2T (0,size) $ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg
 
 computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
                 PC.ParFuture parM) => 
                Int -> Int -> Int ->
-               ParVec21T s1 Int32 parM () ->
-               V.ParVec2T s2 Int32 Int32 parM () ->
-               V.ParVec2T s3 Int32 Int32 parM String
+               (forall s1 . ParVec21T s1 Int32 parM ()) ->
+               (forall s2 . V.ParVec2T s2 Int32 Int32 parM ()) ->
+               V.ParVec2T s Int32 Int32 parM String
 computation size mergeThreshold sortThreshold sMergeAlg sSortAlg = do
-
+{-
   -- test setup: 
   randVec <- liftST$ mkRandomVec size    
   
@@ -132,7 +132,7 @@ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg = do
   internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
-  mergeSort size mergeThreshold sortThreshold sMergeAlg sSortAlg
+   mergeSort mergeThreshold sortThreshold sMergeAlg sSortAlg
   end <- internalLiftIO$ getCurrentTime
 
   internalLiftIO$ printf "finished run\n"
@@ -146,7 +146,7 @@ computation size mergeThreshold sortThreshold sMergeAlg sSortAlg = do
   internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
   internalLiftIO$ printf "SELFTIMED: %0.3f\n" runningTime  
-  
+  -}
 --  return $ show frozenL
   return$ "done"
 
@@ -161,9 +161,9 @@ seqmergeThresh = seqsortThresh
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              Int -> Int -> 
-             ParVec21T s2 elt parM () ->
-             V.ParVec2T s3 elt elt parM () ->
-             V.ParVec2T s1 elt elt parM ()  
+             (forall s2 . ParVec21T s2 elt parM ()) ->
+             (forall s1 . V.ParVec2T s1 elt elt parM ()) ->
+             V.ParVec2T s elt elt parM ()  
 mergeSort mt st sma ssa = do
   len <- V.lengthL
 
@@ -176,14 +176,14 @@ mergeSort mt st sma ssa = do
       (do len <- V.lengthL
           let sp = (len `quot` 2)
           forkSTSplit (sp,sp)
-            mergeSort
-            mergeSort
+            (mergeSort mt st sma ssa)
+            (mergeSort mt st sma ssa)
           mergeTo2 sp mt sma)
       (do len <- V.lengthL                                                                    
           let sp = (len `quot` 2)                                                              
           forkSTSplit (sp,sp)
-            mergeSort         
-            mergeSort
+            (mergeSort mt st sma ssa)
+            (mergeSort mt st sma ssa)
           mergeTo2 sp mt sma)
     mergeTo1 sp mt sma
 
@@ -196,7 +196,15 @@ seqSortL = do
 main :: IO ()
 main = do
   args <- getArgs
-  let (size, mergeThreshold, sortThreshold, sMergeAlg, sSortAlg) = case args of
+  let size, mergeThreshold, sortThreshold :: Int
+--      sMergeAlg :: (forall s elt (parM :: * -> *) . ParVec21T s elt parM ())
+      sMergeAlg :: ParVec21T s elt parM ()
+      sSortAlg :: V.ParVec2T s elt elt parM ()
+--      sMergeAlg :: (Ord elt, ParThreadSafe parM, PC.ParMonad parM) =>
+--                   (forall s . ParVec21T s elt parM ())
+--      sSortAlg :: (ParThreadSafe parM, Ord elt, PC.ParMonad parM) => 
+--                  (forall s . V.ParVec2T s elt elt parM ())
+      (size, mergeThreshold, sortThreshold, sMergeAlg, sSortAlg) = case args of
             []   -> (2^16, 2048, 2048, sMergeTo2, seqSortL)
             [s, mt, st, "cilk", "cilk"] -> 
               (2^(Prelude.read s), Prelude.read mt, Prelude.read st, cilkSeqMerge, cilkSeqSort)
@@ -238,7 +246,7 @@ checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
 -- left position into the vector in right position.
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
              PC.ParFuture parM) => 
-            Int -> Int -> ParVec21T s1 elt parM () -> V.ParVec2T s elt elt parM ()
+            Int -> Int -> (forall s1 . ParVec21T s1 elt parM ()) -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold sma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold sma)
@@ -246,7 +254,7 @@ mergeTo2 sp threshold sma = do
 -- | Parallel merge kernel.
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
-             Int -> ParVec21T s1 elt parM () -> ParVec21T s elt parM ()
+             Int -> (forall s1 . ParVec21T s1 elt parM ()) -> ParVec21T s elt parM ()
 pMergeTo2 threshold sma = do
   len <- length2
   if len < threshold then
@@ -292,6 +300,8 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
     
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
+mergeTo1 :: (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM (), Show elt, Ord elt) =>
+            Int -> Int -> (forall s . ParVec21T s elt parM ()) -> V.ParVec2T s elt elt parM ()
 mergeTo1 sp threshold sma = do
   V.swapState
   (mergeTo2 sp threshold sma)
@@ -306,9 +316,9 @@ mergeTo1 sp threshold sma = do
 --         
 findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
               PC.ParMonad parM) => 
-             (Int -> ParVec21T s2 elt parM elt) ->
-             (Int -> ParVec21T s1 elt parM elt)->
-             ParVec21T s3 elt parM (Int, Int)
+             (Int -> ParVec21T s elt parM elt) ->
+             (Int -> ParVec21T s elt parM elt)->
+             ParVec21T s elt parM (Int, Int)
 
 findSplit indexLeft indexRight = do                                 
   
