@@ -68,6 +68,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Text.Printf
 
+import Data.Int
 
 --------------------------------------------------------------------------------
 
@@ -102,7 +103,12 @@ runTests = True
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort. 
 wrapper :: Int -> String
-wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
+wrapper size = LV.runPar $ V.runParVec2T (0,size) $ computation size
+
+computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
+                PC.ParFuture parM) => 
+               Int -> V.ParVec2T s Int32 Int32 parM String
+computation size = do
 
   -- test setup: 
   randVec <- liftST$ mkRandomVec size    
@@ -120,12 +126,12 @@ wrapper size = LV.runPar $ V.runParVec2T (0,size) $ do
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ IMV.freeze rawL
   
-  internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
+--  internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
   internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
   internalLiftIO$ printf "SELFTIMED: %0.3f\n" runningTime  
   
-  return "done"
---  return$ show frozenL
+--  return $ show frozenL
+  return$ "done"
 
 seqsortThresh :: Int
 seqsortThresh = 2048
@@ -143,8 +149,8 @@ mergeSort = do
 
 -- SET THRESHOLD
   if len < seqsortThresh then do
-    seqSortL
---    cilkSeqSort
+--    seqSortL
+    cilkSeqSort
    else do  
     let sp = (len `quot` 2)              
     forkSTSplit (sp,sp)
@@ -177,7 +183,7 @@ main = do
   putStrLn $ wrapper sz
 
 -- | Create a vector containing the numbers [0,N) in random order.
-mkRandomVec :: Int -> ST s (MV.STVector s Int)
+mkRandomVec :: Int -> ST s (MV.STVector s Int32)
 mkRandomVec len =  
   -- Annoyingly there is no MV.generate:
   do g <- create
@@ -194,8 +200,8 @@ mkRandomVec len =
     MV.swap vec n (n + offset)
     loop (n+1) vec g
     
-checkSorted :: IMV.Vector Int -> Bool
-checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
+--checkSorted :: IMV.Vector Int32 -> Bool
+--checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ IMV.imap (\i elem -> (i == elem)) vec
 
   
 
@@ -217,8 +223,8 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
 pMergeTo2 threshold = do
   len <- length2
   if len < threshold then
-    sMergeTo2
-    --cilkSeqMerge
+--    sMergeTo2
+    cilkSeqMerge
    else do
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
