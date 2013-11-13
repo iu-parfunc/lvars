@@ -33,8 +33,10 @@ MergeSort.exe: MergeSort.hs cilksort-nomain.o
 	$(GHC) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
 
 cilksort-nomain.o: cilksort.c
-	module add intel
-	icc $(CFLAGS) -c $^ -o $@
+#	module add intel
+#	icc $(CFLAGS) -c $^ -o $@
+	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
+
 
 # This runs the benchmark
 run:
