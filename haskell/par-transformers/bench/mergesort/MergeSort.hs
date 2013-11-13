@@ -64,7 +64,9 @@ import qualified Prelude
 
 import System.Random.MWC (create, uniformR) -- uniformVector,
 import System.Environment (getArgs)
+import System.Mem
 import System.IO.Unsafe (unsafePerformIO)
+import System.IO
 import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Text.Printf
 
@@ -115,11 +117,17 @@ computation size = do
   
   STTup2 (VFlp left) (VFlp right) <- SS.get
   SS.put (STTup2 (VFlp randVec) (VFlp right))
-  
+
+  internalLiftIO$ performGC
+  internalLiftIO$ printf "about to start timing"  
+  internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
   mergeSort  
   end <- internalLiftIO$ getCurrentTime
+
+  internalLiftIO$ printf "finished run"
+  internalLiftIO$ hFlush stdout
   
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
     
@@ -223,8 +231,8 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
 pMergeTo2 threshold = do
   len <- length2
   if len < threshold then
---    sMergeTo2
-    cilkSeqMerge
+    sMergeTo2
+--    cilkSeqMerge
    else do
     (splitL, splitR) <- findSplit indexL1 indexR1
     let mid = splitL + splitR
