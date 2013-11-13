@@ -445,10 +445,11 @@ cilkSeqMerge v1 v2 = unsafePerformIO $ do
 		       (castPtr vdest)
 --       return dest
        IMV.unsafeFreeze dest
-#endif
--- End CILK block.
-  
+
 -- Element type being sorted:
 type ElmT  = Word32
 type CElmT = CUInt
+#endif
+-- End CILK block.
+  
 

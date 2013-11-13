@@ -3,7 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -18,7 +18,8 @@
 --   "Data.Vector.Mutable", which operate directly on the implicit vector state
 --   threaded through the monad.
 
-module Control.Par.ST.UVec2
+module Control.Par.ST.StorableVec2
+{-       
        ( -- * A type alias for parallel computations with @Vector@ state
          ParVec2T, 
          runParVec2T,
@@ -34,18 +35,20 @@ module Control.Par.ST.UVec2
          swapL, swapR, dropL, dropR, takeL, takeR,
          growL, growR, setL, setR, swapState
        )
+-}
        where
 
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
 import qualified Control.Monad.State.Strict as S
-import qualified Data.Vector.Unboxed.Mutable as MU
+import qualified Data.Vector.Storable.Mutable as MU
 import Prelude hiding (read, length, drop, take)
 
-#define CONSTRAINT  MU.Unbox
-#define FLIPTY UVectorFlp
-#define FLPIT UFlp
+#define CONSTRAINT MU.Storable
+#define FLIPTY SVectorFlp
+#define FLPIT SFlp
 
 --------------------------------------------------------------------------------
 
 #include "Vec2Common.hs"
+

@@ -42,7 +42,8 @@ module Control.Par.ST
          STSplittable(..),
          
          -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), UVectorFlp(..), STTup2(..), STUnit(..)
+         MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
+         STTup2(..), STUnit(..)
        )
        where
 
@@ -64,6 +65,7 @@ import Control.Monad.Trans (lift)
 import Data.STRef
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Unboxed.Mutable as MU
+import qualified Data.Vector.Storable.Mutable as MS
 import Data.Vector       (freeze)
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
@@ -134,7 +136,7 @@ instance STSplittable STUnit where
 ------------------------------------------------------------
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
--- to be last.
+-- to be last.  Also carries the `Unbox` constraint.
 data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)  
 
 instance STSplittable (UVectorFlp a) where
@@ -143,6 +145,17 @@ instance STSplittable (UVectorFlp a) where
     let lvec = MU.slice 0 mid vec
         rvec = MU.slice mid (MU.length vec - mid) vec
     in (UFlp lvec, UFlp rvec)
+
+-- | An annoying type alias simply for the purpose of arranging for the 's' parameter
+-- to be last.  Also carries the `Storable` constraint.
+data SVectorFlp a s = (MS.Storable a) => SFlp (MS.MVector s a)
+
+instance STSplittable (SVectorFlp a) where
+  type SplitIdx (SVectorFlp a) = Int
+  splitST mid (SFlp vec) = 
+    let lvec = MS.slice 0 mid vec
+        rvec = MS.slice mid (MS.length vec - mid) vec
+    in (SFlp lvec, SFlp rvec)
 
 --------------------------------------------------------------------------------
 
