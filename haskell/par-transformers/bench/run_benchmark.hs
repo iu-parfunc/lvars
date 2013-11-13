@@ -43,7 +43,6 @@ data Sched
    | DirectST
    | SparksST
    | LVishST
-   | None
  deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
 options :: [OptDescr Flag]
@@ -97,19 +96,27 @@ main = do
 
 bls_quick :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_quick ss =
- [ mkBenchmark "mergesort/" [] (futures ss)
+ [ mergeBench [] ss
  ]
 
 bls_desktop :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_desktop ss = 
- [ mkBenchmark "mergesort/" [show sz] (futures ss)
+ [ mergeBench [show sz, show  sthresh, show mthresh, sortmode, mergemode] ss 
  | sz <- [ 25 ]
--- | thresh <- [1024, 2028, 4096, 8192 ]
+ , (sortmode,mergemode)  <- [ ("CSort","CMerge"),
+                              ("VAMSort","CMerge"),
+                              ("VAMSort","TMerge") ]
+ , sthresh <- [ 2048 ]
+ , mthresh <- [ 2048 ]
  ]
 
 bls_server :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_server = bls_desktop -- TODO.
- 
+
+mergeBench args ss =
+ (mkBenchmark "mergesort/Makefile" args (futures ss))
+  { progname=Just "mergesort" }
+
 -- Factor out boilerplate:
 futbench :: String -> [String] -> S.Set Sched -> Benchmark DefaultParamMeaning
 futbench dir args ss =
@@ -126,9 +133,11 @@ futures ss = defaultSettings$ varyThreads $
 
 defaultSettings :: BenchSpace DefaultParamMeaning -> BenchSpace DefaultParamMeaning
 defaultSettings spc =
-  And [ Set NoMeaning (CompileParam "--disable-library-profiling")
-      , Set NoMeaning (CompileParam "--disable-executable-profiling")
-      , Set NoMeaning (RuntimeParam "+RTS -s -qa -RTS")
+  And [
+
+--        Set NoMeaning (CompileParam "--disable-library-profiling")
+--      , Set NoMeaning (CompileParam "--disable-executable-profiling")
+       Set NoMeaning (RuntimeParam "+RTS -s -qa -RTS")
       , spc ]
 
 --------------------------------------------------------------------------------
@@ -137,11 +146,15 @@ defaultSettings spc =
 
 -- | Realize a scheduler selection via a compile flag.
 sched :: Sched -> BenchSpace DefaultParamMeaning
-sched s = Set (Variant$ show s) $ CompileParam $ schedToCabalFlag s
+sched s =
+ --  Set (Variant$ show s) $ CompileParam $ schedToCabalFlag s
+--  Set (Variant$ show s) $ RuntimeEnv "WHICHSCHED" (schedToModule s)
+    Set (Variant$ show s) $ CompileParam ("-DPARSCHED="++(schedToModule s))
 
 -- | By default, we usually don't test meta-par 
 defaultSchedSet :: S.Set Sched
-defaultSchedSet = (S.fromList [minBound ..]) -- All of them.
+defaultSchedSet = [TraceST, SparksST, LVishST] -- Skip Direct.
+  -- (S.fromList [minBound ..]) -- All of them.
 
 schedToCabalFlag :: Sched -> String
 schedToCabalFlag s =
@@ -150,7 +163,14 @@ schedToCabalFlag s =
     DirectST -> "-fdirect-st"
     SparksST -> "-fsparks-st"
     LVishST  -> "-flvish-st"
-    None   -> ""
+
+schedToModule :: Sched -> String
+schedToModule s =
+  case s of
+    TraceST  -> "Control.Monad.Par.Scheds.Trace"
+    SparksST -> "Control.Monad.Par.Scheds.Sparks"
+    DirectST -> "Control.Monad.Par.Scheds.Direct"    
+    LVishST  -> "Control.LVish"
 
 -- TODO: make this an option:
 threadSelection :: [Int]
@@ -170,8 +190,9 @@ varyThreads conf = Or
   [
     -- Disabling unthreaded mode:
     -- conf -- Unthreaded mode.
-    And [ Set NoMeaning (CompileParam "--ghc-options='-threaded'")
-        , Or (map fn threadSelection)
+    And [
+          -- Set NoMeaning (CompileParam "--ghc-options='-threaded'")
+          Or (map fn threadSelection)
         , conf ]
   ]
  where

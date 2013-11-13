@@ -19,7 +19,13 @@ module Main where
 --       )
 --       where
 
-import Control.LVish      as LV
+#ifdef PARSCHED
+#warning "USING PARSCHED FLAG"
+import PARSCHED as LV
+#else
+import Control.LVish as LV
+#endif
+
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(), internalLiftIO)
 import qualified Control.Par.Class as PC
@@ -200,6 +206,7 @@ main = do
             [sz, st, mt, sa, ma] -> 
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma)
+  putStrLn $ "Running with args: " ++ show (sz, st, mt, sa, ma)
   putStrLn $ wrapper sz st mt sa ma
 
 -- | Create a vector containing the numbers [0,N) in random order.

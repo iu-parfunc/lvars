@@ -19,12 +19,25 @@ CFLAGS= -Wall -O3
 
 all: MergeSort.exe
 
+# lvish-st:
+# 	$(MAKE) WHICHSCHED="Control.LVish"
+
+# trace-st:
+# 	$(MAKE) WHICHSCHED="Control.Monad.Par.Scheds.Trace"
+
+# sparks-st:
+# 	$(MAKE) WHICHSCHED="Control.Monad.Par.Scheds.Sparks"
+
+
 MergeSort.exe: MergeSort.hs cilksort-nomain.o
-	$(GHC)  -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
-# -D$(CPU_SORT)
+	$(GHC) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
 
 cilksort-nomain.o: cilksort.c
 	$(CC) $(CFLAGS) -c $^ -o $@
+
+# This runs the benchmark
+run:
+	./MergeSort.exe $(RUN_ARGS)
 
 clean:
 	rm -f cilkWrap mergesort cilksort *.hi *.o
