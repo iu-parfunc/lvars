@@ -153,7 +153,7 @@ sched s =
 
 -- | By default, we usually don't test meta-par 
 defaultSchedSet :: S.Set Sched
-defaultSchedSet = [TraceST, SparksST, LVishST] -- Skip Direct.
+defaultSchedSet = S.fromList [TraceST, SparksST, LVishST] -- Skip Direct.
   -- (S.fromList [minBound ..]) -- All of them.
 
 schedToCabalFlag :: Sched -> String
