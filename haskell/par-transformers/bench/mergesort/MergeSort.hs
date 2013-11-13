@@ -119,14 +119,14 @@ computation size = do
   SS.put (STTup2 (VFlp randVec) (VFlp right))
 
   internalLiftIO$ performGC
-  internalLiftIO$ printf "about to start timing"  
+  internalLiftIO$ printf "about to start timing\n"  
   internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
   mergeSort  
   end <- internalLiftIO$ getCurrentTime
 
-  internalLiftIO$ printf "finished run"
+  internalLiftIO$ printf "finished run\n"
   internalLiftIO$ hFlush stdout
   
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
