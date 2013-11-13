@@ -116,9 +116,9 @@ wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg =
 computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
                 PC.ParFuture parM) => 
                Int -> Int -> Int ->
-               ParVec21T s Int32 parM () ->
-               V.ParVec2T s Int32 Int32 parM () ->
-               V.ParVec2T s Int32 Int32 parM String
+               ParVec21T s1 Int32 parM () ->
+               V.ParVec2T s2 Int32 Int32 parM () ->
+               V.ParVec2T s3 Int32 Int32 parM String
 computation size mergeThreshold sortThreshold sMergeAlg sSortAlg = do
 
   -- test setup: 
@@ -162,7 +162,7 @@ mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              Int -> Int -> 
              ParVec21T s2 elt parM () ->
-             ParVec2T s3 elt elt parM () ->
+             V.ParVec2T s3 elt elt parM () ->
              V.ParVec2T s1 elt elt parM ()  
 mergeSort mt st sma ssa = do
   len <- V.lengthL
@@ -199,11 +199,11 @@ main = do
   let (size, mergeThreshold, sortThreshold, sMergeAlg, sSortAlg) = case args of
             []   -> (2^16, 2048, 2048, sMergeTo2, seqSortL)
             [s, mt, st, "cilk", "cilk"] -> 
-              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, clikSeqMerge, cilkSeqSort)
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, cilkSeqMerge, cilkSeqSort)
             [s, mt, st, "haskell", "cilk"] -> 
               (2^(Prelude.read s), Prelude.read mt, Prelude.read st, sMergeTo2, cilkSeqSort)
             [s, mt, st, "cilk", "haskell"] -> 
-              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, clikSeqMerge, seqSortL)
+              (2^(Prelude.read s), Prelude.read mt, Prelude.read st, cilkSeqMerge, seqSortL)
             [s, mt, st, "haskell", "haskell"] -> 
               (2^(Prelude.read s), Prelude.read mt, Prelude.read st, sMergeTo2, seqSortL)  
   putStrLn $ wrapper size mergeThreshold sortThreshold sMergeAlg sSortAlg
@@ -238,7 +238,7 @@ checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
 -- left position into the vector in right position.
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
              PC.ParFuture parM) => 
-            Int -> Int -> -> ParVec21T s1 elt parM () -> V.ParVec2T s elt elt parM ()
+            Int -> Int -> ParVec21T s1 elt parM () -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold sma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold sma)
