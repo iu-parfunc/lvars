@@ -126,7 +126,7 @@ new = WrapPar$ fmap (IVar . WrapLVar) $
 -- IVar.
 get :: IVar s a -> Par d s a
 get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
+  where globalThresh ref _ = readIORef ref    -- past threshold iff Just _
         deltaThresh  x     = return $ Just x  -- always past threshold
 
 {-# INLINE put_ #-}
