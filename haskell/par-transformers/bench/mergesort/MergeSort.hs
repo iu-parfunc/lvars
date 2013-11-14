@@ -23,7 +23,7 @@ module Main where
 #warning "Using PARSCHED flag"
 import PARSCHED as LV
 #else
--- import Control.LVish      as LV
+--import Control.LVish      as LV
 import Control.Monad.Par      as LV
 #endif
 import Control.Par.ST
@@ -243,8 +243,14 @@ pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> SMerge -> ParVec21T s elt parM ()
 pMergeTo2 threshold ma = do
-  len <- length2
-  if len < threshold then
+--  len <- length1
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
+  let l1 = MV.length v1
+      l2 = MV.length v2  
+      len = MV.length v3
+
+--  if len < threshold then
+  if l1 < threshold || l2 < threshold then 
     case ma of 
       TMerge -> sMergeTo2
       CMerge -> cilkSeqMerge
@@ -330,11 +336,13 @@ findSplit = do
           if (rightSub1 <= left)
              then return (lIndex, rIndex)
              else split 0 0 rLow rIndex
+--             else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "sp") $ split 0 0 rLow rIndex
         else if (rIndex == 0) then do
           leftSub1 <- MV.read vl (lIndex - 1)
           if (leftSub1 <= right)
             then return (lIndex, rIndex)
             else split lLow lIndex 0 0
+--            else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "spl") $ split lLow lIndex 0 0
         else do
           rightSub1 <- MV.read vr (rIndex - 1)
           leftSub1 <- MV.read vl (lIndex - 1)
@@ -343,6 +351,8 @@ findSplit = do
             else if (leftSub1 <= right)
               then split lIndex lHigh rLow rIndex
               else split lLow lIndex rIndex rHigh
+--  ans <- trace "splt" $ liftST$ split 0 lLen 0 rLen
+--  trace (show lLen ++ " " ++ show rLen ++ " ret ans " ++ show ans) $ return ans
   liftST$ split 0 lLen 0 rLen
 
 -- | Type alias for a ParST state of ((Vec,Vec), Vec)             
