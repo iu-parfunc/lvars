@@ -54,12 +54,13 @@
  * log factor in the critical path (left as homework).
  */
 
-#ifdef __INTEL_COMPILER
+#if defined(ACTIVATE_CILK) && defined(__INTEL_COMPILER)
 #include <cilk/cilk.h>
 #else
 #define cilk_sync
 #define cilk_spawn
 #endif
+
 
 #include <stdint.h>
 #include <stdio.h>

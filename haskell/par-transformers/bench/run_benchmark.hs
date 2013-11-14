@@ -96,7 +96,8 @@ main = do
 
 bls_quick :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_quick ss =
- [ mergeBench [] ss
+ [
+--    mergeBench [] ss
  ]
 
 bls_desktop :: S.Set Sched -> [Benchmark DefaultParamMeaning]
@@ -113,9 +114,9 @@ bls_desktop ss =
 bls_server :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_server = bls_desktop -- TODO.
 
-mergeBench args ss =
+mergeBench args@[sz,sthresh,mthresh,sortA,mergeA] ss =
  (mkBenchmark "mergesort/Makefile" args (futures ss))
-  { progname=Just "mergesort" }
+  { progname=Just$ "mergesort_"++sortA++"_"++mergeA }
 
 -- Factor out boilerplate:
 futbench :: String -> [String] -> S.Set Sched -> Benchmark DefaultParamMeaning
