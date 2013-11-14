@@ -71,6 +71,8 @@ import Control.Monad.ST.Unsafe (unsafeIOToST)
 import Text.Printf
 
 import Data.Int
+import Control.Exception (assert)
+import Debug.Trace
 
 --------------------------------------------------------------------------------
 
@@ -453,30 +455,30 @@ seqmerge = do
   let lenL = MV.length left                                                   
       lenR = MV.length right
       len = lenL + lenR
+
+--  assert (len == MV.length dest) $ return ()
       
-  --let --copyRemainingRight :: Int -> elt -> Int -> ParVec21T s elt parM ()
   let copyRemainingRight :: Int -> elt -> Int -> ST s ()
-      copyRemainingRight ri rx di =
+      copyRemainingRight !ri !rx !di =
         if ri < (lenR-1) then do
           MV.write dest di rx
           let ri' = ri + 1
           rx' <- MV.read right ri'
           copyRemainingRight ri' rx' (di + 1)
-         else do          
+         else when (di < len) $ do          
           MV.write dest di rx
           return ()
---      copyRemainingLeft :: Int -> elt -> Int -> ParVec21T s elt parM ()
-      copyRemainingLeft li lx di =
+      copyRemainingLeft !li !lx !di =
         if li < (lenL-1) then do
           MV.write dest di lx
           let li' = li + 1
-          lx' <- MV.read right li'
-          copyRemainingRight li' lx' (di + 1)
-         else do
+          lx' <- MV.read left li'
+          copyRemainingLeft li' lx' (di + 1)
+         else when (di < len) $ do
           MV.write dest di lx
           return ()      
       
-  let loop li lx ri rx di =
+  let loop !li !lx !ri !rx !di =
         let di' = di+1 in
         if lx < rx then do
           MV.write dest di lx
