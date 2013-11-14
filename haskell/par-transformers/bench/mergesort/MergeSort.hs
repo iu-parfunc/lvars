@@ -247,7 +247,7 @@ pMergeTo2 threshold ma = do
       MPMerge -> seqmerge
       _ -> sMergeTo2
    else do
-    (splitL, splitR) <- findSplit indexL1 indexR1
+    (splitL, splitR) <- findSplit
     let mid = splitL + splitR
     forkSTSplit ((splitL, splitR), mid)
       (pMergeTo2 threshold ma)
@@ -299,44 +299,47 @@ mergeTo1 sp threshold ma = do
 -- not using a small threshold that triggers this issue. t=4 breaks
 -- it, but t=8 seems to work.
 --         
-findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
+findSplit :: forall s elt parM . (ParThreadSafe parM, Ord elt, Show elt,
               PC.ParMonad parM) => 
-             (Int -> ParVec21T s elt parM elt) ->
-             (Int -> ParVec21T s elt parM elt)->
+--             (Int -> ParVec21T s elt parM elt) ->
+--             (Int -> ParVec21T s elt parM elt)->
              ParVec21T s elt parM (Int, Int)
 
-findSplit indexLeft indexRight = do                                 
+--findSplit indexLeft indexRight = do                                 
+findSplit = do
   
-  (lLen, rLen) <- lengthLR1    
-    
-  split 0 lLen 0 rLen
-      where
-        split lLow lHigh rLow rHigh = do
-          let lIndex = (lLow + lHigh) `div` 2
-              rIndex = (rLow + rHigh) `div` 2
-              
-          left <- indexLeft lIndex
-          right <- indexRight rIndex
-          if (lIndex == 0) && (rIndex == 0) then do
-            return (lIndex, rIndex)                    
-          else if (lIndex == 0) then do
-            rightSub1 <- indexRight (rIndex - 1)
-            if (rightSub1 <= left)
-               then return (lIndex, rIndex)
-               else split 0 0 rLow rIndex
-          else if (rIndex == 0) then do
-            leftSub1 <- indexLeft (lIndex - 1)
-            if (leftSub1 <= right)
-              then return (lIndex, rIndex)
-              else split lLow lIndex 0 0
-          else do
-            rightSub1 <- indexRight (rIndex - 1)
-            leftSub1 <- indexLeft (lIndex - 1)
-            if (leftSub1 <= right) && (rightSub1 <= left)
-              then return (lIndex, rIndex)
-              else if (leftSub1 <= right)
-                then split lIndex lHigh rLow rIndex
-                else split lLow lIndex rIndex rHigh
+  --(lLen, rLen) <- lengthLR1    
+  STTup2 (STTup2 (VFlp vl) (VFlp vr)) (VFlp v) <- SS.get
+  let lLen = MV.length vl
+      rLen = MV.length vr  
+      split :: Int -> Int -> Int -> Int -> ST s (Int, Int)
+      split lLow lHigh rLow rHigh = do
+        let lIndex = (lLow + lHigh) `div` 2
+            rIndex = (rLow + rHigh) `div` 2
+            
+        left <- MV.read vl lIndex
+        right <- MV.read vr rIndex
+        if (lIndex == 0) && (rIndex == 0) then do
+          return (lIndex, rIndex)                    
+        else if (lIndex == 0) then do
+          rightSub1 <- MV.read vr (rIndex - 1)
+          if (rightSub1 <= left)
+             then return (lIndex, rIndex)
+             else split 0 0 rLow rIndex
+        else if (rIndex == 0) then do
+          leftSub1 <- MV.read vl (lIndex - 1)
+          if (leftSub1 <= right)
+            then return (lIndex, rIndex)
+            else split lLow lIndex 0 0
+        else do
+          rightSub1 <- MV.read vr (rIndex - 1)
+          leftSub1 <- MV.read vl (lIndex - 1)
+          if (leftSub1 <= right) && (rightSub1 <= left)
+            then return (lIndex, rIndex)
+            else if (leftSub1 <= right)
+              then split lIndex lHigh rLow rIndex
+              else split lLow lIndex rIndex rHigh
+  liftST$ split 0 lLen 0 rLen
 
 -- | Type alias for a ParST state of ((Vec,Vec), Vec)             
 type ParVec21T s elt parM ans = ParST (STTup2 
