@@ -29,11 +29,16 @@ all: MergeSort.exe
 # 	$(MAKE) WHICHSCHED="Control.Monad.Par.Scheds.Sparks"
 
 
+SANDBOX_HACK= -no-user-package-db -package-db ../../../.cabal-sandbox/x86_64-linux-ghc-7.6.3-packages.conf.d
+
 MergeSort.exe: MergeSort.hs cilksort-nomain.o
-	$(GHC) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
+	$(GHC) $(SANDBOX_HACK) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
 
 cilksort-nomain.o: cilksort.c
-	$(CC) $(CFLAGS) -c $^ -o $@
+#	module add intel
+#	icc $(CFLAGS) -c $^ -o $@
+	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
+
 
 # This runs the benchmark
 run:
