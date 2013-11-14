@@ -198,7 +198,8 @@ main :: IO ()
 main = do
   args <- getArgs
   let (sz, st, mt, sa, ma) = case args of
-            []   -> (2^16, 2048, 2048, VAMSort, TMerge)
+            []   -> (2^16, 2048, 2048, VAMSort, MPMerge)
+            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge)
             [sz, st, mt, sa, ma] -> 
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma)
