@@ -19,7 +19,13 @@ module Main where
 --       )
 --       where
 
-import Control.LVish      as LV
+#ifdef PARSCHED
+#warning "Using PARSCHED flag"
+import PARSCHED as LV
+#else
+-- import Control.LVish      as LV
+import Control.Monad.Par      as LV
+#endif
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(), internalLiftIO)
 import qualified Control.Par.Class as PC
