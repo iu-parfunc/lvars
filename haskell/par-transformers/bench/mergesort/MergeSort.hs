@@ -19,13 +19,7 @@ module Main where
 --       )
 --       where
 
-#ifdef PARSCHED
-#warning "USING PARSCHED FLAG"
-import PARSCHED as LV
-#else
-import Control.LVish as LV
-#endif
-
+import Control.LVish      as LV
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(), internalLiftIO)
 import qualified Control.Par.Class as PC
@@ -193,7 +187,7 @@ seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST$ VA.sort vecL
 
-data SMerge = CMerge | TMerge
+data SMerge = CMerge | TMerge | MPMerge
   deriving (Show, Read)
 data SSort = CSort | VAMSort
   deriving (Show, Read)
@@ -206,7 +200,6 @@ main = do
             [sz, st, mt, sa, ma] -> 
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma)
-  putStrLn $ "Running with args: " ++ show (sz, st, mt, sa, ma)
   putStrLn $ wrapper sz st mt sa ma
 
 -- | Create a vector containing the numbers [0,N) in random order.
@@ -254,6 +247,7 @@ pMergeTo2 threshold ma = do
     case ma of 
       TMerge -> sMergeTo2
       CMerge -> cilkSeqMerge
+      MPMerge -> seqmerge
       _ -> sMergeTo2
    else do
     (splitL, splitR) <- findSplit indexL1 indexR1
@@ -450,6 +444,63 @@ vec21printState str = do
   f3 <- liftST$ IMV.freeze v3
   internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
 
+-----------
+  
+seqmerge :: forall elt parM s . (ParThreadSafe parM, Ord elt) => ParVec21T s elt parM ()
+seqmerge = do
+  STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp v3) <- SS.get
+  
+  let lenL = MV.length left                                                   
+      lenR = MV.length right
+      len = lenL + lenR
+      
+  let copyRemainingRight :: Int -> elt -> Int -> ParVec21T s elt parM ()
+      copyRemainingRight ri rx di =
+        if ri < (lenR-1) then do
+          write2 di rx
+          let ri' = ri + 1
+          rx' <- liftST$ MV.read right ri'
+          copyRemainingRight ri' rx' (di + 1)
+         else do          
+          write2 di rx
+          return ()
+      copyRemainingLeft :: Int -> elt -> Int -> ParVec21T s elt parM ()
+      copyRemainingLeft li lx di =
+        if li < (lenL-1) then do
+          write2 di lx
+          let li' = li + 1
+          lx' <- liftST$ MV.read right li'
+          copyRemainingRight li' lx' (di + 1)
+         else do
+          write2 di lx
+          return ()      
+      
+  let loop li lx ri rx di =
+        let di' = di+1 in
+        if lx < rx then do
+          write2 di lx
+          let li' = li + 1
+          if li' == lenL then
+            -- copy the rest of right into dest
+            copyRemainingRight ri rx di'
+           else when (di' < len) $ do
+             lx' <- liftST$ MV.read left li'
+             loop li' lx' ri rx di'
+        else do
+          write2 di rx
+          let ri' = ri + 1
+          if ri' == lenR then 
+            -- copy the rest of left into dest
+            copyRemainingLeft li lx di'
+           else when (di' < len) $ do
+             rx' <- liftST$ MV.read right ri'
+             loop li lx ri' rx' di'
+  fstL <- liftST$ MV.read left 0
+  fstR <- liftST$ MV.read right 0
+  loop 0 fstL 0 fstR 0
+  return ()                           
+
+  
 
 --------------------------------------------------------------------------------
 #define CILK_SEQ
