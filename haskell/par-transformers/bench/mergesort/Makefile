@@ -4,7 +4,7 @@ ifeq ($(GHC),)
 endif
 
 CC=icc
-# LDFLAGS= -lcilkrts -lirc -limf
+LDFLAGS= -lcilkrts -lirc -limf
 
 CFLAGS= -Wall -O3
 
@@ -34,12 +34,14 @@ cilksort-nomain.o: cilksort.c
 #	icc $(CFLAGS) -c $^ -o $@
 	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
 
-cilk: 
-	$(MAKE) cilksort-nomain.o LDFLAGS="-lcilkrts -lirc -limf"
+# cilk: 
+# 	$(MAKE) cilksort-nomain.o LDFLAGS="-lcilkrts -lirc -limf"
 
 # This runs the benchmark
 run:
-	./MergeSort.exe $(RUN_ARGS)
+#	./MergeSort.exe $(RUN_ARGS)
+# HACK:
+	bash -c "(module add intel; ./MergeSort.exe $(RUN_ARGS))"
 
 clean:
 	rm -f cilkWrap mergesort cilksort *.hi *.o
