@@ -12,7 +12,7 @@ module Data.LVar.MaxCounter
          newMaxCounter, put, waitThresh, freezeMaxCounter
        ) where
 
-import Control.LVish hiding (freeze)
+import Control.LVish hiding (freeze, put)
 import Control.LVish.Internal (state)
 import Control.LVish.DeepFrz.Internal
 import Data.IORef

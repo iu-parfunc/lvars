@@ -79,7 +79,7 @@ import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 import           Data.LVar.Generic
 
-import           Control.LVish as LV hiding (addHandler)
+import           Control.LVish as LV hiding (addHandler, put,get)
 import           Control.LVish.DeepFrz.Internal  as DF
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,

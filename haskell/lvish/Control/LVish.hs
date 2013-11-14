@@ -29,6 +29,13 @@
 
  -}
 
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP #-}
+
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 -- This module reexports the default LVish scheduler, adding some type-level
 -- wrappers to ensure propert treatment of determinism.
 module Control.LVish
@@ -75,15 +82,61 @@ module Control.LVish
     quiesce, 
     
     forkHP,
+
+    -- * Reexport IVar operations for a full, standard "Par Monad" API
+    module Data.LVar.IVar,
     
     -- * Debug facilities and internal bits
-    logDbgLn, logDbgLn_, runParLogged, 
+    logDbgLn, logDbgLn_, runParLogged,
     LVar()
   ) where
 
--- NOTE : This is an aggregation module ONLY:
+-- NOTE : This is an aggregation module:
 import           Control.LVish.Types
-import           Control.LVish.Internal
-import           Control.LVish.Basics
+import           Control.LVish.Internal as I
+import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.SchedIdempotentInternal (State)
+
+import           Data.LVar.IVar 
+
+import Data.IORef
+--------------------------------------------------------------------------------
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PU
+
+instance PC.ParQuasi (Par d s) (Par QuasiDet s) where
+  -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
+  toQPar act = unsafeConvert act
+  
+instance PC.ParSealed (Par d s) where
+  type GetSession (Par d s) = s
+  
+instance PC.LVarSched (Par d s) where
+  type LVar (Par d s) = L.LVar 
+
+  forkLV = fork
+  newLV  = WrapPar . L.newLV
+  getLV lv glob delt = WrapPar $ L.getLV lv glob delt
+  putLV lv putter    = WrapPar $ L.putLV lv putter
+
+  stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
+
+  returnToSched = WrapPar $ mkPar $ \_k -> L.sched
+
+instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
+--  freezeLV = WrapPar . L.freezeLV
+
+instance PU.ParThreadSafe (Par d s) where
+  unsafeParIO = I.liftIO
+
+#endif
+
+------ DUPLICATED: -----
+mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
+mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
+type SchedState = State L.ClosedPar LVarID
+type LVarID = IORef ()

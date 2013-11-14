@@ -23,7 +23,23 @@ executable pbbs-haskell-bench
   main-is: benchmarks/graphs/bfs_lvish.hs
   hs-source-dirs: . 
   ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
-  build-depends: base >=4.6 && <4.7, lvish >=1.0 && <2.0, process==1.1.0.2, directory ==1.2.0.1, vector >=0.10 && <0.11, time ==1.4.0.1
+  build-depends: pbbs-haskell
+  -- build-depends: base >=4.6 && <4.7, lvish >=1.0 && <2.0, 
+  build-depends: process==1.1.0.2, directory ==1.2.0.1, vector >=0.10 && <0.11, time ==1.4.0.1
+  build-depends: base >=4.6, deepseq >=1.3 && <1.4, split >=0.2 && <0.3,
+        containers >=0.5 && <0.6,
+        bytestring >=0.10 && <0.11,
+        time >=1.4 && <1.5, 
+        rdtsc >=1.3 && <1.4,
+        vector >=0.10 && <0.11, monad-par >=0.3 && <0.4, 
+        abstract-par >= 0.3, monad-par-extras >=0.3 && <0.5, 
+-- parallel >=3.2 && <3.3, 
+        lvish >=1.0 && <2.0,
+        async >=2.0 && <2.1,
+        bytestring-mmap >=0.2 && <0.3, 
+        HUnit >=1.2 && <1.3, test-framework-hunit >=0.3 && <0.4
+
+
 
 library
   exposed-modules:     PBBS.FileReader, PBBS.Timing
@@ -33,7 +49,7 @@ library
 
   other-extensions:    CPP, BangPatterns, OverloadedStrings, ScopedTypeVariables, NamedFieldPuns
 
-  build-depends:       base >=4.6, deepseq >=1.3 && <1.4, split >=0.2 && <0.3,
+  build-depends: base >=4.6, deepseq >=1.3 && <1.4, split >=0.2 && <0.3,
         containers >=0.5 && <0.6,
         bytestring >=0.10 && <0.11,
         time >=1.4 && <1.5, 

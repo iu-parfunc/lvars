@@ -1,0 +1,47 @@
+Name:                par-collections
+Version:             1.0
+Synopsis:            Generic parallel combinators for data and iteration spaces.
+
+-- Version history:
+--  1.0      : This library introduced to replace the deprecated monad-par-extras.
+
+Description:
+  These modules provide means to traverse and consume
+  common data structures, in parallel, using any Par monad.
+  .
+  Additionally, a variety of parallel looping constructs are
+  provided by this package (e.g. parallel traversals where 
+  the "data structure" is merely a range / iteration space.)
+
+License:             BSD3
+License-file:        LICENSE
+Author:              Ryan Newton
+Maintainer:          Ryan Newton <rrnewton@gmail.com>
+Copyright:           (c) Ryan Newton 2011-2013
+Stability:           Experimental
+Category:            Control,Parallelism,Monads
+Build-type:          Simple
+Cabal-version:       >=1.8
+
+Library
+  Source-repository head
+    type:     git
+    location: https://github.com/iu-parfunc/lvars
+    subdir:   haskell/par-collections
+
+  Exposed-modules:
+     Data.Par
+     Data.Par.Range
+     Data.Splittable
+     
+  Build-depends: base >= 4 && < 5
+               -- This provides the interface which monad-par implements:
+               , cereal       >= 0.3
+               , deepseq      >= 1.3
+               , random       >= 1.0
+               , mtl          >= 2.0
+               , transformers >= 0.2
+               , par-classes  >= 1.0
+
+  ghc-options: -O2
+  Other-modules:
