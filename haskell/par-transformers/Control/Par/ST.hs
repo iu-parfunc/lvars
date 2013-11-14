@@ -199,6 +199,7 @@ reify = ParST S.get
 install :: ParThreadSafe parM => stt -> ParST stt parM ()
 install val = ParST (S.put val)
 
+{-# INLINE forkSTSplit #-}
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
 -- gets the state of the current computation, for example a vector, and
 -- then divides up that state between the two other computations.

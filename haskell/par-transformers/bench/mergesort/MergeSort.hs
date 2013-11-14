@@ -238,7 +238,7 @@ mergeTo2 sp threshold ma = do
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
               PC.ParFuture parM) =>
              Int -> SMerge -> ParVec21T s elt parM ()
-pMergeTo2 threshold ma = do
+pMergeTo2 !threshold !ma = do
   len <- length2
   if len < threshold then
     case ma of 
@@ -292,6 +292,8 @@ mergeTo1 sp threshold ma = do
   (mergeTo2 sp threshold ma)
   V.swapState
 
+{-# INLINE findSplit #-}
+  
 -- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
 -- lengths and gets stuck. It might be a general problem with the
 -- parallel merge algorithm, but is most likely something wrong about
@@ -305,13 +307,13 @@ findSplit :: (ParThreadSafe parM, Ord elt, Show elt,
              (Int -> ParVec21T s elt parM elt)->
              ParVec21T s elt parM (Int, Int)
 
-findSplit indexLeft indexRight = do                                 
+findSplit !indexLeft !indexRight = do                                 
   
   (lLen, rLen) <- lengthLR1    
     
   split 0 lLen 0 rLen
       where
-        split lLow lHigh rLow rHigh = do
+        split !lLow !lHigh !rLow !rHigh = do
           let lIndex = (lLow + lHigh) `div` 2
               rIndex = (rLow + rHigh) `div` 2
               
