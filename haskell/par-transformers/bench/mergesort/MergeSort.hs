@@ -448,56 +448,57 @@ vec21printState str = do
   
 seqmerge :: forall elt parM s . (ParThreadSafe parM, Ord elt) => ParVec21T s elt parM ()
 seqmerge = do
-  STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp v3) <- SS.get
+  STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp dest) <- SS.get
   
   let lenL = MV.length left                                                   
       lenR = MV.length right
       len = lenL + lenR
       
-  let copyRemainingRight :: Int -> elt -> Int -> ParVec21T s elt parM ()
+  --let --copyRemainingRight :: Int -> elt -> Int -> ParVec21T s elt parM ()
+  let copyRemainingRight :: Int -> elt -> Int -> ST s ()
       copyRemainingRight ri rx di =
         if ri < (lenR-1) then do
-          write2 di rx
+          MV.write dest di rx
           let ri' = ri + 1
-          rx' <- liftST$ MV.read right ri'
+          rx' <- MV.read right ri'
           copyRemainingRight ri' rx' (di + 1)
          else do          
-          write2 di rx
+          MV.write dest di rx
           return ()
-      copyRemainingLeft :: Int -> elt -> Int -> ParVec21T s elt parM ()
+--      copyRemainingLeft :: Int -> elt -> Int -> ParVec21T s elt parM ()
       copyRemainingLeft li lx di =
         if li < (lenL-1) then do
-          write2 di lx
+          MV.write dest di lx
           let li' = li + 1
-          lx' <- liftST$ MV.read right li'
+          lx' <- MV.read right li'
           copyRemainingRight li' lx' (di + 1)
          else do
-          write2 di lx
+          MV.write dest di lx
           return ()      
       
   let loop li lx ri rx di =
         let di' = di+1 in
         if lx < rx then do
-          write2 di lx
+          MV.write dest di lx
           let li' = li + 1
           if li' == lenL then
             -- copy the rest of right into dest
             copyRemainingRight ri rx di'
            else when (di' < len) $ do
-             lx' <- liftST$ MV.read left li'
+             lx' <- MV.read left li'
              loop li' lx' ri rx di'
         else do
-          write2 di rx
+          MV.write dest di rx
           let ri' = ri + 1
           if ri' == lenR then 
             -- copy the rest of left into dest
             copyRemainingLeft li lx di'
            else when (di' < len) $ do
-             rx' <- liftST$ MV.read right ri'
+             rx' <- MV.read right ri'
              loop li lx ri' rx' di'
   fstL <- liftST$ MV.read left 0
   fstR <- liftST$ MV.read right 0
-  loop 0 fstL 0 fstR 0
+  liftST$ loop 0 fstL 0 fstR 0
   return ()                           
 
   
