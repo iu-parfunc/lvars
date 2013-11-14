@@ -2,7 +2,8 @@
 
 name:                MergeSort
 version:             1.0
-build-type:          Simple
+-- build-type:          Simple
+build-type:          Custom
 cabal-version:       >=1.8
 
 flag newgeneric
@@ -32,6 +33,8 @@ executable test-mergesort-parST
   -- Including a higher-up dir for schedulers:
   hs-source-dirs:    . ../schedulers/
 
+  c-sources: cilksort.c
+
   -- Must pick ONE of the available schedulers:
   -- if !(flag(trace-st) || flag(direct-st) || flag(sparks-st)  || flag(lvish-st) )
   --   buildable:       False
@@ -47,44 +50,21 @@ executable test-mergesort-parST
   -- Only one of these flags should be turned on at once:
 
   if flag(trace-st)
-     cpp-options:     -DPARSCHED=TracePlusParST
+     cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.Trace
 
-  -- if flag(direct)
-  --    build-depends:   monad-par
-  --    cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.Direct
+  if flag(direct-st)
+     cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.Direct
 
-  -- if flag(contfree)
-  --    build-depends:   monad-par
-  --    cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.ContFree
+  if flag(sparks-st)
+     cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.Sparks
 
-  -- if flag(sparks)
-  --    build-depends:   monad-par
-  --    cpp-options:     -DPARSCHED=Control.Monad.Par.Scheds.Sparks
-
-  -- if flag(meta-smp)
-  --    build-depends:   meta-par
-  --    cpp-options:     -DPARSCHED=Control.Monad.Par.Meta.SMP
-
-  -- if flag(meta-numa)
-  --    build-depends:   meta-par
-  --    cpp-options:     -DPARSCHED=Control.Monad.Par.Meta.NUMAOnly
-
-  -- if flag(lvish)
-  --    build-depends:   lvish >= 1.1
-  --    cpp-options:     -DPARSCHED=Control.LVish
-
-  -- if flag(lvish-state)
-  --    build-depends:   lvish >= 1.1
-  --    cpp-options:     -DPARSCHED=LVishPlusStateT
-
-  -- if flag(lvish-rng)
-  --    build-depends:   lvish >= 1.1
-  --    cpp-options:     -DPARSCHED=LVishPlusRNG
-
-  -- -- ELSE would be better here:
-  -- if  !(flag(trace)  || flag(direct)   || flag(contfree)       || flag(trace-st)         || flag(sparks) || flag(meta-smp) || flag(meta-numa)       || flag(lvish) || flag(lvish-state) || flag(lvish-rng)   )
-  --    build-depends:   monad-par
-  --    -- uses Control.Monad.Par by default
+  if flag(lvish-st)
+     cpp-options:     -DPARSCHED=Control.LVish
 
   ghc-options:       -O2 -threaded -rtsopts -with-rtsopts=-N  
   extensions: CPP DoAndIfThenElse
+
+  -- My own custom field to change the C compiler:
+  x-cc-name: icc
+  cc-options: -O3 
+
