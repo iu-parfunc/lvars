@@ -27,21 +27,20 @@ all: MergeSort.exe
 SANDBOX_HACK= -no-user-package-db -package-db ../../../.cabal-sandbox/x86_64-linux-ghc-7.6.3-packages.conf.d
 
 MergeSort.exe: MergeSort.hs cilksort-nomain.o
-	bash -c "(module add intel; $(GHC) $(SANDBOX_HACK) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ -lm $(LDFLAGS) -o $@ )"
+	$(GHC) $(SANDBOX_HACK) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ -lm $(LDFLAGS) -o $@
 
 cilksort-nomain.o: cilksort.c
-#	module add intel
-#	icc $(CFLAGS) -c $^ -o $@
-	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
+	icc $(CFLAGS) -c $^ -o $@
+#	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
 
 # cilk: 
 # 	$(MAKE) cilksort-nomain.o LDFLAGS="-lcilkrts -lirc -limf"
 
 # This runs the benchmark
 run:
-#	./MergeSort.exe $(RUN_ARGS)
+	./MergeSort.exe $(RUN_ARGS)
 # HACK:
-	bash -c "(module add intel; ./MergeSort.exe $(RUN_ARGS))"
+#	bash -c "(module add intel; ./MergeSort.exe $(RUN_ARGS))"
 
 clean:
 	rm -f cilkWrap mergesort cilksort *.hi *.o
