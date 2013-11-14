@@ -145,23 +145,17 @@ computation size st mt sa ma = do
 --  return $ show frozenL
   return$ "done"
 
-seqsortThresh :: Int
-seqsortThresh = 2048
-
-seqmergeThresh :: Int
-seqmergeThresh = seqsortThresh
-
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
               PC.ParFuture parM, Ord elt, Show elt) => 
              Int -> Int -> SSort -> SMerge -> 
              V.ParVec2T s1 elt elt parM ()  
-mergeSort st mt sa ma = do
+mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
 
 -- SET THRESHOLD
-  if len < seqsortThresh then do
+  if len < st then do
     case sa of
       VAMSort -> seqSortL
       CSort -> cilkSeqSort
