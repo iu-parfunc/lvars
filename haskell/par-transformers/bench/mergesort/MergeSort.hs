@@ -74,7 +74,6 @@ import System.Mem
 import System.IO.Unsafe (unsafePerformIO)
 import System.IO
 import Control.Monad.ST.Unsafe (unsafeIOToST)
-import Text.Printf
 
 import Data.Int
 import Control.Exception (assert)
@@ -129,14 +128,14 @@ computation size st mt sa ma = do
   SS.put (STTup2 (VFlp randVec) (VFlp right))
 
   internalLiftIO$ performGC
-  internalLiftIO$ printf "about to start timing\n"  
+  internalLiftIO$ putStrLn "about to start timing"  
   internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
   mergeSort st mt sa ma
   end <- internalLiftIO$ getCurrentTime
 
-  internalLiftIO$ printf "finished run\n"
+  internalLiftIO$ putStrLn "finished run"
   internalLiftIO$ hFlush stdout
   
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
@@ -145,8 +144,7 @@ computation size st mt sa ma = do
   frozenL <- liftST$ IMV.freeze rawL
   
   internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
-  internalLiftIO$ printf "Sorting vector took %0.2f sec.\n" runningTime
-  internalLiftIO$ printf "SELFTIMED: %0.3f\n" runningTime  
+  internalLiftIO$ putStrLn$ "SELFTIMED: "++show runningTime  
   
 --  return $ show frozenL
   return$ "done"
