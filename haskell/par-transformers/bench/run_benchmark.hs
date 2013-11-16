@@ -111,8 +111,8 @@ bls_desktop ss =
                               ("CSort","MPMerge")                              
 --                              ("VAMSort","TMerge")
                             ]
- , sthresh <- [ 8192 ] -- did 2048 for a while
- , mthresh <- [ 8192 ]
+ , sthresh <- [ 8193 ] -- did 2048 for a while
+ , mthresh <- [ 8193 ] -- Bump to 8193.. [2013.11.15]
  ]
 
 bls_server :: S.Set Sched -> [Benchmark DefaultParamMeaning]
