@@ -234,6 +234,11 @@ main = do
   let (sz, st, mt, sa, ma, mode) = case args of
             []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
             [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
+
+            [sz, st, mt, sa, ma] -> 
+                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
+                     Prelude.read sa, Prelude.read ma, InPlace)
+            
             [sz, st, mt, sa, ma, mode] -> 
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma, Prelude.read mode)
