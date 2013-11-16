@@ -107,7 +107,8 @@ bls_desktop ss =
  , (sortmode,mergemode)  <- [ ("CSort","CMerge"),
                               ("VAMSort","CMerge"),
                               ("VAMSort","MPMerge"),
-                              ("CSort","MPMerge") 
+                              ("VAISort","MPMerge"), 
+                              ("CSort","MPMerge")                              
 --                              ("VAMSort","TMerge")
                             ]
  , sthresh <- [ 8192 ] -- did 2048 for a while
