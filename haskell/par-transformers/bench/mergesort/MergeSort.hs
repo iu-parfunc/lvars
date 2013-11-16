@@ -113,15 +113,16 @@ runTests = True
 
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort. 
-wrapper :: Int -> Int -> Int -> SSort -> SMerge -> String
-wrapper size st mt sa ma = LV.runPar $ V.runParVec2T (0,size) $ 
-                           computation size st mt sa ma
+wrapper :: Int -> Int -> Int -> SSort -> SMerge -> ParSort -> String
+wrapper size st mt sa ma mode =
+  LV.runPar $ V.runParVec2T (0,size) $ 
+  computation size st mt sa ma mode
 
 computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
                 PC.ParFuture parM) => 
-               Int -> Int -> Int -> SSort -> SMerge -> 
+               Int -> Int -> Int -> SSort -> SMerge -> ParSort -> 
                V.ParVec2T s Int32 Int32 parM String
-computation size st mt sa ma = do
+computation size st mt sa ma mode = do
 
   -- test setup: 
   randVec <- liftST$ mkRandomVec size    
@@ -134,7 +135,9 @@ computation size st mt sa ma = do
   internalLiftIO$ hFlush stdout
   start <- internalLiftIO$ getCurrentTime  
   -- post condition: left array is sorted
-  mergeSort st mt sa ma
+  case mode of
+    InPlace  -> mergeSort st mt sa ma 
+    OutPlace -> mergeSortOutPlace st mt sa ma 
   end <- internalLiftIO$ getCurrentTime
 
   internalLiftIO$ putStrLn "finished run"
@@ -184,6 +187,27 @@ mergeSort !st !mt !sa !ma = do
           mergeTo2 sp mt ma)
     mergeTo1 sp mt ma
 
+mergeSortOutPlace ::
+            (ParThreadSafe parM, PC.FutContents parM (),
+              PC.ParFuture parM, Ord elt, Show elt) => 
+             Int -> Int -> SSort -> SMerge -> 
+             V.ParVec2T s1 elt elt parM ()  
+mergeSortOutPlace !st !mt !sa !ma = do
+  undefined
+{-
+ where
+  cpuMergeSort t cpuMS vec =
+    if V.length vec <= t
+    then cpuMS vec
+    else do
+      let n = (V.length vec) `div` 2
+      let (lhalf, rhalf) = V.splitAt n vec
+      ileft <- spawn_ (cpuMergeSort t cpuMS lhalf)
+      right <-         cpuMergeSort t cpuMS rhalf
+      left  <- get ileft
+      merge t left right
+-}
+
 -- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
 seqSortL = do
@@ -201,16 +225,19 @@ data SMerge = CMerge | TMerge | MPMerge
 data SSort = CSort | VAMSort | VAISort
   deriving (Show, Read)
 
+data ParSort = InPlace | OutPlace
+  deriving (Show, Read)
+
 main :: IO ()
 main = do
   args <- getArgs
-  let (sz, st, mt, sa, ma) = case args of
-            []   -> (2^16, 2048, 2048, VAMSort, MPMerge)
-            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge)
-            [sz, st, mt, sa, ma] -> 
+  let (sz, st, mt, sa, ma, mode) = case args of
+            []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
+            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
+            [sz, st, mt, sa, ma, mode] -> 
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
-                     Prelude.read sa, Prelude.read ma)
-  putStrLn $ wrapper sz st mt sa ma
+                     Prelude.read sa, Prelude.read ma, Prelude.read mode)
+  putStrLn $ wrapper sz st mt sa ma mode
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int32)
