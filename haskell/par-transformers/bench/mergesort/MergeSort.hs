@@ -25,6 +25,7 @@ import PARSCHED as LV
 #else
 --import Control.LVish      as LV
 import Control.Monad.Par      as LV
+import Control.Monad.Trans (lift)
 #endif
 import Control.Par.ST
 import Control.Par.Class.Unsafe (ParThreadSafe(), internalLiftIO)
@@ -165,11 +166,7 @@ mergeSort !st !mt !sa !ma = do
 
 -- SET THRESHOLD
   if len < st then do
-    case sa of
-      VAMSort -> seqSortL
-      VAISort -> seqSortL2
-      CSort -> cilkSeqSort
-      _ -> seqSortL
+    dispatchSeq sa
    else do  
     let sp = (len `quot` 2)              
     forkSTSplit (sp,sp)
@@ -187,26 +184,47 @@ mergeSort !st !mt !sa !ma = do
           mergeTo2 sp mt ma)
     mergeTo1 sp mt ma
 
-mergeSortOutPlace ::
+dispatchSeq sa = 
+    case sa of
+      VAMSort -> seqSortL
+      VAISort -> seqSortL2
+      CSort -> cilkSeqSort
+      _ -> seqSortL
+
+mergeSortOutPlace :: forall parM elt s1 . 
             (ParThreadSafe parM, PC.FutContents parM (),
-              PC.ParFuture parM, Ord elt, Show elt) => 
+              PC.ParFuture parM, Ord elt, Show elt, MV.Storable elt) => 
              Int -> Int -> SSort -> SMerge -> 
              V.ParVec2T s1 elt elt parM ()  
-mergeSortOutPlace !st !mt !sa !ma = do
+mergeSortOutPlace !st !mt !sa !ma = do 
+  (rawL, _rawR) <- V.reify
+  vec <- liftST$ IMV.freeze rawL
   undefined
-{-
  where
-  cpuMergeSort t cpuMS vec =
-    if V.length vec <= t
-    then cpuMS vec
+  cpuMergeSort :: IMV.Vector elt -> parM (IMV.Vector elt)
+  cpuMergeSort vec =
+    if IMV.length vec < st
+    then case sa of
+          VAMSort -> seqsort vec
     else do
-      let n = (V.length vec) `div` 2
-      let (lhalf, rhalf) = V.splitAt n vec
-      ileft <- spawn_ (cpuMergeSort t cpuMS lhalf)
-      right <-         cpuMergeSort t cpuMS rhalf
-      left  <- get ileft
-      merge t left right
--}
+      let n = (IMV.length vec) `div` 2
+      let (lhalf, rhalf) = IMV.splitAt n vec
+--      ileft <- lift $ PC.spawn_ (cpuMergeSort lhalf)
+      right <-                   cpuMergeSort rhalf
+--      left  <- lift$ PC.get ileft
+--      merge left right
+      undefined
+      
+-- seqsort :: V.Vector ElmT ->  (V.Vector ElmT)
+seqsort (v::IMV.Vector elm) =
+  return $ IMV.create $ do 
+--                mut <- thawit v
+                mut <- IMV.thaw v
+                -- This is the pure-haskell sort on mutable vectors
+                -- from the vector-algorithms package:
+                VA.sort mut
+                return mut
+
 
 -- | Call a sequential in-place sort on the left vector.
 seqSortL :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
