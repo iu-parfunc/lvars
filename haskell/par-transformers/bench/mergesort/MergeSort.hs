@@ -64,6 +64,8 @@ import Foreign.C.Types
 import Foreign.Marshal.Array (allocaArray)
 #endif
 
+-- [2013.11.15] Adding new variant:
+import qualified Data.Vector.Algorithms.Intro as VI
 import qualified Data.Vector.Algorithms.Merge as VA
 import Prelude hiding (read, length)
 import qualified Prelude
@@ -162,6 +164,7 @@ mergeSort !st !mt !sa !ma = do
   if len < st then do
     case sa of
       VAMSort -> seqSortL
+      VAISort -> seqSortL2
       CSort -> cilkSeqSort
       _ -> seqSortL
    else do  
@@ -187,9 +190,15 @@ seqSortL = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST$ VA.sort vecL
 
+seqSortL2 :: (Ord eltL, ParThreadSafe parM) => V.ParVec2T s eltL eltR parM ()
+seqSortL2 = do
+  STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
+  liftST$ VI.sort vecL
+
+
 data SMerge = CMerge | TMerge | MPMerge
   deriving (Show, Read)
-data SSort = CSort | VAMSort
+data SSort = CSort | VAMSort | VAISort
   deriving (Show, Read)
 
 main :: IO ()
