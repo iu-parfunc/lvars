@@ -71,6 +71,11 @@ flag_UNDECIDED = 0
 flag_CHOSEN    = 1
 flag_NBRCHOSEN = 2
 
+-- data VertState = Chosen | Undecided | NbrChosen
+-- instance Unbox VertState where
+-- instance Storable VertState where
+  
+
 {-# INLINE maximalIndependentSet #-}
 -- maximalIndependentSet :: ISet s NodeID -> Par d s (ISet s NodeID)  -- Operate on a subgraph
 -- maximalIndependentSet :: AdjacencyGraph -> Par d s (ISet s NodeID) -- Operate on a whole graph.
