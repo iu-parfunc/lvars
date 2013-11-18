@@ -21,7 +21,7 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar
+         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar
        ) where
 
 import Control.LVish
