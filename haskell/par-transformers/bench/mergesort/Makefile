@@ -32,6 +32,12 @@ MergeSort.exe: MergeSort.hs cilksort-nomain.o
 local: MergeSort.hs cilksort-nomain.o
 	$(GHC) $(COMPILE_ARGS) -i../.. --make -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
 
+local-dump: MergeSort.hs cilksort-nomain.o
+	$(GHC) $(COMPILE_ARGS) -i../.. --make -O2 -ddump-to-file -ddump-core-stats -ddump-simpl-stats -ddump-simpl -ddump-stg -keep-tmp-files -rtsopts -threaded $^ $(LDFLAGS) -o $@
+
+local-profile: MergeSort.hs cilksort-nomain.o
+	$(GHC) $(COMPILE_ARGS) -i../.. --make -prof -auto-all -O2 -rtsopts -threaded $^ $(LDFLAGS) -o $@
+
 cilksort-nomain.o: cilksort.c
 	icc $(CFLAGS) -c $^ -o $@
 #	bash -c "(module add intel; icc $(CFLAGS) -c $^ -o $@)"
