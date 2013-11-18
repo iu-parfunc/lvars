@@ -34,6 +34,9 @@ asyncAnd hp trueM falseM kont = do
   launch falseM
   return ()
 
+-- OR this could expose:
+-- asyncAnd :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> Par d s Bool
+
 
 -- <DUPLICATED CODE>
 -- I think this is one of those situations where (efficiently) abstracting is more

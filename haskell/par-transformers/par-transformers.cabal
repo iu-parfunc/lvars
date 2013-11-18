@@ -37,6 +37,8 @@ Library
                  Control.Par.ST.Vec2
                  Control.Par.ST.UVec
                  Control.Par.ST.UVec2
+
+                 Control.Par.ST.StorableVec2
                  
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
@@ -59,7 +61,8 @@ Library
 -- Note: This is actually broken with ghc 7.6 on linux, due to a bug
 -- with how ghci interacts with the atomic primops package. This
 -- should be fixed in ghc 7.8, but until then the tests can be run
--- directly with: `cabal install; ghc -i. tests/Main.hs; ./tests/Main`.
+-- directly with: `cabal install; ghc -i. -i tests/CancelTests.hs -i
+-- tests/STTests.hs tests/Main.hs; ./tests/Main`.
 
 Test-suite test-par-transformers
   Type: exitcode-stdio-1.0
