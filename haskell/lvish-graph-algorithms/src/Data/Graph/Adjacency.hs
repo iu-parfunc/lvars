@@ -31,7 +31,9 @@ module Data.Graph.Adjacency
                       
          -- * Testing
          t0,t1,t2,t3,t3B,t4,t5,
-         unitTests
+         unitTests,
+
+         main -- TEMP
        ) where 
 
 import Control.Monad   (foldM)
@@ -56,6 +58,7 @@ import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 import Data.Time.Clock
 
 import qualified Data.Graph.Inductive.Graph as G
+import Data.Graph.Inductive.PatriciaTree (Gr)
 
 import System.IO.Posix.MMap (unsafeMMapFile)
 import Test.HUnit
@@ -67,8 +70,8 @@ import Prelude hiding (min,max,fst,last)
 -- | The adjacency-graph representation.
 data AdjacencyGraph =
   AdjacencyGraph {
-    vertOffsets :: U.Vector Word, 
-    allEdges   :: U.Vector Word
+    vertOffsets :: U.Vector Int, 
+    allEdges   :: U.Vector Int
   }
  deriving (Read,Show,Eq,Ord)
 
@@ -76,7 +79,7 @@ data AdjacencyGraph =
 -- that graph nodes (vertices) be identified by a scalar number.  Additionally, for
 -- the `AdjacencyGraph` representation, nodes are expected to densely occupy a
 -- continuous range of integers from 0..N.
-type NodeID = Word
+type NodeID = Int
 
 -- | Retrieve the neighbors of a given node.
 --   This is /O(1)/ allocation and /O(1)/ time.
@@ -88,6 +91,7 @@ nbrs AdjacencyGraph{vertOffsets, allEdges} nid =
     if fromIntegral nid == U.length vertOffsets - 1
     then suff 
     else U.take (fromIntegral$ nxt-ind) suff
+{-# INLINE nbrs #-}
 
 -- | Read an AdjacencyGraph file into memory from a file.
 readAdjacencyGraph :: FilePath -> IO AdjacencyGraph
@@ -100,6 +104,7 @@ readAdjacencyGraph path = do
   runParIO $ parseAdjacencyGraph (ncap * overPartition) bs
 
 -- | Parse an AdjacencyGraph file already in memory (ByteString), in parallel.
+--   The first parameter is a tuning parameter -- how many parallel chunks to parse.
 parseAdjacencyGraph :: Int -> B.ByteString -> Par d s AdjacencyGraph
 parseAdjacencyGraph chunks bs = 
   case B.splitAt (B.length tag) bs of
@@ -348,6 +353,7 @@ readNatsPartial bs
 -- Unit Tests
 --------------------------------------------------------------------------------
 
+-- | HUnit unit tests.
 unitTests :: [Test]
 unitTests =
   [ TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
@@ -365,6 +371,19 @@ unitTests =
               (Compound (Just (RightFrag 3 23)) [U.fromList [456]] (Just (LeftFrag (78::Word64)))) =<<
               readNatsPartial (S.take 10 "023 456 789")
   ]
+
+-- Simple graphs:
+
+-- Two nodes, zero edges:
+g1 :: AdjacencyGraph
+g1 = runPar $ parseAdjacencyGraph 1 (B.pack "AdjacencyGraph\n 2\n 0\n 0\n 0\n")
+
+-- Two nodes, one edge:
+g2 :: AdjacencyGraph
+g2 = runPar $ parseAdjacencyGraph 1 (B.pack "AdjacencyGraph\n 2\n 1\n 0\n 1\n 1\n")
+
+fgl2 :: Gr () ()
+fgl2 = toFGL g2 
 
 ---------------------------
 -- Bigger, temporary tests:
@@ -467,17 +486,19 @@ instance G.Graph LAdjacencyGraph where
 -- labNodes :: gr a b -> [LNode a]
 #endif
 
--- #define USE_FGL
+#define USE_FGL
 #ifdef USE_FGL
 -- | Convert from an `AdjacencyGraph` to some FGL graph representation.
 toFGL :: G.Graph g => AdjacencyGraph -> g () ()
 toFGL origGr@AdjacencyGraph{vertOffsets, allEdges} =  
   -- A whole lot of dictionary elimination followed by inlining will need to happen
   -- for this to become deforested....
-  let allVerts = [0 .. U.length vertOffsets - 1] in
-  G.mkGraph allVerts
-            [ (v1,v2,()) | v1 <- allVerts
-                         , v2 <- U.toList (nbrs origGr v1) ]
+   G.mkGraph [ (v,()) | v <- allVerts ] edges
+  where
+    allVerts = [ 0 .. U.length vertOffsets - 1] 
+    edges :: [G.LEdge ()]
+    edges = [ (v1,v2,()) | v1 <- allVerts
+                         , v2 <- U.toList (nbrs origGr v1) ]            
 #endif
 
 --------------------------------------------------------------------------------
@@ -567,4 +588,5 @@ number of threads, I actually see quite nice parallel performance.
 
 -}
 
+main = print (G.labNodes fgl2, G.labEdges fgl2)
 
