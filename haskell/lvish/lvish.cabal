@@ -114,6 +114,7 @@ library
     exposed-modules: 
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
+                      Data.LVar.NatArray.Unsafe
                       Data.LVar.MaxCounter
 
   -- Modules included in this library but not exported.

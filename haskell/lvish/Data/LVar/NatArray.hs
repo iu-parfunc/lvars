@@ -59,6 +59,9 @@ module Data.LVar.NatArray
 -- import qualified Data.Vector.Unboxed as U
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
+
+import Data.LVar.NatArray.Unsafe
+
 import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as M
 import Foreign.Marshal.MissingAlloc (callocBytes)
@@ -94,12 +97,6 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- A low-level optimization below.
 
 ------------------------------------------------------------------------------
-
--- | An array of bit-fields with a monotonic OR operation.  This can be used to model
---   a set of Ints by setting the vector entries to zero or one, but it can also
---   model other finite lattices for each index.
--- newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
-data NatArray s a = Storable a => NatArray !(LVar s (M.IOVector a) (Int,a))
 
 unNatArray (NatArray lv) = lv
 
