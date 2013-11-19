@@ -89,7 +89,7 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
       loop !numNbrs !nbrs !selfInd !i 
         | i == numNbrs = thisNodeWins
         | otherwise = do
-          -- logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
           let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
               selfInd' = fromIntegral selfInd
           -- If we got to the end of the neighbors below us, then we are NOT disqualified:
@@ -97,25 +97,25 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
             then thisNodeWins
             else do
               -- This should never block in a single-thread execution:
-              logStrLn (" [MIS] ! Getting on nbrInd "++show nbrInd)
+              logDbgLn 3 (" [MIS] ! Getting on nbrInd "++show nbrInd)
               nbrFlag <- NArr.get flagsArr (fromIntegral nbrInd)
-              logStrLn (" [MIS] ! Get completed on nbrInd "++show nbrInd)
+              logDbgLn 3 (" [MIS] ! Get completed on nbrInd "++show nbrInd)
               if nbrFlag == flag_CHOSEN
                 then NArr.put flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
                          NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
   parFor (0,numVerts) $ \ ndIx -> do 
       let nds = nbrs gr (fromIntegral ndIx)
-      -- logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
   return flagsArr
 
 -- | DUPLICATE CODE: IStructure version.
 maximalIndependentSet2 :: ParFor d s -> AdjacencyGraph -> Par d s (IStructure s Word8) -- Operate on a whole graph.
 maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
-  logStrLn$ " [MIS] Beginning maximalIndependentSet / Istructures"
+  logDbgLn 3$ " [MIS] Beginning maximalIndependentSet / Istructures"
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
   flagsArr <- newIStructure numVerts
@@ -124,7 +124,7 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
       loop !numNbrs !nbrs !selfInd !i 
         | i == numNbrs = thisNodeWins
         | otherwise = do
-          -- logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
           let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
               selfInd' = fromIntegral selfInd
           -- If we got to the end of the neighbors below us, then we are NOT disqualified:
@@ -132,18 +132,18 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
             then thisNodeWins
             else do
               -- This should never block in a single-thread execution:
-              logStrLn (" [MIS] ! Getting on nbrInd "++show nbrInd)
+              logDbgLn 3 (" [MIS] ! Getting on nbrInd "++show nbrInd)
               nbrFlag <- ISt.get flagsArr (fromIntegral nbrInd)
-              logStrLn (" [MIS] ! Get completed on nbrInd "++show nbrInd)
+              logDbgLn 3 (" [MIS] ! Get completed on nbrInd "++show nbrInd)
               if nbrFlag == flag_CHOSEN
                 then ISt.put_ flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
                          ISt.put_ flagsArr (fromIntegral selfInd) flag_CHOSEN
   parFor (0,numVerts) $ \ ndIx -> do 
       let nds = nbrs gr (fromIntegral ndIx)
-      -- logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
   return flagsArr
 

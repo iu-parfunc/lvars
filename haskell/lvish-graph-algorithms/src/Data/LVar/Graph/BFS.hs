@@ -152,7 +152,7 @@ bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
-    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+    logDbgLn 1 $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
     forVec (nbrs gr nd) (`S.insert` st)
   return st
 --    T.traverse_ (`S.insert` st) (nbrs gr nd)
@@ -164,11 +164,11 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       logStrLn $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
+       logDbgLn 1 $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
-  logStrLn $" [bfs] Seeding with start vertex... "
+  logDbgLn 1 $" [bfs] Seeding with start vertex... "
   ISt.put_ arr (fromIntegral start) True
   return arr
 
@@ -178,10 +178,10 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       -- logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+       -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
-  -- logStrLn $" [bfs] Seeding with start vertex... "
+  -- logDbgLn 1 $" [bfs] Seeding with start vertex... "
   NArr.put arr (fromIntegral start) 1
   return arr
 
