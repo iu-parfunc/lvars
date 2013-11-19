@@ -47,6 +47,7 @@ import qualified Data.Par.Range as R
 import Data.Word
 import Data.Char (isSpace)
 import Data.Maybe (fromJust)
+import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
 import qualified Data.ByteString as S
@@ -54,7 +55,7 @@ import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 import Data.Time.Clock
 
--- import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Graph.Inductive.Graph as G
 
 import System.IO.Posix.MMap (unsafeMMapFile)
 import Test.HUnit
@@ -66,12 +67,10 @@ import Prelude hiding (min,max,fst,last)
 -- | The adjacency-graph representation.
 data AdjacencyGraph =
   AdjacencyGraph {
-    vertOffets :: U.Vector Word, 
+    vertOffsets :: U.Vector Word, 
     allEdges   :: U.Vector Word
   }
  deriving (Read,Show,Eq,Ord)
-
-
 
 -- | Following the same conventions as many graph libaries (e.g. fgl), we require
 -- that graph nodes (vertices) be identified by a scalar number.  Additionally, for
@@ -82,11 +81,11 @@ type NodeID = Word
 -- | Retrieve the neighbors of a given node.
 --   This is /O(1)/ allocation and /O(1)/ time.
 nbrs :: AdjacencyGraph -> NodeID -> U.Vector NodeID
-nbrs AdjacencyGraph{vertOffets, allEdges} nid = 
-    let ind = vertOffets U.! (fromIntegral nid)
-        nxt = vertOffets U.! (fromIntegral (nid+1))
+nbrs AdjacencyGraph{vertOffsets, allEdges} nid = 
+    let ind = vertOffsets U.! (fromIntegral nid)
+        nxt = vertOffsets U.! (fromIntegral (nid+1))
         suff = U.drop (fromIntegral ind) allEdges in
-    if fromIntegral nid == U.length vertOffets - 1
+    if fromIntegral nid == U.length vertOffsets - 1
     then suff 
     else U.take (fromIntegral$ nxt-ind) suff
 
@@ -437,6 +436,49 @@ consume ox = do
   where
   fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
   fn (Compound r uvs l) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++", ends "++show(r,l)++">"
+
+
+--------------------------------------------------------------------------------
+-- FGL instance:
+--------------------------------------------------------------------------------
+-- We COULD provide this, but it would be ludicrously inefficient, so it's better to
+-- just provide a conversion function.
+
+#if 0
+-- | A labeled adjacency graph.
+data LAdjacencyGraph vlab elab =
+     LAdjacencyGraph {
+       structure :: AdjacencyGraph,
+       vlabs     :: V.Vector vlab,
+       elabs     :: V.Vector elab
+     }
+
+--   TODO: promote LAdjacencyGraph to a family:
+-- data family LAdjacencyGraph vertlab edgelab
+--   TODO: need a closed type family so that we can optimize the unit case while
+--   defaulting to the other case:
+-- data instance LAdjacencyGraph () () = Unlabeled AdjacencyGraph
+
+instance G.Graph LAdjacencyGraph where
+  empty   = LAdjacencyGraph (AdjacencyGraph U.empty U.empty) V.empty V.empty
+  isEmpty = U.null . vertOffsets . structure
+-- match :: Node -> gr a b -> Decomp gr a b
+-- mkGraph :: [LNode a] -> [LEdge b] -> gr a b
+-- labNodes :: gr a b -> [LNode a]
+#endif
+
+-- #define USE_FGL
+#ifdef USE_FGL
+-- | Convert from an `AdjacencyGraph` to some FGL graph representation.
+toFGL :: G.Graph g => AdjacencyGraph -> g () ()
+toFGL origGr@AdjacencyGraph{vertOffsets, allEdges} =  
+  -- A whole lot of dictionary elimination followed by inlining will need to happen
+  -- for this to become deforested....
+  let allVerts = [0 .. U.length vertOffsets - 1] in
+  G.mkGraph allVerts
+            [ (v1,v2,()) | v1 <- allVerts
+                         , v2 <- U.toList (nbrs origGr v1) ]
+#endif
 
 --------------------------------------------------------------------------------
 -- DEVELOPMENT NOTES
