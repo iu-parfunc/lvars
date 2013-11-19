@@ -42,6 +42,7 @@ import Control.Concurrent (getNumCapabilities)
 import Control.LVish as LV
 import Control.LVish.Internal (liftIO)
 import qualified Data.LVar.IVar as I
+import qualified Data.Par.Range as R
 
 import Data.Word
 import Data.Char (isSpace)
@@ -52,6 +53,8 @@ import qualified Data.ByteString as S
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 import Data.Time.Clock
+
+-- import qualified Data.Graph.Inductive.Graph as G
 
 import System.IO.Posix.MMap (unsafeMMapFile)
 import Test.HUnit
@@ -68,12 +71,16 @@ data AdjacencyGraph =
   }
  deriving (Read,Show,Eq,Ord)
 
+
+
 -- | Following the same conventions as many graph libaries (e.g. fgl), we require
 -- that graph nodes (vertices) be identified by a scalar number.  Additionally, for
 -- the `AdjacencyGraph` representation, nodes are expected to densely occupy a
 -- continuous range of integers from 0..N.
 type NodeID = Word
 
+-- | Retrieve the neighbors of a given node.
+--   This is /O(1)/ allocation and /O(1)/ time.
 nbrs :: AdjacencyGraph -> NodeID -> U.Vector NodeID
 nbrs AdjacencyGraph{vertOffets, allEdges} nid = 
     let ind = vertOffets U.! (fromIntegral nid)
@@ -83,16 +90,17 @@ nbrs AdjacencyGraph{vertOffets, allEdges} nid =
     then suff 
     else U.take (fromIntegral$ nxt-ind) suff
 
-
 -- | Read an AdjacencyGraph file into memory from a file.
 readAdjacencyGraph :: FilePath -> IO AdjacencyGraph
+-- TODO! Once we have fine-grained effect tracking in this should STAY in Par, but
+-- require IO effects.
 readAdjacencyGraph path = do
   bs <- fmap (B.dropWhile isSpace) $
         unsafeMMapFile path
   ncap <- getNumCapabilities
   runParIO $ parseAdjacencyGraph (ncap * overPartition) bs
 
--- | Parse a PBBS AdjacencyGraph file from a ByteString, in parallel.
+-- | Parse an AdjacencyGraph file already in memory (ByteString), in parallel.
 parseAdjacencyGraph :: Int -> B.ByteString -> Par d s AdjacencyGraph
 parseAdjacencyGraph chunks bs = 
   case B.splitAt (B.length tag) bs of
@@ -180,8 +188,10 @@ parReadNats chunks bs = par
 
     par :: LV.Par d s [PartialNums nty]
     par = do _ <- I.new
-             parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
-                                  mapper reducer []              
+             -- parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
+             --                      mapper reducer []              
+             R.parMapReduceThresh 1 (R.range 0 chunks)
+                mapper reducer [] 
 
 --------------------------------------------------------------------------------                          
 -- Partially parsed number fragments
@@ -515,42 +525,4 @@ number of threads, I actually see quite nice parallel performance.
 
 -}
 
---------------------------------------------------------------------------------
--- DUPLICATION: coping some of monad-par-extras
---------------------------------------------------------------------------------
-
--- | \"Auto-partitioning\" version of 'parMapReduceRangeThresh' that chooses the threshold based on
---    the size of the range and the number of processors..
-
-parMapReduceRangeThresh
-   :: (NFData a, Eq a)
-      => Int                            -- ^ threshold
-      -> InclusiveRange                 -- ^ range over which to calculate
-      -> (Int -> Par d s a)                 -- ^ compute one result
-      -> (a -> a -> Par d s a)              -- ^ combine two results (associative)
-      -> a                              -- ^ initial result
-      -> Par d s a
-parMapReduceRangeThresh threshold (InclusiveRange min max) fn binop init
- = loop min max
- where
-  loop min max
-    | max - min <= threshold =
-	let mapred a b = do x <- fn b;
-			    result <- a `binop` x
-			    return result
-	in foldM mapred init [min..max]
-
-    | otherwise  = do
-	let mid = min + ((max - min) `quot` 2)
-	rght <- I.spawn $ loop (mid+1) max
-	l  <- loop  min    mid
-	r  <- I.get rght
-	l `binop` r
-
--- How many tasks per process should we aim for?  Higher numbers
--- improve load balance but put more pressure on the scheduler.
-auto_partition_factor :: Int
-auto_partition_factor = 4
-
-data InclusiveRange = InclusiveRange Int Int
 

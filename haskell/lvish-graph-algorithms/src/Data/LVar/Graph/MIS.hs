@@ -60,6 +60,13 @@ import Data.LVar.IStructure as ISt
 import Data.LVar.NatArray as NArr
 
 ------------------------------------------------------------------------------------------
+
+-- TODO: Define clan user-visible datatypes for dense and sparse representations of
+-- node sets.
+
+
+
+------------------------------------------------------------------------------------------
 -- Maximal Independent Set
 ------------------------------------------------------------------------------------------  
 
