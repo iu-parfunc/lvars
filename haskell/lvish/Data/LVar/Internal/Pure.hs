@@ -21,7 +21,7 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar
+         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar
        ) where
 
 import Control.LVish
@@ -41,6 +41,7 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 
 {-# INLINE newPureLVar #-}
 {-# INLINE putPureLVar #-}
+{-# INLINE getPureLVar #-}
 {-# INLINE waitPureLVar #-}
 {-# INLINE freezePureLVar #-}
 
@@ -49,6 +50,26 @@ newPureLVar :: BoundedJoinSemiLattice t =>
                t -> Par d s (PureLVar s t)
 newPureLVar st = WrapPar$ fmap (PureLVar . WrapLVar) $
                  LI.newLV $ newIORef st
+
+-- | Blocks until the contents of `lv` are at or above one element of
+-- `thrshSet`, then returns that one element.
+getPureLVar :: (JoinSemiLattice t, Eq t) => PureLVar s t -> [t] -> Par d s t
+getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
+  WrapPar$ LI.getLV lv globalThresh deltaThresh
+  where globalThresh ref _ = do
+          x <- readIORef ref
+          deltaThresh x
+        deltaThresh x =
+          return $ checkThresholds x thrshSet
+
+-- | Returns the element of thrshSet that `currentState` is above, if
+-- it exists.  (Assumes that there is only one such element!)
+checkThresholds :: (JoinSemiLattice t, Eq t) => t -> [t] -> Maybe t
+checkThresholds currentState thrshSet = case thrshSet of
+  []               -> Nothing
+  (thrsh : thrshs) -> if thrsh `joinLeq` currentState
+                      then Just thrsh
+                      else checkThresholds currentState thrshs
 
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)

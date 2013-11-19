@@ -82,10 +82,12 @@ module Control.LVish
     quiesce, 
     
     forkHP,
+
+    -- * Reexport IVar operations for a full, standard "Par Monad" API
+    module Data.LVar.IVar,
     
     -- * Debug facilities and internal bits
     logDbgLn, logDbgLn_, runParLogged,
-
     LVar()
   ) where
 
@@ -96,6 +98,8 @@ import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
+
+import           Data.LVar.IVar 
 
 import Data.IORef
 --------------------------------------------------------------------------------
@@ -128,9 +132,6 @@ instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
 
 instance PU.ParThreadSafe (Par d s) where
   unsafeParIO = I.liftIO
-
-instance PU.PrivateMonadIO (Par d s) where
-  internalLiftIO = I.liftIO  
 
 #endif
 

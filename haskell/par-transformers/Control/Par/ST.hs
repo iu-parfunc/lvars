@@ -31,6 +31,9 @@ module Control.Par.ST
 
          -- * Working with ST and other lifts
          liftST, liftPar,
+         
+         -- * Convert between state types
+         transmute,
 
          --  Useful utilities
 --         vecParMap_, 
@@ -39,7 +42,8 @@ module Control.Par.ST
          STSplittable(..),
          
          -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), UVectorFlp(..), STTup2(..)
+         MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
+         STTup2(..), STUnit(..)
        )
        where
 
@@ -61,6 +65,7 @@ import Control.Monad.Trans (lift)
 import Data.STRef
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Unboxed.Mutable as MU
+import qualified Data.Vector.Storable.Mutable as MS
 import Data.Vector       (freeze)
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
@@ -68,7 +73,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), ParMonad(..))
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -119,10 +124,19 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
 
+-- | A splittable type which contains no information.
+data STUnit s = STUnit
+-- newtype STUnit s = STUnit ()
+  
+
+instance STSplittable STUnit where
+  type SplitIdx STUnit = ()
+  splitST () STUnit = (STUnit,STUnit)
+
 ------------------------------------------------------------
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
--- to be last.
+-- to be last.  Also carries the `Unbox` constraint.
 data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)  
 
 instance STSplittable (UVectorFlp a) where
@@ -131,6 +145,17 @@ instance STSplittable (UVectorFlp a) where
     let lvec = MU.slice 0 mid vec
         rvec = MU.slice mid (MU.length vec - mid) vec
     in (UFlp lvec, UFlp rvec)
+
+-- | An annoying type alias simply for the purpose of arranging for the 's' parameter
+-- to be last.  Also carries the `Storable` constraint.
+data SVectorFlp a s = (MS.Storable a) => SFlp (MS.MVector s a)
+
+instance STSplittable (SVectorFlp a) where
+  type SplitIdx (SVectorFlp a) = Int
+  splitST mid (SFlp vec) = 
+    let lvec = MS.slice 0 mid vec
+        rvec = MS.slice mid (MS.length vec - mid) vec
+    in (SFlp lvec, SFlp rvec)
 
 --------------------------------------------------------------------------------
 
@@ -209,9 +234,29 @@ liftST st = ParST (lift (unsafeParIO io))
 liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
 liftPar m = ParST (lift m)
 
+transmute :: forall a b s parM ans . 
+             (ParThreadSafe parM, 
+              STSplittable a,
+              STSplittable b)              
+              => (b s -> a s) -> ParST (a s) parM ans -> ParST (b s) parM ans
+transmute fn (ParST comp) = ParST$ do
+  orig <- S.get
+  let newSt :: a s
+      newSt = fn orig
+  (res,_) <- lift$ S.runStateT comp newSt
+  return $! res
+  
+instance ParMonad parM => ParMonad (ParST stt1 parM) where
+  internalLiftIO io = ParST (lift (internalLiftIO io))
+  fork (ParST task) = ParST $ 
+    lift $ PC.fork $ do
+      (res,_) <- S.runStateT task
+                 (error "fork: This child thread does not have permission to touch the array!")
+      return res
+
 -- | A conditional instance which will only be usable if unsafe imports are made.
-instance MonadIO parM => MonadIO (ParST stt1 parM) where
-  liftIO io = ParST (liftIO io)
+-- instance MonadIO parM => MonadIO (ParST stt1 parM) where
+--   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
@@ -228,11 +273,6 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
 
 
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
-  fork (ParST task) = ParST $ 
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task
-                 (error "fork: This child thread does not have permission to touch the array!")
-      return res
   new       = ParST$ lift PC.new
   put_ iv v = ParST$ lift$ PC.put_ iv v
 
