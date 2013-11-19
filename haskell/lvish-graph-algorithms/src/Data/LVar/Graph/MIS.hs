@@ -7,11 +7,11 @@ module Data.LVar.Graph.MIS where
 
 import Data.Set as Set
 
-import Utils
+-- import Utils
 
 -- Benchmark utils:
-import PBBS.FileReader
-import PBBS.Timing (wait_clocks, runAndReport)
+-- import PBBS.FileReader
+-- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
 import Control.LVish
@@ -20,7 +20,7 @@ import Control.LVish.DeepFrz (runParThenFreezeIO)
 import qualified Control.LVish.SchedIdempotent as L
 
 import Control.Monad
-import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
+-- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
 import Control.Monad.ST
 import Control.Exception
 import GHC.Conc
@@ -40,6 +40,7 @@ import System.Environment (getArgs)
 import System.Directory
 import System.Process
 
+import Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
 
@@ -81,7 +82,8 @@ flag_NBRCHOSEN = 2
 -- data VertState = Chosen | Undecided | NbrChosen
 -- instance Unbox VertState where
 -- instance Storable VertState where
-  
+
+type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
 
 {-# INLINE maximalIndependentSet #-}
 -- maximalIndependentSet :: ISet s NodeID -> Par d s (ISet s NodeID)  -- Operate on a subgraph

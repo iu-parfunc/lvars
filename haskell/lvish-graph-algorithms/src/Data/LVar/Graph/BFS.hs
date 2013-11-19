@@ -6,11 +6,11 @@ module Data.LVar.Graph.BFS where
 
 import Data.Set as Set
 
-import Utils
+-- import Utils
 
 -- Benchmark utils:
-import PBBS.FileReader
-import PBBS.Timing (wait_clocks, runAndReport)
+-- import PBBS.FileReader
+-- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
 import Control.LVish
@@ -19,7 +19,7 @@ import Control.LVish.DeepFrz (runParThenFreezeIO)
 import qualified Control.LVish.SchedIdempotent as L
 
 import Control.Monad
-import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
+-- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
 import Control.Monad.ST
 import Control.Exception
 import GHC.Conc
@@ -39,6 +39,7 @@ import System.Environment (getArgs)
 import System.Directory
 import System.Process
 
+import Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
 
@@ -185,3 +186,16 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   NArr.put arr (fromIntegral start) 1
   return arr
 
+--------------------------------------------------------------------------------
+-- Misc helpers
+--------------------------------------------------------------------------------
+
+{-# INLINE forVec #-}
+-- | Simple for-each loops over vector elements.
+forVec :: U.Unbox a => U.Vector a -> (a -> Par d s ()) -> Par d s ()
+forVec vec fn = loop 0 
+  where
+    len = U.length vec
+    loop i | i == len = return ()
+           | otherwise = fn (U.unsafeIndex vec i) >>
+                         loop (i+1)
