@@ -4,8 +4,6 @@
 
 module Data.LVar.Graph.BFS where
 
-import Data.Set as Set
-
 -- import Utils
 
 -- Benchmark utils:
@@ -14,36 +12,14 @@ import Data.Set as Set
 -- calibrate, measureFreq, commaint,
 
 import Control.LVish
-import Control.LVish.Internal
-import Control.LVish.DeepFrz (runParThenFreezeIO)
-import qualified Control.LVish.SchedIdempotent as L
 
-import Control.Monad
 -- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
-import Control.Monad.ST
-import Control.Exception
-import GHC.Conc
-
 import Data.Word
-import Data.Maybe
-import Data.LVar.MaxCounter as C
-import Data.Time.Clock
-import qualified Data.Traversable as T
-import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.Vector.Storable as UV
-import qualified Data.Vector.Storable.Mutable as MV
-import System.Mem (performGC)
-import System.Environment (getArgs)
-import System.Directory
-import System.Process
 
 import Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
-
---------------------------------------------------------------------------------
 
 #if 1
 import Data.LVar.PureSet as S
@@ -54,10 +30,10 @@ import Data.LVar.PureSet as S
 import Data.LVar.SLSet as S
 #endif
 
-import qualified Data.LVar.SLSet as SL
-
 import Data.LVar.IStructure as ISt
 import Data.LVar.NatArray as NArr
+
+--------------------------------------------------------------------------------
 
 -- An LVar-based version of bf_traverse.  As we traverse the graph,
 -- the results of applying f to each node accumulate in an LVar, where
