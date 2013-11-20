@@ -42,6 +42,9 @@ import Data.LVar.NatArray as NArr
 -- node sets.
 
 
+type DenseVertset s = NatArray s Word8 
+
+-- type SparseVertset
 
 ------------------------------------------------------------------------------------------
 -- Maximal Independent Set
@@ -56,8 +59,10 @@ flag_CHOSEN    = 1
 flag_NBRCHOSEN = 2
 
 -- data VertState = Chosen | Undecided | NbrChosen
--- instance Unbox VertState where
 -- instance Storable VertState where
+-- Minimal complete definition: sizeOf, alignment, one of peek, peekElemOff and peekByteOff, and one of poke, pokeElemOff and pokeByteOff.
+
+
 
 type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
 
