@@ -18,6 +18,8 @@ version:             1.1.0.3
 -- 1.0.0.2 -- minor docs polishing
 -- 1.0.0.4 -- Bugfix for runParThenFreeze 's' param (issue #26).
 -- 1.0.0.6 -- tighten up dependencies; remove unused flags; very minor doc fixes.
+-- 1.1.0.2 -- add verifyFiniteJoin
+-- 1.1.0.3 -- expose BulkRetry prototype
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
