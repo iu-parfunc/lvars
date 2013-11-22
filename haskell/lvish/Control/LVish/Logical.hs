@@ -14,7 +14,7 @@ import qualified Data.Atomics.Counter as C
 
 -- | A parallel @And@ operation that can return early---whenever a False appears on either branch.
 asyncAnd :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> (Bool -> Par d s ()) -> Par d s ()
-asyncAnd hp trueM falseM kont = do
+asyncAnd hp leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- io$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch m = forkHP hp $
@@ -30,8 +30,8 @@ asyncAnd hp trueM falseM kont = do
                                     if n < 200 -- Zero ops or one True.
                                       then kont False
                                       else return ()
-  launch trueM
-  launch falseM
+  launch leftM
+  launch rightM
   return ()
 
 -- OR this could expose:
@@ -44,7 +44,7 @@ asyncAnd hp trueM falseM kont = do
 
 -- | Analagous operation for @Or@.
 asyncOr :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> (Bool -> Par d s ()) -> Par d s ()
-asyncOr hp trueM falseM kont = do
+asyncOr hp leftM rightM kont = do
   -- Atomic counter, if we`re the second True we write the result:
   cnt <- io$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch m = forkHP hp $
@@ -60,8 +60,8 @@ asyncOr hp trueM falseM kont = do
                                     if n < 200 -- Zero ops or one True.
                                       then kont True
                                       else return ()
-  launch trueM
-  launch falseM
+  launch leftM
+  launch rightM
   return ()
 -- </DUPLICATED CODE>
 
