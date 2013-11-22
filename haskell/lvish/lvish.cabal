@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.0.1
+version:             1.1.0.3
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -115,6 +115,7 @@ library
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
                       Data.LVar.MaxCounter
+                      Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
   other-modules:

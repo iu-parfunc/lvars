@@ -73,8 +73,7 @@ forSpeculative (st,end) bodyfn = do
         fails <- newEmptySet
         let chunkend = offset + (min prefix remain)        
                 
---        parForTiled (Just pool)
-        parForTiled desired_tasks (offset,chunkend) $ \ix -> do
+        parForTiled (Just pool) desired_tasks (offset,chunkend) $ \ix -> do
           bodyfn (RetryHub fails) ix
         quiesce pool
         snap <- freezeSet fails
