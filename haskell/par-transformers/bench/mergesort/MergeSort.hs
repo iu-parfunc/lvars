@@ -11,7 +11,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP, ForeignFunctionInterface #-}
 
-module Main where
+module Main(main) where
 
 --module MergeSort 
 --       (
