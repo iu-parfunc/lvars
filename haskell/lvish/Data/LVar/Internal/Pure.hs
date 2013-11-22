@@ -21,7 +21,7 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar
+         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar
        ) where
 
 import Control.LVish
@@ -58,6 +58,7 @@ getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
           x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] Getting from a Pure LVar.. read ref."
           deltaThresh x
         deltaThresh x =
           return $ checkThresholds x thrshSet

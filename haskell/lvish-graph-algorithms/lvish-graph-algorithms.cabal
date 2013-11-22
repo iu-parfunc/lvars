@@ -16,6 +16,7 @@ library
   exposed-modules:     Data.LVar.Graph.BFS, 
                        Data.LVar.Graph.MIS,
                        Data.Graph.Adjacency
+
   -- other-modules:       
   other-extensions:    CPP, BangPatterns, OverloadedStrings, ScopedTypeVariables, NamedFieldPuns
   build-depends:       base >=4.6, process==1.1.0.2, directory ==1.2.0.1,
