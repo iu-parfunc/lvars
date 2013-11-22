@@ -4,8 +4,8 @@
 {-| 
     A collection of useful parallel combinators based on top of a 'Par' monad.
 
-    In particular, this module provides higher order functions for
-     traversing data structures in parallel.  
+    This module provides a notion of ranges (iteration spaces) and various parallel
+    loops over those ranges.
 
 -}
 

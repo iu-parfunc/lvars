@@ -4,45 +4,22 @@
 
 module Data.LVar.Graph.BFS where
 
-import Data.Set as Set
-
-import Utils
+-- import Utils
 
 -- Benchmark utils:
-import PBBS.FileReader
-import PBBS.Timing (wait_clocks, runAndReport)
+-- import PBBS.FileReader
+-- import PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
 import Control.LVish
-import Control.LVish.Internal
-import Control.LVish.DeepFrz (runParThenFreezeIO)
-import qualified Control.LVish.SchedIdempotent as L
 
-import Control.Monad
-import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
-import Control.Monad.ST
-import Control.Exception
-import GHC.Conc
-
+-- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
 import Data.Word
-import Data.Maybe
-import Data.LVar.MaxCounter as C
-import Data.Time.Clock
-import qualified Data.Traversable as T
-import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.Vector.Storable as UV
-import qualified Data.Vector.Storable.Mutable as MV
-import System.Mem (performGC)
-import System.Environment (getArgs)
-import System.Directory
-import System.Process
 
+import Data.Graph.Adjacency
 
 -- define DEBUG_CHECKS
-
---------------------------------------------------------------------------------
 
 #if 1
 import Data.LVar.PureSet as S
@@ -53,10 +30,10 @@ import Data.LVar.PureSet as S
 import Data.LVar.SLSet as S
 #endif
 
-import qualified Data.LVar.SLSet as SL
-
 import Data.LVar.IStructure as ISt
 import Data.LVar.NatArray as NArr
+
+--------------------------------------------------------------------------------
 
 -- An LVar-based version of bf_traverse.  As we traverse the graph,
 -- the results of applying f to each node accumulate in an LVar, where
@@ -152,7 +129,7 @@ bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
-    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+    logDbgLn 1 $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
     forVec (nbrs gr nd) (`S.insert` st)
   return st
 --    T.traverse_ (`S.insert` st) (nbrs gr nd)
@@ -164,11 +141,11 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       logStrLn $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
+       logDbgLn 1 $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
-  logStrLn $" [bfs] Seeding with start vertex... "
+  logDbgLn 1 $" [bfs] Seeding with start vertex... "
   ISt.put_ arr (fromIntegral start) True
   return arr
 
@@ -178,10 +155,23 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       -- logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+       -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
-  -- logStrLn $" [bfs] Seeding with start vertex... "
+  -- logDbgLn 1 $" [bfs] Seeding with start vertex... "
   NArr.put arr (fromIntegral start) 1
   return arr
 
+--------------------------------------------------------------------------------
+-- Misc helpers
+--------------------------------------------------------------------------------
+
+{-# INLINE forVec #-}
+-- | Simple for-each loops over vector elements.
+forVec :: U.Unbox a => U.Vector a -> (a -> Par d s ()) -> Par d s ()
+forVec vec fn = loop 0 
+  where
+    len = U.length vec
+    loop i | i == len = return ()
+           | otherwise = fn (U.unsafeIndex vec i) >>
+                         loop (i+1)
