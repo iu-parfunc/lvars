@@ -21,7 +21,8 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar
+         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
+         verifyFiniteJoin
        ) where
 
 import Control.LVish
@@ -44,6 +45,26 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 {-# INLINE getPureLVar #-}
 {-# INLINE waitPureLVar #-}
 {-# INLINE freezePureLVar #-}
+
+-- | Takes a join operation (e.g., for an instance of JoinSemiLattice
+-- and returns an error message if th lattice properties don't hold.
+-- Don't try this for an infinite lattice!
+verifyFiniteJoin :: (Eq a, Bounded a, Show a, Enum a) => (a -> a -> a) -> Maybe String
+verifyFiniteJoin join =
+  case (isCommutative, isAssociative, isIdempotent) of
+    (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
+    (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
+    (_ , _, hd : _) -> Just $ "idempotency violated!: " ++ show hd
+    ([], [], []) -> Nothing
+  where
+    isCommutative = [(a, b) | a <- allStates, b <- allStates, a `join` b /= b `join` a]
+    isAssociative = [(a, b, c) |
+                     a <- allStates,
+                     b <- allStates,
+                     c <- allStates,
+                     a `join` (b `join` c) /= (a `join` b) `join` c]
+    isIdempotent = [a | a <- allStates, a `join` a /= a]
+    allStates = [minBound .. maxBound]
 
 -- | A new pure LVar populated with the provided initial state.
 newPureLVar :: BoundedJoinSemiLattice t =>
