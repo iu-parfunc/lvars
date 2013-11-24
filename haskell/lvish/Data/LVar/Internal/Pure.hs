@@ -49,8 +49,8 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 -- | Takes a join operation (e.g., for an instance of JoinSemiLattice
 -- and returns an error message if th lattice properties don't hold.
 -- Don't try this for an infinite lattice!
-verifyFiniteJoin :: (Eq a, Bounded a, Show a, Enum a) => (a -> a -> a) -> Maybe String
-verifyFiniteJoin join =
+verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
+verifyFiniteJoin allStates join =
   case (isCommutative, isAssociative, isIdempotent) of
     (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
     (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
@@ -64,7 +64,6 @@ verifyFiniteJoin join =
                      c <- allStates,
                      a `join` (b `join` c) /= (a `join` b) `join` c]
     isIdempotent = [a | a <- allStates, a `join` a /= a]
-    allStates = [minBound .. maxBound]
 
 -- | Verify that a blocking get is monotone in just the right way.
 --   This takes a designated bottom and top element.
