@@ -68,8 +68,10 @@ verifyFiniteJoin join =
 
 -- | Verify that a blocking get is monotone in just the right way.
 --   This takes a designated bottom and top element.
-verifyFiniteGet :: (Eq a, Bounded a, Show a, Enum a, Ord a) => (a,a) -> (a -> a) -> Maybe String
-verifyFiniteGet (bot,top) getter =
+verifyFiniteGet :: (Eq a, Show a, JoinSemiLattice a,
+                    Eq b, Show b) =>
+                   [a] -> (b,b) -> (a -> b) -> Maybe String
+verifyFiniteGet allStates (bot,top) getter =
    case (botBefore, constAfter) of
      ((a,b):_, _) -> Just$ "violation! input "++ show a
                       ++" unblocked get, but larger input"++show b++" did not."
@@ -78,14 +80,13 @@ verifyFiniteGet (bot,top) getter =
                       ++"), but then changed at "++show b++" ("++ show (getter b)++")"
      ([],[])      -> Nothing
   where
-   allStates = [minBound .. maxBound] 
    botBefore = [ (a,b)
                | a <- allStates, b <- allStates
-               , a < b,  getter b == bot
+               , a `joinLeq` b,  getter b == bot
                , not (getter a == bot) ]
    constAfter = [ (a,b)
                 | a <- allStates, b <- allStates
-                , a < b
+                , a `joinLeq` b
                 , getter a /= bot
                 , getter a /= getter b
                 , getter b /= top -- It's ok to go to error.
