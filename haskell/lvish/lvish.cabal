@@ -117,7 +117,7 @@ library
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
                       Data.LVar.MaxCounter
-                      Control.LVish.BulkRetry
+--                      Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
   other-modules:

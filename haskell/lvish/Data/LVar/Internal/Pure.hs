@@ -22,7 +22,7 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
-         verifyFiniteJoin
+         verifyFiniteJoin, verifyFiniteGet
        ) where
 
 import Control.LVish
@@ -65,6 +65,30 @@ verifyFiniteJoin join =
                      a `join` (b `join` c) /= (a `join` b) `join` c]
     isIdempotent = [a | a <- allStates, a `join` a /= a]
     allStates = [minBound .. maxBound]
+
+-- | Verify that a blocking get is monotone in just the right way.
+--   This takes a designated bottom and top element.
+verifyFiniteGet :: (Eq a, Bounded a, Show a, Enum a, Ord a) => (a,a) -> (a -> a) -> Maybe String
+verifyFiniteGet (bot,top) getter =
+   case (botBefore, constAfter) of
+     ((a,b):_, _) -> Just$ "violation! input "++ show a
+                      ++" unblocked get, but larger input"++show b++" did not."
+     (_, (a,b):_) -> Just$ "violation! value at "++ show a
+                      ++" was non-bottom, but then changed at "++show b
+     ([],[])      -> Nothing
+  where
+   allStates = [minBound .. maxBound] 
+   botBefore = [ (a,b)
+               | a <- allStates, b <- allStates
+               , a < b,  getter b == bot
+               , not (getter a == bot) ]
+   constAfter = [ (a,b)
+                | a <- allStates, b <- allStates
+                , a < b
+                , getter a /= bot
+                , getter a /= getter b
+                ]
+
 
 -- | A new pure LVar populated with the provided initial state.
 newPureLVar :: BoundedJoinSemiLattice t =>
