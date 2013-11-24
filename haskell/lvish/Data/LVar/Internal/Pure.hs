@@ -74,7 +74,8 @@ verifyFiniteGet (bot,top) getter =
      ((a,b):_, _) -> Just$ "violation! input "++ show a
                       ++" unblocked get, but larger input"++show b++" did not."
      (_, (a,b):_) -> Just$ "violation! value at "++ show a
-                      ++" was non-bottom, but then changed at "++show b
+                      ++" was non-bottom ("++show (getter a)
+                      ++"), but then changed at "++show b++" ("++ show (getter b)++")"
      ([],[])      -> Nothing
   where
    allStates = [minBound .. maxBound] 
@@ -87,6 +88,7 @@ verifyFiniteGet (bot,top) getter =
                 , a < b
                 , getter a /= bot
                 , getter a /= getter b
+                , getter b /= top -- It's ok to go to error.
                 ]
 
 
