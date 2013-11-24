@@ -128,7 +128,7 @@ instance PC.LVarSched (Par d s) where
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
 instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
---  freezeLV = WrapPar . L.freezeLV
+--  freezeLV = WrapPar . L.freezeLV  -- FINISHME
 
 instance PU.ParThreadSafe (Par d s) where
   unsafeParIO = I.liftIO

@@ -198,8 +198,8 @@ parForTree (start,end) body = do
 
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
-parForTiled :: Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
-parForTiled otiles (start,end) body = do 
+parForTiled :: Maybe L.HandlerPool -> Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTiled hp otiles (start,end) body = do 
   loop 0 (end - start) otiles
  where
    loop offset remain tiles
@@ -208,7 +208,7 @@ parForTiled otiles (start,end) body = do
      | otherwise       = do
          let (half,rem)   = remain `quotRem` 2
              (halfT,remT) = tiles `quotRem` 2
-         fork$ loop offset half halfT
+         forkHP hp$ loop offset half halfT
          loop (offset+half) (half+rem) (halfT+remT)
 
 

@@ -71,7 +71,7 @@ import Prelude hiding (min,max,fst,last)
 data AdjacencyGraph =
   AdjacencyGraph {
     vertOffsets :: U.Vector Int, 
-    allEdges   :: U.Vector NodeID
+    allEdges    :: U.Vector NodeID
   }
  deriving (Read,Show,Eq,Ord)
 
