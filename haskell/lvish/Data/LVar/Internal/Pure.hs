@@ -22,7 +22,7 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
-         verifyFiniteJoin
+         verifyFiniteJoin, verifyFiniteGet
        ) where
 
 import Control.LVish
@@ -49,8 +49,8 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 -- | Takes a join operation (e.g., for an instance of JoinSemiLattice
 -- and returns an error message if th lattice properties don't hold.
 -- Don't try this for an infinite lattice!
-verifyFiniteJoin :: (Eq a, Bounded a, Show a, Enum a) => (a -> a -> a) -> Maybe String
-verifyFiniteJoin join =
+verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
+verifyFiniteJoin allStates join =
   case (isCommutative, isAssociative, isIdempotent) of
     (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
     (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
@@ -64,7 +64,33 @@ verifyFiniteJoin join =
                      c <- allStates,
                      a `join` (b `join` c) /= (a `join` b) `join` c]
     isIdempotent = [a | a <- allStates, a `join` a /= a]
-    allStates = [minBound .. maxBound]
+
+-- | Verify that a blocking get is monotone in just the right way.
+--   This takes a designated bottom and top element.
+verifyFiniteGet :: (Eq a, Show a, JoinSemiLattice a,
+                    Eq b, Show b) =>
+                   [a] -> (b,b) -> (a -> b) -> Maybe String
+verifyFiniteGet allStates (bot,top) getter =
+   case (botBefore, constAfter) of
+     ((a,b):_, _) -> Just$ "violation! input "++ show a
+                      ++" unblocked get, but larger input"++show b++" did not."
+     (_, (a,b):_) -> Just$ "violation! value at "++ show a
+                      ++" was non-bottom ("++show (getter a)
+                      ++"), but then changed at "++show b++" ("++ show (getter b)++")"
+     ([],[])      -> Nothing
+  where
+   botBefore = [ (a,b)
+               | a <- allStates, b <- allStates
+               , a `joinLeq` b,  getter b == bot
+               , not (getter a == bot) ]
+   constAfter = [ (a,b)
+                | a <- allStates, b <- allStates
+                , a `joinLeq` b
+                , getter a /= bot
+                , getter a /= getter b
+                , getter b /= top -- It's ok to go to error.
+                ]
+
 
 -- | A new pure LVar populated with the provided initial state.
 newPureLVar :: BoundedJoinSemiLattice t =>
