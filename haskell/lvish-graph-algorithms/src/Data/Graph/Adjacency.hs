@@ -48,7 +48,7 @@ import qualified Data.Par.Range as R
 
 import Data.Word
 import Data.Char (isSpace)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
@@ -61,6 +61,8 @@ import qualified Data.Graph.Inductive.Graph as G
 import Data.Graph.Inductive.PatriciaTree (Gr)
 
 import System.IO.Posix.MMap (unsafeMMapFile)
+import System.Directory
+import System.Process
 import Test.HUnit
 import Prelude hiding (min,max,fst,last)
 
@@ -455,6 +457,36 @@ consume ox = do
   where
   fn (Single (MiddleFrag c x)) = putStrLn$ " <middle frag "++ show (c,x)++">"
   fn (Compound r uvs l) = putStrLn$ " <segment, lengths "++show (map U.length uvs)++", ends "++show(r,l)++">"
+
+
+-- Build a PBBS graph data file (specified by topo and size) if it doesn't already exist
+buildPBBSdat :: String -> Integer -> IO FilePath
+buildPBBSdat topo size = do
+  let existD d = do b <- doesDirectoryExist d
+                    return $ if b then (Just d) else Nothing
+  pbbsdirs <- fmap catMaybes $ mapM existD [ "../pbbs"
+                                           , "../../pbbs"
+                                           , "../../../pbbs"
+                                           , "../../../../pbbs"]
+  let pbbsroot = case pbbsdirs of
+                   [] -> error "PBBS dir not found!  Is the submodule checked out?"
+                   hd:_ -> hd
+      datroot = pbbsroot++"/breadthFirstSearch/graphData/data/"
+      file = case topo of
+               "grid" -> "3Dgrid_J_"++show size
+               "rmat" -> "rMatGraph_J_5_"++show size
+               "rand" -> "randLocalGraph_J_5_"++show size
+               _      -> error$"Unknown graph topology: "++topo
+  -- The PBBS Makefile knowns how to build the common graphs:
+  origdir <- getCurrentDirectory
+  setCurrentDirectory datroot
+  b <- doesFileExist file
+  unless b $ do
+    putStrLn "Input file does not exist!  Building..."
+    system$ "make "++file
+    return ()
+  setCurrentDirectory origdir
+  return (datroot ++ file)
 
 
 --------------------------------------------------------------------------------
