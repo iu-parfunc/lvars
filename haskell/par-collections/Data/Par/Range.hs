@@ -12,7 +12,7 @@
 module Data.Par.Range
   (
     -- * Describing ranges of integers
-    InclusiveRange(..), range, irange, zrange, fullpar,
+    Range(..), range, irange, zrange, fullpar,
 
     -- * Combined MapReduce operations on ranges
     pmapReduce
@@ -37,7 +37,7 @@ import Data.Splittable
 -- | An iteration space expressed as an inclusive range of integers,
 -- i.e. `InclusiveRange 1 3` includes both `1` and `3`.
 --
-data InclusiveRange =
+data Range =
      InclusiveRange
      { startInd  :: {-# UNPACK #-} !Int -- ^ Start, inclusive
      , endInd    :: {-# UNPACK #-} !Int -- ^ End, inclusive
@@ -45,7 +45,7 @@ data InclusiveRange =
      }
      deriving (Eq,Ord,Show,Read)
 
-instance Split InclusiveRange where
+instance Split Range where
   {-# INLINE split #-}
   split = splitPlease 2
   {-# INLINE splitPlease #-}  
@@ -77,28 +77,28 @@ instance Split InclusiveRange where
 -- \"auto-sequentializing\" iteration spaces that choose a threshold for bottoming
 -- out to sequential execution based on the size of the range and the number of
 -- processors.
-range :: Int -> Int -> InclusiveRange
+range :: Int -> Int -> Range
 range s e = mkInclusiveRange s (e-1)
 {-# INLINE range #-}
 
 -- | A simple shorthand for inclusive ranges from `n` to `m`.
-irange :: Int -> Int -> InclusiveRange
+irange :: Int -> Int -> Range
 irange s e = mkInclusiveRange s e
 {-# INLINE irange #-}
 
 -- | A simple shorthand for ranges from `0` to `n-1`
-zrange :: Int -> InclusiveRange
+zrange :: Int -> Range
 zrange n = mkInclusiveRange 0 (n-1)
 {-# INLINE zrange #-}
 
 -- | Tweak an iteration range to exploit all parallelism; never bottom-out to
 -- sequential loops.
-fullpar :: InclusiveRange -> InclusiveRange
+fullpar :: Range -> Range
 fullpar (InclusiveRange s e _) = InclusiveRange s e 1
 {-# INLINE fullpar #-}
 
 -- By default we produce a range that bottoms out to sequential.
-mkInclusiveRange :: Int -> Int -> InclusiveRange
+mkInclusiveRange :: Int -> Int -> Range
 mkInclusiveRange s e = InclusiveRange s e thresh
   where
     thresh = min max_iterations_seq chunksize
@@ -150,36 +150,18 @@ num_procs = unsafePerformIO getNumProcessors
 -- combine lower iteration results on the left and higher on the right.
 pmapReduce
    :: (NFData a, ParFuture p, FutContents p a)
-      => InclusiveRange   -- ^ iteration range over which to calculate
+      => Range   -- ^ iteration range over which to calculate
       -> (Int -> p a)     -- ^ compute one result
       -> (a -> a -> p a)  -- ^ combine two results 
       -> a                -- ^ initial result
       -> p a
 pmapReduce  = mkMapReduce spawn
- -- irng fn binop init = loop irng
- -- where
- --  spawner = spawn 
- --  mapred ac b = do x <- fn b;
- --                   result <- ac `binop` x
- --                   return result                            
- --  loop rng =
- --    case split rng of
- --      -- Sequential case:
- --      [InclusiveRange st en _] -> forAcc_ st en init mapred 
- --        -- foldM mapred init [min..max]
- --      [a,b] -> do iv <- spawner$ loop a
- --                  res2 <- loop b
- --                  res1 <- get iv
- --                  binop res1 res2
- --      ls -> do ivs <- mapM (spawner . loop) ls
- --               foldM (\ acc iv -> get iv >>= binop acc) init ivs
- --      [] -> return init
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
 pmapReduce_
    :: (ParFuture p, FutContents p a)
-      => InclusiveRange   -- ^ iteration range over which to calculate
+      => Range   -- ^ iteration range over which to calculate
       -> (Int -> p a)     -- ^ compute one result
       -> (a -> a -> p a)  -- ^ combine two results 
       -> a                -- ^ initial result
@@ -188,7 +170,7 @@ pmapReduce_ = mkMapReduce spawn_
 
 {-# INLINE mkMapReduce #-}
 mkMapReduce :: ParFuture m => (m t -> m (Future m t)) ->
-               InclusiveRange -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
+               Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
 mkMapReduce spawner irng fn binop init = loop irng
  where
   mapred ac b = do x <- fn b;
