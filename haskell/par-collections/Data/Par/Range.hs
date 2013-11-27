@@ -2,17 +2,15 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-{-| 
-    A collection of useful parallel combinators based on top of a 'Par' monad.
+{-|
 
-    In particular, this module provides higher order functions for
-     traversing data structures in parallel.  
+A mechanism to describe iteration spaces supporting parallel execution.
 
 -}
 
 module Data.Par.Range
   (
-    -- * Describing ranges of integers
+    -- * Constructing iteration spaces
     Range(..), range, irange, zrange, fullpar,
 
     -- * Combined MapReduce operations on ranges
@@ -24,26 +22,32 @@ where
 import Control.DeepSeq
 import Data.Traversable ()
 import Control.Monad as M hiding (mapM, sequence, join)
-import GHC.Conc (numCapabilities, getNumProcessors)
+import GHC.Conc (getNumProcessors)
 
 import Control.Par.Class
 import Data.Splittable
 import Prelude hiding (init,max,sequence, head,tail)
 
 import System.IO.Unsafe (unsafePerformIO)
-import Data.Splittable
+import qualified Data.Par as P
 
 -- --------------------------------------------------------------------------------
 
 -- | An iteration space expressed as an inclusive range of integers,
 -- i.e. `InclusiveRange 1 3` includes both `1` and `3`.
 --
+--   An iteration space also includes information that determines splitting behavior
+--   (e.g. threshold to bottom out to sequential execution).
 data Range =
      InclusiveRange
      { startInd  :: {-# UNPACK #-} !Int -- ^ Start, inclusive
      , endInd    :: {-# UNPACK #-} !Int -- ^ End, inclusive
      , seqThresh :: {-# UNPACK #-} !Int -- ^ For ranges less than or equal to this, switch to sequential execution.
      }
+--     | TiledRange -- Sequential spawning of tiles rather than tree-spawning.
+--                     This creates more "left-biased" executions.
+--                     (Tiles internally are just InclusiveRange's)
+--     | ??
      deriving (Eq,Ord,Show,Read)
 
 instance Split Range where
@@ -67,8 +71,10 @@ instance Split Range where
         let offset = start + (i * portion) + remain
         in (InclusiveRange offset (offset + portion - 1) thresh)
 
+--  splitPlease pieces rng@(TiledRange start end thresh) 
+
 instance Generator Range Int where
-  foldrM fn inita (InclusiveRange st en thresh) =
+  foldrM fn inita (InclusiveRange st en _thresh) =
     forAcc_ st en inita fn
     
 
@@ -160,7 +166,8 @@ pmapReduce
       -> (a -> a -> p a)  -- ^ combine two results 
       -> a                -- ^ initial result
       -> p a
-pmapReduce  = mkMapReduce spawn
+-- pmapReduce = P.pmapReduce 
+pmapReduce = mkMapReduce spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.

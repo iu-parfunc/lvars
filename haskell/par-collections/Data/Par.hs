@@ -6,28 +6,27 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| 
-    A collection of useful parallel combinators based on top of a 'Par' monad.
 
-    In particular, this module provides higher order functions for
-     traversing data structures in parallel.  
+A collection of useful parallel combinators based on top of a 'Par' monad.
+Specifically, this module provides higher order functions for traversing data
+structures in parallel.
 
 -}
 
 module Data.Par
   (
-    -- * Naive parallel maps on traversable structures.
-    
-    -- | Because these operations assume only `Traversable`, the best they can do is
-    -- to fork one parallel computation per element.
-    parMap, parMapM, parMapM_
-
-    -- * More efficient, balanced parallel traversals for splittable structures                     
+    -- * Efficient, balanced parallel traversals for splittable structures                     
 
     -- | These operations require an instance of `Data.Splittable.Split`, but in
     -- return they can perform more balanced traversals that are more tolerant of
     -- fine-granularity.
-                     
-    -- TODO: 
+    pmapReduce, pmapReduce_, pforEach,
+                             
+    -- * Naive parallel maps on traversable structures.
+    
+    -- | Because these operations assume only `Traversable`, the best they can do is
+    -- to fork one parallel computation per element.
+    pmap, ptraverse, ptraverse_
   )
 where 
 
@@ -49,38 +48,34 @@ import Data.Splittable as Sp (Split(..), Generator(..))
 -- in parallel (fully evaluating the results), and returns a new data
 -- structure containing the results.
 --
--- > parMap f xs = mapM (spawnP . f) xs >>= mapM get
+-- > pmap f xs = mapM (spawnP . f) xs >>= mapM get
 --
--- @parMap@ is commonly used for lists, where it has this specialised type:
+-- @pmap@ is commonly used for lists, where it has this specialised type:
 --
--- > parMap :: NFData b => (a -> b) -> [a] -> Par [b]
+-- > pmap :: NFData b => (a -> b) -> [a] -> Par [b]
 --
-parMap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
+-- But note that for efficient parallelism you want balanced task trees, not "one at
+-- a time" parallel tasks.  Thus look at `pmapReduce` and friends.
+pmap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
           (a -> b) -> t a -> p (t b)
-{-# INLINE parMap #-}
-parMap f xs = mapM (spawnP . f) xs >>= mapM get
-
--- --  A variant that only evaluates to weak-head-normal-form.
--- parMap_ :: (Traversable t, ParFuture p, FutContents p b) =>
---           (a -> b) -> t a -> p (t b)
--- {-# INLINE parMap #-}
--- parMap_ f xs = mapM (spawnP . f) xs >>= mapM get
+{-# INLINE pmap #-}
+pmap f xs = mapM (spawnP . f) xs >>= mapM get
 
 
--- | Like 'parMap', but the function is a @Par@ monad operation.
+-- | Like 'pmap', but the function is a @Par@ monad operation.
 --
--- > parMapM f xs = mapM (spawn . f) xs >>= mapM get
+-- > ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 --
-parMapM :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
+ptraverse :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
            (a -> p b) -> t a -> p (t b)
-{-# INLINE parMapM #-}           
-parMapM f xs = mapM (spawn . f) xs >>= mapM get
+{-# INLINE ptraverse #-}           
+ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 
 -- | A variant that only evaluates to weak-head-normal-form.
-parMapM_ :: (Traversable t, ParFuture p, FutContents p b) =>
+ptraverse_ :: (Traversable t, ParFuture p, FutContents p b) =>
            (a -> p b) -> t a -> p (t b)
-{-# INLINE parMapM_ #-}
-parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
+{-# INLINE ptraverse_ #-}
+ptraverse_ f xs = mapM (spawn_ . f) xs >>= mapM get
 
 
 -- TODO: parBuffer -- enable signaling with a counter?
@@ -88,28 +83,6 @@ parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
 -- -----------------------------------------------------------------------------
 -- Parallel maps over splittable data structures
 -- -----------------------------------------------------------------------------
-
--- pmap :: (Splittable a) => (a -> b) -> a -> b
-
--- pmap :: (Functor f, Splittable (f a)) => (a -> b) -> f a -> f b
-
--- pmapSplit
-
-{-
-pmapReduce_
-   :: (ParFuture p, FutContents p a)
-      => Range   -- ^ iteration range over which to calculate
-      -> (Int -> p a)     -- ^ compute one result
-      -> (a -> a -> p a)  -- ^ combine two results 
-      -> a                -- ^ initial result
-      -> p a
-pmapReduce_ = mkMapReduce spawn_
--}
-
-{-# INLINE mkMapReduce #-}
--- mkMapReduce :: (Generator c e, ParFuture m) =>
---                (m t -> m (Future m t)) ->
---                Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
 
 -- | Computes a binary map\/reduce over a data source.  The input is recursively
 -- split into two, the result for each half is computed in parallel, and then the two
@@ -119,15 +92,17 @@ pmapReduce_ = mkMapReduce spawn_
 --
 -- >  foldl (+) 0 (map (^2) [1..10^6])
 --
+-- > import Data.Par.Range (irange)
+-- >  ...
 -- > parMapReduce (irange 1 (10^6))
 -- >        (\x -> return (x^2))
 -- >        (\x y -> return (x+y))
 -- >        0
 --
 -- If an automatic threshold is being used in the underlying ranges, answers may vary
--- on different machines.  But note that this function does NOT require a commutative
--- combining function.  Commutativity, however, is not required.  This will always
--- combine lower iteration results on the left and higher on the right.
+-- on different machines if the reduce function is not associative.  But even then,
+-- platform portability does NOT require a commutative reduce function.  This combinator
+-- will always fold earlier results on the left and later on the right.
 pmapReduce :: forall c e m a t .
       (Split c, Generator c e, ParFuture m, FutContents m a, NFData a)
       => c                -- ^ element generator to consume
@@ -135,8 +110,11 @@ pmapReduce :: forall c e m a t .
       -> (a -> a -> m a)  -- ^ combine two results 
       -> a                -- ^ initial accumulator value
       -> m a
+{-# INLINE pmapReduce #-}      
 pmapReduce = mkMapReduce spawn
 
+-- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
+-- the folded accumulators.
 pmapReduce_ :: forall c e m a t .
       (Split c, Generator c e, ParFuture m, FutContents m a)
       => c                -- ^ element generator to consume
@@ -144,9 +122,17 @@ pmapReduce_ :: forall c e m a t .
       -> (a -> a -> m a)  -- ^ combine two results 
       -> a                -- ^ initial accumulator value
       -> m a
+{-# INLINE pmapReduce_ #-}      
 pmapReduce_ = mkMapReduce spawn_
   
-
+-- | Execute a side-effect in parallel for each element generated.  This is
+--   synchronous; that is, it does not return until all of the actions are executed.
+pforEach :: (Split c, Generator c e, ParFuture m, FutContents m ())
+      => c                -- ^ element generator to consume
+      -> (e -> m ())       -- ^ compute one result
+      -> m ()
+{-# INLINE pforEach #-}
+pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
 
 -- | Make a parallel map-reduce function given a custom
 --   function for spawning work.
@@ -159,6 +145,7 @@ mkMapReduce
       -> (a -> a -> m a)  -- ^ combine two results 
       -> a                -- ^ initial accumulator value
       -> m a
+{-# INLINE mkMapReduce #-}
 mkMapReduce spawner genc fn binop init = loop genc
  where
   mapred :: a -> e -> m a 
