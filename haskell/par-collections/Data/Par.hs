@@ -37,6 +37,7 @@ import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
+import Data.Splittable
 
 
 -- -----------------------------------------------------------------------------
@@ -88,6 +89,9 @@ parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
 -- Parallel maps over splittable data structures
 -- -----------------------------------------------------------------------------
 
+-- pmap :: (Splittable a) => (a -> b) -> a -> b
+
+-- pmap :: (Functor f, Splittable (f a)) => (a -> b) -> f a -> f b
 
 
 
