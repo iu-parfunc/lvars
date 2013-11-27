@@ -3,6 +3,7 @@
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-| 
     A collection of useful parallel combinators based on top of a 'Par' monad.
@@ -37,7 +38,7 @@ import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
-import Data.Splittable
+import Data.Splittable as Sp (Split(..), Generator(..)) 
 
 
 -- -----------------------------------------------------------------------------
@@ -84,7 +85,6 @@ parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
 
 -- TODO: parBuffer -- enable signaling with a counter?
 
-
 -- -----------------------------------------------------------------------------
 -- Parallel maps over splittable data structures
 -- -----------------------------------------------------------------------------
@@ -93,6 +93,90 @@ parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
 
 -- pmap :: (Functor f, Splittable (f a)) => (a -> b) -> f a -> f b
 
-
-
 -- pmapSplit
+
+{-
+pmapReduce_
+   :: (ParFuture p, FutContents p a)
+      => Range   -- ^ iteration range over which to calculate
+      -> (Int -> p a)     -- ^ compute one result
+      -> (a -> a -> p a)  -- ^ combine two results 
+      -> a                -- ^ initial result
+      -> p a
+pmapReduce_ = mkMapReduce spawn_
+-}
+
+{-# INLINE mkMapReduce #-}
+-- mkMapReduce :: (Generator c e, ParFuture m) =>
+--                (m t -> m (Future m t)) ->
+--                Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
+
+-- | Computes a binary map\/reduce over a data source.  The input is recursively
+-- split into two, the result for each half is computed in parallel, and then the two
+-- results are combined. A sequential loop is used if the splitting bottoms out.
+--
+-- For example, the following is a parallel implementation of
+--
+-- >  foldl (+) 0 (map (^2) [1..10^6])
+--
+-- > parMapReduce (irange 1 (10^6))
+-- >        (\x -> return (x^2))
+-- >        (\x y -> return (x+y))
+-- >        0
+--
+-- If an automatic threshold is being used in the underlying ranges, answers may vary
+-- on different machines.  But note that this function does NOT require a commutative
+-- combining function.  Commutativity, however, is not required.  This will always
+-- combine lower iteration results on the left and higher on the right.
+pmapReduce :: forall c e m a t .
+      (Split c, Generator c e, ParFuture m, FutContents m a, NFData a)
+      => c                -- ^ element generator to consume
+      -> (e -> m a)       -- ^ compute one result
+      -> (a -> a -> m a)  -- ^ combine two results 
+      -> a                -- ^ initial accumulator value
+      -> m a
+pmapReduce = mkMapReduce spawn
+
+pmapReduce_ :: forall c e m a t .
+      (Split c, Generator c e, ParFuture m, FutContents m a)
+      => c                -- ^ element generator to consume
+      -> (e -> m a)       -- ^ compute one result
+      -> (a -> a -> m a)  -- ^ combine two results 
+      -> a                -- ^ initial accumulator value
+      -> m a
+pmapReduce_ = mkMapReduce spawn_
+  
+
+
+-- | Make a parallel map-reduce function given a custom
+--   function for spawning work.
+mkMapReduce 
+   :: forall c e m a t .
+      (Split c, Generator c e, ParFuture m, FutContents m a)
+      => (m a -> m (Future m a)) -- ^ Spawn function
+      -> c                -- ^ element generator to consume
+      -> (e -> m a)       -- ^ compute one result
+      -> (a -> a -> m a)  -- ^ combine two results 
+      -> a                -- ^ initial accumulator value
+      -> m a
+mkMapReduce spawner genc fn binop init = loop genc
+ where
+  mapred :: a -> e -> m a 
+  mapred ac b = do x <- fn b;
+                   result <- ac `binop` x
+                   return result
+  loop :: c -> m a
+  loop gen =
+    case split gen of
+      -- Sequential case:
+      [seqchunk] -> Sp.foldrM mapred init seqchunk
+        -- foldM mapred init [min..max]
+      [a,b] -> do iv <- spawner$ loop a
+                  res2 <- loop b
+                  res1 <- get iv
+                  binop res1 res2
+      ls@(_:_:_) ->
+        do ivs <- mapM (spawner . loop) ls
+           foldM (\ acc iv -> get iv >>= binop acc) init ivs
+      [] -> return init
+

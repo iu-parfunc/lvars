@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 {-| 
     A collection of useful parallel combinators based on top of a 'Par' monad.
@@ -15,7 +16,7 @@ module Data.Par.Range
     Range(..), range, irange, zrange, fullpar,
 
     -- * Combined MapReduce operations on ranges
-    pmapReduce
+    pmapReduce, pmapReduce_
 --    parFor
   )
 where 
@@ -66,6 +67,10 @@ instance Split Range where
         let offset = start + (i * portion) + remain
         in (InclusiveRange offset (offset + portion - 1) thresh)
 
+instance Generator Range Int where
+  foldrM fn inita (InclusiveRange st en thresh) =
+    forAcc_ st en inita fn
+    
 
 -- | A range of integers.  This follows the standard for for-loops in imperative
 -- languages: inclusive start, exclusive end.
@@ -185,10 +190,9 @@ mkMapReduce spawner irng fn binop init = loop irng
                   res2 <- loop b
                   res1 <- get iv
                   binop res1 res2
-      ls -> do ivs <- mapM (spawner . loop) ls
-               foldM (\ acc iv -> get iv >>= binop acc) init ivs
+      ls@(_:_:_) -> do ivs <- mapM (spawner . loop) ls
+                       foldM (\ acc iv -> get iv >>= binop acc) init ivs
       [] -> return init
-
 
 
 {-
