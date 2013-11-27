@@ -31,12 +31,15 @@ import Control.LVish.Internal
 import Data.IORef
 import qualified Control.LVish.SchedIdempotent as LI 
 import Algebra.Lattice
-import           GHC.Prim (unsafeCoerce#)
-
+import GHC.Prim (unsafeCoerce#)
+import System.IO.Unsafe (unsafePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
 newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
+
+instance Show a => Show (PureLVar Frzn a) where
+  show (PureLVar lv) = show$ unsafePerformIO$ readIORef$ state lv
 
 -- data PureLVar s t = BoundedJoinSemiLattice t => PureLVar (LVar s (IORef t) t)
 
