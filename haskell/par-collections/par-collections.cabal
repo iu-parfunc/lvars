@@ -32,7 +32,6 @@ Library
   Exposed-modules:
      Data.Par
      Data.Par.Range
-     Data.Splittable
      
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
@@ -42,6 +41,10 @@ Library
                , mtl          >= 2.0
                , transformers >= 0.2
                , par-classes  >= 1.0
+
+               -- These are so we can provide instances for existing collections:
+               , primitive    >= 0.5  && < 0.6
+               , vector       >= 0.10 && < 0.11
 
   ghc-options: -O2
   Other-modules:

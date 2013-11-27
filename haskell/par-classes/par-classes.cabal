@@ -1,9 +1,10 @@
 Name:                par-classes
-Version:             1.0
+Version:             1.0.1
 Synopsis:            Type classes providing a general interface to various @Par@ monads.
 
 -- Version history:
 --  1.0      : Replacing old 'abstract-par' package with this new, extended version.
+--  1.0.1    : Add Data.Splittable
 
 Description:
   A @Par@ monad offers a parallel programming API based on dataflow
@@ -35,12 +36,13 @@ Library
     subdir:   haskell/par-classes
 
   Exposed-modules: 
-           -- A class generalizing different levels of monad-par functionality:
+           -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
+           Data.Splittable
 
+  -- This needs to stay low-dependencies!!  Interfaces only.
   Build-depends: base >= 4 && < 5
-               , deepseq >= 1.1, ghc-prim
-               -- TEMP: for ghc-mod
---               , lvish, monad-par, ghc-prim, mtl
+               , deepseq >= 1.1
+               , ghc-prim >= 0.3
 
