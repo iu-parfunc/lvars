@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification, GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | An implementation of concurrent finite maps based on skip lists.  Only
 -- supports lookup and insertions, not modifications or removals.
@@ -44,7 +45,7 @@ import Prelude hiding (map)
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
 -- level in the skip list.
 data SLMap_ k v t where
-  Bottom :: LM.LMap k v -> SLMap_ k v (LM.LMap k v)
+  Bottom :: LM.LMap k v                      -> SLMap_ k v (LM.LMap k v)
   Index  :: LM.LMap k (t, v) -> SLMap_ k v t -> SLMap_ k v (LM.LMap k (t, v))
 
 -- The complete multi-level SLMap always keeps a pointer to the bottom level (the
@@ -53,7 +54,9 @@ data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
 
 -- | A portion of an SLMap between two keys.
 --   (If the upper-bound is missing, that means "go to the end".)
-data SLMapSlice k v = SLice (SLMap k v) !k !(Maybe k)
+data SLMapSlice k v = Slice (SLMap k v)
+                      -- !k -- We don't really need the lower bound.
+                      !(Maybe k) -- ^ Upper bound.
 
 -- | Physical identity
 instance Eq (SLMap k v) where
@@ -211,9 +214,52 @@ counts_ (Index m slm) = do
 
 -- TODO: provide a balanced traversal / fold:
 
--- | Create a slice corresponding to the entire map.
-toSlice :: SLMap k v -> SLMapSlice k v
-toSlice = undefined
+-- | Create a slice corresponding to the entire (non-empty) map.
+toSlice :: SLMap k v -> IO (SLMapSlice k v)
+toSlice mp@(SLMap slm lmbot) = return $! Slice mp Nothing
+  -- do x <- LM.head lmbot
+  --    case x of
+  --      Nothing -> error "toSlice: cannot accept empty map."
+  --      Just h  -> return $! Slice mp h Nothing
 
-splitSlice :: SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
-splitSlice = undefined
+-- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
+-- two slices, this retruns Nothing.
+splitSlice :: forall k v . Eq k =>
+--              SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
+              SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
+splitSlice (Slice (SLMap index lmbot) mend) = do
+  loop index
+  where
+    loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
+    loop (Bottom lm) = do
+      lm' <- readIORef lm
+      res <- LM.halve mend lm'
+      case res of
+        Nothing -> return $! Nothing
+        Just (lenL, lenR, tlseg) -> do
+          -- We don't really want to allocate just for slicing... but alas we need
+          -- new IORef boxes here:
+          tlboxed <- newIORef tlseg
+          let (LM.Node tlhead _ _) = tlseg
+              rmap   = SLMap (Bottom tlboxed) tlboxed
+              rslice = Slice rmap mend
+              lslice = Slice (SLMap (Bottom lm) lm) (Just tlhead)
+          return $! Just $! (lslice, rslice)
+
+    loop orig@(Index m slm) = do
+      indm <- readIORef m
+      -- Halve *this* level of the index, and use that as a fast way to split everything below.
+      res <- LM.halve mend indm
+      case res of
+        -- This level isn't big enough to split, keep going down.  Note that we don't
+        -- reconstruct the higher level, for splitting we don't care about it.
+        Nothing -> loop slm
+        Just (lenL, lenR, tlseg:: LM.LMList k (t2,v)) -> do
+          -- Here we have it: two pieces that we can return as slices!
+          tlboxed <- newIORef tlseg
+          let (LM.Node tlhead _ _) = tlseg
+              rmap   = SLMap undefined lmbot
+              rslice :: SLMapSlice k v 
+              rslice = Slice rmap mend
+              lslice = Slice (SLMap orig lmbot) (Just tlhead)
+          return $! Just $! (lslice, rslice)

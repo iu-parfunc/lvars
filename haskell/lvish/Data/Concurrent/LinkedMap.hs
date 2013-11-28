@@ -16,8 +16,9 @@
 -- data structures, e.g. SkipListMap.
 
 module Data.Concurrent.LinkedMap (
-  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert,
-  foldlWithKey, map, reverse,
+  LMap(), LMList(..),
+  newLMap, Token(), value, find, FindResult(..), tryInsert,
+  foldlWithKey, map, reverse, head,
   
   -- * Utilities for splitting/slicing
   halve, dropUntil
@@ -29,7 +30,7 @@ import Data.Atomics
 import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                        -- to use it.
 import Control.Monad.IO.Class
-import Prelude hiding (reverse, map)
+import Prelude hiding (reverse, map, head)
 
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
@@ -120,14 +121,24 @@ reverse mp = liftIO . newIORef =<< loop Empty mp
           r <- liftIO (newIORef acc)
           loop (Node k v r) next
 
+head :: LMap k v -> IO (Maybe k)
+head lm = do
+  x <- readIORef lm
+  case x of
+    Empty      -> return Nothing
+    Node k _ _ -> return $! Just k
+
 -- | Attempt to split into two halves.
---   If there is only one element, then return Nothing.
---   If there are more, return the number of elements in the first half
---   plus a pointer into the middle that represents the second half.
---
+--    
 --   This optionally takes an upper bound key, which is treated as an alternate
 --   end-of-list signifier.
-halve :: Eq k => Maybe k -> LMList k v -> IO (Maybe (Int, LMList k v))
+--
+--   Result: If there is only one element, then return Nothing.  If there are more,
+--   return the number of elements in the first and second halves, plus a pointer to
+--   the beginning of the second half.  It is a contract of this function that the
+--   two Ints returned are non-zero.
+--
+halve :: Eq k => Maybe k -> LMList k v -> IO (Maybe (Int, Int, LMList k v))
 {-# INLINE halve #-}
 halve endKey ls = loop 0 ls ls
   where
@@ -138,11 +149,11 @@ halve endKey ls = loop 0 ls ls
          Nothing -> False
       
     loop len tort hare | isEnd hare =
-      return $! Just (len, tort)
+      return $! Just (len, len, tort)
     loop len tort@(Node _ _ next1) (Node k v next2) = do 
       next2' <- readIORef next2
       case next2' of
-        Empty -> return $! Just (len, tort)
+        Empty -> return $! Just (len, len+1, tort)
         Node _ _ next3 -> do next1' <- readIORef next1
                              next3' <- readIORef next3
                              loop (len+1) next1' next3'
