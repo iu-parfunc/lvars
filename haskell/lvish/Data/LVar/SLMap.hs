@@ -74,6 +74,7 @@ import           Prelude
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
+import qualified Data.Splittable as Sp
 #endif
 
 ------------------------------------------------------------------------------
@@ -129,6 +130,11 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
+#ifdef GENERIC_PAR
+instance Sp.Split (IMap k Frzn a) where
+--  split = error "FINISHME - "
+#endif  
+  
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels

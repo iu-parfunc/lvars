@@ -17,7 +17,11 @@
 
 module Data.Concurrent.LinkedMap (
   LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert,
-  foldlWithKey, map, reverse)
+  foldlWithKey, map, reverse,
+  
+  -- * Utilities for splitting/slicing
+  halve, dropUntil
+  )
 where
   
 import Data.IORef
@@ -115,3 +119,39 @@ reverse mp = liftIO . newIORef =<< loop Empty mp
         Node k v next -> do
           r <- liftIO (newIORef acc)
           loop (Node k v r) next
+
+-- | Attempt to split into two halves.
+--   If there is only one element, then return Nothing.
+--   If there are more, return the number of elements in the first half
+--   plus a pointer into the middle that represents the second half.
+--
+--   This optionally takes an upper bound key, which is treated as an alternate
+--   end-of-list signifier.
+halve :: Eq k => Maybe k -> LMList k v -> IO (Maybe (Int, LMList k v))
+{-# INLINE halve #-}
+halve endKey ls = loop 0 ls ls
+  where
+    isEnd Empty = True
+    isEnd (Node k _ _) =
+       case endKey of
+         Just ke -> k == ke
+         Nothing -> False
+      
+    loop len tort hare | isEnd hare =
+      return $! Just (len, tort)
+    loop len tort@(Node _ _ next1) (Node k v next2) = do 
+      next2' <- readIORef next2
+      case next2' of
+        Empty -> return $! Just (len, tort)
+        Node _ _ next3 -> do next1' <- readIORef next1
+                             next3' <- readIORef next3
+                             loop (len+1) next1' next3'
+
+-- | Drop from the front of the list until the first key is equal or greater than the
+-- given key.
+dropUntil :: Ord k => k -> LMList k v -> IO (LMList k v)
+dropUntil _ Empty = return Empty
+dropUntil stop nd@(Node k v tl)
+  | stop <= k = return nd
+  | otherwise = do tl' <- readIORef tl
+                   dropUntil stop tl' 

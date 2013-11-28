@@ -34,6 +34,7 @@ import Control.LVish.MonadToss
 import Control.LVish (Par)
 
 import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!  FIXME.  We can't keep this from escaping.
+import Data.Maybe (fromMaybe)
 import Data.IORef
 import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
@@ -49,6 +50,10 @@ data SLMap_ k v t where
 -- The complete multi-level SLMap always keeps a pointer to the bottom level (the
 -- second field).
 data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
+
+-- | A portion of an SLMap between two keys.
+--   (If the upper-bound is missing, that means "go to the end".)
+data SLMapSlice k v = SLice (SLMap k v) !k !(Maybe k)
 
 -- | Physical identity
 instance Eq (SLMap k v) where
@@ -73,7 +78,7 @@ find_ :: Ord k => SLMap_ k v t -> Maybe t -> k -> IO (Maybe v)
 
 -- At the bottom level: just lift the find from LinkedMap
 find_ (Bottom m) shortcut k = do
-  searchResult <- LM.find (maybe m id shortcut) k
+  searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of
     LM.Found v      -> return $ Just v
     LM.NotFound tok -> return Nothing
@@ -81,7 +86,7 @@ find_ (Bottom m) shortcut k = do
 -- At an indexing level: attempt to use the index to shortcut into the level
 -- below.  
 find_ (Index m slm) shortcut k = do 
-  searchResult <- LM.find (maybe m id shortcut) k
+  searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of 
     LM.Found (_, v) -> 
       return $ Just v   -- the key is in the index itself; we're outta here
@@ -137,7 +142,7 @@ putIfAbsent_ :: (Ord k, MonadIO m) =>
 putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where 
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
-    searchResult <- liftIO $ LM.find (maybe m id shortcut) k
+    searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
     case searchResult of
       LM.Found v      -> return $ Found v
       LM.NotFound tok -> do
@@ -152,7 +157,7 @@ putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where
 -- At an index level; try to shortcut into the level below, while remembering
 -- where we were so that we can insert index nodes later on
 putIfAbsent_ (Index m slm) shortcut k vc coin install = do          
-  searchResult <- liftIO $ LM.find (maybe m id shortcut) k
+  searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
   case searchResult of 
     LM.Found (_, v) -> return $ Found v -- key is in the index; bail out
     LM.NotFound tok -> 
@@ -205,3 +210,10 @@ counts_ (Index m slm) = do
 
 
 -- TODO: provide a balanced traversal / fold:
+
+-- | Create a slice corresponding to the entire map.
+toSlice :: SLMap k v -> SLMapSlice k v
+toSlice = undefined
+
+splitSlice :: SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
+splitSlice = undefined
