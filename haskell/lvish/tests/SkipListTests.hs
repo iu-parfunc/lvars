@@ -15,51 +15,18 @@ import Test.Framework (Test, defaultMain, testGroup)
 import Test.Framework.TH (testGroupGenerator)
 
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import qualified Test.HUnit as HU
-import Control.Applicative
 import Control.Monad
 import Control.Concurrent
-import Control.Concurrent.MVar
 import GHC.Conc
-import Data.List (isInfixOf, intersperse)
-import qualified Data.Vector as V
-import qualified Data.Set as S
-import Data.IORef
-import Data.Time.Clock
-import System.Environment (getArgs)
-import System.IO
-import System.Exit
-import System.Random
 
-import Control.Exception (catch, evaluate, SomeException)
-
-import Data.Traversable (traverse)
-import qualified Data.Set as S
-import qualified Data.Map as M
 import Data.Word
-
-import qualified Data.LVar.Generic as G
-import qualified Data.LVar.NatArray as NA
-import Data.LVar.PureSet as IS
-import Data.LVar.PureMap as IM
-
-import qualified Data.LVar.SLMap as SM
-import qualified Data.LVar.SLSet as SS
-import Data.LVar.Memo  as Memo
-
-import qualified Data.LVar.IVar as IV
-import qualified Data.LVar.IStructure as ISt
-import qualified Data.LVar.Pair as IP
-
-import Control.LVish
-import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import qualified Control.LVish.Internal as I
+import Data.IORef
+import System.Random (random, mkStdGen)
 import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import qualified Control.LVish.SchedIdempotent as L
-
-import qualified Data.Concurrent.SNZI as SNZI
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
+
+import Debug.Trace
 
 import TestHelpers as T
 
@@ -88,15 +55,25 @@ slm1 = do
   SLM.putIfAbsent slm 1 $ return "World"
   Just s0 <- SLM.find slm 0
   Just s1 <- SLM.find slm 1
+  dbg <- SLM.debugShow (SLM.toSlice slm)
+--  trace dbg $ return ()
   return $ s0 ++ s1
   
 case_slm1 :: Assertion  
 case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
 
-slm2 :: IO Bool
-slm2 = do
+-- A number of insertions to test that is reasonable.
+mediumSize :: Int
+mediumSize = 10000
+
+expectedSum :: Word64
+expectedSum = (s * (s + 1)) `quot` 2
+  where s = fromIntegral mediumSize
+
+insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
+insertionTest chunks = do
   slm <- SLM.newSLMap 10
-  mvars <- replicateM numCapabilities $ do
+  mvars <- forM chunks $ \ (start,end) -> do
     mv <- newEmptyMVar
     forkWithExceptions forkIO "slm2 test thread" $ do
       rgen <- newIORef $ mkStdGen 0
@@ -105,19 +82,35 @@ slm2 = do
             let (b, g') = random g
             writeIORef rgen $! g'
             return b
-      nTimes 10000 $ \n -> SLM.putIfAbsentToss slm n (return n) flip
+
+      -- [for slm2] Iterating downward makes this take 1.2 seconds on 2+ threads:
+      -- T.forDown_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
+      -- But this in-order version is just as fast at -N1 and -N2!?! 
+      T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
       putMVar mv ()
     return mv  
   forM_ mvars takeMVar
-  -- cs <- SLM.counts slm
-  -- putStrLn $ show cs
-  SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
+  cs <- SLM.counts slm
+  putStrLn $ show cs
+  -- dbg <- SLM.debugShow (SLM.toSlice slm)  
+  -- trace dbg $ return ()  
+  matches <- SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
+  summed  <- SLM.foldlWithKey (\s _ v -> return $! s + fromIntegral v) 0 slm  
+  return (matches, summed)
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n
-  
-case_slm2 :: Assertion  
-case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" True
 
+-- Concurrent insertion of the same values:
+slm2 :: IO (Bool, Word64)
+slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
+case_slm2 :: Assertion  
+case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+
+-- Same, but in the opposite order:
+slm3 :: IO (Bool, Word64)
+slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
+case_slm3 :: Assertion 
+case_slm3 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
 
 --------------------------------------------------------------------------------
 
@@ -126,3 +119,45 @@ tests = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMain [tests]
+
+
+{-
+Development notes:
+
+[2013.11.29] {Adding to tests, encountered nondeterministic failure}
+--------------------------------------------------------------------
+
+This was on my laptop.  It looks like we got the wrong sum:
+
+    $ time ./SkipListTests.exe -t slm2 +RTS -N4 -s
+    SkipListTests:
+    [5,12,27,65,131,258,585,1285,2497,5001,3686]
+
+      slm2: [Failed]
+    test concurrent insertion for SkipListMap
+    expected: (True,50005000)
+     but got: (True,6795141)
+
+             Test Cases  Total
+     Passed  0           0
+     Failed  1           1
+     Total   1           1
+
+Currently I have to repeat hundreds of times to see it again:
+
+    expected: (True,50005000)
+     but got: (True,24777280)
+
+Ok, ChaseLev is off.  I don't think it's losing work because of a bug with that.
+
+Notice that it looks like a glitch with the last level of the skiplist, which ends up
+far too small.  The other levels look the right size.  The place it gets cut off,
+when it goes wrong, varies wildly:
+
+    SkipListTests:
+    [9,19,35,71,141,275,578,1269,2502,4986,532]
+    test concurrent insertion for SkipListMap
+    expected: (True,50005000)
+     but got: (True,141778)
+ 
+-}

@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, assertOr, timeOut,
+   nTimes, for_, forDown_, assertOr, timeOut,
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -287,3 +287,20 @@ nTimes :: Int -> (Int -> IO a) -> IO ()
 nTimes 0 _ = return ()
 nTimes n c = c n >> nTimes (n-1) c
 
+{-# INLINE for_ #-}
+-- | Inclusive/Inclusive
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) fn | start > end = forDown_ (end, start) fn
+for_ (start, end) fn = loop start
+  where
+  loop !i | i > end  = return ()
+          | otherwise = do fn i; loop (i+1)
+
+
+-- | Inclusive/Inclusive, iterate downward.
+forDown_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+forDown_ (start, end) _fn | start > end = error "forDown_: start is greater than end"
+forDown_ (start, end) fn = loop end
+  where
+  loop !i | i < start = return ()
+          | otherwise = do fn i; loop (i-1)

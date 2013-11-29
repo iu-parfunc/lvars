@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ParallelListComp #-}
 
 -- | An implementation of concurrent finite maps based on skip lists.  Only
 -- supports lookup and insertions, not modifications or removals.
@@ -21,8 +22,12 @@
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
-  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts
+  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts,
   -- map: is not exposed, because it has that FINISHME for now... [2013.10.01]
+  debugShow,
+
+  -- * Slicing SLMaps
+  SLMapSlice, toSlice, splitSlice
   )
 where
   
@@ -215,8 +220,11 @@ counts_ (Index m slm) = do
 -- TODO: provide a balanced traversal / fold:
 
 -- | Create a slice corresponding to the entire (non-empty) map.
-toSlice :: SLMap k v -> IO (SLMapSlice k v)
-toSlice mp@(SLMap slm lmbot) = return $! Slice mp Nothing
+toSlice :: SLMap k v -> SLMapSlice k v
+toSlice mp = Slice mp Nothing
+
+-- toSlice :: SLMap k v -> IO (SLMapSlice k v)
+-- toSlice mp@(SLMap slm lmbot) = 
   -- do x <- LM.head lmbot
   --    case x of
   --      Nothing -> error "toSlice: cannot accept empty map."
@@ -258,8 +266,45 @@ splitSlice (Slice (SLMap index lmbot) mend) = do
           -- Here we have it: two pieces that we can return as slices!
           tlboxed <- newIORef tlseg
           let (LM.Node tlhead _ _) = tlseg
-              rmap   = SLMap undefined lmbot
+              rmap   = SLMap (Index tlboxed slm) lmbot
               rslice :: SLMapSlice k v 
               rslice = Slice rmap mend
               lslice = Slice (SLMap orig lmbot) (Just tlhead)
           return $! Just $! (lslice, rslice)
+
+-- | Print a slice with each layer on a line.
+debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
+debugShow (Slice (SLMap index lmbot) mend) =
+  do lns <- loop index
+     let len = length lns
+     return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0..len-1] ]
+  where
+    endCheck = case mend of
+                 Just end -> \ k -> k < end
+                 Nothing  -> \ _ -> True
+    
+    loop :: SLMap_ k v t -> IO [String]
+    loop (Bottom lm) = do
+      ls <- LM.toList lm
+      return [ unwords $ [ show i++":"++show k++","++show v 
+                         | i <- [0::Int ..]
+                         | (k,v) <- ls 
+                         , endCheck k ] ]
+    loop (Index indm slm) = do
+      ls <- LM.toList indm
+      strs <- forM (zip [0..] ls) $ \ (ix, (key, (shortcut::t, val))) -> do
+        -- Peek at the next layer down:
+{-        
+        case (slm::SLMap_ k v t) of
+          Index (nxt::LM.LMap k (t2,v)) _ -> do
+--    Could not deduce (t3 ~ IORef (LM.LMList k (t3, v)))            
+            lmlst <- readIORef nxt
+            LM.findIndex lmlst lmlst
+            undefined
+--        Bottom x  -> x
+-}
+        if endCheck key
+         then return $ show ix++":"++show key++","++show val
+         else return ""
+      rest <- loop slm
+      return $ unwords strs : rest

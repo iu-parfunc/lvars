@@ -57,7 +57,7 @@ flag debug
 
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
-  default: True
+  default: False
 
 flag getonce
   description: Ensure that continuations of get run at most once 

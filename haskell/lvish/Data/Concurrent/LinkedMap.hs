@@ -18,7 +18,7 @@
 module Data.Concurrent.LinkedMap (
   LMap(), LMList(..),
   newLMap, Token(), value, find, FindResult(..), tryInsert,
-  foldlWithKey, map, reverse, head,
+  foldlWithKey, map, reverse, head, toList, findIndex,
   
   -- * Utilities for splitting/slicing
   halve, dropUntil
@@ -87,7 +87,7 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
 foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> LMap k v -> m a
-foldlWithKey f a m = do
+foldlWithKey f !a !m = do
   n <- liftIO $ readIORef m
   case n of
     Empty -> return a
@@ -128,6 +128,16 @@ head lm = do
     Empty      -> return Nothing
     Node k _ _ -> return $! Just k
 
+-- | Convert to a list
+toList :: LMap k v -> IO [(k,v)]
+toList lm = do
+  x <- readIORef lm
+  case x of
+    Empty       -> return []
+    Node k v tl -> do
+      ls <- toList tl
+      return $! (k,v) : ls 
+
 -- | Attempt to split into two halves.
 --    
 --   This optionally takes an upper bound key, which is treated as an alternate
@@ -166,3 +176,9 @@ dropUntil stop nd@(Node k v tl)
   | stop <= k = return nd
   | otherwise = do tl' <- readIORef tl
                    dropUntil stop tl' 
+
+-- | Given a pointer into the middle of the list, find how deep it is.
+-- findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
+findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)                   
+findIndex = undefined
+
