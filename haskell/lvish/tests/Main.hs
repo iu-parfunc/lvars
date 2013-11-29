@@ -12,7 +12,7 @@ import qualified MemoTests
 import qualified LVishAndIVar
 --import qualified ArrayTests
 import qualified LogicalTests
---import qualified SkipListTests
+import qualified SkipListTests
 --import qualified SNZITests
 import qualified MapTests
 import qualified SetTests

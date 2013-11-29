@@ -69,11 +69,11 @@ theEnv = unsafePerformIO getEnvironment
 -- configuration record, so that it can be changed programmatically.
 
 -- How many elements should each of the tests pump through the queue(s)?
-numElems :: Int
+numElems :: Maybe Int
 numElems = case lookup "NUMELEMS" theEnv of 
-             Nothing  -> 100 * 1000 -- 500000
+             Nothing  -> Nothing -- 100 * 1000 -- 500000
              Just str -> warnUsing ("NUMELEMS = "++str) $ 
-                         read str
+                         Just (read str)
 
 forkThread :: IO () -> IO ThreadId
 forkThread = case lookup "OSTHREADS" theEnv of 

@@ -64,7 +64,9 @@ case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "He
 
 -- A number of insertions to test that is reasonable.
 mediumSize :: Int
-mediumSize = 10000
+mediumSize = case numElems of
+               Just x -> x
+               Nothing -> 10000
 
 expectedSum :: Word64
 expectedSum = (s * (s + 1)) `quot` 2
