@@ -24,10 +24,10 @@
 module Data.Concurrent.SkipListMap (
   SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts,
   -- map: is not exposed, because it has that FINISHME for now... [2013.10.01]
-  debugShow,
+  debugShow, 
 
   -- * Slicing SLMaps
-  SLMapSlice, toSlice, splitSlice
+  SLMapSlice, toSlice, splitSlice, sliceSize
   )
 where
   
@@ -36,6 +36,7 @@ import System.Random
 import Control.Applicative ((<$>))
 import Control.Monad  
 import Control.Monad.IO.Class
+import Control.Exception (assert)
 import Control.LVish.MonadToss
 import Control.LVish (Par)
 
@@ -232,7 +233,7 @@ toSlice mp = Slice mp Nothing
 
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
-splitSlice :: forall k v . Eq k =>
+splitSlice :: forall k v . (Eq k, Show k) =>
 --              SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
               SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
 splitSlice (Slice (SLMap index lmbot) mend) = do
@@ -243,15 +244,21 @@ splitSlice (Slice (SLMap index lmbot) mend) = do
       lm' <- readIORef lm
       res <- LM.halve mend lm'
       case res of
-        Nothing -> return $! Nothing
-        Just (lenL, lenR, tlseg) -> do
+        Nothing -> return Nothing
+--          error "Halving the bottom failed!" 
+        Just (lenL, lenR, tlseg) ->
+          assert (lenL > 0) $ assert (lenR > 0) $ do            
           -- We don't really want to allocate just for slicing... but alas we need
           -- new IORef boxes here:
           tlboxed <- newIORef tlseg
+
+          tmp <- fmap length $ LM.toList tlboxed
+          putStrLn$ "Looping to split, tail len "++show tmp          
           let (LM.Node tlhead _ _) = tlseg
               rmap   = SLMap (Bottom tlboxed) tlboxed
               rslice = Slice rmap mend
               lslice = Slice (SLMap (Bottom lm) lm) (Just tlhead)
+          putStrLn$ "Split just before: "++show tlhead  
           return $! Just $! (lslice, rslice)
 
     loop orig@(Index m slm) = do
@@ -259,18 +266,34 @@ splitSlice (Slice (SLMap index lmbot) mend) = do
       -- Halve *this* level of the index, and use that as a fast way to split everything below.
       res <- LM.halve mend indm
       case res of
-        -- This level isn't big enough to split, keep going down.  Note that we don't
-        -- reconstruct the higher level, for splitting we don't care about it.
+        -- Case 1: This level isn't big enough to split, keep going down.  Note that we don't
+        -- reconstruct the higher level, for splitting we don't care about it:
         Nothing -> loop slm
         Just (lenL, lenR, tlseg:: LM.LMList k (t2,v)) -> do
           -- Here we have it: two pieces that we can return as slices!
           tlboxed <- newIORef tlseg
+
+          tmp <- fmap length $ LM.toList tlboxed
+          putStrLn$ "Looping to split, tail len "++show tmp
+          putStrLn$ " -> split sizes at this level"++show (lenL,lenR)
+          
           let (LM.Node tlhead _ _) = tlseg
               rmap   = SLMap (Index tlboxed slm) lmbot
               rslice :: SLMapSlice k v 
               rslice = Slice rmap mend
               lslice = Slice (SLMap orig lmbot) (Just tlhead)
+          putStrLn$ "Split just before key: "++show tlhead                
           return $! Just $! (lslice, rslice)
+
+-- | /O(N)/ measure the length of the bottom tier.
+sliceSize :: Ord k => SLMapSlice k v -> IO Int
+sliceSize (Slice (SLMap _ lmbot) mend) = do
+   ls <- LM.toList lmbot
+   return $! length [ k | (k,v) <- ls, endCheck k ] -- Inefficient.
+  where    
+    endCheck = case mend of
+                 Just end -> \ k -> k < end
+                 Nothing  -> \ _ -> True    
 
 -- | Print a slice with each layer on a line.
 debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
@@ -286,10 +309,12 @@ debugShow (Slice (SLMap index lmbot) mend) =
     loop :: SLMap_ k v t -> IO [String]
     loop (Bottom lm) = do
       ls <- LM.toList lm
-      return [ unwords $ [ show i++":"++show k++","++show v 
+      return [ unwords $ [ if endCheck k
+                           then show i++":"++show k++","++show v
+                           else "_"
                          | i <- [0::Int ..]
                          | (k,v) <- ls 
-                         , endCheck k ] ]
+                         ] ]
     loop (Index indm slm) = do
       ls <- LM.toList indm
       strs <- forM (zip [0..] ls) $ \ (ix, (key, (shortcut::t, val))) -> do
@@ -305,6 +330,6 @@ debugShow (Slice (SLMap index lmbot) mend) =
 -}
         if endCheck key
          then return $ show ix++":"++show key++","++show val
-         else return ""
+         else return "_"
       rest <- loop slm
       return $ unwords strs : rest

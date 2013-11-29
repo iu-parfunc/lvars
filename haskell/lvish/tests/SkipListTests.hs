@@ -91,8 +91,16 @@ insertionTest chunks = do
   forM_ mvars takeMVar
   cs <- SLM.counts slm
   putStrLn $ show cs
-  -- dbg <- SLM.debugShow (SLM.toSlice slm)  
-  -- trace dbg $ return ()  
+  when True $ do
+    let sl1 = SLM.toSlice slm
+    Just (sl2,sl3) <- SLM.splitSlice sl1    
+    dbg1 <- SLM.debugShow sl2
+    dbg2 <- SLM.debugShow sl3
+    sz2 <- SLM.sliceSize sl2
+    sz3 <- SLM.sliceSize sl3
+    putStrLn $ "HALF 1, sz "++ show sz2++":\n"++dbg1
+    putStrLn $ "HALF 2, sz "++ show sz3++":\n"++dbg2
+    
   matches <- SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
   summed  <- SLM.foldlWithKey (\s _ v -> return $! s + fromIntegral v) 0 slm  
   return (matches, summed)

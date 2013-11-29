@@ -30,6 +30,7 @@ import Data.Atomics
 import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                        -- to use it.
 import Control.Monad.IO.Class
+import Control.Exception (assert)
 import Prelude hiding (reverse, map, head)
 
 -- | A concurrent finite map, represented as a linked list
@@ -157,13 +158,15 @@ halve endKey ls = loop 0 ls ls
        case endKey of
          Just ke -> k == ke
          Nothing -> False
-      
+    emptCheck (0,l2,t) = return Nothing
+    emptCheck !x       = return $! Just x
+
     loop len tort hare | isEnd hare =
-      return $! Just (len, len, tort)
+      emptCheck (len, len, tort)
     loop len tort@(Node _ _ next1) (Node k v next2) = do 
       next2' <- readIORef next2
       case next2' of
-        Empty -> return $! Just (len, len+1, tort)
+        Empty -> emptCheck (len, len+1, tort)
         Node _ _ next3 -> do next1' <- readIORef next1
                              next3' <- readIORef next3
                              loop (len+1) next1' next3'
