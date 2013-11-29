@@ -83,9 +83,6 @@ insertionTest chunks = do
             writeIORef rgen $! g'
             return b
 
-      -- [for slm2] Iterating downward makes this take 1.2 seconds on 2+ threads:
-      -- T.forDown_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
-      -- But this in-order version is just as fast at -N1 and -N2!?! 
       T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
       putMVar mv ()
     return mv  
@@ -104,19 +101,19 @@ insertionTest chunks = do
 slm2 :: IO (Bool, Word64)
 slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
 case_slm2 :: Assertion  
-case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap (#2)" (True, expectedSum)
 
 -- Same, but in the opposite order:
 -- Takes much longer (in parallel)!! Why?
 slm3 :: IO (Bool, Word64)
 slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
 case_slm3 :: Assertion 
-case_slm3 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
 
 slm4 :: IO (Bool, Word64)
 slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
 case_slm4 :: Assertion 
-case_slm4 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
 
 
 
