@@ -107,10 +107,19 @@ case_slm2 :: Assertion
 case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
 
 -- Same, but in the opposite order:
+-- Takes much longer (in parallel)!! Why?
 slm3 :: IO (Bool, Word64)
 slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
 case_slm3 :: Assertion 
 case_slm3 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+
+slm4 :: IO (Bool, Word64)
+slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
+case_slm4 :: Assertion 
+case_slm4 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap" (True, expectedSum)
+
+
+
 
 --------------------------------------------------------------------------------
 

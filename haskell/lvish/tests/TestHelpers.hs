@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, for_, forDown_, assertOr, timeOut,
+   nTimes, for_, forDown_, assertOr, timeOut, splitRange, 
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -304,3 +304,24 @@ forDown_ (start, end) fn = loop end
   where
   loop !i | i < start = return ()
           | otherwise = do fn i; loop (i-1)
+
+
+-- | Split an inclusive range into N chunks.
+--   This may return less than the desired number of pieces if there aren't enough
+--   elements in the range.
+splitRange :: Int -> (Int,Int) -> [(Int,Int)]
+splitRange pieces (start,end)
+  | len < pieces = [ (i,i) | i <- [start .. end]]
+  | otherwise = chunks
+ where
+    len = end - start + 1 
+    chunks = map largepiece [0..remain-1] ++
+             map smallpiece [remain..pieces-1]
+    (portion, remain) = len `quotRem` pieces
+    largepiece i =
+        let offset = start + (i * (portion + 1))
+        in (offset, (offset + portion))
+    smallpiece i =
+        let offset = start + (i * portion) + remain
+        in (offset, (offset + portion - 1))
+
