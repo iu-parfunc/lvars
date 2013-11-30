@@ -58,10 +58,13 @@ data SLMap_ k v t where
 -- second field).
 data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
 
--- | A portion of an SLMap between two keys.
---   (If the upper-bound is missing, that means "go to the end".)
+-- | A portion of an SLMap between two keys.  If the upper-bound is missing, that
+--   means "go to the end".  The optional lower bound is used to "lazily" prune the
+--   fronts each layer.  The reason for this is that we don't want to reallocate an
+--   IORef spine and prematurely prune all lower layers IF we're simply going to
+--   split again before actually enumerating the contents.
 data SLMapSlice k v = Slice (SLMap k v)
-                      -- !k -- We don't really need the lower bound.
+                      !(Maybe k) -- ^ Lower bound.  
                       !(Maybe k) -- ^ Upper bound.
 
 -- | Physical identity
@@ -218,48 +221,29 @@ counts_ (Index m slm) = do
   return $ c:cs
 
 
--- TODO: provide a balanced traversal / fold:
-
 -- | Create a slice corresponding to the entire (non-empty) map.
 toSlice :: SLMap k v -> SLMapSlice k v
-toSlice mp = Slice mp Nothing
-
--- toSlice :: SLMap k v -> IO (SLMapSlice k v)
--- toSlice mp@(SLMap slm lmbot) = 
-  -- do x <- LM.head lmbot
-  --    case x of
-  --      Nothing -> error "toSlice: cannot accept empty map."
-  --      Just h  -> return $! Slice mp h Nothing
+toSlice mp = Slice mp Nothing Nothing
 
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
-splitSlice :: forall k v . (Eq k, Show k) =>
+splitSlice :: forall k v . (Ord k, Show k) =>
 --              SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
               SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
-splitSlice (Slice (SLMap index lmbot) mend) = do
+splitSlice (Slice (SLMap index lmbot) mstart mend) = do
   loop index
-  where
+  where    
     loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     loop (Bottom lm) = do
       lm' <- readIORef lm
-      res <- LM.halve mend lm'
+      lm'' <- case mstart of
+                Nothing -> return lm'
+                Just strtK -> LM.dropUntil strtK lm'
+      res <- LM.halve mend lm''
       case res of
         Nothing -> return Nothing
---          error "Halving the bottom failed!" 
-        Just (lenL, lenR, tlseg) ->
-          assert (lenL > 0) $ assert (lenR > 0) $ do            
-          -- We don't really want to allocate just for slicing... but alas we need
-          -- new IORef boxes here:
-          tlboxed <- newIORef tlseg
-
-          tmp <- fmap length $ LM.toList tlboxed
-          putStrLn$ "Looping to split, tail len "++show tmp          
-          let (LM.Node tlhead _ _) = tlseg
-              rmap   = SLMap (Bottom tlboxed) tlboxed
-              rslice = Slice rmap mend
-              lslice = Slice (SLMap (Bottom lm) lm) (Just tlhead)
-          putStrLn$ "Split just before: "++show tlhead  
-          return $! Just $! (lslice, rslice)
+        Just x -> dosplit (SLMap (Bottom lm) lm)
+                          (\ tlboxed -> SLMap (Bottom tlboxed) tlboxed) x
 
     loop orig@(Index m slm) = do
       indm <- readIORef m
@@ -269,35 +253,49 @@ splitSlice (Slice (SLMap index lmbot) mend) = do
         -- Case 1: This level isn't big enough to split, keep going down.  Note that we don't
         -- reconstruct the higher level, for splitting we don't care about it:
         Nothing -> loop slm
-        Just (lenL, lenR, tlseg:: LM.LMList k (t2,v)) -> do
-          -- Here we have it: two pieces that we can return as slices!
-          tlboxed <- newIORef tlseg
+        -- Case 2: Do the split but use the full lmbot on the right
+        -- (lazy pruning of the head elements):
+        Just x -> dosplit (SLMap orig lmbot)
+                          (\ tlboxed -> SLMap (Index tlboxed slm) lmbot) x 
 
+    -- Create the left and right slices when halving is successful.
+    dosplit :: SLMap k v -> (LM.LMap k tmp -> SLMap k v) -> 
+               (Int, Int, LM.LMList k tmp) ->
+               IO (Maybe (SLMapSlice k v, SLMapSlice k v))
+    dosplit lmap mkRight (lenL, lenR, tlseg) =
+      assert (lenL > 0) $ assert (lenR > 0) $ do 
+          -- We don't really want to allocate just for slicing... but alas we need new 
+          -- IORef boxes here.  We lazily prune the head of the lower levels, but we
+          -- don't want to throw away the work we've done traversing to this point in "loop":
+          tlboxed <- newIORef tlseg
           tmp <- fmap length $ LM.toList tlboxed
-          putStrLn$ "Looping to split, tail len "++show tmp
-          putStrLn$ " -> split sizes at this level"++show (lenL,lenR)
+          putStrLn$ "Loop done, got split, tail len "++show tmp
           
           let (LM.Node tlhead _ _) = tlseg
-              rmap   = SLMap (Index tlboxed slm) lmbot
-              rslice :: SLMapSlice k v 
-              rslice = Slice rmap mend
-              lslice = Slice (SLMap orig lmbot) (Just tlhead)
-          putStrLn$ "Split just before key: "++show tlhead                
+              rmap   = mkRight tlboxed 
+              rslice = Slice rmap (Just tlhead) mend
+              lslice = Slice lmap Nothing (Just tlhead)
+          putStrLn$ "Split just before: "++show tlhead  
           return $! Just $! (lslice, rslice)
+
 
 -- | /O(N)/ measure the length of the bottom tier.
 sliceSize :: Ord k => SLMapSlice k v -> IO Int
-sliceSize (Slice (SLMap _ lmbot) mend) = do
+sliceSize (Slice (SLMap _ lmbot) mstart mend) = do
    ls <- LM.toList lmbot
-   return $! length [ k | (k,v) <- ls, endCheck k ] -- Inefficient.
-  where    
+   -- We SHOULD use the index layers to shortcut to a start, then stop at the end.
+   return $! length [ k | (k,v) <- ls, strtCheck k, endCheck k ] -- Inefficient!
+  where
+    strtCheck = case mstart of
+                 Just strt -> \ k -> k >= strt
+                 Nothing   -> \ _ -> True
     endCheck = case mend of
                  Just end -> \ k -> k < end
                  Nothing  -> \ _ -> True    
 
 -- | Print a slice with each layer on a line.
 debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
-debugShow (Slice (SLMap index lmbot) mend) =
+debugShow (Slice (SLMap index lmbot) mstart mend) =
   do lns <- loop index
      let len = length lns
      return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0..len-1] ]
