@@ -19,6 +19,7 @@ import Control.Monad
 import Control.Concurrent
 import GHC.Conc
 
+import Data.Time.Clock
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
@@ -60,6 +61,14 @@ sliceCheck slm = do
   assertEqual "Splitting consvered size: " sz1 (sz2 + sz3)
   return () 
 
+timeit :: IO a -> IO a 
+timeit ioact = do 
+   start <- getCurrentTime
+   res <- ioact
+   end   <- getCurrentTime
+   putStrLn$ "SELFTIMED: " ++ show (diffUTCTime end start)
+   return res
+
 --------------------------------------------------------------------------------
 -- Tests for concurrent SkipLists
 --------------------------------------------------------------------------------
@@ -95,20 +104,22 @@ case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "He
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
   slm <- SLM.newSLMap 10
-  mvars <- forM chunks $ \ (start,end) -> do
-    mv <- newEmptyMVar
-    forkWithExceptions forkIO "slm2 test thread" $ do
-      rgen <- newIORef $ mkStdGen 0
-      let flip = do
-            g <- readIORef rgen
-            let (b, g') = random g
-            writeIORef rgen $! g'
-            return b
+  timeit $ do 
+     mvars <- forM chunks $ \ (start,end) -> do
+       mv <- newEmptyMVar
+       forkWithExceptions forkIO "slm2 test thread" $ do
+         rgen <- newIORef $ mkStdGen 0
+         let flip = do
+               g <- readIORef rgen
+               let (b, g') = random g
+               writeIORef rgen $! g'
+               return b
 
-      T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
-      putMVar mv ()
-    return mv  
-  forM_ mvars takeMVar
+         T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
+         putMVar mv ()
+       return mv  
+     forM_ mvars takeMVar
+  -- End timing.  Timing just the insertion phase.
   cs <- SLM.counts slm
   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
   sliceCheck slm    
