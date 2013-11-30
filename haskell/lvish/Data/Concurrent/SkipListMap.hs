@@ -268,14 +268,11 @@ splitSlice (Slice (SLMap index lmbot) mstart mend) = do
           -- IORef boxes here.  We lazily prune the head of the lower levels, but we
           -- don't want to throw away the work we've done traversing to this point in "loop":
           tlboxed <- newIORef tlseg
-          tmp <- fmap length $ LM.toList tlboxed
-          putStrLn$ "Loop done, got split, tail len "++show tmp
-          
+          tmp <- fmap length $ LM.toList tlboxed          
           let (LM.Node tlhead _ _) = tlseg
               rmap   = mkRight tlboxed 
               rslice = Slice rmap (Just tlhead) mend
               lslice = Slice lmap Nothing (Just tlhead)
-          putStrLn$ "Split just before: "++show tlhead  
           return $! Just $! (lslice, rslice)
 
 
@@ -300,22 +297,27 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
      let len = length lns
      return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0..len-1] ]
   where
+    startCheck = case mstart of
+                  Just start -> \ k -> k >= start
+                  Nothing  -> \ _ -> True    
     endCheck = case mend of
                  Just end -> \ k -> k < end
                  Nothing  -> \ _ -> True
-    
+
     loop :: SLMap_ k v t -> IO [String]
     loop (Bottom lm) = do
       ls <- LM.toList lm
-      return [ unwords $ [ if endCheck k
+      return [ unwords $ [ if endCheck k && startCheck k
                            then show i++":"++show k++","++show v
                            else "_"
                          | i <- [0::Int ..]
-                         | (k,v) <- ls 
+                         | (k,v) <- ls
+--                         , startCheck k
                          ] ]
     loop (Index indm slm) = do
       ls <- LM.toList indm
-      strs <- forM (zip [0..] ls) $ \ (ix, (key, (shortcut::t, val))) -> do
+      strs <- forM [ (i,tup) | i <- [0..] | tup@(k,_) <- ls ] $ -- , startCheck k
+              \ (ix, (key, (shortcut::t, val))) -> do
         -- Peek at the next layer down:
 {-        
         case (slm::SLMap_ k v t) of
@@ -326,8 +328,8 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
             undefined
 --        Bottom x  -> x
 -}
-        if endCheck key
-         then return $ show ix++":"++show key++","++show val
-         else return "_"
+         if endCheck key && startCheck key
+          then return $ show ix++":"++show key++","++show val
+          else return "_"
       rest <- loop slm
       return $ unwords strs : rest

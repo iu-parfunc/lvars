@@ -34,7 +34,7 @@ module Control.LVish.SchedIdempotent
     quiesce, quiesceAll,
 
     -- * Debug facilities
-    logStrLn, logLnAt_, dbgLvl,
+    logStrLn, logLnAt_, dbgLvl, printLog, 
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
@@ -150,7 +150,7 @@ dbgLvl = case lookup "DEBUG" theEnv of
        Just "0" -> defaultDbg
        Just s   ->
          case reads s of
-           ((n,_):_) -> trace (" [!] Responding to env Var: DEBUG="++show n) n
+           ((n,_):_) -> trace (" [!] LVish responding to env Var: DEBUG="++show n) n
            [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
 #else 
 dbgLvl = 0

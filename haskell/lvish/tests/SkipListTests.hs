@@ -22,7 +22,8 @@ import GHC.Conc
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions, printLog)
+import Control.LVish  (logDbgLn_)
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
@@ -31,7 +32,36 @@ import Debug.Trace
 import TestHelpers as T
 
 --------------------------------------------------------------------------------
--- TESTS FOR SKIPLIST
+-- Parameters and helpers
+--------------------------------------------------------------------------------
+
+-- A number of insertions to test that is reasonable.
+mediumSize :: Int
+mediumSize = case numElems of
+               Just x -> x
+               Nothing -> 10000
+
+expectedSum :: Word64
+expectedSum = (s * (s + 1)) `quot` 2
+  where s = fromIntegral mediumSize
+
+-- | An additional check to apply to any SLMs we generate.
+sliceCheck :: (Ord k, Show k, Show v) => SLM.SLMap k v -> IO ()
+sliceCheck slm = do 
+  let sl1 = SLM.toSlice slm
+  sz1 <- SLM.sliceSize sl1
+  Just (sl2,sl3) <- SLM.splitSlice sl1    
+  dbg1 <- SLM.debugShow sl2
+  dbg2 <- SLM.debugShow sl3
+  sz2 <- SLM.sliceSize sl2
+  sz3 <- SLM.sliceSize sl3
+  logDbgLn_ 5 $ "HALF 1, sz "++ show sz2++":\n"++dbg1
+  logDbgLn_ 5 $ "HALF 2, sz "++ show sz3++":\n"++dbg2
+  assertEqual "Splitting consvered size: " sz1 (sz2 + sz3)
+  return () 
+
+--------------------------------------------------------------------------------
+-- Tests for concurrent SkipLists
 --------------------------------------------------------------------------------
 
 lm1 :: IO (String)
@@ -56,21 +86,11 @@ slm1 = do
   Just s0 <- SLM.find slm 0
   Just s1 <- SLM.find slm 1
   dbg <- SLM.debugShow (SLM.toSlice slm)
---  trace dbg $ return ()
+  logDbgLn_ 1 dbg; printLog
   return $ s0 ++ s1
   
 case_slm1 :: Assertion  
 case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
-
--- A number of insertions to test that is reasonable.
-mediumSize :: Int
-mediumSize = case numElems of
-               Just x -> x
-               Nothing -> 10000
-
-expectedSum :: Word64
-expectedSum = (s * (s + 1)) `quot` 2
-  where s = fromIntegral mediumSize
 
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
@@ -90,19 +110,11 @@ insertionTest chunks = do
     return mv  
   forM_ mvars takeMVar
   cs <- SLM.counts slm
-  putStrLn $ show cs
-  when True $ do
-    let sl1 = SLM.toSlice slm
-    Just (sl2,sl3) <- SLM.splitSlice sl1    
-    dbg1 <- SLM.debugShow sl2
-    dbg2 <- SLM.debugShow sl3
-    sz2 <- SLM.sliceSize sl2
-    sz3 <- SLM.sliceSize sl3
-    putStrLn $ "HALF 1, sz "++ show sz2++":\n"++dbg1
-    putStrLn $ "HALF 2, sz "++ show sz3++":\n"++dbg2
-    
+  logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
+  sliceCheck slm    
   matches <- SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
-  summed  <- SLM.foldlWithKey (\s _ v -> return $! s + fromIntegral v) 0 slm  
+  summed  <- SLM.foldlWithKey (\s _ v -> return $! s + fromIntegral v) 0 slm
+  printLog
   return (matches, summed)
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n
