@@ -190,7 +190,7 @@ putIfAbsent_ (Index m slm) shortcut k vc coin install = do
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
 foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> SLMap k v -> m a
-foldlWithKey f a (SLMap _ lm) = LM.foldlWithKey f a lm
+foldlWithKey f a (SLMap _ lm) = LM.foldlWithKey liftIO f a lm
 
 -- | Create an identical copy of an (unchanging) SLMap with the keys unchanged and
 -- the values replaced by the result of applying the provided function.
@@ -213,10 +213,10 @@ counts (SLMap slm _) = counts_ slm
 
 counts_ :: SLMap_ k v t -> IO [Int]
 counts_ (Bottom m)    = do
-  c <- LM.foldlWithKey (\n _ _ -> return (n+1)) 0 m
+  c <- LM.foldlWithKey id (\n _ _ -> return (n+1)) 0 m
   return [c]
 counts_ (Index m slm) = do
-  c  <- LM.foldlWithKey (\n _ _ -> return (n+1)) 0 m
+  c  <- LM.foldlWithKey id (\n _ _ -> return (n+1)) 0 m
   cs <- counts_ slm
   return $ c:cs
 

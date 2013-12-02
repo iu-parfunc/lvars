@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A concurrent finite map represented as a single linked list.  
 --
@@ -87,14 +88,15 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
-foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> LMap k v -> m a
-foldlWithKey f !a !m = do
-  n <- liftIO $ readIORef m
+foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
+                (a -> k -> v -> m a) -> a -> LMap k v -> m a
+foldlWithKey liftIO f !a !m = do
+  n <- liftIO$ readIORef m
   case n of
     Empty -> return a
     Node k v next -> do
       a' <- f a k v
-      foldlWithKey f a' next
+      foldlWithKey liftIO f a' next
 
 
 -- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
@@ -102,7 +104,8 @@ foldlWithKey f !a !m = do
 -- same.
 map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
 map fn mp = do 
- tmp <- foldlWithKey (\ acc k v -> do
+ tmp <- foldlWithKey liftIO
+                     (\ acc k v -> do
                       r <- liftIO (newIORef acc)
                       return$! Node k (fn v) r)
                      Empty mp
