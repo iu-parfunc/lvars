@@ -64,8 +64,8 @@ data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
 --   IORef spine and prematurely prune all lower layers IF we're simply going to
 --   split again before actually enumerating the contents.
 data SLMapSlice k v = Slice (SLMap k v)
-                      !(Maybe k) -- ^ Lower bound.  
-                      !(Maybe k) -- ^ Upper bound.
+                      !(Maybe k) -- Lower bound.  
+                      !(Maybe k) -- Upper bound.
 
 -- | Physical identity
 instance Eq (SLMap k v) where

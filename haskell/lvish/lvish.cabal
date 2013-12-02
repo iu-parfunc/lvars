@@ -172,7 +172,7 @@ library
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
-    hs-source-dirs: tests/
+    hs-source-dirs: tests/ ./
     other-modules:  TestHelpers, 
                     LVishAndIVar,
                     ArrayTests,
