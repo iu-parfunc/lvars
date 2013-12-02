@@ -74,7 +74,7 @@ import           Prelude
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
-import qualified Data.Splittable as Sp
+import qualified Data.Splittable.Class as Sp
 #endif
 
 ------------------------------------------------------------------------------
@@ -130,18 +130,6 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
-#ifdef GENERIC_PAR
-instance Sp.Split (IMap k Frzn a) where
-  split (IMap lv) =
-    let slm = state lv 
-        slc = SLM.toSlice slm in
-    -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
-    -- enough that we might as well use unsafePerformIO?    
-    case unsafeDupablePerformIO $ SLM.splitSlice slc of
-      Just (sl1,sl2) ->    
-       undefined
---  split = error "FINISHME - "
-#endif  
   
 --------------------------------------------------------------------------------
 
@@ -377,6 +365,19 @@ instance F.Foldable (IMap k Frzn) where
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+
+#ifdef GENERIC_PAR
+instance PC.ParFoldable (IMap k Frzn a) where
+  pmapFold fn initAcc (IMap lv) =
+    let slm = state lv 
+        slc = SLM.toSlice slm in
+    -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
+    -- enough that we might as well use unsafePerformIO?    
+    case unsafeDupablePerformIO $ SLM.splitSlice slc of
+      Just (sl1,sl2) ->    
+       undefined
+-- Can't split directly but can slice and then split:  
+#endif  
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =

@@ -43,6 +43,9 @@ module Control.Par.Class
   --  Monotonically growing finite maps
 --  , ParIMap(..) -- Not ready yet.
 
+   -- * Data structures that can be consumed in parallel
+  , ParFoldable(..)
+    
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
   , ParQuasi (..), ParSealed(..)
