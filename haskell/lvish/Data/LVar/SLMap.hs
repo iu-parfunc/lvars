@@ -72,6 +72,8 @@ import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
 
+import Debug.Trace
+
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
@@ -383,13 +385,16 @@ instance PC.ParFoldable (IMap k Frzn a) where
         splitter s =
           -- Some unfortunate conversion between protocols:
           case unsafeDupablePerformIO (SLM.splitSlice s) of
-            Nothing      -> [s]
+            Nothing      -> trace "Bottom! "
+                            [s]
             Just (s1,s2) -> [s1,s2]
 
         -- Ideally we could liftIO into the Par monad here.
         seqfold fn zer (SLM.Slice slm _ _) =
+          trace ("[DBG] dropping to seqfold...") $                
           SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm
     in
+    trace ("[DBG] pmapFold on frzn IMap... calling mkMapReduce") $      
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc
 

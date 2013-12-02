@@ -1,4 +1,6 @@
-# A simple convenience for building tests without Cabal.
+# A simple convenience for building tests without Cabal
+# (and WITH debugging enabled).
+#------------------------------------------------------
 
 # LIBSRC = $(shell find ../Data/ -name "*.hs") \
 #          $(shell find ../Control/ -name "*.hs")

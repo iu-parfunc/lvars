@@ -40,8 +40,8 @@ t1 = runParIO par
 --------------------------------------------------------------------------------
 
 -- ParFold instance
-case_pfold_imap :: Assertion 
-case_pfold_imap = runParIO $ do
+ase_pfold_imap :: Assertion 
+ase_pfold_imap = runParIO $ do
   mp <- SM.newEmptyMap
   let sz = fromMaybe 100 numElems
   -- pforEach (zrange sz) $ \ ix -> do

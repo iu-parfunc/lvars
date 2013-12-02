@@ -70,7 +70,7 @@ timeit ioact = do
    return res
 
 --------------------------------------------------------------------------------
--- Tests for concurrent SkipLists
+-- Tests for basic linked maps
 --------------------------------------------------------------------------------
 
 lm1 :: IO (String)
@@ -82,10 +82,34 @@ lm1 = do
   LM.tryInsert tok " World"
   LM.Found s1 <- LM.find lm 1
   LM.Found s0 <- LM.find lm 0
-  return $ s1 ++ s0
-  
+  return $ s1 ++ s0  
 case_lm1 :: Assertion  
 case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello World"
+
+halveTest :: (Show k, Show v, Eq k, Eq v) => [(k,v)] -> IO ()
+halveTest ls = do
+  lm  <- LM.fromList ls
+  res <- LM.halve' Nothing lm
+  case res of
+    Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls <= 1)
+    Just (l,r) -> do
+      l' <- LM.toList l
+      r' <- LM.toList r
+      assertBool "halve should not return empty halves" (length l' > 0)
+      assertBool "halve should not return empty halves" (length r' > 0)
+      assertEqual "Halving and joining should yield original" ls (l' ++ r')
+
+case_halveTest1 :: Assertion
+case_halveTest1 = halveTest (zip [0] ['a'..])
+case_halveTest2 = halveTest (zip [0,1] ['a'..])
+case_halveTest3 = halveTest (zip [0,1,2] ['a'..])
+case_halveTest4 = halveTest (zip [0..3] ['a'..])
+case_halveTest5 = halveTest (zip [0..10] ['a'..])
+case_halveTest6 = halveTest (zip [0..100] ['a'..])
+
+--------------------------------------------------------------------------------
+-- Tests for concurrent SkipLists
+--------------------------------------------------------------------------------
 
 slm1 :: IO (String)
 slm1 = do
@@ -123,8 +147,8 @@ insertionTest chunks = do
   cs <- SLM.counts slm
   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
   sliceCheck slm    
-  matches <- SLM.foldlWithKey (\b k v -> if k == v then return b else return False) True slm
-  summed  <- SLM.foldlWithKey (\s _ v -> return $! s + fromIntegral v) 0 slm
+  matches <- SLM.foldlWithKey id (\b k v -> if k == v then return b else return False) True slm
+  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
   printLog
   return (matches, summed)
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function

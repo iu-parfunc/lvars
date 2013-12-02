@@ -36,6 +36,8 @@ import GHC.Conc (numCapabilities)
 import Control.Par.Class
 import Data.Splittable.Class as Sp (Split(..), Generator(..)) 
 
+import Debug.Trace
+
 -- -----------------------------------------------------------------------------
 -- Parallel maps over splittable data structures
 -- -----------------------------------------------------------------------------
@@ -107,13 +109,13 @@ pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
 mkMapReduce 
    :: forall c e m a t .
       (ParFuture m, FutContents m a)
-      => (c -> [c])        -- ^ splitting function
+      => (c -> [c])              -- ^ splitting function
       -> ((e -> a -> m a) -> a -> c -> m a) -- ^ sequential fold function
       -> (m a -> m (Future m a)) -- ^ spawn function
-      -> c                 -- ^ element generator to consume
-      -> (e -> m a) -- ^ compute one result
-      -> (a -> a -> m a)   -- ^ combine two results 
-      -> a                 -- ^ initial accumulator value
+      -> c                       -- ^ element generator to consume
+      -> (e -> m a)              -- ^ compute one result
+      -> (a -> a -> m a)         -- ^ combine two results 
+      -> a                       -- ^ initial accumulator value
       -> m a
 {-# INLINE mkMapReduce #-}
 mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
@@ -124,9 +126,11 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
                    return result
   loop :: c -> m a
   loop gen =
+    trace ("[DBG] Looping around mkMapReduce...") $ 
     case splitter gen of
       -- Sequential case, use Generator class:
-      [seqchunk] -> seqfold mapred init seqchunk
+      [seqchunk] ->  trace ("[DBG]   Bottoming out to sequential fold..") $ 
+                    seqfold mapred init seqchunk
         -- foldM mapred init [min..max]
       [a,b] -> do iv <- spawner$ loop a
                   res2 <- loop b

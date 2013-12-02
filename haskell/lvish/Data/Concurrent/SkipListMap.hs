@@ -227,12 +227,20 @@ counts_ (Index m slm) = do
 toSlice :: SLMap k v -> SLMapSlice k v
 toSlice mp = Slice mp Nothing Nothing
 
+
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
 splitSlice :: forall k v . (Ord k) =>
               SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
-splitSlice (Slice (SLMap index lmbot) mstart mend) = do
-  loop index
+splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
+  res <- loop index
+  case res of
+    Just (x,y) -> do sz1 <- sliceSize sl0
+                     sz2 <- sliceSize x
+                     sz3 <- sliceSize y
+                     putStrLn $ "Splitslice! size " ++(show sz1) ++" out szs "++(show (sz2,sz3))
+    Nothing -> return ()
+  return res    
   where    
     loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     loop (Bottom lm) = do
@@ -264,7 +272,8 @@ splitSlice (Slice (SLMap index lmbot) mstart mend) = do
                (Int, Int, LM.LMList k tmp) ->
                IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     dosplit lmap mkRight (lenL, lenR, tlseg) =
-      assert (lenL > 0) $ assert (lenR > 0) $ do 
+      assert (lenL > 0) $ assert (lenR > 0) $ do
+          putStrLn $ "Halved lengths "++show (lenL,lenR)
           -- We don't really want to allocate just for slicing... but alas we need new 
           -- IORef boxes here.  We lazily prune the head of the lower levels, but we
           -- don't want to throw away the work we've done traversing to this point in "loop":

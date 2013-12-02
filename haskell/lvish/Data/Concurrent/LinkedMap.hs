@@ -19,10 +19,10 @@
 module Data.Concurrent.LinkedMap (
   LMap(), LMList(..),
   newLMap, Token(), value, find, FindResult(..), tryInsert,
-  foldlWithKey, map, reverse, head, toList, findIndex,
+  foldlWithKey, map, reverse, head, toList, fromList, findIndex,
   
   -- * Utilities for splitting/slicing
-  halve, dropUntil
+  halve, halve', dropUntil
   )
 where
   
@@ -141,6 +141,31 @@ toList lm = do
     Node k v tl -> do
       ls <- toList tl
       return $! (k,v) : ls 
+
+-- | Convert from a list.
+fromList :: [(k,v)] -> IO (LMap k v)
+fromList ls = do
+  let loop [] = return Empty
+      loop ((k,v):tl) = do
+        tl' <- loop tl
+        ref <- newIORef tl'
+        return $! Node k v ref
+  lm <- loop ls
+  newIORef lm
+
+
+halve' :: Eq k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
+halve' mend lm = do 
+  lml <- readIORef lm
+  res <- halve mend lml
+  case res of
+    Nothing -> return Nothing
+    Just (len1,_len2,tailhd) -> do
+      ls <- toList lm
+      l' <- fromList (take len1 ls)
+      r' <- newIORef tailhd
+      return $! Just $! (l',r')
+          
 
 -- | Attempt to split into two halves.
 --    
