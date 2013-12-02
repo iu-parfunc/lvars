@@ -154,7 +154,7 @@ fromList ls = do
   newIORef lm
 
 
-halve' :: Eq k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
+halve' :: Ord k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
 halve' mend lm = do 
   lml <- readIORef lm
   res <- halve mend lml
@@ -177,14 +177,14 @@ halve' mend lm = do
 --   the beginning of the second half.  It is a contract of this function that the
 --   two Ints returned are non-zero.
 --
-halve :: Eq k => Maybe k -> LMList k v -> IO (Maybe (Int, Int, LMList k v))
+halve :: Ord k => Maybe k -> LMList k v -> IO (Maybe (Int, Int, LMList k v))
 {-# INLINE halve #-}
-halve endKey ls = loop 0 ls ls
+halve mend ls = loop 0 ls ls
   where
     isEnd Empty = True
     isEnd (Node k _ _) =
-       case endKey of
-         Just ke -> k == ke
+       case mend of
+         Just end -> k >= end
          Nothing -> False
     emptCheck (0,l2,t) = return Nothing
     emptCheck !x       = return $! Just x
@@ -194,7 +194,7 @@ halve endKey ls = loop 0 ls ls
     loop len tort@(Node _ _ next1) (Node k v next2) = do 
       next2' <- readIORef next2
       case next2' of
-        Empty -> emptCheck (len, len+1, tort)
+        x | isEnd x -> emptCheck (len, len+1, tort)
         Node _ _ next3 -> do next1' <- readIORef next1
                              next3' <- readIORef next3
                              loop (len+1) next1' next3'

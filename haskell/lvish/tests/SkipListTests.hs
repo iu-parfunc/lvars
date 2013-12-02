@@ -86,26 +86,39 @@ lm1 = do
 case_lm1 :: Assertion  
 case_lm1 = lm1 >>= assertEqual "test sequential insertion for LinkedMap" "Hello World"
 
-halveTest :: (Show k, Show v, Eq k, Eq v) => [(k,v)] -> IO ()
-halveTest ls = do
+halveTest :: (Show k, Show v, Ord k, Eq v) => Maybe k -> [(k,v)] -> IO ()
+halveTest mend ls = do
   lm  <- LM.fromList ls
-  res <- LM.halve' Nothing lm
+  res <- LM.halve' mend lm
+  let capit = case mend of
+                Nothing -> id
+                Just end -> filter ((< end) . fst)
+      ls' = capit ls
+  printLog                
   case res of
-    Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls <= 1)
+    Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls' <= 1)
     Just (l,r) -> do
       l' <- LM.toList l
       r' <- LM.toList r
-      assertBool "halve should not return empty halves" (length l' > 0)
-      assertBool "halve should not return empty halves" (length r' > 0)
-      assertEqual "Halving and joining should yield original" ls (l' ++ r')
+      let r'' = capit r'
+      assertBool "halve should not return empty halves (L)" (length l' > 0)
+      assertBool "halve should not return empty halves (R)" (length r'' > 0)
+      assertEqual "Halving and joining should yield original" ls' (l' ++ r'')
 
-case_halveTest1 :: Assertion
-case_halveTest1 = halveTest (zip [0] ['a'..])
-case_halveTest2 = halveTest (zip [0,1] ['a'..])
-case_halveTest3 = halveTest (zip [0,1,2] ['a'..])
-case_halveTest4 = halveTest (zip [0..3] ['a'..])
-case_halveTest5 = halveTest (zip [0..10] ['a'..])
-case_halveTest6 = halveTest (zip [0..100] ['a'..])
+case_halveTest01 :: Assertion
+case_halveTest01 = halveTest Nothing (zip [0] ['a'..])
+case_halveTest02 = halveTest Nothing (zip [0,1] ['a'..])
+case_halveTest03 = halveTest Nothing (zip [0,1,2] ['a'..])
+case_halveTest04 = halveTest Nothing (zip [0..3] ['a'..])
+case_halveTest05 = halveTest Nothing (zip [0..10] ['a'..])
+case_halveTest06 = halveTest Nothing (zip [0..100] ['a'..])
+
+case_halveTest07 = halveTest (Just 1) (zip [0,1] ['a'..])
+case_halveTest08 = halveTest (Just 2) (zip [0,1,2] ['a'..])
+case_halveTest09 = halveTest (Just 2) (zip [0..3] ['a'..])
+case_halveTest10 = halveTest (Just 7) (zip [0..10] ['a'..])
+case_halveTest11 = halveTest (Just 91) (zip [0..100] ['a'..])
+
 
 --------------------------------------------------------------------------------
 -- Tests for concurrent SkipLists

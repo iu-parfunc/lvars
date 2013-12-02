@@ -374,7 +374,7 @@ instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
 #ifdef GENERIC_PAR
-instance PC.ParFoldable (IMap k Frzn a) where
+instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split: 
   pmapFold mfn rfn initAcc (IMap lv) =

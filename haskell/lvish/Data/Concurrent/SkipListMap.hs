@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-} -- for debugging
 
 -- | An implementation of concurrent finite maps based on skip lists.  Only
 -- supports lookup and insertions, not modifications or removals.
@@ -47,6 +48,7 @@ import Data.IORef
 import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
 import Prelude hiding (map)
+import qualified Prelude as P
 
 
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
@@ -228,27 +230,42 @@ toSlice :: SLMap k v -> SLMapSlice k v
 toSlice mp = Slice mp Nothing Nothing
 
 
+instance Show (LM.LMap k v) where
+  show _ = "<LinkedMap>"
+
+instance Show (LM.LMList k v) where
+  show _ = "<LinkedMapList>"  
+
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
-splitSlice :: forall k v . (Ord k) =>
+splitSlice :: forall k v . (Show k, Ord k) =>
               SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
 splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
   res <- loop index
   case res of
-    Just (x,y) -> do sz1 <- sliceSize sl0
-                     sz2 <- sliceSize x
-                     sz3 <- sliceSize y
+    Just (x,y) -> do sz1 <- fmap (P.map fst) $ sliceToList sl0
+                     sz2 <- fmap (P.map fst) $ sliceToList x
+                     sz3 <- fmap (P.map fst) $ sliceToList y                      
                      putStrLn $ "Splitslice! size " ++(show sz1) ++" out szs "++(show (sz2,sz3))
+                                ++ " mstart/end "++show (mstart,mend)
     Nothing -> return ()
   return res    
   where    
     loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     loop (Bottom lm) = do
+      putStrLn "AT BOT"
       lm' <- readIORef lm
       lm'' <- case mstart of
                 Nothing -> return lm'
                 Just strtK -> LM.dropUntil strtK lm'
       res <- LM.halve mend lm''
+
+      -- DEBUG:
+      let Just (_,_,c) = res
+      ls  <- newIORef c
+      ls' <- LM.toList ls
+      putStrLn $ "halve RES -> "++show res++", "++show (P.map fst ls')
+      
       case res of
         Nothing -> return Nothing
         Just x -> dosplit (SLMap (Bottom lm) lm)
@@ -256,8 +273,11 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
 
     loop orig@(Index m slm) = do
       indm <- readIORef m
+      indm' <- case mstart of
+                Nothing -> return indm
+                Just strtK -> LM.dropUntil strtK indm      
       -- Halve *this* level of the index, and use that as a fast way to split everything below.
-      res <- LM.halve mend indm
+      res <- LM.halve mend indm'
       case res of
         -- Case 1: This level isn't big enough to split, keep going down.  Note that we don't
         -- reconstruct the higher level, for splitting we don't care about it:
@@ -288,10 +308,15 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
 
 -- | /O(N)/ measure the length of the bottom tier.
 sliceSize :: Ord k => SLMapSlice k v -> IO Int
-sliceSize (Slice (SLMap _ lmbot) mstart mend) = do
+sliceSize slc = do
+   ls <- sliceToList slc
+   return $! length ls
+
+sliceToList :: Ord k => SLMapSlice k v -> IO [(k,v)]
+sliceToList (Slice (SLMap _ lmbot) mstart mend) = do
    ls <- LM.toList lmbot
    -- We SHOULD use the index layers to shortcut to a start, then stop at the end.
-   return $! length [ k | (k,v) <- ls, strtCheck k, endCheck k ] -- Inefficient!
+   return $! [ pr | pr@(k,v) <- ls, strtCheck k, endCheck k ] -- Inefficient!
   where
     strtCheck = case mstart of
                  Just strt -> \ k -> k >= strt
@@ -299,6 +324,8 @@ sliceSize (Slice (SLMap _ lmbot) mstart mend) = do
     endCheck = case mend of
                  Just end -> \ k -> k < end
                  Nothing  -> \ _ -> True    
+
+
 
 -- | Print a slice with each layer on a line.
 debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
