@@ -46,16 +46,6 @@ class Eq a => Split a where
 --   not containers for arbitrary data.  Thus we introduce a more limited concept of
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).
-#if 0
-class Generator c e | c -> e where
-  -- | Fold all outputs from the generator.
-  foldrM :: (Monad m) => (acc -> e -> m acc) -> acc -> c -> m acc
-
-  -- | Execute an action for each output of the generator.
-  forM_ :: (Monad m) => (e -> m ()) -> c -> m ()
-  forM_ fn = foldrM (\ () x -> fn x) ()
-  -- forEach :: (Applicative f) => (e -> f ()) -> c -> f ()
-#else
 class Generator c where
   type ElemOf c :: *
   -- | Fold all outputs from the generator, sequentially.
@@ -69,7 +59,5 @@ instance F.Foldable f => Generator (f a) where
   type ElemOf (f a) = a
   {-# INLINE foldrM #-}
   foldrM = F.foldrM 
-#endif
 
--- Foldable f => Generator (f a) a
 

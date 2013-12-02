@@ -303,10 +303,10 @@ data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 class Sp.Generator c => ParFoldable c where  
   pmapFold :: forall m a t .
               (ParFuture m, FutContents m a)
-              => c                 -- ^ element generator to consume
-              -> (ElemOf c -> m a) -- ^ compute one result
+              => (ElemOf c -> m a) -- ^ compute one result
               -> (a -> a -> m a)   -- ^ combine two results 
               -> a                 -- ^ initial accumulator value
+              -> c                 -- ^ element generator to consume              
               -> m a
 
 --------------------------------------------------------------------------------

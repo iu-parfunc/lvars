@@ -27,7 +27,7 @@ module Data.Concurrent.SkipListMap (
   debugShow, 
 
   -- * Slicing SLMaps
-  SLMapSlice, toSlice, splitSlice, sliceSize
+  SLMapSlice(Slice), toSlice, splitSlice, sliceSize
   )
 where
   

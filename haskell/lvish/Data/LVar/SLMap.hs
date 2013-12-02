@@ -74,7 +74,9 @@ import           Prelude
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (unsafeParIO)
 import qualified Data.Splittable.Class as Sp
+import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
 #endif
 
 ------------------------------------------------------------------------------
@@ -368,15 +370,29 @@ instance F.Foldable (IMap k Trvrsbl) where
 
 #ifdef GENERIC_PAR
 instance PC.ParFoldable (IMap k Frzn a) where
-  pmapFold fn initAcc (IMap lv) =
+  {-# INLINE pmapFold #-}
+  -- Can't split directly but can slice and then split: 
+  pmapFold mfn rfn initAcc (IMap lv) =
     let slm = state lv 
-        slc = SLM.toSlice slm in
-    -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
-    -- enough that we might as well use unsafePerformIO?    
-    case unsafeDupablePerformIO $ SLM.splitSlice slc of
-      Just (sl1,sl2) ->    
-       undefined
--- Can't split directly but can slice and then split:  
+        slc = SLM.toSlice slm
+        -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
+        -- enough that we might as well use unsafePerformIO?
+        splitter s =
+          -- Some unfortunate conversion between protocols:
+          case unsafeDupablePerformIO (SLM.splitSlice s) of
+            Nothing      -> [s]
+            Just (s1,s2) -> [s1,s2]
+
+        -- Ideally we could liftIO into the Par monad here.
+        seqfold fn zer (SLM.Slice slm _ _) =
+          undefined
+--          SLM.foldlWithKey unsafeParIO (\ a _k v -> fn v a) zer slm
+    in
+    mkMapReduce splitter seqfold PC.spawn_
+                slc mfn rfn initAcc
+
+-- UNSAFE!  It is naughty if this instance escapes to the outside world, which it can...
+instance F.Foldable (SLMapSlice k) where
 #endif  
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
