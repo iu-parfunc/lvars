@@ -395,6 +395,6 @@ cartesianProdsHP mh ls = do
     peeksR <- liftIO$ mapM (readIORef . state . unISet) right
 
 --    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
-    return undefined
+    return (error "FINISHME: set cartesianProdHP")
 #endif
 

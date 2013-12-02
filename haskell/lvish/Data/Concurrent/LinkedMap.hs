@@ -186,5 +186,6 @@ dropUntil stop nd@(Node k v tl)
 -- | Given a pointer into the middle of the list, find how deep it is.
 -- findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)                   
-findIndex = undefined
+findIndex ls1 ls2 =
+  error "FINISHME - LinkedMap.findIndex"
 

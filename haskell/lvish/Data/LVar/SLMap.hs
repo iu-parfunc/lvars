@@ -74,7 +74,7 @@ import           Prelude
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (unsafeParIO)
+import Control.Par.Class.Unsafe (internalLiftIO)
 import qualified Data.Splittable.Class as Sp
 import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
 #endif
@@ -388,8 +388,7 @@ instance PC.ParFoldable (IMap k Frzn a) where
 
         -- Ideally we could liftIO into the Par monad here.
         seqfold fn zer (SLM.Slice slm _ _) =
-          undefined
---          SLM.foldlWithKey unsafeParIO (\ a _k v -> fn v a) zer slm
+          SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm
     in
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc

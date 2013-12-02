@@ -126,7 +126,7 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
   loop gen =
     case splitter gen of
       -- Sequential case, use Generator class:
-      [seqchunk] -> undefined -- seqfold mapred init seqchunk
+      [seqchunk] -> seqfold mapred init seqchunk
         -- foldM mapred init [min..max]
       [a,b] -> do iv <- spawner$ loop a
                   res2 <- loop b

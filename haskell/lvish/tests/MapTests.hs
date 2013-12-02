@@ -15,6 +15,7 @@ import Control.Concurrent (threadDelay)
 import Data.Traversable (traverse)
 import qualified Data.Map as M
 import qualified Data.Set as S
+import Data.Maybe (fromMaybe)
 import Data.IORef
 import System.Random
 
@@ -26,6 +27,10 @@ import qualified Data.LVar.IVar as IV
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
+
+import qualified Control.Par.Class as PC
+import Data.Par.Range (zrange)
+import Data.Par.Splittable (pforEach)
 
 --------------------------------------------------------------------------------
 
@@ -115,6 +120,21 @@ v7c = runParIO $ do
   IV.get f1; IV.get f2; IV.get f3; IV.get f4
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
+
+
+-- ParFold instance
+case_pfold_imap :: Assertion 
+case_pfold_imap = runParIO $ do
+  mp <- SM.newEmptyMap
+  let sz = fromMaybe 100 numElems
+  pforEach (zrange sz) $ \ ix -> do 
+    SM.insert ix ix mp
+  
+  fmp <- SM.freezeMap mp
+  summed <- PC.pmapFold return (\ x y -> return $! x+y) 0 fmp
+  return ()
+
+--  
 
 --------------------------------------------------------------------------------
 -- Tests that use `forEachHP`

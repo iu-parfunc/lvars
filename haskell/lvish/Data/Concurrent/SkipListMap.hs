@@ -325,8 +325,7 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
           Index (nxt::LM.LMap k (t2,v)) _ -> do
 --    Could not deduce (t3 ~ IORef (LM.LMList k (t3, v)))            
             lmlst <- readIORef nxt
-            LM.findIndex lmlst lmlst
-            undefined
+            LM.findIndex lmlst lmlst            
 --        Bottom x  -> x
 -}
          if endCheck key && startCheck key
