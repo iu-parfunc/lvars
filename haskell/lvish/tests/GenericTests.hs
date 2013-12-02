@@ -8,7 +8,9 @@ module GenericTests (tests, runTests) where
 
 import Control.Monad
 import Data.Maybe (fromMaybe)
+import Data.Word
 import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (internalLiftIO)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import Test.Framework    (defaultMain, Test)
@@ -39,14 +41,20 @@ t1 = runParIO par
 
 --------------------------------------------------------------------------------
 
+size :: Int
+size = fromMaybe 100 numElems
+
+expectedSum :: Word64
+expectedSum = (s * (s + 1)) `quot` 2
+  where s = fromIntegral size
+
 -- ParFold instance
 case_pfold_imap :: Assertion 
 case_pfold_imap = runParIO $ do
   mp <- SM.newEmptyMap
-  let sz = fromMaybe 100 numElems
   -- pforEach (zrange sz) $ \ ix -> do
-  forM_ [0..sz-1] $ \ ix -> do       
-    SM.insert ix ix mp
+  forM_ [1..size] $ \ ix -> do       
+    SM.insert ix (fromIntegral ix::Word64) mp
 
   logDbgLn 1 $ "IMap filled up... freezing"
   fmp <- SM.freezeMap mp
@@ -59,6 +67,7 @@ case_pfold_imap = runParIO $ do
         return $! x+y 
   summed <- PC.pmapFold mapper folder 0 fmp
   logDbgLn 1 $ "Sum of IMap values: " ++ show summed
+  internalLiftIO$ assertEqual "Sum of IMap values" expectedSum summed
   return ()
 
 --------------------------------------------------------------------------------

@@ -261,10 +261,7 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
       res <- LM.halve mend lm''
 
       -- DEBUG:
-      let Just (_,_,c) = res
-      ls  <- newIORef c
-      ls' <- LM.toList ls
-      putStrLn $ "halve RES -> "++show res++", "++show (P.map fst ls')
+      putStrLn $ "halve RES -> "++show res
       
       case res of
         Nothing -> return Nothing

@@ -18,7 +18,7 @@ module Data.Par
     
     -- | Because these operations assume only `Traversable`, the best they can do is
     -- to fork one parallel computation per element.
-    pmap, ptraverse, ptraverse_
+    parMap, ptraverse, ptraverse_
   )
 where 
 
@@ -38,21 +38,21 @@ import Control.Par.Class
 -- in parallel (fully evaluating the results), and returns a new data
 -- structure containing the results.
 --
--- > pmap f xs = mapM (spawnP . f) xs >>= mapM get
+-- > parMap f xs = mapM (spawnP . f) xs >>= mapM get
 --
 -- @pmap@ is commonly used for lists, where it has this specialised type:
 --
--- > pmap :: NFData b => (a -> b) -> [a] -> Par [b]
+-- > parMap :: NFData b => (a -> b) -> [a] -> Par [b]
 --
 -- But note that for efficient parallelism you want balanced task trees, not "one at
 -- a time" parallel tasks.  Thus look at `pmapReduce` and friends.
-pmap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
+parMap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
           (a -> b) -> t a -> p (t b)
-{-# INLINE pmap #-}
-pmap f xs = mapM (spawnP . f) xs >>= mapM get
+{-# INLINE parMap #-}
+parMap f xs = mapM (spawnP . f) xs >>= mapM get
 
 
--- | Like 'pmap', but the function is a @Par@ monad operation.
+-- | Like 'parMap', but the function is a @Par@ monad operation.
 --
 -- > ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 --
