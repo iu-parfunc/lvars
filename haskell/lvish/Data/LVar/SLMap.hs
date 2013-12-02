@@ -132,6 +132,14 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
 
 #ifdef GENERIC_PAR
 instance Sp.Split (IMap k Frzn a) where
+  split (IMap lv) =
+    let slm = state lv 
+        slc = SLM.toSlice slm in
+    -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
+    -- enough that we might as well use unsafePerformIO?    
+    case unsafeDupablePerformIO $ SLM.splitSlice slc of
+      Just (sl1,sl2) ->    
+       undefined
 --  split = error "FINISHME - "
 #endif  
   

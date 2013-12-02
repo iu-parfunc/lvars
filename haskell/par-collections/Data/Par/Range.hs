@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-|
 
@@ -25,7 +25,7 @@ import Control.Monad as M hiding (mapM, sequence, join)
 import GHC.Conc (getNumProcessors)
 
 import Control.Par.Class
-import Data.Splittable
+import Data.Splittable.Class
 import Prelude hiding (init,max,sequence, head,tail)
 
 import System.IO.Unsafe (unsafePerformIO)
@@ -73,14 +73,10 @@ instance Split Range where
 
 --  splitPlease pieces rng@(TiledRange start end thresh) 
 
-instance Generator Range Int where
+instance Generator Range where
+  type ElemOf Range = Int
   foldrM fn inita (InclusiveRange st en _thresh) =
     forAcc_ st en inita fn
-    
-
--- | A range of integers.  This follows the standard for for-loops in imperative
--- languages: inclusive start, exclusive end.
--- data Range = Range {-# UNPACK #-} !Int {-# UNPACK #-}!Int
 
 -- | A simple shorthand for ranges from `n` to `m-1` (inclusive,exclusive).
 -- 
@@ -180,12 +176,13 @@ pmapReduce_
       -> p a
 pmapReduce_ = mkMapReduce spawn_
 
+-- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
 mkMapReduce :: ParFuture m => (m t -> m (Future m t)) ->
                Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
 mkMapReduce spawner irng fn binop init = loop irng
  where
-  mapred ac b = do x <- fn b;
+  mapred b ac = do x <- fn b;
                    result <- ac `binop` x
                    return result                            
   loop rng =
@@ -203,13 +200,7 @@ mkMapReduce spawner irng fn binop init = loop irng
 
 
 {-
-
--- TODO: A version that works for any splittable input domain.  In this case
--- the "threshold" is a predicate on inputs.
--- parMapReduceRangeGeneric :: (inp -> Bool) -> (inp -> Maybe (inp,inp)) -> inp ->
-
-
-
+-- OLD Lvish versions... 
 
 -- | Parallel for-loop over an inclusive range.  Semantically similar to:
 --
@@ -330,13 +321,13 @@ for_ start end fn = loop start
 	   | otherwise = do fn i; loop (i+1)
 
 {-# INLINE forAcc_ #-}
-forAcc_ :: Monad m => Int -> Int -> acc -> (acc -> Int -> m acc) -> m acc
+forAcc_ :: Monad m => Int -> Int -> acc -> (Int -> acc -> m acc) -> m acc
 forAcc_ start end _ _fn | start > end = error "for_: start is greater than end"
 forAcc_ start end acc fn = loop acc start 
   where
    loop !acc !i
      | i == end  = return acc
-     | otherwise = do acc' <- fn acc i
+     | otherwise = do acc' <- fn i acc
                       loop acc (i+1)
 
 

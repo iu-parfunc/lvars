@@ -37,7 +37,7 @@ import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
-import Data.Splittable as Sp (Split(..), Generator(..)) 
+import Data.Splittable.Class as Sp (Split(..), Generator(..)) 
 
 
 -- -----------------------------------------------------------------------------
@@ -104,11 +104,11 @@ ptraverse_ f xs = mapM (spawn_ . f) xs >>= mapM get
 -- platform portability does NOT require a commutative reduce function.  This combinator
 -- will always fold earlier results on the left and later on the right.
 pmapReduce :: forall c e m a t .
-      (Split c, Generator c e, ParFuture m, FutContents m a, NFData a)
-      => c                -- ^ element generator to consume
-      -> (e -> m a)       -- ^ compute one result
-      -> (a -> a -> m a)  -- ^ combine two results 
-      -> a                -- ^ initial accumulator value
+      (Split c, Generator c, ParFuture m, FutContents m a, NFData a)
+      => c                 -- ^ element generator to consume
+      -> (ElemOf c -> m a) -- ^ compute one result
+      -> (a -> a -> m a)   -- ^ combine two results 
+      -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE pmapReduce #-}      
 pmapReduce = mkMapReduce spawn
@@ -116,20 +116,20 @@ pmapReduce = mkMapReduce spawn
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
 pmapReduce_ :: forall c e m a t .
-      (Split c, Generator c e, ParFuture m, FutContents m a)
-      => c                -- ^ element generator to consume
-      -> (e -> m a)       -- ^ compute one result
-      -> (a -> a -> m a)  -- ^ combine two results 
-      -> a                -- ^ initial accumulator value
+      (Split c, Generator c, ParFuture m, FutContents m a)
+      => c                 -- ^ element generator to consume
+      -> (ElemOf c -> m a) -- ^ compute one result
+      -> (a -> a -> m a)   -- ^ combine two results 
+      -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE pmapReduce_ #-}      
 pmapReduce_ = mkMapReduce spawn_
   
 -- | Execute a side-effect in parallel for each element generated.  This is
 --   synchronous; that is, it does not return until all of the actions are executed.
-pforEach :: (Split c, Generator c e, ParFuture m, FutContents m ())
-      => c                -- ^ element generator to consume
-      -> (e -> m ())       -- ^ compute one result
+pforEach :: (Split c, Generator c, ParFuture m, FutContents m ())
+      => c                  -- ^ element generator to consume
+      -> (ElemOf c -> m ()) -- ^ compute one result
       -> m ()
 {-# INLINE pforEach #-}
 pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
@@ -138,18 +138,18 @@ pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
 --   function for spawning work.
 mkMapReduce 
    :: forall c e m a t .
-      (Split c, Generator c e, ParFuture m, FutContents m a)
+      (Split c, Generator c, ParFuture m, FutContents m a)
       => (m a -> m (Future m a)) -- ^ Spawn function
-      -> c                -- ^ element generator to consume
-      -> (e -> m a)       -- ^ compute one result
-      -> (a -> a -> m a)  -- ^ combine two results 
-      -> a                -- ^ initial accumulator value
+      -> c                 -- ^ element generator to consume
+      -> (ElemOf c -> m a) -- ^ compute one result
+      -> (a -> a -> m a)   -- ^ combine two results 
+      -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE mkMapReduce #-}
 mkMapReduce spawner genc fn binop init = loop genc
  where
-  mapred :: a -> e -> m a 
-  mapred ac b = do x <- fn b;
+  mapred :: ElemOf c -> a -> m a 
+  mapred b ac = do x <- fn b;
                    result <- ac `binop` x
                    return result
   loop :: c -> m a

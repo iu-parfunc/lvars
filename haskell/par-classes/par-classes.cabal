@@ -39,7 +39,7 @@ Library
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
-           Data.Splittable
+           Data.Splittable.Class
 
   -- This needs to stay low-dependencies!!  Interfaces only.
   Build-depends: base >= 4 && < 5

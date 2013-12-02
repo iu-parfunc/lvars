@@ -227,8 +227,7 @@ toSlice mp = Slice mp Nothing Nothing
 
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
-splitSlice :: forall k v . (Ord k, Show k) =>
---              SLMapSlice k v -> IO (SLMapSlice k v, Maybe (SLMapSlice k v))
+splitSlice :: forall k v . (Ord k) =>
               SLMapSlice k v -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
 splitSlice (Slice (SLMap index lmbot) mstart mend) = do
   loop index
