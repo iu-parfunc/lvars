@@ -390,8 +390,8 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
             Just (s1,s2) -> [s1,s2]
 
         -- Ideally we could liftIO into the Par monad here.
-        seqfold fn zer (SLM.Slice slm _ _) =
-          trace ("[DBG] dropping to seqfold...") $
+        seqfold fn zer (SLM.Slice slm st en) =
+          trace ("[DBG] dropping to seqfold.., st/en: "++show (st,en)) $
           -- FIXME: Fold over only the range in the slice:
           SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm
     in
