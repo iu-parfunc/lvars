@@ -29,7 +29,7 @@ import Data.Splittable.Class
 import Prelude hiding (init,max,sequence, head,tail)
 
 import System.IO.Unsafe (unsafePerformIO)
-import qualified Data.Par as P
+-- import qualified Data.Par.Splittable as P
 
 -- --------------------------------------------------------------------------------
 

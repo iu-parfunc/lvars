@@ -32,7 +32,7 @@ Library
   Exposed-modules:
      Data.Par
      Data.Par.Splittable
---   Data.Par.Traversable
+     Data.Par.Traversable
      Data.Par.Range
      
   Build-depends: base >= 4 && < 5

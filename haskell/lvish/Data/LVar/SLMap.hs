@@ -377,7 +377,7 @@ instance F.Foldable (IMap k Trvrsbl) where
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split: 
-  pmapFold mfn rfn initAcc (IMap lv) =
+  pmapFold mfn rfn initAcc (IMap lv) = do 
     let slm = state lv 
         slc = SLM.toSlice slm
         -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
@@ -385,17 +385,15 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
         splitter s =
           -- Some unfortunate conversion between protocols:
           case unsafeDupablePerformIO (SLM.splitSlice s) of
-            Nothing      -> trace "Bottom! "
-                            [s]
+            Nothing      -> [s]
             Just (s1,s2) -> [s1,s2]
 
         -- Ideally we could liftIO into the Par monad here.
-        seqfold fn zer (SLM.Slice slm st en) =
-          trace ("[DBG] dropping to seqfold.., st/en: "++show (st,en)) $
+        seqfold fn zer (SLM.Slice slm st en) = do 
+          internalLiftIO $ putStrLn $ "[DBG] dropping to seqfold.., st/en: "++show (st,en)
           -- FIXME: Fold over only the range in the slice:
-          SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm
-    in
-    trace ("[DBG] pmapFold on frzn IMap... calling mkMapReduce") $      
+          SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm    
+    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap... calling mkMapReduce"
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc
 
