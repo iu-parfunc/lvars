@@ -209,3 +209,9 @@ And this setting for numCapabilities seems to effect the
 test-framework driver as well.
 
 
+[2013.12.02] {Debugging pmapFold for SLMap}
+-------------------------------------------
+
+
+
+

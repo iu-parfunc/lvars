@@ -46,6 +46,20 @@ class Eq a => Split a where
 --   not containers for arbitrary data.  Thus we introduce a more limited concept of
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).
+--
+--   It is trivial to provide an instance for any type that is already a `Functor`:
+--   
+-- > import Data.Foldable as F
+-- > instance Foldable f => Generator (f a) where
+-- >   type ElemOf (f a) = a
+-- >   foldrM = F.foldrM 
+--
+--   However, we don't provide this blanket instance because it would conflict with
+--   more tailored instances that may be desired for particular containers.  For
+--   example, a "Data.Map" generator might include keys as well as values.
+--
+--   Finally, note that a much more general version of this class can be found in
+--   "Data.Generator" from the reducers package.
 class Generator c where
   type ElemOf c :: *
   -- | Fold all outputs from the generator, sequentially.
@@ -55,9 +69,9 @@ class Generator c where
   forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
   forM_ fn = foldrM (\ x () -> fn x) ()
 
-instance F.Foldable f => Generator (f a) where
-  type ElemOf (f a) = a
-  {-# INLINE foldrM #-}
-  foldrM = F.foldrM 
+-- instance F.Foldable f => Generator (f a) where
+--   type ElemOf (f a) = a
+--   {-# INLINE foldrM #-}
+--   foldrM = F.foldrM 
 
 
