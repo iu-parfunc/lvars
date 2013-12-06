@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, assertOr, timeOut,
+   nTimes, for_, forDown_, assertOr, timeOut, splitRange, 
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -69,11 +69,11 @@ theEnv = unsafePerformIO getEnvironment
 -- configuration record, so that it can be changed programmatically.
 
 -- How many elements should each of the tests pump through the queue(s)?
-numElems :: Int
+numElems :: Maybe Int
 numElems = case lookup "NUMELEMS" theEnv of 
-             Nothing  -> 100 * 1000 -- 500000
+             Nothing  -> Nothing -- 100 * 1000 -- 500000
              Just str -> warnUsing ("NUMELEMS = "++str) $ 
-                         read str
+                         Just (read str)
 
 forkThread :: IO () -> IO ThreadId
 forkThread = case lookup "OSTHREADS" theEnv of 
@@ -286,4 +286,42 @@ assertOr act1 act2 =
 nTimes :: Int -> (Int -> IO a) -> IO ()
 nTimes 0 _ = return ()
 nTimes n c = c n >> nTimes (n-1) c
+
+{-# INLINE for_ #-}
+-- | Inclusive/Inclusive
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) fn | start > end = forDown_ (end, start) fn
+for_ (start, end) fn = loop start
+  where
+  loop !i | i > end  = return ()
+          | otherwise = do fn i; loop (i+1)
+
+
+-- | Inclusive/Inclusive, iterate downward.
+forDown_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+forDown_ (start, end) _fn | start > end = error "forDown_: start is greater than end"
+forDown_ (start, end) fn = loop end
+  where
+  loop !i | i < start = return ()
+          | otherwise = do fn i; loop (i-1)
+
+
+-- | Split an inclusive range into N chunks.
+--   This may return less than the desired number of pieces if there aren't enough
+--   elements in the range.
+splitRange :: Int -> (Int,Int) -> [(Int,Int)]
+splitRange pieces (start,end)
+  | len < pieces = [ (i,i) | i <- [start .. end]]
+  | otherwise = chunks
+ where
+    len = end - start + 1 
+    chunks = map largepiece [0..remain-1] ++
+             map smallpiece [remain..pieces-1]
+    (portion, remain) = len `quotRem` pieces
+    largepiece i =
+        let offset = start + (i * (portion + 1))
+        in (offset, (offset + portion))
+    smallpiece i =
+        let offset = start + (i * portion) + remain
+        in (offset, (offset + portion - 1))
 

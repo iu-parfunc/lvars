@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
@@ -184,3 +185,28 @@ show03 = show$ runParThenFreeze $ do
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  
   return mp
+
+
+--------------------------------------------------------------------------------
+-- Issue related:
+--------------------------------------------------------------------------------
+
+-- #27
+
+case_handlrDup :: Assertion
+case_handlrDup = runParIO $ do
+  ctr <- I.liftIO$ newIORef 0
+  mp  <- SM.newEmptyMap
+  hp  <- newPool
+  -- Register handler FIRST.. no race.
+  SM.forEachHP (Just hp) mp $ \ (k::Int) v -> do
+    logDbgLn 1 $ "[case_handlrDup] Callback executing: " ++ show (k,v)
+    I.liftIO $ incr ctr
+  SM.insert 2 2 mp
+  SM.insert 3 3 mp 
+  quiesce hp
+  sum <- I.liftIO $ readIORef ctr
+  I.liftIO $ assertEqual "Should be no duplication in this case" 2 sum
+
+incr :: IORef Int -> IO ()
+incr ref = atomicModifyIORef' ref (\x -> (x+1,()))

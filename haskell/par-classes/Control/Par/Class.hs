@@ -41,8 +41,11 @@ module Control.Par.Class
   , ParIVar(..)
 
   --  Monotonically growing finite maps
---  , ParIMap(..)
+--  , ParIMap(..) -- Not ready yet.
 
+   -- * Data structures that can be consumed in parallel
+  , ParFoldable(..)
+    
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
   , ParQuasi (..), ParSealed(..)
@@ -61,6 +64,7 @@ where
 
 import Control.DeepSeq
 import Control.Par.Class.Unsafe
+import Data.Splittable.Class as Sp 
 import GHC.Prim (Constraint)
 
 import qualified Data.Foldable as F
@@ -241,7 +245,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 
 --------------------------------------------------------------------------------
 
---  | A commonly desired monotonic data structure an insertion-only Map or Set.
+--  | A commonly desired monotonic data structure is an insertion-only Map or Set.
 --   This captures Par monads which are able to provide that capability.
 class (Functor m, Monad m) => ParIMap m  where
   -- | The type of a future that goes along with the particular `Par`
@@ -289,6 +293,21 @@ class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
   -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
 
 data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
+
+
+--------------------------------------------------------------------------------
+
+-- class Sp.Generator c e => ParFoldable c e | c -> e where
+
+-- | Collection types which can be consumed in parallel.
+class Sp.Generator c => ParFoldable c where  
+  pmapFold :: forall m a t .
+              (ParFuture m, FutContents m a)
+              => (ElemOf c -> m a) -- ^ compute one result
+              -> (a -> a -> m a)   -- ^ combine two results 
+              -> a                 -- ^ initial accumulator value
+              -> c                 -- ^ element generator to consume              
+              -> m a
 
 --------------------------------------------------------------------------------
 

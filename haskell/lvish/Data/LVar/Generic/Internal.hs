@@ -75,7 +75,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
     in AFoldable ls'
 
 -- | A class enabling generic creation of new LVars.
-class LVarData1 f => LVarWBottom (f :: * -> * -> *) where
+class LVarWBottom (f :: * -> * -> *) where
   -- | Requirements for contents types of this LVar.
   type LVContents f a :: Constraint
   

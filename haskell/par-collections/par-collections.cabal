@@ -23,6 +23,10 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
+flag newcontainers
+  description: Use (forthcoming) new version of containers.
+  default: False
+
 Library
   Source-repository head
     type:     git
@@ -31,8 +35,10 @@ Library
 
   Exposed-modules:
      Data.Par
+     Data.Par.Splittable
+     Data.Par.Traversable
      Data.Par.Range
-     Data.Splittable
+     Data.Par.Instances
      
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
@@ -42,6 +48,16 @@ Library
                , mtl          >= 2.0
                , transformers >= 0.2
                , par-classes  >= 1.0
+
+               -- These are so we can provide instances for existing collections:
+               , primitive    >= 0.5  && < 0.6
+               , vector       >= 0.10 && < 0.11
+
+  if flag(newcontainers)
+    cpp-options: -DNEWCONTAINERS
+    build-depends: containers >= 0.5.3.2
+  else 
+    build-depends: containers >= 0.5
 
   ghc-options: -O2
   Other-modules:

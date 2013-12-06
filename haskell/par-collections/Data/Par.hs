@@ -1,94 +1,18 @@
 
-
-
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE ConstraintKinds #-}
-
-{-| 
-    A collection of useful parallel combinators based on top of a 'Par' monad.
-
-    In particular, this module provides higher order functions for
-     traversing data structures in parallel.  
-
--}
+-- | Convenience module that reexports various parallel combinators.
 
 module Data.Par
-  (
-    -- * Naive parallel maps on traversable structures.
-    
-    -- | Because these operations assume only `Traversable`, the best they can do is
-    -- to fork one parallel computation per element.
-    parMap, parMapM, parMapM_
-
-    -- * More efficient, balanced parallel traversals for splittable structures                     
-
-    -- | These operations require an instance of `Data.Splittable.Split`, but in
-    -- return they can perform more balanced traversals that are more tolerant of
-    -- fine-granularity.
-                     
-    -- TODO: 
-  )
-where 
-
-import Control.DeepSeq
-import Data.Traversable
-import Control.Monad as M hiding (mapM, sequence, join)
-import Prelude hiding (mapM, sequence, head,tail)
-import GHC.Conc (numCapabilities)
-
-import Control.Par.Class
+       (
+         -- * Parallle consmuption of /O(1)/-splittable data
+         module Data.Par.Splittable,         
+         -- * Ranges of numbers, aka iteration spaces
+         module Data.Par.Range,
+         -- * Basic per-element parallelism for Traversables
+         module Data.Par.Traversable
+       )
+       where
 
 
--- -----------------------------------------------------------------------------
--- Parallel maps over Traversable data structures
--- -----------------------------------------------------------------------------
-
--- | Applies the given function to each element of a data structure
--- in parallel (fully evaluating the results), and returns a new data
--- structure containing the results.
---
--- > parMap f xs = mapM (spawnP . f) xs >>= mapM get
---
--- @parMap@ is commonly used for lists, where it has this specialised type:
---
--- > parMap :: NFData b => (a -> b) -> [a] -> Par [b]
---
-parMap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
-          (a -> b) -> t a -> p (t b)
-{-# INLINE parMap #-}
-parMap f xs = mapM (spawnP . f) xs >>= mapM get
-
--- --  A variant that only evaluates to weak-head-normal-form.
--- parMap_ :: (Traversable t, ParFuture p, FutContents p b) =>
---           (a -> b) -> t a -> p (t b)
--- {-# INLINE parMap #-}
--- parMap_ f xs = mapM (spawnP . f) xs >>= mapM get
-
-
--- | Like 'parMap', but the function is a @Par@ monad operation.
---
--- > parMapM f xs = mapM (spawn . f) xs >>= mapM get
---
-parMapM :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
-           (a -> p b) -> t a -> p (t b)
-{-# INLINE parMapM #-}           
-parMapM f xs = mapM (spawn . f) xs >>= mapM get
-
--- | A variant that only evaluates to weak-head-normal-form.
-parMapM_ :: (Traversable t, ParFuture p, FutContents p b) =>
-           (a -> p b) -> t a -> p (t b)
-{-# INLINE parMapM_ #-}
-parMapM_ f xs = mapM (spawn_ . f) xs >>= mapM get
-
-
--- TODO: parBuffer -- enable signaling with a counter?
-
-
--- -----------------------------------------------------------------------------
--- Parallel maps over splittable data structures
--- -----------------------------------------------------------------------------
-
-
-
-
--- pmapSplit
+import Data.Par.Traversable
+import Data.Par.Splittable 
+import Data.Par.Range hiding (pmapReduce, pmapReduce_)

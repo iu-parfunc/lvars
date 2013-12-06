@@ -21,7 +21,8 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar
+         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
+         verifyFiniteJoin, verifyFiniteGet
        ) where
 
 import Control.LVish
@@ -30,12 +31,15 @@ import Control.LVish.Internal
 import Data.IORef
 import qualified Control.LVish.SchedIdempotent as LI 
 import Algebra.Lattice
-import           GHC.Prim (unsafeCoerce#)
-
+import GHC.Prim (unsafeCoerce#)
+import System.IO.Unsafe (unsafePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
 newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
+
+instance Show a => Show (PureLVar Frzn a) where
+  show (PureLVar lv) = show$ unsafePerformIO$ readIORef$ state lv
 
 -- data PureLVar s t = BoundedJoinSemiLattice t => PureLVar (LVar s (IORef t) t)
 
@@ -44,6 +48,52 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 {-# INLINE getPureLVar #-}
 {-# INLINE waitPureLVar #-}
 {-# INLINE freezePureLVar #-}
+
+-- | Takes a join operation (e.g., for an instance of JoinSemiLattice
+-- and returns an error message if th lattice properties don't hold.
+-- Don't try this for an infinite lattice!
+verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
+verifyFiniteJoin allStates join =
+  case (isCommutative, isAssociative, isIdempotent) of
+    (hd : _ , _, _) -> Just $ "commutativity violated!: " ++ show hd
+    (_ , hd : _, _) -> Just $ "associativity violated!: " ++ show hd
+    (_ , _, hd : _) -> Just $ "idempotency violated!: " ++ show hd
+    ([], [], []) -> Nothing
+  where
+    isCommutative = [(a, b) | a <- allStates, b <- allStates, a `join` b /= b `join` a]
+    isAssociative = [(a, b, c) |
+                     a <- allStates,
+                     b <- allStates,
+                     c <- allStates,
+                     a `join` (b `join` c) /= (a `join` b) `join` c]
+    isIdempotent = [a | a <- allStates, a `join` a /= a]
+
+-- | Verify that a blocking get is monotone in just the right way.
+--   This takes a designated bottom and top element.
+verifyFiniteGet :: (Eq a, Show a, JoinSemiLattice a,
+                    Eq b, Show b) =>
+                   [a] -> (b,b) -> (a -> b) -> Maybe String
+verifyFiniteGet allStates (bot,top) getter =
+   case (botBefore, constAfter) of
+     ((a,b):_, _) -> Just$ "violation! input "++ show a
+                      ++" unblocked get, but larger input"++show b++" did not."
+     (_, (a,b):_) -> Just$ "violation! value at "++ show a
+                      ++" was non-bottom ("++show (getter a)
+                      ++"), but then changed at "++show b++" ("++ show (getter b)++")"
+     ([],[])      -> Nothing
+  where
+   botBefore = [ (a,b)
+               | a <- allStates, b <- allStates
+               , a `joinLeq` b,  getter b == bot
+               , not (getter a == bot) ]
+   constAfter = [ (a,b)
+                | a <- allStates, b <- allStates
+                , a `joinLeq` b
+                , getter a /= bot
+                , getter a /= getter b
+                , getter b /= top -- It's ok to go to error.
+                ]
+
 
 -- | A new pure LVar populated with the provided initial state.
 newPureLVar :: BoundedJoinSemiLattice t =>
@@ -58,6 +108,7 @@ getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
           x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] Getting from a Pure LVar.. read ref."
           deltaThresh x
         deltaThresh x =
           return $ checkThresholds x thrshSet

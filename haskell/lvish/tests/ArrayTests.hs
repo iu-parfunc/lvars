@@ -96,7 +96,7 @@ v9a = runParIO$ do
 -- i9b = runParIO$ do
 --   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
 --   fork $ do NA.get arr 5
---             logStrLn "Unblocked!  Shouldn't see this."
+--             logDbgLn "Unblocked!  Shouldn't see this."
 --             return ()
 --   return 9
 -- #endif
@@ -107,7 +107,7 @@ i9c :: IO Word8
 i9c = runParIO$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
-            logStrLn "Unblocked!  Shouldn't see this."
+            logDbgLn 1 "Unblocked!  Shouldn't see this."
             NA.put arr 6 99
   NA.get arr 6 
 
@@ -117,9 +117,9 @@ v9d :: IO Word8
 v9d = runParIO$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
-            logStrLn "Unblocked! Good."
+            logDbgLn 1 "Unblocked! Good."
             NA.put arr 6 99
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   NA.put arr 5 5
   NA.get arr 6 
 
@@ -138,7 +138,7 @@ v9e = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       NA.put arr ix (fromIntegral ix + 1) -- Can't put 0
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- NA.get arr ix
                                      loop (acc+v) (ix+1)
@@ -184,7 +184,7 @@ v9f = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       IV.put_ (arr V.! ix) (fromIntegral ix + 1)
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
                                      loop (acc+v) (ix+1)
@@ -205,7 +205,7 @@ v9g = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       ISt.put_ arr ix (fromIntegral ix + 1)
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- ISt.get arr ix
                                      loop (acc+v) (ix+1)
