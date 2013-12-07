@@ -25,7 +25,7 @@ import Control.Monad as M hiding (mapM, sequence, join)
 import GHC.Conc (getNumProcessors)
 
 import Control.Par.Class
-import Data.Splittable.Class
+import Data.Splittable.Class as Sp
 import Prelude hiding (init,max,sequence, head,tail)
 
 import System.IO.Unsafe (unsafePerformIO)
@@ -75,8 +75,8 @@ instance Split Range where
 
 instance Generator Range where
   type ElemOf Range = Int
-  foldrM fn inita (InclusiveRange st en _thresh) =
-    forAcc_ st en inita fn
+  foldM fn inita (InclusiveRange st en _thresh) =
+    forAcc_ st en inita (flip fn)
 
 -- | A simple shorthand for ranges from `n` to `m-1` (inclusive,exclusive).
 -- 
@@ -195,7 +195,7 @@ mkMapReduce spawner irng fn binop init = loop irng
                   res1 <- get iv
                   binop res1 res2
       ls@(_:_:_) -> do ivs <- mapM (spawner . loop) ls
-                       foldM (\ acc iv -> get iv >>= binop acc) init ivs
+                       M.foldM (\ acc iv -> get iv >>= binop acc) init ivs
       [] -> return init
 
 

@@ -10,6 +10,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DefaultSignatures #-}
 
+{-# LANGUAGE RankNTypes #-}
+
 {-|
     This module establishes a class hierarchy that captures the
     interfaces of @Par@ monads.  There are two layers: simple futures
@@ -45,6 +47,7 @@ module Control.Par.Class
 
    -- * Data structures that can be consumed in parallel
   , ParFoldable(..)
+  , Generator(..)    
     
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
@@ -297,10 +300,70 @@ data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 --------------------------------------------------------------------------------
 
+
+-- | We have a problem where some types (like Ranges) are splittable, but they are
+--   not containers for arbitrary data.  Thus we introduce a more limited concept of
+--   a data source that can generate only a particular kind of element (but cannot be
+--   constructed or traversed).
+--
+--   It is trivial to provide an instance for any type that is already a `Functor`:
+--   
+-- > import Data.Foldable as F
+-- > instance Foldable f => Generator (f a) where
+-- >   type ElemOf (f a) = a
+-- >   foldrM = F.foldrM 
+--
+--   However, we don't provide this blanket instance because it would conflict with
+--   more tailored instances that may be desired for particular containers.  For
+--   example, a "Data.Map" generator might include keys as well as values.
+--
+--   Finally, note that a much more general version of this class can be found in
+--   "Data.Generator" from the reducers package.
+class Generator c where
+  type ElemOf c :: *
+  -- | Fold all outputs from the generator, sequentially.
+  --   The ordering is determined by the generator type, and is whatever
+  --   the natural and inexpensive ordering for that type is.
+  --        
+  --   In general this should be used with commutative, associative functions.
+  foldM :: (Monad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc  
+  foldM fn zer = fold (\ acc elm -> acc >>= (`fn2` elm)) (return zer)
+     where fn2 acc elm = fn acc elm
+
+  -- -- This is inefficient because unsafePerformIO requires locking:
+  -- foldM = foldMIO (\ io -> let x = unsafePerformIO io in
+  --                          x `seq` return x)
+
+  -- -- | Execute an action for each output of the generator.
+  -- forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
+  -- forM_ fn = foldM (\ x () -> fn x) ()
+
+  -- | Fold all outputs from the generator, sequentially.
+  --   The ordering is determined by the generator type, and is whatever
+  --   the natural and inexpensive ordering for that type is.
+  fold :: (acc -> ElemOf c -> acc) -> acc -> c -> acc
+
+  -- | Some data types may internally need to use IO, even if they're conceputually
+  -- pure.  In this cases, this function can be more efficient.
+  foldMIO :: (Monad m) => (forall a . IO a -> m a) ->
+                          (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  foldMIO _lift = foldM
+  
+  foldMP :: (ParMonad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  foldMP f z c = foldM f z c
+
+-- instance F.Foldable f => Generator (f a) where
+--   type ElemOf (f a) = a
+--   {-# INLINE foldrM #-}
+--   foldrM = F.foldrM 
+
+--------------------------------------------------------------------------------
+
 -- class Sp.Generator c e => ParFoldable c e | c -> e where
 
 -- | Collection types which can be consumed in parallel.
-class Sp.Generator c => ParFoldable c where  
+class Generator c => ParFoldable c where  
   pmapFold :: forall m a t .
               (ParFuture m, FutContents m a)
               => (ElemOf c -> m a) -- ^ compute one result

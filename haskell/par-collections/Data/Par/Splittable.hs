@@ -33,8 +33,8 @@ import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
-import Control.Par.Class
-import Data.Splittable.Class as Sp (Split(..), Generator(..)) 
+import Control.Par.Class     as PC
+import Data.Splittable.Class (Split(..)) 
 
 import Debug.Trace
 
@@ -69,7 +69,7 @@ pmapReduce :: forall c e m a t .
       -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE pmapReduce #-}      
-pmapReduce = mkMapReduce split Sp.foldrM spawn
+pmapReduce = mkMapReduce split PC.foldM spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
@@ -81,7 +81,7 @@ pmapReduce_ :: forall c e m a t .
       -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE pmapReduce_ #-}      
-pmapReduce_ = mkMapReduce split Sp.foldrM spawn_
+pmapReduce_ = mkMapReduce split PC.foldM spawn_
 
 -- | A version of `pmapReduce_` that uses a custom splitting function.
 pmapReduceWith_ :: forall c e m a t .
@@ -93,7 +93,7 @@ pmapReduceWith_ :: forall c e m a t .
       -> a                 -- ^ initial accumulator value
       -> m a
 {-# INLINE pmapReduceWith_ #-}      
-pmapReduceWith_ split = mkMapReduce split Sp.foldrM spawn_
+pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 
 -- | Execute a side-effect in parallel for each element generated.  This is
 --   synchronous; that is, it does not return until all of the actions are executed.
@@ -110,7 +110,7 @@ mkMapReduce
    :: forall c e m a t .
       (ParFuture m, FutContents m a)
       => (c -> [c])              -- ^ splitting function
-      -> ((e -> a -> m a) -> a -> c -> m a) -- ^ sequential fold function
+      -> ((a -> e -> m a) -> a -> c -> m a) -- ^ sequential fold function
       -> (m a -> m (Future m a)) -- ^ spawn function
       -> c                       -- ^ element generator to consume
       -> (e -> m a)              -- ^ compute one result
@@ -120,8 +120,8 @@ mkMapReduce
 {-# INLINE mkMapReduce #-}
 mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
  where
-  mapred :: e -> a -> m a 
-  mapred b ac = do x <- fn b;
+  mapred :: a -> e -> m a 
+  mapred ac b = do x <- fn b;
                    result <- ac `binop` x
                    return result
   loop :: c -> m a
@@ -138,6 +138,6 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
                   binop res1 res2
       ls@(_:_:_) ->
         do ivs <- mapM (spawner . loop) ls
-           foldM (\ acc iv -> get iv >>= binop acc) init ivs
+           M.foldM (\ acc iv -> get iv >>= binop acc) init ivs
       [] -> return init
 

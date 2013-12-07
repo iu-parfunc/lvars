@@ -365,6 +365,7 @@ unionHP mh m1 m2 = do
 instance F.Foldable (IMap k Frzn) where
   -- Note: making these strict for now:  
   foldr fn zer (IMap (WrapLVar lv)) =
+    -- TODO: this isn't a fold RIGHT, it's a fold left.  Need to fix that:
     unsafeDupablePerformIO $
     SLM.foldlWithKey id (\ a _k v -> return (fn v a))
                      zer (L.state lv)
@@ -374,9 +375,16 @@ instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
 #ifdef GENERIC_PAR
-instance Sp.Generator (IMap k Frzn a) where
-  type ElemOf (IMap k Frzn a) = a
-  foldrM = F.foldrM
+instance PC.Generator (IMap k Frzn a) where
+  type ElemOf (IMap k Frzn a) = (k,a)
+  -- foldM fn zer (IMap (WrapLVar lv)) =
+  --   unsafeDupablePerformIO $
+  --   SLM.foldlWithKey id (\ a k v -> return (fn v a))
+  --                    zer (L.state lv)
+
+  -- foldMIO lifter fn zer (IMap (WrapLVar lv)) =
+  --   SLM.foldlWithKey lifter (\ a k v -> fn v a)
+  --                    zer (L.state lv)
 
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
@@ -396,7 +404,7 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
         seqfold fn zer (SLM.Slice slm st en) = do 
           internalLiftIO $ putStrLn $ "[DBG] dropping to seqfold.., st/en: "++show (st,en)
           -- FIXME: Fold over only the range in the slice:
-          SLM.foldlWithKey internalLiftIO (\ a _k v -> fn v a) zer slm    
+          SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v)) zer slm    
     internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap... calling mkMapReduce"
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc

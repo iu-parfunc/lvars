@@ -6,7 +6,7 @@
 module Data.Par.Instances
        () where
 
-import Data.Splittable.Class (Split(..), Generator(..))
+import Data.Splittable.Class (Split(..))
 import qualified Control.Par.Class as PC
 import qualified Data.Map as M
 import qualified Data.Set as S
