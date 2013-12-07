@@ -85,6 +85,10 @@ instance Generator Range where
   foldM fn !inita (InclusiveRange st en _thresh) =
     forAcc_ st en inita (flip fn)
 
+  {-# INLINE foldMP #-}
+  foldMP fn !inita (InclusiveRange st en _thresh) =
+    forAcc_ st en inita (flip fn)
+
 
 -- | Enumerate the elements in a Range.
 toList :: Range -> [Int]

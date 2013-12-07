@@ -50,9 +50,7 @@ case_seqfoldM = do
   assertEqual "Fold a range of ints in Par" expectedSum =<<
     (timeit $ foldM (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
 
--- Same thing in a different monad.
--- This one is REALLY screwed up... it is about 100X slower.
--- E.g. you can run 5M iters in 0.4s.
+-- Same thing in a different monad.  This gets about the same time 0.45s.
 case_seqfoldMP :: Assertion
 case_seqfoldMP = do
   assertEqual "Fold a range of ints in IO" expectedSum =<<

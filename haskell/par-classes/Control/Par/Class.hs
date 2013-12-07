@@ -340,6 +340,10 @@ class Generator c where
   -- more efficient than `foldM`.
   foldMP :: (ParMonad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
   foldMP f z c = foldM f z c
+  -- This default implementation was going VERY slowly for me with the Trace
+  -- scheduler (100X slower, [2013.12.07]).  It's weird though, because simply
+  -- duplicating the foldM function for foldMP (Range instances) fixes the problem
+  -- entirely.
 
   -- | Execute an action for each output of the generator.
   forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
