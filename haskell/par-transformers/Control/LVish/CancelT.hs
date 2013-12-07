@@ -60,13 +60,13 @@ data CPair = CPair !Bool ![CState]
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it is
 -- possible to cancel subtrees of computations.
-runCancelT :: ParMonad m => CancelT m a -> m a
+runCancelT :: PC.ParMonad m => CancelT m a -> m a
 runCancelT (CancelT st) = do
   ref <- internalLiftIO $ newIORef (CPair True []) 
   evalStateT st (CState ref) 
 
 -- Check for cancellation of our thread.
-poll :: (ParMonad m, LVarSched m) => CancelT m Bool
+poll :: (PC.ParMonad m, LVarSched m) => CancelT m Bool
 poll = CancelT$ do
   CState ref  <- S.get
   CPair flg _ <- lift$ internalLiftIO$ readIORef ref
@@ -74,7 +74,7 @@ poll = CancelT$ do
 
 -- | Check with the scheduler to see if the current thread has been canceled, if so
 -- stop computing immediately.
-pollForCancel :: (ParMonad m, LVarSched m) => CancelT m ()
+pollForCancel :: (PC.ParMonad m, LVarSched m) => CancelT m ()
 pollForCancel = do
   b <- poll
   unless b $ cancelMe
@@ -88,7 +88,7 @@ type ThreadId = CState
 
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
 -- (and all its descendents).  This is equivalent to `createTid` followed by `forkCancelableWithTid`.
-forkCancelable :: (ParMonad m, LVarSched m) => CancelT m () -> CancelT m ThreadId
+forkCancelable :: (PC.ParMonad m, LVarSched m) => CancelT m () -> CancelT m ThreadId
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
@@ -99,7 +99,7 @@ forkCancelable act = do
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
 -- computations in question.  For that purpose, we provide a two-phase interface:
 -- `createTid` followed by `forkCancelableWithTid`.
-createTid :: (ParMonad m, LVarSched m) => CancelT m ThreadId
+createTid :: (PC.ParMonad m, LVarSched m) => CancelT m ThreadId
 {-# INLINE createTid #-}
 createTid = CancelT$ do
     newSt <- lift$ internalLiftIO$ newIORef (CPair True [])
@@ -108,7 +108,7 @@ createTid = CancelT$ do
 -- | Fork a thread whil emaking it cancelable with the provided threadId argument.
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (ParMonad m, LVarSched m) => ThreadId -> CancelT m () -> CancelT m ()
+forkCancelableWithTid :: (PC.ParMonad m, LVarSched m) => ThreadId -> CancelT m () -> CancelT m ()
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
     CState parentRef <- S.get
@@ -129,7 +129,7 @@ forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (ParMonad m, Monad m) => ThreadId -> CancelT m ()
+cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
 cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
@@ -139,15 +139,16 @@ cancel (CState ref) = do
      then (CPair False [], ls)
      else (orig, [])
   -- We could do this traversal in parallel if we liked...
-  forM_ chldrn cancel
+  S.forM_ chldrn cancel
 
 cancelMe' :: LVarSched m => StateT CState m ()
 cancelMe' = unCancelT cancelMe
   
-instance (ParSealed m) => ParSealed (CancelT m) where
+instance (PC.ParSealed m) => PC.ParSealed (CancelT m) where
   type GetSession (CancelT m) = GetSession m
   
-instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (CancelT m) where
+instance (PC.ParMonad m, PC.ParIVar m, PC.LVarSched m) =>
+         PC.LVarSched (CancelT m) where
   type LVar (CancelT m) = LVar m 
 
 -- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
@@ -173,14 +174,14 @@ instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (CancelT m) where
      
   returnToSched = lift returnToSched
 
-instance (ParQuasi m qm) => ParQuasi (CancelT m) (CancelT qm) where
+instance (PC.ParQuasi m qm) => PC.ParQuasi (CancelT m) (CancelT qm) where
   toQPar :: (CancelT m) a -> (CancelT qm) a 
   toQPar (CancelT (S.StateT{runStateT})) =
     CancelT $ S.StateT $ toQPar . runStateT
 
-instance (Functor qm, Monad qm, ParMonad m, ParIVar m, 
-          LVarSched m, LVarSchedQ m qm, ParQuasi (CancelT m) (CancelT qm) ) =>
-         LVarSchedQ (CancelT m) (CancelT qm) where
+instance (Functor qm, Monad qm, PC.ParMonad m, PC.ParIVar m, 
+          LVarSched m, LVarSchedQ m qm, PC.ParQuasi (CancelT m) (CancelT qm) ) =>
+         PC.LVarSchedQ (CancelT m) (CancelT qm) where
 
   freezeLV :: forall a d . LVar (CancelT m) a d -> (Proxy ((CancelT m) ()), (CancelT qm) ())
   freezeLV lvar = (Proxy, (do
@@ -192,7 +193,7 @@ instance (Functor qm, Monad qm, ParMonad m, ParIVar m,
     CancelT (lift (snd (frz lvar2)))
     return ()))
 
-instance ParMonad m => ParMonad (CancelT m) where
+instance PC.ParMonad m => PC.ParMonad (CancelT m) where
   fork (CancelT task) = CancelT $ do
     s0 <- S.get
     lift $ PC.fork $ do      
@@ -200,7 +201,7 @@ instance ParMonad m => ParMonad (CancelT m) where
       return res
   internalLiftIO m = CancelT (lift (internalLiftIO m))
 
-instance ParFuture m => ParFuture (CancelT m) where
+instance PC.ParFuture m => PC.ParFuture (CancelT m) where
   type Future (CancelT m) = Future m
   type FutContents (CancelT m) a = PC.FutContents m a
   spawn_ (CancelT task) = CancelT $ do
@@ -223,7 +224,7 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 --
 -- FIXME: This is unsafe until there is a way to guarantee that read-only
 -- computations are performed!
-asyncAnd :: forall p . (ParMonad p, LVarSched p)
+asyncAnd :: forall p . (PC.ParMonad p, LVarSched p)
             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
 asyncAnd leftM rightM kont = do

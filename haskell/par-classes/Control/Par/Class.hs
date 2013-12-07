@@ -11,6 +11,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -326,32 +327,28 @@ class Generator c where
   --   the natural and inexpensive ordering for that type is.
   --        
   --   In general this should be used with commutative, associative functions.
-  foldM :: (Monad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
-  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc  
-  foldM fn zer = fold (\ acc elm -> acc >>= (`fn2` elm)) (return zer)
-     where fn2 acc elm = fn acc elm
-
-  -- -- This is inefficient because unsafePerformIO requires locking:
-  -- foldM = foldMIO (\ io -> let x = unsafePerformIO io in
-  --                          x `seq` return x)
-
-  -- -- | Execute an action for each output of the generator.
-  -- forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
-  -- forM_ fn = foldM (\ x () -> fn x) ()
-
-  -- | Fold all outputs from the generator, sequentially.
-  --   The ordering is determined by the generator type, and is whatever
-  --   the natural and inexpensive ordering for that type is.
+  --   This fold is strict in the accumulator.       
   fold :: (acc -> ElemOf c -> acc) -> acc -> c -> acc
 
-  -- | Some data types may internally need to use IO, even if they're conceputually
-  -- pure.  In this cases, this function can be more efficient.
-  foldMIO :: (Monad m) => (forall a . IO a -> m a) ->
-                          (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
-  foldMIO _lift = foldM
-  
+  -- | A monadic version of `fold`.
+  foldM :: (Monad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc  
+  foldM fn zer = fold (\ !acc elm -> acc >>= (`fn2` elm)) (return zer)
+     where fn2 !acc elm = fn acc elm
+
+  -- | If the monad in question is a Par monad, then this version can sometimes be
+  -- more efficient than `foldM`.
   foldMP :: (ParMonad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
   foldMP f z c = foldM f z c
+
+  -- | Execute an action for each output of the generator.
+  forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
+  forM_ fn = foldM (\ () x -> fn x) ()
+
+  -- | The same as `forM_` but for a Par monad.
+  forMP_ :: (ParMonad m) => (ElemOf c -> m ()) -> c -> m ()
+  forMP_ fn = foldMP (\ () x -> fn x) ()
+
 
 -- instance F.Foldable f => Generator (f a) where
 --   type ElemOf (f a) = a
