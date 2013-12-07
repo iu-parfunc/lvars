@@ -59,7 +59,7 @@ Library
   else 
     build-depends: containers >= 0.5
 
-  ghc-options: -O2
+  ghc-options: -O2 -rtsopts
   Other-modules:
 
 
@@ -73,7 +73,8 @@ Test-suite test-par-collections
   -- (2) Dependencies common to test files and the library:
   Build-depends: base >= 4 && < 5
                , time >= 1.4 
-  --              , par-classes >= 1.0 && < 2.0  
+               , par-classes >= 1.0 && < 2.0
+               , monad-par >= 0.3.4.5
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9
@@ -85,6 +86,8 @@ Test-suite test-par-collections
   -- (4) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
-  ghc-options: -threaded
+  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
+  ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
 
 

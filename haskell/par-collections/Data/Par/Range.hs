@@ -14,8 +14,10 @@ module Data.Par.Range
     Range(..), range, irange, zrange, fullpar,
 
     -- * Combined MapReduce operations on ranges
-    pmapReduce, pmapReduce_
---    parFor
+    pmapReduce, pmapReduce_,
+
+    -- * Misc                
+    toList
   )
 where 
 
@@ -77,11 +79,16 @@ instance Generator Range where
   fold fn inita (InclusiveRange st en _thresh) =
     loop inita st
     where
-      loop !acc i | i >= en   = acc
+      loop !acc i | i > en   = acc
                   | otherwise = loop (fn acc i) (i+1)
   {-# INLINE foldM #-}
   foldM fn !inita (InclusiveRange st en _thresh) =
     forAcc_ st en inita (flip fn)
+
+
+-- | Enumerate the elements in a Range.
+toList :: Range -> [Int]
+toList (InclusiveRange st en _) = [st..en]
 
 -- | A simple shorthand for ranges from `n` to `m-1` (inclusive,exclusive).
 -- 
@@ -325,14 +332,13 @@ for_ start end fn = loop start
    loop !i | i == end  = return ()
 	   | otherwise = do fn i; loop (i+1)
 
+-- | Inclusive / Inclusive
 {-# INLINE forAcc_ #-}
 forAcc_ :: Monad m => Int -> Int -> acc -> (Int -> acc -> m acc) -> m acc
 forAcc_ start end _ _fn | start > end = error "for_: start is greater than end"
 forAcc_ start end acc fn = loop acc start 
   where
    loop !acc !i
-     | i == end  = return acc
+     | i > end  = return acc
      | otherwise = do acc' <- fn i acc
-                      loop acc (i+1)
-
-
+                      loop acc' (i+1)
