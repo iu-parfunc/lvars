@@ -346,12 +346,12 @@ class Generator c where
   -- entirely.
 
   -- | Execute an action for each output of the generator.
-  forM_ :: (Monad m) => (ElemOf c -> m ()) -> c -> m ()
-  forM_ fn = foldM (\ () x -> fn x) ()
+  forM_ :: (Monad m) => c -> (ElemOf c -> m ()) -> m ()
+  forM_ c fn = foldM (\ () x -> fn x) () c 
 
   -- | The same as `forM_` but for a Par monad.
-  forMP_ :: (ParMonad m) => (ElemOf c -> m ()) -> c -> m ()
-  forMP_ fn = foldMP (\ () x -> fn x) ()
+  forMP_ :: (ParMonad m) => c -> (ElemOf c -> m ()) -> m ()
+  forMP_ c fn= foldMP (\ () x -> fn x) () c 
 
 
 -- instance F.Foldable f => Generator (f a) where

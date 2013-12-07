@@ -15,7 +15,7 @@ import Data.Word
 -- import Control.Monad.Trans
 
 import Control.Exception (evaluate)
-import Control.Par.Class (Generator(..))
+import Control.Par.Class as PC (Generator(..))
 import Data.Par.Range
 import qualified Control.Monad.Par as P
 
@@ -56,6 +56,14 @@ case_seqfoldMP = do
   assertEqual "Fold a range of ints in IO" expectedSum =<<
     (timeit $ P.runParIO $
      foldMP (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
+
+case_seqfor :: Assertion
+case_seqfor = do
+  assertEqual "For loop over a range of ints" () =<<
+    (timeit $ 
+     PC.forM_ (irange 1 size) $ \ i ->
+        return ()
+    )
 
 -- --------------------------------------------------------------------------------
 
