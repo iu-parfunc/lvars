@@ -2,11 +2,11 @@
 
 module CancelTests (tests, runTests) where
 
-import Control.LVish
+import Control.LVish (logDbgLn, runParLogged, runParIO, runPar, Par)
 import Control.LVish.CancelT as CT
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
-import Control.LVish.Unsafe
+-- import Control.LVish.Unsafe ()
 import Data.LVar.IVar as IV
 
 import Control.Concurrent

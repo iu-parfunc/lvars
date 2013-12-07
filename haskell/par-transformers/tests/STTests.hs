@@ -19,6 +19,8 @@ import Control.Concurrent (threadDelay)
 import Data.STRef
 import Data.Vector.Mutable as MV
 import Data.Vector       (freeze)
+import Debug.Trace
+
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -71,10 +73,8 @@ t1 :: String
 t1 = LV.runPar $ V.runParVecT 1 p1
 
 p1 :: V.ParVecT s1 Int (LV.Par d s0) String
-p1 = do
-  
-  V.set 0
-  
+p1 = do  
+  V.set 0  
   PST.transmute (\v -> PST.STTup2 v v) 
     (do 
         (rawL, rawR) <- VV.reify
@@ -84,20 +84,21 @@ p1 = do
   
 case_v_t2 :: Assertion
 case_v_t2 = assertEqual "testing transmute with effects"
-            "fromList [0]fromList [0]" t2
+                 "fromList [120,5] fromList [120,5]fromList [120,5]" t2
             
 t2 :: String
 t2 = LV.runPar $ V.runParVecT 2 p2
 
+-- | FIXME: This is an example of what we should NOT be allowed to do.
+--   Arbitrary transmute can't be allowed, it allows aliasing.
+--   However, controlled zooming in and out will be allowed.
 p2 :: V.ParVecT s1 Int (LV.Par d s0) String
 p2 = do
-  
   V.set 0
-  
   str <- PST.transmute (\v -> PST.STTup2 v v)
     (do 
         VV.writeL 0 120
-        VV.writeR 0 5
+        VV.writeR 1 5
         (rawL,rawR) <- VV.reify
         frozenL <- PST.liftST$ freeze rawL
         frozenR <- PST.liftST$ freeze rawR
@@ -105,7 +106,8 @@ p2 = do
            
   raw <- V.reify
   frozen <- PST.liftST$ freeze raw
-  return$ show frozen ++ " " ++ str
+  let result = show frozen ++ " " ++ str
+  return result
 {-
 splitVec v = (PST.STTup2 (PST.VFlp l) (PST.VFlp r))
   where

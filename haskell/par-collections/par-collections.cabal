@@ -61,3 +61,30 @@ Library
 
   ghc-options: -O2
   Other-modules:
+
+
+Test-suite test-par-collections
+  Type: exitcode-stdio-1.0
+  hs-source-dirs: ./tests/
+  Main-is: Main.hs
+  -- Build depends that are used directly by the test files, including:
+  -- (1) Self dependency:
+  Build-depends: par-collections
+  -- (2) Dependencies common to test files and the library:
+  Build-depends: base >= 4 && < 5
+               , time >= 1.4 
+  --              , par-classes >= 1.0 && < 2.0  
+  --              , mtl    >= 2.0
+  --              , transformers >= 0.2
+  --              , vector >= 0.9
+  --              , ghc-prim 
+
+  -- (3) Additional depends to test concrete instances:
+--  Build-depends: lvish  >= 1.0.0.4
+
+  -- (4) Additional build depends for testing:
+  Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
+
+  ghc-options: -threaded
+
+

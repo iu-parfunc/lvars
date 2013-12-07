@@ -88,6 +88,8 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
+--
+-- Strict in the accumulator.  
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> LMap k v -> m a
 foldlWithKey liftIO f !a !m = do

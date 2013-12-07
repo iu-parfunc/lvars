@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Provide instances for parallel handling of common, pure Haskell data structures.
@@ -29,14 +30,20 @@ instance (Eq k, Eq v) => Split (M.Map k v) where
   {-# INLINE split #-}
   split = M.splitRoot
 
-instance Generator (M.Map k v) where
+instance PC.Generator (M.Map k v) where
   type ElemOf (M.Map k v) = (k,v)
-  foldrM = foldrMWithKey
+  {-# INLINE foldM #-}  
+  foldM = foldrMWithKey
+  {-# INLINE fold #-}
+  fold fn = M.foldlWithKey (\ !a k v -> fn a (k,v)) 
 
-instance Generator (S.Set a) where
+instance PC.Generator (S.Set a) where
   type ElemOf (S.Set a) = a
-  foldrM = F.foldrM
-
+  {-# INLINE foldM #-}  
+  foldM = F.foldlM
+  {-# INLINE fold #-}  
+  fold  = F.foldl'
+  
 -- TODO: Opt in to the trivial instance of ParFoldable:
 
 -- instance PC.ParFoldable (M.Map k v) where
@@ -44,9 +51,11 @@ instance Generator (S.Set a) where
   
 #endif  
 
-foldrMWithKey :: Monad m => ((k, v) -> acc -> m acc) -> acc -> M.Map k v -> m acc
+foldrMWithKey :: Monad m => (acc -> (k, v) -> m acc) -> acc -> M.Map k v -> m acc
 foldrMWithKey fn zer mp =
-  M.foldrWithKey (\ k v m -> m >>= fn (k,v)) (return zer) mp
+   M.foldrWithKey (\ k v m -> m >>= fn2 (k,v)) (return zer) mp
+  where
+    fn2 !pr !a = fn a pr
 {-# INLINE foldrMWithKey #-}
 
 {-

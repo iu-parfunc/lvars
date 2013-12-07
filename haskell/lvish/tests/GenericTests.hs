@@ -59,10 +59,10 @@ case_pfold_imap = runParIO $ do
   logDbgLn 1 $ "IMap filled up... freezing"
   fmp <- SM.freezeMap mp
   logDbgLn 3 $ "Frozen: "++show fmp
-  let mapper x = do
+  let mapper (_k,x) = do
         logDbgLn 2 $ "Mapping in parallel: "++show x
         return x
-      folder x y = do 
+      folder x y = do
         logDbgLn 2 $ "Summing in parallel "++show (x,y)
         return $! x+y 
   summed <- PC.pmapFold mapper folder 0 fmp

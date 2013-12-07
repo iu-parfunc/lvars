@@ -71,11 +71,16 @@ instance Split Range where
         let offset = start + (i * portion) + remain
         in (InclusiveRange offset (offset + portion - 1) thresh)
 
---  splitPlease pieces rng@(TiledRange start end thresh) 
-
 instance Generator Range where
   type ElemOf Range = Int
-  foldM fn inita (InclusiveRange st en _thresh) =
+  {-# INLINE fold #-}
+  fold fn inita (InclusiveRange st en _thresh) =
+    loop inita st
+    where
+      loop !acc i | i >= en   = acc
+                  | otherwise = loop (fn acc i) (i+1)
+  {-# INLINE foldM #-}
+  foldM fn !inita (InclusiveRange st en _thresh) =
     forAcc_ st en inita (flip fn)
 
 -- | A simple shorthand for ranges from `n` to `m-1` (inclusive,exclusive).

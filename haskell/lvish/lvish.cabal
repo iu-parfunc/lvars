@@ -198,7 +198,8 @@ test-suite test-lvish
                    bits-atomic, missing-foreign
     if flag(generic)
       cpp-options: -DGENERIC_PAR
-      build-depends: par-classes      <= 2.0
+      build-depends: par-classes     >= 1.0 && < 2.0,
+                     par-collections >= 1.0 && < 2.0
     -- END DUPLICATED
     if flag(generic)
       other-modules:  GenericTests

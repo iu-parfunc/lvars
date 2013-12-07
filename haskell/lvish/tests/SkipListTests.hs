@@ -19,7 +19,6 @@ import Control.Monad
 import Control.Concurrent
 import GHC.Conc
 
-import Data.Time.Clock
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
@@ -38,9 +37,11 @@ import TestHelpers as T
 
 -- A number of insertions to test that is reasonable.
 mediumSize :: Int
-mediumSize = case numElems of
+mediumSize =
+  trace ("Setting size for SkipListTests to "++show x) x 
+  where x = case numElems of
                Just x -> x
-               Nothing -> 10000
+               Nothing -> 1000
 
 expectedSum :: Word64
 expectedSum = (s * (s + 1)) `quot` 2
@@ -60,14 +61,6 @@ sliceCheck slm = do
   logDbgLn_ 5 $ "HALF 2, sz "++ show sz3++":\n"++dbg2
   assertEqual "Splitting consvered size: " sz1 (sz2 + sz3)
   return () 
-
-timeit :: IO a -> IO a 
-timeit ioact = do 
-   start <- getCurrentTime
-   res <- ioact
-   end   <- getCurrentTime
-   putStrLn$ "SELFTIMED: " ++ show (diffUTCTime end start)
-   return res
 
 --------------------------------------------------------------------------------
 -- Tests for basic linked maps

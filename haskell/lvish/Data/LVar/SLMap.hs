@@ -377,14 +377,18 @@ instance F.Foldable (IMap k Trvrsbl) where
 #ifdef GENERIC_PAR
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
-  -- foldM fn zer (IMap (WrapLVar lv)) =
-  --   unsafeDupablePerformIO $
-  --   SLM.foldlWithKey id (\ a k v -> return (fn v a))
-  --                    zer (L.state lv)
+  {-# INLINE fold #-}
+  fold fn zer (IMap (WrapLVar lv)) =
+    unsafeDupablePerformIO $
+    SLM.foldlWithKey id (\ a k v -> return $! fn a (k,v))
+                     zer (L.state lv)
+    
+  {-# INLINE foldMP #-}
+  -- | More efficient, not requiring unsafePerformIO or risk of duplication.
+  foldMP fn zer (IMap (WrapLVar lv)) =
+    SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
+                     zer (L.state lv)
 
-  -- foldMIO lifter fn zer (IMap (WrapLVar lv)) =
-  --   SLM.foldlWithKey lifter (\ a k v -> fn v a)
-  --                    zer (L.state lv)
 
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}

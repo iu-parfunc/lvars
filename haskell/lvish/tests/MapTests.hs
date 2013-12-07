@@ -191,8 +191,7 @@ show03 = show$ runParThenFreeze $ do
 -- Issue related:
 --------------------------------------------------------------------------------
 
--- #27
-
+-- Issue #27, spurious duplication.
 case_handlrDup :: Assertion
 case_handlrDup = runParIO $ do
   ctr <- I.liftIO$ newIORef 0

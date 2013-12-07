@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, for_, forDown_, assertOr, timeOut, splitRange, 
+   nTimes, for_, forDown_, assertOr, timeOut, splitRange, timeit, 
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -27,8 +27,7 @@ import Control.Exception
 import GHC.Conc
 import Data.IORef
 import Data.Time.Clock
-import Data.List (isInfixOf, intersperse)
-import qualified Data.Set as S
+import Data.List (isInfixOf, intersperse, nub)
 import Text.Printf
 import Control.Concurrent (forkOS, forkIO, ThreadId)
 -- import Control.Exception (catch, SomeException, fromException, bracket, AsyncException(ThreadKilled))
@@ -40,7 +39,7 @@ import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 import Test.HUnit as HU
 
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+-- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -148,8 +147,7 @@ stdTestHarness genTests = do
   -- of benchmarks is quite limited.
   let all_threads = case lookup "NUMTHREADS" theEnv of
                       Just str -> [read str]
-                      Nothing -> S.toList$ S.fromList$
-                        [1, 2, np `quot` 2, np, 2*np ]
+                      Nothing -> nub [1, 2, np `quot` 2, np, 2*np ]
   putStrLn $"Running tests for these thread settings: "  ++show all_threads
   all_tests <- genTests 
 
@@ -224,7 +222,7 @@ allowSomeExceptions msgs action = do
        (\e ->
          let estr = show e in
          if  any (`isInfixOf` estr) msgs
-          then do when (dbgLvl>=1) $
+          then do when True $ -- (dbgLvl>=1) $
                     putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
                   return (Left e)
           else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
@@ -325,3 +323,11 @@ splitRange pieces (start,end)
         let offset = start + (i * portion) + remain
         in (offset, (offset + portion - 1))
 
+-- | Print out a SELFTIMED message reporting the time from a given test.
+timeit :: IO a -> IO a 
+timeit ioact = do 
+   start <- getCurrentTime
+   res <- ioact
+   end   <- getCurrentTime
+   putStrLn$ "SELFTIMED: " ++ show (diffUTCTime end start)
+   return res

@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-} -- for debugging
 
 -- | An implementation of concurrent finite maps based on skip lists.  Only
@@ -192,9 +193,11 @@ putIfAbsent_ (Index m slm) shortcut k vc coin install = do
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
+--
+-- Strict in the accumulator.        
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> SLMap k v -> m a
-foldlWithKey liftIO f a (SLMap _ lm) = LM.foldlWithKey liftIO f a lm
+foldlWithKey liftIO f !a (SLMap _ !lm) = LM.foldlWithKey liftIO f a lm
 
 -- | Create an identical copy of an (unchanging) SLMap with the keys unchanged and
 -- the values replaced by the result of applying the provided function.
