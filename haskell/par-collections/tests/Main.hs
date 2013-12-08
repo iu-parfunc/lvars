@@ -64,18 +64,21 @@ case_seqfoldMP = do
 -- Data.Atomic.Counter drops that time by a factor of three, i.e. 0.9s for 500M, or
 -- twice as slow as the fold versions above.
 --
---   (By the way, it's 2X slower to use the C.incrCounter atomic op than to use raw
+--   Side note 1: it's 2X slower to use the C.incrCounter atomic op than to use raw
 --   reads and writes, but some of this must be due to the fact that the
---   fetch-and-add primop is not an inline primop yet.)
+--   fetch-and-add primop is not an inline primop yet.
+--
+--   Side note 2: Using a custom vs. default implementatino of forM_ for Ranges
+--   didn't make a difference here.
 case_seqfor1 :: Assertion
 case_seqfor1 = do
   assertEqual "For loop over a range of ints" expectedSum =<<
     (timeit $ do
        cnt <- C.newCounter 0
        PC.forM_ (irange 1 size) $ \ i -> do 
---         x <- C.readCounter cnt
---         C.writeCounter cnt $! x + fromIntegral i
-         C.incrCounter (fromIntegral i) cnt 
+         x <- C.readCounter cnt
+         C.writeCounter cnt $! x + fromIntegral i
+--         C.incrCounter (fromIntegral i) cnt 
          return ()
        fmap fromIntegral $ C.readCounter cnt 
        -- cnt <- newIORef 0
@@ -86,11 +89,16 @@ case_seqfor1 = do
        -- readIORef cnt        
     )
 
--- Very slow currently [2013.12.07]: 5M in 0.37s, a full 100X worse.
-case_seqforMP :: Assertion
-case_seqforMP = do
+-- Very slow currently [2013.12.07]: 5M in 0.37s, a full 100X worse.  Providing a
+-- custom definition of forMP_ for Ranges (rather than the default) got this down to
+-- 0.13s for 5M, but that is still abysmal.
+--  
+--   Of course, if you perform the internalLiftIO once, outside the loop, the
+--   performance is the same as seqfor1.
+case_seqforMP1 :: Assertion
+case_seqforMP1 = do
   assertEqual "For loop over a range of ints in Par monad" expectedSum =<<
-    (timeit $ P.runParIO $ do
+    (timeit $ P.runParIO $ do 
        cnt <- internalLiftIO $ C.newCounter 0
        PC.forMP_ (irange 1 size) $ \ i -> do 
          x <- internalLiftIO$ C.readCounter cnt
@@ -99,6 +107,15 @@ case_seqforMP = do
        fmap fromIntegral $ internalLiftIO$ C.readCounter cnt 
     )
 
+-- Do no work in this version, but run the loop in the par monad.
+-- This one is reasonable speed, 0.29s for 500M.
+case_seqforMP2 :: Assertion
+case_seqforMP2 = do
+  assertEqual "For loop over a range of ints in Par monad" () =<<
+    (timeit $ P.runParIO $ do 
+       PC.forMP_ (irange 1 size) $ \ i -> 
+         return ()
+    )
 
 -- --------------------------------------------------------------------------------
 
