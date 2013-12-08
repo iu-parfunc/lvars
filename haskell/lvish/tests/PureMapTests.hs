@@ -1,64 +1,28 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
-module MapTests(tests, runTests) where
-
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
-import qualified Test.HUnit as HU
-import TestHelpers as T
-
-import Control.Concurrent (threadDelay)
-import Data.Traversable (traverse)
-import qualified Data.Map as M
-import qualified Data.Set as S
-import Data.IORef
-import System.Random
+module PureMapTests(tests, runTests) where
 
 import Data.LVar.PureSet as IS
 import Data.LVar.PureMap as IM
-import qualified Data.LVar.SLMap as SM
-import qualified Data.LVar.IVar as IV
 
-import           Control.LVish
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import qualified Control.LVish.Internal as I
+#include "CommonMapTests.hs"
 
 --------------------------------------------------------------------------------
 
 tests :: Test
-tests = $(testGroupGenerator)
+tests = testGroup "" [tests_here, tests_common ]
+
+tests_here :: Test
+tests_here = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMain [tests]
 
 --------------------------------------------------------------------------------
-
-case_v7a :: Assertion
-case_v7a = assertEqual "basic imap test"
-           (M.fromList [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)]) =<<
-           v7a
-
-v7a :: IO (M.Map Int Float)
-v7a = runParIO $ IM.freezeMap =<<
-  do mp <- IM.newEmptyMap
-     fork $ do IM.waitSize 3 mp
-               IM.insert 100 100.1 mp
-     fork $ do IM.waitValue 100.1 mp
-               v <- IM.getKey 1 mp
-               IM.insert 200 (200.1 + v) mp
-     IM.insert 1 1 mp
-     IM.insert 2 2 mp
-     logDbgLn 1 "[v7a] Did the first two puts.."
-     I.liftIO$ threadDelay 1000
-     IM.insert 3 3 mp
-     logDbgLn 1 "[v7a] Did the first third put."
-     IM.waitSize 5 mp
-     return mp
 
 -- [2013.08.05] RRN: Observing nondeterministic blocked-indefinitely
 -- exception here.
@@ -73,7 +37,7 @@ case_i7b = do
 
 -- | A quasi-deterministic example.
 i7b :: IO (M.Map Int (S.Set Float))
--- Do we need a "deep freeze" that freezes nested structures?
+-- A manual nested freeze instead of DeepFrz:
 i7b = runParIO $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
@@ -89,13 +53,6 @@ i7b = runParIO $ do
   IV.get f1; IV.get f2
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
-
-case_v7c :: Assertion
-case_v7c = assertEqual "imap test - racing modifies"
-           (M.fromList [(1,S.fromList [3.33]),
-                        (2,S.fromList [4.44]),
-                        (3,S.fromList [5.55,6.6])]) =<<
-           v7c
 
 -- | This example is valid because two modifies may race.
 v7c :: IO (M.Map Int (S.Set Float))
@@ -116,6 +73,13 @@ v7c = runParIO $ do
   IV.get f1; IV.get f2; IV.get f3; IV.get f4
   mp2 <- IM.freezeMap mp
   traverse IS.freezeSet mp2
+
+case_v7c :: Assertion
+case_v7c = assertEqual "imap test - racing modifies"
+           (M.fromList [(1,S.fromList [3.33]),
+                        (2,S.fromList [4.44]),
+                        (3,S.fromList [5.55,6.6])]) =<<
+           v7c
 
 --------------------------------------------------------------------------------
 -- Tests that use `forEachHP`
@@ -167,16 +131,6 @@ v8d = runParIO $ do
 -- Show instances
 ------------------------------------------------------------------------------------------
 
--- | It happens that these come out in the opposite order from the Pure one:
-case_show02 :: Assertion
-case_show02 = assertEqual "show for SLMap" "{IMap: (\"key2\",44), (\"key1\",33)}" show02
-show02 :: String
-show02 = show$ runParThenFreeze $ do
-  mp <- SM.newEmptyMap
-  SM.insert "key1" (33::Int) mp
-  SM.insert "key2" (44::Int) mp  
-  return mp
-
 case_show03 :: Assertion
 case_show03 = assertEqual "show for PureMap" "{IMap: (\"key1\",33), (\"key2\",44)}" show03
 show03 :: String
@@ -187,25 +141,3 @@ show03 = show$ runParThenFreeze $ do
   return mp
 
 
---------------------------------------------------------------------------------
--- Issue related:
---------------------------------------------------------------------------------
-
--- Issue #27, spurious duplication.
-case_handlrDup :: Assertion
-case_handlrDup = runParIO $ do
-  ctr <- I.liftIO$ newIORef 0
-  mp  <- SM.newEmptyMap
-  hp  <- newPool
-  -- Register handler FIRST.. no race.
-  SM.forEachHP (Just hp) mp $ \ (k::Int) v -> do
-    logDbgLn 1 $ "[case_handlrDup] Callback executing: " ++ show (k,v)
-    I.liftIO $ incr ctr
-  SM.insert 2 2 mp
-  SM.insert 3 3 mp 
-  quiesce hp
-  sum <- I.liftIO $ readIORef ctr
-  I.liftIO $ assertEqual "Should be no duplication in this case" 2 sum
-
-incr :: IORef Int -> IO ()
-incr ref = atomicModifyIORef' ref (\x -> (x+1,()))

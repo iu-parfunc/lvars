@@ -9,7 +9,7 @@ LIBSRC =
 ARGS = -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
 # -fforce-recomp
 
-ALLEXES = ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe MapTests.exe MaxCounterTests.exe MemoTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe 
+ALLEXES = ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe 
 
  .SUFFIXES: .hs .exe
 
@@ -20,7 +20,7 @@ prof:
 	rm -f MapTests.exe
 	GHC_ARGS="-prof -auto-all -osuf=po" $(MAKE) MapTests.exe
 
-.hs.exe:
+.hs.exe: CommonMapTests.hs
 	ghc $(ARGS) -i.. -main-is $(^:.hs=.runTests) $^ -o $@
 
 main: Main.exe

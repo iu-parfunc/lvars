@@ -31,12 +31,12 @@ module Data.LVar.SLMap
          IMap,
          newEmptyMap, newMap, newFromList,
          insert, 
-         getKey, waitSize, modify,
+         getKey, waitSize, waitValue,
+         modify,
 
          -- * Quasi-deterministic operations
          freezeMap,
-         traverseFrzn_,
-         -- waitValue, 
+         traverseFrzn_,         
 
          -- * Iteration and callbacks
          forEach, forEachHP, 
@@ -256,7 +256,18 @@ getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
 
 -- | Wait until the map contains a certain value (on any key).
 waitValue :: (Ord k, Eq v) => v -> IMap k s v -> Par d s ()
-waitValue !val (IMap (WrapLVar lv)) = error "TODO / FINISHME SLMap.waitValue"
+waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
+  where
+    deltaThresh (_,v) | v == val  = return$ Just ()
+                      | otherwise = return Nothing
+    globalThresh ref _frzn = do
+      let slm = L.state lv
+      let fn Nothing _k v | v == val  = return $! Just ()
+                          | otherwise = return $ Nothing
+          fn just _ _  = return $! just
+      -- This is inefficient.
+      -- FIXME: no short-circuit for this fold:
+      SLM.foldlWithKey id fn Nothing slm
 
 -- | Wait on the SIZE of the map, not its contents.
 waitSize :: Int -> IMap k s v -> Par d s ()

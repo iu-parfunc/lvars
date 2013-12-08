@@ -59,7 +59,7 @@ sliceCheck slm = do
   sz3 <- SLM.sliceSize sl3
   logDbgLn_ 5 $ "HALF 1, sz "++ show sz2++":\n"++dbg1
   logDbgLn_ 5 $ "HALF 2, sz "++ show sz3++":\n"++dbg2
-  assertEqual "Splitting consvered size: " sz1 (sz2 + sz3)
+  assertEqual "Splitting conserved size: " sz1 (sz2 + sz3)
   return () 
 
 --------------------------------------------------------------------------------
@@ -131,24 +131,28 @@ slm1 = do
 case_slm1 :: Assertion  
 case_slm1 = slm1 >>= assertEqual "test sequential insertion for SkipListMap" "Hello World"  
 
+-- | Perform a fork-join computation and populate a SkipListMap in parallel.
+fillOne :: [(Int, Int)] -> IO (SLM.SLMap Int Int)
+fillOne chunks = do
+  slm <- SLM.newSLMap 10
+  mvars <- forM chunks $ \ (start,end) -> do
+    mv <- newEmptyMVar
+    forkWithExceptions forkIO "slm2 test thread" $ do
+      rgen <- newIORef $ mkStdGen 0
+      let flip = do
+            g <- readIORef rgen
+            let (b, g') = random g
+            writeIORef rgen $! g'
+            return b
+      T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
+      putMVar mv ()
+    return mv  
+  forM_ mvars takeMVar  
+  return slm
+
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
-  slm <- SLM.newSLMap 10
-  timeit $ do 
-     mvars <- forM chunks $ \ (start,end) -> do
-       mv <- newEmptyMVar
-       forkWithExceptions forkIO "slm2 test thread" $ do
-         rgen <- newIORef $ mkStdGen 0
-         let flip = do
-               g <- readIORef rgen
-               let (b, g') = random g
-               writeIORef rgen $! g'
-               return b
-
-         T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
-         putMVar mv ()
-       return mv  
-     forM_ mvars takeMVar
+  slm <- timeit$ fillOne chunks 
   -- End timing.  Timing just the insertion phase.
   cs <- SLM.counts slm
   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
@@ -177,8 +181,6 @@ slm4 :: IO (Bool, Word64)
 slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
 case_slm4 :: Assertion 
 case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
-
-
 
 
 --------------------------------------------------------------------------------
