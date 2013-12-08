@@ -75,6 +75,7 @@ Test-suite test-par-collections
                , time >= 1.4 
                , par-classes >= 1.0 && < 2.0
                , monad-par >= 0.3.4.5
+               , atomic-primops >= 0.4
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9

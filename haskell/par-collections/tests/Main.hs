@@ -4,7 +4,7 @@ module Main (tests, main) where
 
 -- import Control.LVish
 -- import qualified Control.Par.Class as PC
--- import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
+import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
 -- import Control.LVish.Unsafe
 -- import Data.LVar.IVar as IV
 
@@ -17,7 +17,9 @@ import Data.Word
 import Control.Exception (evaluate)
 import Control.Par.Class as PC (Generator(..))
 import Data.Par.Range
+import Data.IORef
 import qualified Control.Monad.Par as P
+import qualified Data.Atomics.Counter as C
 
 -- import Data.List
 import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
@@ -57,13 +59,46 @@ case_seqfoldMP = do
     (timeit $ P.runParIO $
      foldMP (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
 
-case_seqfor :: Assertion
-case_seqfor = do
-  assertEqual "For loop over a range of ints" () =<<
-    (timeit $ 
-     PC.forM_ (irange 1 size) $ \ i ->
-        return ()
+-- Runs at 0.3s for 500M if there's no work done in the body at all.  With an IORef
+-- Word (i.e. boxed), this is 10X slower, at 0.28s for 50M Switching to
+-- Data.Atomic.Counter drops that time by a factor of three, i.e. 0.9s for 500M, or
+-- twice as slow as the fold versions above.
+--
+--   (By the way, it's 2X slower to use the C.incrCounter atomic op than to use raw
+--   reads and writes, but some of this must be due to the fact that the
+--   fetch-and-add primop is not an inline primop yet.)
+case_seqfor1 :: Assertion
+case_seqfor1 = do
+  assertEqual "For loop over a range of ints" expectedSum =<<
+    (timeit $ do
+       cnt <- C.newCounter 0
+       PC.forM_ (irange 1 size) $ \ i -> do 
+--         x <- C.readCounter cnt
+--         C.writeCounter cnt $! x + fromIntegral i
+         C.incrCounter (fromIntegral i) cnt 
+         return ()
+       fmap fromIntegral $ C.readCounter cnt 
+       -- cnt <- newIORef 0
+       -- PC.forM_ (irange 1 size) $ \ i -> do 
+       --   x <- readIORef cnt
+       --   writeIORef cnt $! x + fromIntegral i
+       --   return ()
+       -- readIORef cnt        
     )
+
+-- Very slow currently [2013.12.07]: 5M in 0.37s, a full 100X worse.
+case_seqforMP :: Assertion
+case_seqforMP = do
+  assertEqual "For loop over a range of ints in Par monad" expectedSum =<<
+    (timeit $ P.runParIO $ do
+       cnt <- internalLiftIO $ C.newCounter 0
+       PC.forMP_ (irange 1 size) $ \ i -> do 
+         x <- internalLiftIO$ C.readCounter cnt
+         internalLiftIO$ C.writeCounter cnt $! x + fromIntegral i
+         return ()
+       fmap fromIntegral $ internalLiftIO$ C.readCounter cnt 
+    )
+
 
 -- --------------------------------------------------------------------------------
 
