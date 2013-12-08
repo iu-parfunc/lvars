@@ -106,10 +106,12 @@ v8c = runParIO $ do
 
 case_v8d :: Assertion
 case_v8d = assertEqual "union on maps"
-           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
-             =<< v8d
-v8d :: IO (M.Map Int Int)
-v8d = runParIO $ do
+--           (M.fromList [(1,101),(2,102),(40,40),(50,50)] )
+           [40,50,101,102] =<< v8d
+-- v8d :: IO (M.Map Int Int)
+v8d :: IO [Int]
+v8d = fmap (L.sort . F.toList) $
+      runParIO $ do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."  
   m1 <- IM.newFromList [(1,1),(2,2)]
@@ -125,7 +127,7 @@ v8d = runParIO $ do
   quiesce hp
 --  quiesceAll  
   logDbgLn 1 " [v8d] quiesce finished, next freeze::"
-  freezeMap m4
+  IM.freezeMap m4
 
 ------------------------------------------------------------------------------------------
 -- Show instances

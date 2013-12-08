@@ -14,7 +14,7 @@ module TestHelpers
    stdTestHarness,
 
    -- * Misc utilities
-   nTimes, for_, forDown_, assertOr, timeOut, splitRange, timeit, 
+   nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit, 
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -207,11 +207,11 @@ assertException msgs action = do
             (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
                       return (Just $ show e))
  case x of 
-  Nothing -> error "Failed to get an exception!"
+  Nothing -> HU.assertFailure "Failed to get an exception!"
   Just s -> 
    if  any (`isInfixOf` s) msgs
    then return () 
-   else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+   else HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
         ++ "\nInstead got this exception:\n  " ++ show s
 
 -- | For testing quasi-deterministic programs: programs that always
@@ -225,20 +225,31 @@ allowSomeExceptions msgs action = do
           then do when True $ -- (dbgLvl>=1) $
                     putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
                   return (Left e)
-          else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
-               ++ "\nInstead got this exception:\n  " ++ show estr)
+          else do HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
+                    ++ "\nInstead got this exception:\n  " ++ show estr
+                  error "Should not reach this..."
+       )
 
 exceptionOrTimeOut :: Double -> [String] -> IO a -> IO ()
 exceptionOrTimeOut time msgs action = do
   x <- timeOut time $
        allowSomeExceptions msgs action
   case x of
-    Just (Right _val) -> error "exceptionOrTimeOut: action returned successfully!" 
+    Just (Right _val) -> HU.assertFailure "exceptionOrTimeOut: action returned successfully!" 
     Just (Left _exn)  -> return () -- Error, yay!
     Nothing           -> return () -- Timeout.
 
+-- | Simple wrapper around `timeOut` that throws an error if timeOut occurs.
+assertNoTimeOut :: Double -> IO a -> IO a
+assertNoTimeOut t a = do
+  m <- timeOut t a
+  case m of
+    Nothing -> do HU.assertFailure$ "assertNoTimeOut: timeout occurred after "++show t++" seconds"
+                  error "Should not reach this #2"
+    Just a  -> return a  
+
 -- | Time-out an IO action by running it on a separate thread, which is killed when
--- the timer expires.  This requires that the action do allocation, otherwise it will
+-- the timer (in seconds) expires.  This requires that the action do allocation, otherwise it will
 -- be non-preemptable.
 timeOut :: Double -> IO a -> IO (Maybe a)
 timeOut interval act = do

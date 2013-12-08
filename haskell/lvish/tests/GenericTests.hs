@@ -50,7 +50,7 @@ expectedSum = (s * (s + 1)) `quot` 2
 
 -- ParFold instance
 case_pfold_imap :: Assertion 
-case_pfold_imap = runParIO $ do
+case_pfold_imap = assertNoTimeOut 3.0 $ runParIO $ do
   mp <- SM.newEmptyMap
   -- pforEach (zrange sz) $ \ ix -> do
   forM_ [1..size] $ \ ix -> do       
