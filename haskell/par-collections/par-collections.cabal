@@ -38,7 +38,9 @@ Library
      Data.Par.Splittable
      Data.Par.Traversable
      Data.Par.Range
-     Data.Par.Instances
+     Data.Par.List
+     Data.Par.Map
+     Data.Par.Set     
      
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
@@ -57,7 +59,7 @@ Library
     cpp-options: -DNEWCONTAINERS
     build-depends: containers >= 0.5.3.2
   else 
-    build-depends: containers >= 0.5
+    build-depends: containers >= 0.5 && < 0.5.3.2
 
   ghc-options: -O2 -rtsopts
   Other-modules:

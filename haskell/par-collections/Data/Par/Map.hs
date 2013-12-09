@@ -4,13 +4,12 @@
 
 -- | Provide instances for parallel handling of common, pure Haskell data structures.
 
-module Data.Par.Instances
+module Data.Par.Map
        () where
 
 import Data.Splittable.Class (Split(..))
 import qualified Control.Par.Class as PC
 import qualified Data.Map as M
-import qualified Data.Set as S
 import qualified Data.Foldable as F
 
 import qualified Data.Par.Splittable as Sp 
@@ -20,16 +19,6 @@ import Data.Monoid
 
 --------------------------------------------------------------------------------
 
-#ifdef NEWCONTAINERS
-
-instance Eq a => Split (S.Set a) where
-  {-# INLINE split #-}
-  split = S.splitRoot
-
-instance (Eq k, Eq v) => Split (M.Map k v) where
-  {-# INLINE split #-}
-  split = M.splitRoot
-
 instance PC.Generator (M.Map k v) where
   type ElemOf (M.Map k v) = (k,v)
   {-# INLINE foldM #-}  
@@ -37,18 +26,16 @@ instance PC.Generator (M.Map k v) where
   {-# INLINE fold #-}
   fold fn = M.foldlWithKey (\ !a k v -> fn a (k,v)) 
 
-instance PC.Generator (S.Set a) where
-  type ElemOf (S.Set a) = a
-  {-# INLINE foldM #-}  
-  foldM = F.foldlM
-  {-# INLINE fold #-}  
-  fold  = F.foldl'
-  
--- TODO: Opt in to the trivial instance of ParFoldable:
+#ifdef NEWCONTAINERS
+instance (Eq k, Eq v) => Split (M.Map k v) where
+  {-# INLINE split #-}
+  split = M.splitRoot
 
+-- TODO: Opt in to the trivial instance of ParFoldable, using Split-based mapreduce:
 -- instance PC.ParFoldable (M.Map k v) where
 --  pmapFold = Sp.pmapReduce
-  
+#else
+-- instance PC.ParFoldable (M.Map k v) where
 #endif  
 
 foldrMWithKey :: Monad m => (acc -> (k, v) -> m acc) -> acc -> M.Map k v -> m acc

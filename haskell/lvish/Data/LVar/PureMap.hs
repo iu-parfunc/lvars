@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 -- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 
 {-|
 
@@ -61,6 +62,16 @@ import           Data.IORef
 import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
+
+#ifdef GENERIC_PAR
+-- From here we get a Generator and, in the future, ParFoldable instance for Map:
+import Data.Par.Map ()
+
+import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (internalLiftIO)
+-- import qualified Data.Splittable.Class as Sp
+-- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -320,3 +331,25 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
+
+--------------------------------------------------------------------------------
+-- Interfaces for generic programming with containers:
+
+#ifdef GENERIC_PAR
+#warning "Creating instances for generic programming with IMaps"
+instance PC.Generator (IMap k Frzn a) where
+  type ElemOf (IMap k Frzn a) = (k,a)
+  {-# INLINE fold #-}
+  {-# INLINE foldM #-}    
+  {-# INLINE foldMP #-}  
+  fold   fn zer (IMap (WrapLVar lv)) = PC.fold   fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+  foldM  fn zer (IMap (WrapLVar lv)) = PC.foldM  fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+  foldMP fn zer (IMap (WrapLVar lv)) = PC.foldMP fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+
+-- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
+-- instance.  
+-- instance Show k => PC.ParFoldable (IMap k Frzn a) where
+
+#endif  
+
+

@@ -358,7 +358,7 @@ class Generator c where
 --   type ElemOf (f a) = a
 --   {-# INLINE foldrM #-}
 --   foldrM = F.foldrM 
-
+   
 --------------------------------------------------------------------------------
 
 -- class Sp.Generator c e => ParFoldable c e | c -> e where

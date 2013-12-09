@@ -8,7 +8,8 @@
 {-| 
 
 Parallel combinators based on top of a 'Par' monad.  Specifically, this module
-provides higher order functions for traversing data structures in parallel.
+provides higher order functions for operating on `Traversable` data structures in
+parallel.
 
 -}
 
@@ -18,17 +19,22 @@ module Data.Par.Traversable
     
     -- | Because these operations assume only `Traversable`, the best they can do is
     -- to fork one parallel computation per element.
-    parMap, ptraverse, ptraverse_
+    parMap, ptraverse,
+
+    -- * Variants that evaluate only down to weak-head-normal-form
+    parMap_, ptraverse_
   )
 where 
 
 import Control.DeepSeq
+import Control.Exception (evaluate)
 import Data.Traversable
 import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
+import Control.Par.Class.Unsafe (internalLiftIO)
 
 -- -----------------------------------------------------------------------------
 -- Parallel maps over Traversable data structures
@@ -51,6 +57,15 @@ parMap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
 {-# INLINE parMap #-}
 parMap f xs = mapM (spawnP . f) xs >>= mapM get
 
+-- | A variant of `ParMap` that only evaluates to weak-head-normal-form.
+parMap_ :: (Traversable t, ParFuture p, FutContents p b) =>
+          (a -> b) -> t a -> p (t b)
+{-# INLINE parMap_ #-}
+parMap_ f xs = mapM spawnWHNF xs >>= mapM get
+  where
+    spawnWHNF x = spawn_ $ internalLiftIO $ evaluate (f x)
+
+--------------------------------------------------------------------------------
 
 -- | Like 'parMap', but the function is a @Par@ monad operation.
 --
@@ -61,11 +76,14 @@ ptraverse :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
 {-# INLINE ptraverse #-}           
 ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 
+
 -- | A variant that only evaluates to weak-head-normal-form.
 ptraverse_ :: (Traversable t, ParFuture p, FutContents p b) =>
            (a -> p b) -> t a -> p (t b)
 {-# INLINE ptraverse_ #-}
 ptraverse_ f xs = mapM (spawn_ . f) xs >>= mapM get
+
+--------------------------------------------------------------------------------
 
 
 -- TODO: parBuffer -- enable signaling with a counter?

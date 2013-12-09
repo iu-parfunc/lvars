@@ -9,11 +9,13 @@ import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import TestHelpers as T
 import Control.Concurrent (threadDelay)
+import Control.Monad (forM_, forM)
 import Data.Traversable (traverse)
 import qualified Data.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.List as L
+import Data.Word
 import Data.IORef
 import System.Random
 
@@ -21,17 +23,18 @@ import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
 import qualified Data.LVar.IVar as IV
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class as PC
+#endif
 --------------------------------------------------------------------------------
 
 
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
---           (M.fromList [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)]) =<<
---           [(1,1.0),(2,2.0),(3,3.0),(100,100.1),(200,201.1)] =<<
            [1.0,2.0,3.0,100.1,201.1] =<<
            v7a
 
--- v7a :: IO ([(Int,Float)])
 v7a :: IO [Float]
 v7a = fmap (L.sort . F.toList) $
   runParIO $ IM.freezeMap =<<
@@ -126,35 +129,44 @@ incr ref = atomicModifyIORef' ref (\x -> (x+1,()))
 --------------------------------------------------------------------------------
 
 -- -- | Perform a fork-join computation and populate a SkipListMap in parallel.
--- fillOne :: [(Int, Int)] -> IO (SLM.SLMap Int Int)
--- fillOne chunks = do
---   slm <- SLM.newSLMap 10
---   mvars <- forM chunks $ \ (start,end) -> do
---     mv <- newEmptyMVar
---     forkWithExceptions forkIO "slm2 test thread" $ do
---       rgen <- newIORef $ mkStdGen 0
---       let flip = do
---             g <- readIORef rgen
---             let (b, g') = random g
---             writeIORef rgen $! g'
---             return b
---       T.for_ (start, end)$ \n -> void (SLM.putIfAbsentToss slm n (return n) flip)
---       putMVar mv ()
---     return mv  
---   forM_ mvars takeMVar  
---   return slm
+fillOne :: [(Int, Int)] -> Par d s (IM.IMap Int s Int)
+-- fillOne :: PC.ParMonad p => [(Int, Int)] -> p (IM.IMap Int Int)
+fillOne chunks = do
+  mp <- IM.newEmptyMap 
+  vars <- forM chunks $ \ (start,end) -> do
+    iv <- IV.new
+    fork $ do
+      T.for_ (start, end)$ \n -> IM.insert n n mp
+      IV.put iv ()
+    return iv  
+  forM_ vars IV.get
+  return mp
 
--- insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
--- insertionTest chunks = do
---   slm <- timeit$ fillOne chunks 
---   -- End timing.  Timing just the insertion phase.
---   cs <- SLM.counts slm
---   logDbgLn_ 1 $ "After insertions, counts: " ++ show cs
---   sliceCheck slm    
---   matches <- SLM.foldlWithKey id (\b k v -> if k == v then return b else return False) True slm
---   summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
---   printLog
---   return (matches, summed)
+insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
+insertionTest chunks = do
+  mp <- timeit$ runParThenFreezeIO $ fillOne chunks
+  let matches = PC.fold (\b (k,v) -> b && k == v) True mp
+--  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
+--  return (matches, summed)
+  undefined
+
+-- -- Concurrent insertion of the same values:
+-- slm2 :: IO (Bool, Word64)
+-- slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
+-- case_slm2 :: Assertion  
+-- case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap (#2)" (True, expectedSum)
+
+-- -- Same, but in the opposite order:
+-- -- Takes much longer (in parallel)!! Why?
+-- slm3 :: IO (Bool, Word64)
+-- slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
+-- case_slm3 :: Assertion 
+-- case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
+
+-- slm4 :: IO (Bool, Word64)
+-- slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
+-- case_slm4 :: Assertion 
+-- case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
 
 
 
