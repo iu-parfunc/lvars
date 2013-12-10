@@ -35,7 +35,7 @@ alltests =
        , MaxCounterTests.tests
        , SetTests.tests
        , PureMapTests.tests 
-#ifdef FAILING_TESTS         
+#ifdef FAILING_TESTS
        , SLMapTests.tests    -- TODO: close Issue #27, #28 first.  
        , SkipListTests.tests -- Seems to diverge on some sizes on slm2/slm3 [2013.12.07]
 --       , SNZITests.tests     -- These have failures still [2013.10.23]

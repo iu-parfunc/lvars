@@ -48,6 +48,8 @@ module Data.LVar.SLMap
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP,
 
+         -- * Debugging Helpers
+         levelCounts
        ) where
 
 import           Control.Exception (throw)
@@ -207,9 +209,15 @@ forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
     L.addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
-    globalCB slm = 
-      return $ Just $ unWrapPar $
-        SLM.foldlWithKey LI.liftIO (\() k v -> forkHP mh $ callb k v) () slm
+    gcallb k v = do
+      logDbgLn 5 " [SLMap] callback from global traversal "
+      callb k v
+    globalCB slm = do 
+      -- TODO: This always returns "Just" for now, but there would be the option of
+      -- checking for emptiness of the SLM and returning Nothing.  Requires measurement.
+      return $ Just $ unWrapPar $ do
+        logDbgLn 5 " [SLMap] Beginning fold to check for global-work"
+        SLM.foldlWithKey LI.liftIO (\() k v -> forkHP mh $ gcallb k v) () slm
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
@@ -365,6 +373,11 @@ unionHP mh m1 m2 = do
   forEachHP mh m1 (\ k v -> insert k v os)
   forEachHP mh m2 (\ k v -> insert k v os)
   return os
+
+levelCounts :: IMap k s a -> IO [Int]
+levelCounts (IMap (WrapLVar lv)) = 
+  let slm = L.state lv in
+  SLM.counts slm
 
 --------------------------------------------------------------------------------
 -- Operations on frozen Maps

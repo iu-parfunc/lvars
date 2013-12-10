@@ -8,6 +8,7 @@ module SLMapTests(tests, runTests) where
 
 import qualified Data.LVar.SLSet as IS
 import qualified Data.LVar.SLMap as IM
+import qualified Data.Concurrent.SkipListMap as SLM
 
 import qualified Data.LVar.SLMap as SM
 

@@ -176,6 +176,15 @@ slm3 :: IO (Bool, Word64)
 slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
 case_slm3 :: Assertion 
 case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
+-- Aaron doesn't know anything about the algorithm that would be biased on insertion order.
+-- Theories: Perhaps this is distributing failure across different threads in a more uniform way?
+-- This sort of test is vulnerable to chaotic thread scheduling conditions.
+
+-- Performance debugging TODO:
+--   Count putIfAbsent insertion failures, and then CAS failures.
+
+-- TODO: randomized insertions... more orderings.  Add work gradually.
+
 
 slm4 :: IO (Bool, Word64)
 slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))

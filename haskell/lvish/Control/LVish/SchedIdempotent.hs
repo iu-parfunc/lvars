@@ -457,14 +457,19 @@ closeInPool (Just hp) c = do
 addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> LVar a d                    -- ^ LVar to listen to
            -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+-- API change: don't expose parallelism here:
+--            -> (a -> Par ())  -- ^ initial callback           
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
 addHandler hp LVar {state, status} globalThresh updateThresh = 
   let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          closed <- closeInPool hp cb
-          Sched.pushWork q closed        
+          logLnAt_ 5 " [dbg-lvish] addHandler: Over threshold, pushing work"
+--          closed <- closeInPool hp cb
+--          Sched.pushWork q closed
+          -- TEMPORARY: Run it in THIS thread. [2013.12.10]
+          exec (close cb (\() -> ClosedPar (\_ -> return ()))) q
       onUpdate d _ q = spawnWhen (updateThresh d) q
       onFreeze   _ _ = return ()        
   in mkPar $ \k q -> do
@@ -472,7 +477,9 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
     case curStatus of
       Active listeners ->             -- enroll the handler as a listener
         do B.put listeners $ Listener onUpdate onFreeze; return ()
-      Frozen -> return ()             -- frozen, so no need to enroll 
+      Frozen -> return ()             -- frozen, so no need to enroll
+
+    logLnAt_ 4 " [dbg-lvish] addHandler: checking global thresh.."
     spawnWhen (globalThresh state) q  -- poll globally to see whether we should
                                       -- launch any callbacks now
     exec (k ()) q 

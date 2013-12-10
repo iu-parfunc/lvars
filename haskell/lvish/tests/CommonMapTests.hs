@@ -108,13 +108,19 @@ v8d = fmap (L.sort . F.toList) $
 -- Issue #27, spurious duplication.
 case_handlrDup :: Assertion
 case_handlrDup = runParIO $ do
+  logDbgLn 1 $ "[case_handlrDup] Step 1"
   ctr <- I.liftIO$ newIORef 0
   mp  <- IM.newEmptyMap
+  logDbgLn 1 $ "[case_handlrDup] Step 2"  
   hp  <- newPool
+--  ls <- I.liftIO$ IM.levelCounts mp
+--  logDbgLn 1 $ "[case_handlrDup] Step 3: check slm counts: "++show ls
   -- Register handler FIRST.. no race.
   IM.forEachHP (Just hp) mp $ \ (k::Int) v -> do
     logDbgLn 1 $ "[case_handlrDup] Callback executing: " ++ show (k,v)
     I.liftIO $ incr ctr
+--  ls2 <- I.liftIO$ IM.levelCounts mp
+--  logDbgLn 1 $ "[case_handlrDup] Step 4: Main thread, done registering callback, slm: "++show ls2
   IM.insert 2 2 mp
   IM.insert 3 3 mp 
   quiesce hp
