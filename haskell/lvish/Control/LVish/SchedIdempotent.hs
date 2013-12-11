@@ -466,12 +466,15 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
         tripped <- thresh
         whenJust tripped $ \cb -> do
           logLnAt_ 5 " [dbg-lvish] addHandler: Over threshold, pushing work"
---          closed <- closeInPool hp cb
---          Sched.pushWork q closed
-          -- TEMPORARY: Run it in THIS thread. [2013.12.10]
-          exec (close cb (\() -> ClosedPar (\_ -> return ()))) q
+          closed <- closeInPool hp cb
+          Sched.pushWork q closed
       onUpdate d _ q = spawnWhen (updateThresh d) q
-      onFreeze   _ _ = return ()        
+      onFreeze   _ _ = return ()
+
+      runWhen thresh q = do
+        tripped <- thresh
+        whenJust tripped $ \cb -> 
+          exec (close cb nullCont) q
   in mkPar $ \k q -> do
     curStatus <- readIORef status 
     case curStatus of
@@ -480,9 +483,11 @@ addHandler hp LVar {state, status} globalThresh updateThresh =
       Frozen -> return ()             -- frozen, so no need to enroll
 
     logLnAt_ 4 " [dbg-lvish] addHandler: checking global thresh.."
-    spawnWhen (globalThresh state) q  -- poll globally to see whether we should
-                                      -- launch any callbacks now
+    runWhen (globalThresh state) q
+
     exec (k ()) q 
+
+nullCont = (\() -> ClosedPar (\_ -> return ()))
 
 -- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()

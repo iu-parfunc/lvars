@@ -117,6 +117,10 @@ case_v9a = assertEqual "make sure there's sufficient parallelism" () =<<
      IM.insert 'b' () mp
      IM.getKey 'c' mp
      return ())
+-- [2013.12.11] Whoa!  I'm seeing nondeterministic failures on this that make NO
+-- sense.  assertNoTimeOut must be busted.  It reports 1-second timeout when the
+-- whole process took 10ms.
+
 
 --------------------------------------------------------------------------------
 -- Issue related:

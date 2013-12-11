@@ -230,7 +230,7 @@ allowSomeExceptions msgs action = do
                   error "Should not reach this..."
        )
 
-exceptionOrTimeOut :: Double -> [String] -> IO a -> IO ()
+exceptionOrTimeOut :: Show a => Double -> [String] -> IO a -> IO ()
 exceptionOrTimeOut time msgs action = do
   x <- timeOut time $
        allowSomeExceptions msgs action
@@ -240,18 +240,18 @@ exceptionOrTimeOut time msgs action = do
     Nothing           -> return () -- Timeout.
 
 -- | Simple wrapper around `timeOut` that throws an error if timeOut occurs.
-assertNoTimeOut :: Double -> IO a -> IO a
+assertNoTimeOut :: Show a => Double -> IO a -> IO a
 assertNoTimeOut t a = do
   m <- timeOut t a
   case m of
-    Nothing -> do HU.assertFailure$ "assertNoTimeOut: timeout occurred after "++show t++" seconds"
+    Nothing -> do HU.assertFailure$ "assertNoTimeOut: thread failed or timeout occurred after "++show t++" seconds"
                   error "Should not reach this #2"
     Just a  -> return a  
 
 -- | Time-out an IO action by running it on a separate thread, which is killed when
 -- the timer (in seconds) expires.  This requires that the action do allocation, otherwise it will
 -- be non-preemptable.
-timeOut :: Double -> IO a -> IO (Maybe a)
+timeOut :: Show a => Double -> IO a -> IO (Maybe a)
 timeOut interval act = do
   result <- newIORef Nothing
   tid <- forkIO (act >>= writeIORef result . Just)
@@ -260,18 +260,25 @@ timeOut interval act = do
         stat <- threadStatus tid
         case stat of
           ThreadFinished  -> readIORef result
-          ThreadBlocked _ -> do putStrLn " [lvish-tests] Test timed out -- thread blocked!"
+          ThreadBlocked r -> timeCheckAndLoop
+          -- ThreadBlocked r -> do putStrLn$ " [lvish-tests] Time-out check -- thread "++
+          --                          show tid++" blocked!  Reason: "++show r
+          --                       x <- readIORef result
+          --                       putStrLn $ " [lvish-tests] Result is: "++show x
+          --                       return Nothing
+          ThreadDied      -> do putStrLn " [lvish-tests] Time-out check -- thread died!"
                                 return Nothing
-          ThreadDied      -> do putStrLn " [lvish-tests] Test timed out -- thread died!"
-                                return Nothing
-          ThreadRunning   -> do 
+          ThreadRunning   -> timeCheckAndLoop
+      timeCheckAndLoop = do 
             now <- getCurrentTime
             let delt :: Double
                 delt = fromRational$ toRational$ diffUTCTime now t0
             if delt >= interval
-              then do killThread tid -- TODO: should probably wait for it to show up as dead.
+              then do putStrLn " [lvish-tests] Time-out: out of time, killing test thread.."
+                      killThread tid
+                      -- TODO: <- should probably wait for it to show up as dead.
                       return Nothing
-              else do threadDelay (10 * 1000)
+              else do threadDelay (10 * 1000) -- Sleep 10ms.
                       loop   
   loop
 
@@ -282,7 +289,7 @@ timeOut interval act = do
 -- WARNING: This doesn't seem to work properly yet!  I am seeing spurious failures.
 -- -RRN [2013.10.24]
 --
-timeOutPure :: Double -> a -> Maybe a
+timeOutPure :: Show a => Double -> a -> Maybe a
 timeOutPure tm thnk =
   unsafePerformIO (timeOut tm (evaluate thnk))
 
