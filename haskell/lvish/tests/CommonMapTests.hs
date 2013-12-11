@@ -101,6 +101,23 @@ v8d = fmap (L.sort . F.toList) $
   IM.freezeMap m4
 
 
+-- | Check for sufficient parallelism in handlers
+case_v9a :: Assertion
+case_v9a = assertEqual "make sure there's sufficient parallelism" () =<< 
+  (assertNoTimeOut 1.0 $ 
+   runParIO $ do
+     mp <- IM.newEmptyMap
+     IM.forEach mp $ \ c v -> do
+       case c of
+         'a' -> do IM.getKey 'b' mp
+                   IM.insert 'c' () mp
+         'b' -> return ()
+         'c' -> return ()
+     IM.insert 'a' () mp
+     IM.insert 'b' () mp
+     IM.getKey 'c' mp
+     return ())
+
 --------------------------------------------------------------------------------
 -- Issue related:
 --------------------------------------------------------------------------------
