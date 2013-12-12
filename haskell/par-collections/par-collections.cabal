@@ -76,7 +76,7 @@ Test-suite test-par-collections
   Build-depends: base >= 4 && < 5
                , time >= 1.4 
                , par-classes >= 1.0 && < 2.0
-               , monad-par >= 0.3.4.5
+               , monad-par >= 0.3.4.6
                , atomic-primops >= 0.4
   --              , mtl    >= 2.0
   --              , transformers >= 0.2

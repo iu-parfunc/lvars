@@ -19,7 +19,7 @@ M="$D/monad-par"
 PKGS="$PKGS $D/lvish $D/par-classes/ $D/par-transformers/ $D/par-collections/"
 
 # If you want to build monad-par HEAD, just check it out in this directory.
-if [ -e "$D/monad-par" ]; then
+if [ -e "$D/monad-par" && "$MONADPAR" != 0 ]; then
   PKGS="$PKGS $M/monad-par $M/monad-par-extras/ $M/abstract-par/"
   echo ' [!!] Building monad-par as well as LVish.'
 fi
