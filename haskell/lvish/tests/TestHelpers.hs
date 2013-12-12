@@ -44,6 +44,7 @@ import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 import Data.Monoid (mappend, mempty)
 import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
 import Test.Framework.Runners.Options (RunnerOptions'(..))
+import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
@@ -361,5 +362,7 @@ defaultMainSeqTests tests = do
   case x of
     Left err -> error$ "defaultMainSeqTests: "++err
     Right (opts,_) -> defaultMainWithOpts tests
-                       ((mempty{ ropt_threads= Just 1}) `mappend` opts)
+                       ((mempty{ ropt_threads= Just 1
+                               , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                        `mappend` opts)
   return ()
