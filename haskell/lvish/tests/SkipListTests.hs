@@ -198,7 +198,7 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]
 
 
 {-

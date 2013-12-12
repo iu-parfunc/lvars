@@ -14,6 +14,7 @@ import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import Test.Framework    (defaultMain, Test)
 import Test.Framework.Providers.HUnit (testCase) -- For macro-expansion.
+import TestHelpers (defaultMainSeqTests)
 
 import Prelude as P
 
@@ -96,4 +97,4 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]

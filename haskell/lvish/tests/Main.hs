@@ -6,7 +6,8 @@
 
 module Main where
 
-import Test.Framework (defaultMain, Test)
+import Test.Framework (Test)
+import TestHelpers (defaultMainSeqTests)
 
 import qualified MemoTests
 import qualified LVishAndIVar
@@ -24,7 +25,7 @@ import qualified GenericTests
 #endif
 
 main :: IO ()
-main = defaultMain alltests
+main = defaultMainSeqTests alltests
 
 alltests :: [Test]
 alltests = 

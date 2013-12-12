@@ -267,4 +267,22 @@ manifest not as timeouts but as indefinite-blockage:
 
     ERROR: LVarSpecificExn "EXCEPTION in runPar(ThreadId 5): thread blocked indefinitely in an MVar operation"
 
-E.g. for v3d.
+E.g. for v3d.  
+
+Note that this pattern of test failures existed before the change to
+addHandler...  Actually, the test failures seem to have been worse
+before.  It would deadlock even with "-j1 --timeout=3".
+
+Debugging v9e:
+-----------------------------
+
+This is actually a pretty nice situation, because it will fail even
+with one test enabled, and on only two threads:
+
+    cd lvish/tests
+    time ./Main.exe -tv9e -j1 --timeout=1 +RTS -N2
+
+This is fine too:
+
+    DEBUG=3 time ./ArrayTests.exe -tv9e -j1 --timeout=1 +RTS -N2
+    

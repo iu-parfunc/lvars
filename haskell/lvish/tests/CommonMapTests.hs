@@ -3,7 +3,7 @@
 -- This is a slice of source code that is #included into multiple files.
 
 import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
+import Test.Framework (Test, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU

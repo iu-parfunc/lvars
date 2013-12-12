@@ -16,7 +16,10 @@ module TestHelpers
    -- * Misc utilities
    nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit, 
    -- timeOutPure, 
-   exceptionOrTimeOut, allowSomeExceptions, assertException
+   exceptionOrTimeOut, allowSomeExceptions, assertException,
+
+   -- * A replacement for defaultMain that uses a 1-thread worker pool 
+   defaultMainSeqTests
  )
  where 
 
@@ -37,6 +40,10 @@ import System.IO (hFlush, stdout)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
+
+import Data.Monoid (mappend, mempty)
+import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
+import Test.Framework.Runners.Options (RunnerOptions'(..))
 import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
@@ -344,3 +351,15 @@ timeit ioact = do
    end   <- getCurrentTime
    putStrLn$ "SELFTIMED: " ++ show (diffUTCTime end start)
    return res
+
+-- | An alternate version of `defaultMain` which sets the number of test running
+--   threads to one by default, unless the user explicitly overrules it with "-j".
+defaultMainSeqTests :: [TF.Test] -> IO ()
+defaultMainSeqTests tests = do
+  args <- getArgs
+  x <- interpretArgs args
+  case x of
+    Left err -> error$ "defaultMainSeqTests: "++err
+    Right (opts,_) -> defaultMainWithOpts tests
+                       ((mempty{ ropt_threads= Just 1}) `mappend` opts)
+  return ()

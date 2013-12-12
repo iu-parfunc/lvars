@@ -20,7 +20,7 @@ tests_here :: Test
 tests_here = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]
 
 --------------------------------------------------------------------------------
 

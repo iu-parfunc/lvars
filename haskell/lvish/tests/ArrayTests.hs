@@ -15,9 +15,10 @@ import Test.Framework (Test, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
 import Test.Framework.TH (testGroupGenerator)
-
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import qualified Test.HUnit as HU
+import TestHelpers (defaultMainSeqTests)
+
 import Control.Applicative
 import Control.Monad
 import Control.Concurrent
@@ -68,7 +69,7 @@ import qualified Data.Concurrent.SkipListMap as SLM
 import TestHelpers as T
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]
 
 -- SADLY, this use of template-Haskell, together with the atomic-primops dependency,
 -- triggers a GHC linking bug:
@@ -138,7 +139,7 @@ v9e = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       NA.put arr ix (fromIntegral ix + 1) -- Can't put 0
-  logDbgLn 1 "After fork."
+  logDbgLn 1 $ "v9e: After fork.  Filling array of size "++show size
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- NA.get arr ix
                                      loop (acc+v) (ix+1)
