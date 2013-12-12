@@ -120,7 +120,7 @@ instance LVarData1 (IMap k) where
     L.addHandler mh lv globalCB (\(_k,v) -> return$ Just$ unWrapPar$ callb v)
     where
       globalCB slm = 
-        return $ Just $ unWrapPar $
+        unWrapPar $
           SLM.foldlWithKey LI.liftIO
              (\() _k v -> forkHP mh $ callb v) () slm
 
@@ -188,7 +188,7 @@ withCallbacksThenFreeze (IMap lv) callback action = do
       initCB slm = do
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
-        return $ Just $ unWrapPar $ do
+        unWrapPar $ do
           SLM.foldlWithKey LI.liftIO 
             (\() k v -> forkHP (Just hp) $ callback k v) () slm
           x <- action -- Any additional puts here trigger the callback.
@@ -213,9 +213,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
       logDbgLn 5 " [SLMap] callback from global traversal "
       callb k v
     globalCB slm = do 
-      -- TODO: This always returns "Just" for now, but there would be the option of
-      -- checking for emptiness of the SLM and returning Nothing.  Requires measurement.
-      return $ Just $ unWrapPar $ do
+      unWrapPar $ do
         logDbgLn 5 " [SLMap] Beginning fold to check for global-work"
         SLM.foldlWithKey LI.liftIO (\() k v -> forkHP mh $ gcallb k v) () slm
         

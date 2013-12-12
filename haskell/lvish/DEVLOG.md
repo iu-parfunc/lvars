@@ -213,5 +213,58 @@ test-framework driver as well.
 -------------------------------------------
 
 
+[2013.12.11] {Debugging issue with testing framework}
+------------------------------------------------------------
 
+It was appearing as spurious thread blocked failures:
 
+       Common:
+	 SLMapTests:
+	   v7a: [OK]
+	   v8c: [OK]
+	   v8d: [OK]
+      [lvish-tests] Test timed out -- thread blocked!
+	   v9a: [Failed]
+     assertNoTimeOut: timeout occurred after 1.0 seconds
+	   handlrDup: [OK]
+	      Test Cases  Total
+      Passed  5           5
+      Failed  1           1
+      Total   6           6
+     real	0m0.009s
+     user	0m0.004s
+     sys	0m0.003s
+
+This was a bug.  Misinterpreting ThreadBlocked, fixed now.
+
+[2013.12.12] {More testing woes}
+------------------------------------------------------------
+
+We appear to be consistently locking up on test v9e atm.
+Oh wait.. is it just taking an excessive amount of time?
+
+No, sometimes its getting past that test and going a couple tests
+further, possibly getting stuck on v9f.  I hope test-framework is
+flushing stdout and giving us an accurate representation of how many
+tests we've gotten through...
+
+Test-framework *does* have systematic timeouts.  They just don't
+actually work.  It still gets stuck.  Though they seem to work better
+if -j1 is provided.
+
+    time ./Main.exe -j1 --timeout=1 +RTS -N4
+    
+These stuck tests do seem to be deadlock rather than livelock --
+they're not burning CPU.  With the above single-threaded timeout
+approach we can get through all the tests, but a nondeterministic
+number of them pass.
+
+I'm seeing 7-10 failures out of 57 currently.  That's with -N4.  With
+-N1 everything works fine.
+
+As mentioned in the discussion of issue #11, some of these failures
+manifest not as timeouts but as indefinite-blockage:
+
+    ERROR: LVarSpecificExn "EXCEPTION in runPar(ThreadId 5): thread blocked indefinitely in an MVar operation"
+
+E.g. for v3d.

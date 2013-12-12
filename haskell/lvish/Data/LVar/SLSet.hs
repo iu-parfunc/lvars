@@ -198,10 +198,10 @@ withCallbacksThenFreeze (ISet lv) callback action = do
   hp  <- newPool 
   res <- IV.new -- TODO, specialize to skip this when the init action returns ()
   let deltCB x = return$ Just$ unWrapPar$ callback x
-      initCB slm = do
+      initCB slm = 
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
-        return $ Just $ unWrapPar $ do
+        unWrapPar $ do
           SLM.foldlWithKey LI.liftIO
             (\() v () -> forkHP (Just hp) $ callback v) () slm
           x <- action -- Any additional puts here trigger the callback.
@@ -226,7 +226,7 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
   where
     globalCB slm = 
-      return $ Just $ unWrapPar $
+      unWrapPar $
         SLM.foldlWithKey LI.liftIO
            (\() v () -> forkHP hp $ callb v) () slm
 

@@ -261,11 +261,6 @@ timeOut interval act = do
         case stat of
           ThreadFinished  -> readIORef result
           ThreadBlocked r -> timeCheckAndLoop
-          -- ThreadBlocked r -> do putStrLn$ " [lvish-tests] Time-out check -- thread "++
-          --                          show tid++" blocked!  Reason: "++show r
-          --                       x <- readIORef result
-          --                       putStrLn $ " [lvish-tests] Result is: "++show x
-          --                       return Nothing
           ThreadDied      -> do putStrLn " [lvish-tests] Time-out check -- thread died!"
                                 return Nothing
           ThreadRunning   -> timeCheckAndLoop

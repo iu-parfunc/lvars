@@ -124,9 +124,9 @@ escape01B =
 -- disallowed, but blocked ones are tolerated.
 case_i3f :: Assertion
 case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
+i3f :: IO ()
 #ifdef NO_DANGLING_THREADS
 -- | A test to make sure that we get an error when we block on an unavailable ivar.
-i3f :: IO ()
 i3f = runParIO$ do
   iv <- IV.new
   fork $ do IV.get iv
