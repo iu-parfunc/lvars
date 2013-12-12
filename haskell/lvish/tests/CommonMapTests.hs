@@ -169,6 +169,7 @@ fillOne chunks = do
   forM_ vars IV.get
   return mp
 
+#ifdef GENERIC_PAR
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
   mp <- timeit$ runParThenFreezeIO $ fillOne chunks
@@ -176,6 +177,8 @@ insertionTest chunks = do
 --  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
 --  return (matches, summed)
   undefined
+
+#endif
 
 -- -- Concurrent insertion of the same values:
 -- slm2 :: IO (Bool, Word64)
