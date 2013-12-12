@@ -2,8 +2,8 @@
 # (and WITH debugging enabled).
 #------------------------------------------------------
 
-LIBSRC = $(shell find ../Data/ -name "*.hs") \
-          $(shell find ../Control/ -name "*.hs")
+# LIBSRC = $(shell find ../Data/ -name "*.hs") \
+#          $(shell find ../Control/ -name "*.hs")
 LIBSRC =
 
 ARGS = -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
@@ -30,8 +30,8 @@ Main.exe:
 Main_wfailing.exe:
 	ghc -DFAILING_TESTS $(ARGS) -i.. Main.hs -o Main_wfailing.exe
 
-AddRemoveSet.exe:
-	ghc -i.. AddRemoveSet.hs -o AddRemoveSet.exe
+AddRemoveSetTests.exe:
+	ghc -i.. AddRemoveSetTests.hs -o AddRemoveSetTests.exe
 
 clean: 
 	rm -f *.hi *.o $(ALLEXES) 
