@@ -178,11 +178,12 @@ test-suite test-lvish
                     ArrayTests,
                     MemoTests,
                     LogicalTests,
-                    MapTests,
+                    PureMapTests,
+                    SLMapTests,
                     SetTests,
                     MaxCounterTests
                     
-    ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
+--    ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
 
     -- DUPLICATED: from above
     build-depends: base    >= 4.6 && <= 4.8, 
