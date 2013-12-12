@@ -15,6 +15,8 @@ module Data.LVar.AddRemoveSet
          newEmptySet, newSet, newFromList,
          insert, waitAddedElem, waitAddedSize,
          remove, waitRemovedElem, waitRemovedSize,
+
+         freezeSet
          
        ) where
 import qualified Data.Set as S
@@ -65,3 +67,11 @@ waitRemovedElem !elm (AddRemoveSet added removed) = undefined
 -- | Wait on the size of the set of removed elements.
 waitRemovedSize :: Int -> AddRemoveSet s a -> Par d s ()
 waitRemovedSize !sz (AddRemoveSet added removed) = undefined
+
+-- | Get the exact contents of the set.  As with any
+-- quasi-deterministic operation, using `freezeSet` may cause your
+-- program to exhibit a limited form of nondeterminism: it will never
+-- return the wrong answer, but it may include synchronization bugs
+-- that can (nondeterministically) cause exceptions.
+freezeSet :: AddRemoveSet s a -> QPar s (S.Set a)
+freezeSet (AddRemoveSet addded removed) = undefined
