@@ -173,6 +173,7 @@ newFromList ls = newFromList_ ls defaultLevels
 newFromList_ :: Ord k => [(k,v)] -> Int -> Par d s (IMap k s v)
 newFromList_ ls n = do  
   m@(IMap lv) <- newEmptyMap_ n
+  -- TODO: May want to consider parallelism here for sufficiently large inputs:
   forM_ ls $ \(k,v) -> LI.liftIO $ SLM.putIfAbsent (state lv) k $ return v
   return m
 

@@ -22,7 +22,8 @@ import Test.QuickCheck
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 import           Control.LVish
-import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, NonFrzn, Trvrsbl,
+                                        runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
 import qualified Data.LVar.IVar as IV
 
@@ -30,20 +31,56 @@ import qualified Data.LVar.IVar as IV
 import qualified Control.Par.Class as PC
 #endif
 --------------------------------------------------------------------------------
+-- Quickcheck properties:
 
-prop_tofrom :: [Int] -> Bool 
-prop_tofrom ls = 
--- case_cvtMap :: Assertion
--- case_cvtMap = assertEqual ""
-  (L.sort$ L.nub$ map snd ls2) == 
+-- Build simple properties that amount to the identity function, but perform
+-- conversions in the middle.
+mkSimpleIdentityProp ::
+  (Ord v, Ord k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
+  (IM.IMap k NonFrzn v -> Par 'Det NonFrzn a) -> [(k, v)] -> Bool
+mkSimpleIdentityProp trans prs =
+  (L.sort$ L.nub$ map snd prs) == 
   (L.sort$ L.nub $ F.toList $
    runParThenFreeze $ do
-     IM.newFromList ls2
-  )
+     mp0 <- IM.newFromList prs
+     trans mp0)
+
+prop_tofrom :: [Int] -> Bool 
+prop_tofrom ls = mkSimpleIdentityProp return (zip ls ls)
+
+-- | Add one then subtract one to all entries.
+prop_traverse :: [Int] -> Bool 
+prop_traverse ls = mkSimpleIdentityProp fn (zip ls ls)
   where
-    ls2 = zip ls ls
-    -- ls :: [(Int,Int)]
-    -- ls = (zip [1..10] [1..10])
+    fn mp = IM.traverseMap (\_ x -> return (x+1)) mp >>=
+            IM.traverseMap (\_ x -> return (x-1))
+
+-- | Should always be able to get the things that go in.
+prop_getKey :: [Int] -> Bool
+prop_getKey ls = mkSimpleIdentityProp fn (zip ls ls)
+  where
+    uniq = L.length $ L.nub ls
+    fn mp = do forM_ ls $ \ key ->
+                 IM.getKey key mp
+               return mp
+
+-- | Wait until it is full before proceeding.
+prop_waitSize :: [Int] -> Bool
+prop_waitSize ls = mkSimpleIdentityProp fn (zip ls ls)
+  where
+    uniq = L.length $ L.nub ls
+    fn mp = do IM.waitSize uniq mp
+               return mp
+
+-- | Wait until it is full before proceeding.
+prop_waitVal :: [Int] -> Bool
+prop_waitVal ls = mkSimpleIdentityProp fn (zip ls ls)
+  where
+    uniq = L.length $ L.nub ls
+    fn mp = do forM_ ls $ \ v -> IM.waitValue v mp
+               return mp
+
+--------------------------------------------------------------------------------
 
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
