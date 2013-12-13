@@ -18,6 +18,8 @@ import qualified Data.List as L
 import Data.Word
 import Data.IORef
 import System.Random
+import Test.QuickCheck
+import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
@@ -29,6 +31,19 @@ import qualified Control.Par.Class as PC
 #endif
 --------------------------------------------------------------------------------
 
+prop_tofrom :: [Int] -> Bool 
+prop_tofrom ls = 
+-- case_cvtMap :: Assertion
+-- case_cvtMap = assertEqual ""
+  (L.sort$ L.nub$ map snd ls2) == 
+  (L.sort$ L.nub $ F.toList $
+   runParThenFreeze $ do
+     IM.newFromList ls2
+  )
+  where
+    ls2 = zip ls ls
+    -- ls :: [(Int,Int)]
+    -- ls = (zip [1..10] [1..10])
 
 case_v7a :: Assertion
 case_v7a = assertEqual "basic imap test"
