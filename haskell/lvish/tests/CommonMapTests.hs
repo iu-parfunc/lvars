@@ -145,12 +145,14 @@ v8d = fmap (L.sort . F.toList) $
   m3 <- IM.traverseMapHP (Just hp) cb m1
   m4 <- IM.unionHP       (Just hp) m2 m3
   IM.forEachHP (Just hp) m4 $ \ k elm ->
-    logDbgLn 1 $ " [v8d]   Got element: "++show (k,elm)
+    logDbgLn 1 $ " [v8d] [foreach] Got element: "++show (k,elm)
   logDbgLn 1 " [v8d] Everything set up; about to quiesce..."
   quiesce hp
 --  quiesceAll  
   logDbgLn 1 " [v8d] quiesce finished, next freeze::"
   IM.freezeMap m4
+-- [2013.12.13] I've observed this dying at several different points.
+-- After the four "got element" messages, or before any of them.
 
 
 -- | Check for sufficient parallelism in handlers

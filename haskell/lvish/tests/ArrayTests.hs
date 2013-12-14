@@ -125,8 +125,10 @@ v9d = runParIO$ do
   NA.get arr 6 
 
 in9e :: Int
--- in9e = 100000  -- This was where lots of problems happen.
-in9e = 10000 -- Wait... still plenty of problems at this size.
+in9e = case numElems of
+        Just x -> x
+        -- 100000  -- This was where lots of problems happen.        
+        Nothing -> 10000 -- Wait... still plenty of problems at this size.
 
 out9e :: Word64
 out9e = fromIntegral$ in9e * (in9e + 1) `quot` 2 -- 5000050000
@@ -171,11 +173,15 @@ i9i = runParIO$ do
 -- Array of IVar
 --------------------------------------------------------------------------------
 
--- | Here's the same test with an actual array of IVars.
+-- | Here's the same test  as v9e with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
 case_v9f_ivarArr :: Assertion
 -- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
 -- thread-blocked-indefinitely problem here.
+-- [2013.12.13] It can even happen at NUMELEMS=1000 (with debug messages slowing it)
+--              Could this possibly be a GHC bug?
+-- [2013.12.13] Runaway duplication of callbacks is ALSO possible on this test.
+--              Bafflingly that happens on DEBUG=2 but not 5.
 case_v9f_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
@@ -188,8 +194,11 @@ v9f = runParIO$ do
   logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
+                                     when (ix `mod` 1000 == 0) $
+                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix
                                      loop (acc+v) (ix+1)
   loop 0 0
+
 
 
 --------------------------------------------------------------------------------
