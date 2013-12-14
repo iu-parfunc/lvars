@@ -66,7 +66,10 @@ import qualified Data.Concurrent.SNZI as SNZI
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
+import Debug.Trace
 import TestHelpers as T
+
+--------------------------------------------------------------------------------
 
 runTests :: IO ()
 runTests = defaultMainSeqTests [tests]
@@ -188,14 +191,15 @@ v9f = runParIO$ do
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
-  fork $
-    forM_ [0..size-1] $ \ix ->
-      IV.put_ (arr V.! ix) (fromIntegral ix + 1)
-  logDbgLn 1 "After fork."
+  fork (do logDbgLn 1 " [v9f] Beginning putter loop.."
+           forM_ [0..size-1] $ \ix ->
+             IV.put_ (arr V.! ix) (fromIntegral ix + 1))
+  logDbgLn 1 " [v9f] After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
                                      when (ix `mod` 1000 == 0) $
-                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix
+--                                       trace ("   [v9f] get completed at: "++show ix) $ return ()
+                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix++" -> "++show v
                                      loop (acc+v) (ix+1)
   loop 0 0
 
