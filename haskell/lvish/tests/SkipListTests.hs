@@ -22,7 +22,7 @@ import GHC.Conc
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions, printLog)
+import Control.LVish.Sched (liftIO, dbgLvl, forkWithExceptions, printLog)
 import Control.LVish  (logDbgLn_)
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM

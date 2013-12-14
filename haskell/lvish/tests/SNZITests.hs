@@ -54,8 +54,8 @@ import qualified Data.LVar.Pair as IP
 import Control.LVish
 import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import qualified Control.LVish.SchedIdempotent as L
+import Control.LVish.Sched (liftIO, dbgLvl, forkWithExceptions)
+import qualified Control.LVish.Sched as L
 
 import qualified Data.Concurrent.SNZI as SNZI
 import qualified Data.Concurrent.LinkedMap as LM
