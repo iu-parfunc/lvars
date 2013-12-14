@@ -15,7 +15,7 @@ import           TestHelpers as T
 import Control.Concurrent (killThread, myThreadId)
 
 import Data.LVar.MaxCounter
-import           Control.LVish
+import           Control.LVish hiding (put)
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
 
@@ -25,7 +25,7 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]
 
 --------------------------------------------------------------------------------
 

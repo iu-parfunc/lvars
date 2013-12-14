@@ -209,3 +209,158 @@ And this setting for numCapabilities seems to effect the
 test-framework driver as well.
 
 
+[2013.12.02] {Debugging pmapFold for SLMap}
+-------------------------------------------
+
+
+[2013.12.11] {Debugging issue with testing framework}
+------------------------------------------------------------
+
+It was appearing as spurious thread blocked failures:
+
+       Common:
+	 SLMapTests:
+	   v7a: [OK]
+	   v8c: [OK]
+	   v8d: [OK]
+      [lvish-tests] Test timed out -- thread blocked!
+	   v9a: [Failed]
+     assertNoTimeOut: timeout occurred after 1.0 seconds
+	   handlrDup: [OK]
+	      Test Cases  Total
+      Passed  5           5
+      Failed  1           1
+      Total   6           6
+     real	0m0.009s
+     user	0m0.004s
+     sys	0m0.003s
+
+This was a bug.  Misinterpreting ThreadBlocked, fixed now.
+
+[2013.12.12] {More testing woes}
+------------------------------------------------------------
+
+We appear to be consistently locking up on test v9e atm.
+Oh wait.. is it just taking an excessive amount of time?
+
+No, sometimes its getting past that test and going a couple tests
+further, possibly getting stuck on v9f.  I hope test-framework is
+flushing stdout and giving us an accurate representation of how many
+tests we've gotten through...
+
+Test-framework *does* have systematic timeouts.  They just don't
+actually work.  It still gets stuck.  Though they seem to work better
+if -j1 is provided.
+
+    time ./Main.exe -j1 --timeout=1 +RTS -N4
+    
+These stuck tests do seem to be deadlock rather than livelock --
+they're not burning CPU.  With the above single-threaded timeout
+approach we can get through all the tests, but a nondeterministic
+number of them pass.
+
+I'm seeing 7-10 failures out of 57 currently.  That's with -N4.  With
+-N1 everything works fine.
+
+As mentioned in the discussion of issue #11, some of these failures
+manifest not as timeouts but as indefinite-blockage:
+
+    ERROR: LVarSpecificExn "EXCEPTION in runPar(ThreadId 5): thread blocked indefinitely in an MVar operation"
+
+E.g. for v3d.  
+
+Note that this pattern of test failures existed before the change to
+addHandler...  Actually, the test failures seem to have been worse
+before.  It would deadlock even with "-j1 --timeout=3".
+
+Debugging v9e:
+-----------------------------
+
+This is actually a pretty nice situation, because it will fail even
+with one test enabled, and on only two threads:
+
+    cd lvish/tests
+    time ./Main.exe -tv9e -j1 --timeout=1 +RTS -N2
+
+This is fine too:
+
+    DEBUG=3 time ./ArrayTests.exe -tv9e -j1 --timeout=1 +RTS -N2
+
+Looking for a different test to debug...
+----------------------------------------
+
+Are there any that fail but don't use istructure or map variants?
+    
+Ok, as of rev 88d540d (depth 898), we COULD pass the basic tests, or
+at least 48 of them, on four threads.  Namely, these tests.
+
+     :LVishAndIVarv0
+     :LVishAndIVarv1a
+     :LVishAndIVarv1b
+     :LVishAndIVari3f
+     :LVishAndIVari3g
+     :LVishAndIVarlp01
+     :LVishAndIVarlp02
+     :LVishAndIVarlp03
+     :LVishAndIVarlp04
+     :LVishAndIVardftest0
+     :LVishAndIVardftest1
+     :LVishAndIVardftest3
+     :LVishAndIVarshow01
+     :MemoTests02seq
+     :MemoTests03seq
+     :MemoTests04seq
+     :LogicalTestsand1
+     :LogicalTestsand2
+     :LogicalTestsand3
+     :LogicalTestsand4
+     :LogicalTestsor1
+     :LogicalTestsor2
+     :LogicalTestsor3
+     :LogicalTestsor4
+     :LogicalTestsandMap01
+     :LogicalTestsorMap01
+     :MapTestsv7a
+     :MapTestsi7b
+     :MapTestsv7c
+     :MapTestsv8c
+     :MapTestsv8d
+     :MapTestsshow02
+     :MapTestsshow03
+     :SetTestsv2a
+     :SetTestsv2b
+     :SetTestsv2c
+     :SetTestsv3b
+     :SetTestsi3c
+     :SetTestsv3d
+     :SetTestsv3e
+     :SetTestsv8a
+     :SetTestsv8b
+     :SetTestsshow05
+     :SetTestsshow06
+     :SetTestsshow05B
+     :SetTestsshow06B
+     :MaxCounterTestsmc1
+     :MaxCounterTestsmc2
+
+But now we're having failures on 8 tests.  Even when we disable the
+new generic tests (-f-generic).  Here are some of the failures:
+
+ * v9e - natarray
+ * v9g - istruct
+ * v9f - ivar array
+ * v8d - map test: traverse, union, foreach
+   (traverse property for maps also fails)
+
+ * i3c - sets: undersynchronized
+ * v3e - sets: foreach, waitElem
+ * v8a - sets: cartesian product
+ * v8b - sets: 3-way cartesian
+
+Ok, from all this it looks like there might be a general failure in
+callbacks/addHandler.  Or perhaps a general failure in handler pools.
+
+v9f is interesting however...  It uses no callbacks or handler pools.
+It simply writes N ivars and then reads them.
+
+

@@ -11,7 +11,7 @@ module Data.UtilInternal
 import           Control.Applicative
 import           Control.Monad (void)
 import           Data.Monoid (Monoid(..))
-import           Data.Map as M
+import qualified Data.Map as M
 
 --------------------------------------------------------------------------------
 -- Helper code.
@@ -27,13 +27,13 @@ instance Applicative f => Monoid (Traverse_ f) where
   Traverse_ a `mappend` Traverse_ b = Traverse_ (a *> b)
 -- Since the Applicative used is Const (newtype Const m a = Const m), the
 -- structure is never built up.
---(b) You can derive traverseWithKey_ from foldMapWithKey, e.g. as follows:
+--(b) You can derive traverseWithKey_ from myfoldMapWithKey, e.g. as follows:
 
 {-# INLINE traverseWithKey_ #-}
 traverseWithKey_ :: Applicative f => (k -> a -> f ()) -> M.Map k a -> f ()
 traverseWithKey_ f = runTraverse_ .
-                     foldMapWithKey (\k x -> Traverse_ (void (f k x)))
+                     myfoldMapWithKey (\k x -> Traverse_ (void (f k x)))
 
-{-# INLINE foldMapWithKey #-}
-foldMapWithKey :: Monoid r => (k -> a -> r) -> M.Map k a -> r
-foldMapWithKey f = getConst . M.traverseWithKey (\k x -> Const (f k x))
+{-# INLINE myfoldMapWithKey #-}
+myfoldMapWithKey :: Monoid r => (k -> a -> r) -> M.Map k a -> r
+myfoldMapWithKey f = getConst . M.traverseWithKey (\k x -> Const (f k x))

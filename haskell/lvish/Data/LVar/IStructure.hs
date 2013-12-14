@@ -37,7 +37,7 @@ import qualified Data.Foldable as F
 import           Data.List (intersperse)
 -- import qualified Data.Traversable as T
 
-import           Control.LVish as LV 
+import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,

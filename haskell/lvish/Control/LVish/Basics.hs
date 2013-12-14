@@ -19,14 +19,20 @@ module Control.LVish.Basics where
 
 import qualified Data.Foldable    as F
 import           Control.Exception (Exception)
-import           Control.LVish.Internal
+import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.Sched as L
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
-
 import           Prelude hiding (rem)
--- import GHC.Exts (Constraint)
+
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class.Unsafe as PU
+
+instance PU.ParMonad (Par d s) where
+  fork = fork  
+  internalLiftIO = I.liftIO  
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -215,3 +221,4 @@ for_ (start, end) fn = loop start
   where
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
+

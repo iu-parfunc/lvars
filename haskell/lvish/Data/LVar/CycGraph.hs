@@ -21,7 +21,10 @@ module Data.LVar.CycGraph
          Response(..),
 
          -- * A parallel version
-         exploreGraph, NodeValue(..), NodeAction
+         exploreGraph, NodeValue(..), NodeAction,
+
+         -- * Debugging aides
+         ShortShow(..), shortTwo
        )
        where
 -- Standard:
@@ -471,9 +474,10 @@ instance (ShortShow a, ShortShow b) => ShortShow (a,b) where
   shortShow 2 _ = ".."
   shortShow n (a,b) = let (l,r) = shortTwo (n-3) a b 
                       in "("++ l ++","++ r ++")"
-    
--- this could be better...
+
+-- | Combine two things within a given size budget.
 shortTwo :: (ShortShow t, ShortShow t1) => Int -> t -> t1 -> (String, String)
+-- this could be better...
 shortTwo n a b = (left, shortShow (half+remain) b)
    where
      remain = abs (half - length left)

@@ -31,6 +31,9 @@ module Control.Par.ST
 
          -- * Working with ST and other lifts
          liftST, liftPar,
+         
+         -- * Convert between state types
+         transmute,
 
          --  Useful utilities
 --         vecParMap_, 
@@ -39,7 +42,8 @@ module Control.Par.ST
          STSplittable(..),
          
          -- * Annoying newtypes and wrappers to take the @s@ param last:
-         MVectorFlp(..), UVectorFlp(..), STTup2(..)
+         MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
+         STTup2(..), STUnit(..)
        )
        where
 
@@ -61,6 +65,7 @@ import Control.Monad.Trans (lift)
 import Data.STRef
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Unboxed.Mutable as MU
+import qualified Data.Vector.Storable.Mutable as MS
 import Data.Vector       (freeze)
 import Prelude hiding (read, length)
 import System.IO.Unsafe (unsafePerformIO)
@@ -68,11 +73,12 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), ParMonad(..))
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
+{-# INLINE unsafeCastST #-}
 unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
   
@@ -98,6 +104,7 @@ newtype MVectorFlp a s = VFlp (MV.MVector s a)
 
 instance STSplittable (MVectorFlp a) where
   type SplitIdx (MVectorFlp a) = Int
+  {-# INLINE splitST #-}
   splitST mid (VFlp vec) = 
     let lvec = MV.slice 0 mid vec
         rvec = MV.slice mid (MV.length vec - mid) vec
@@ -114,23 +121,47 @@ data STTup2 (a :: * -> *) (b :: * -> *) (s :: *) =
 
 instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
   type SplitIdx (STTup2 a b) = (SplitIdx a, SplitIdx b)
+  {-# INLINE splitST #-}
   splitST (spltA,spltB) (STTup2 a b) = 
     let (a',a'') = splitST spltA a 
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
 
+-- | A splittable type which contains no information.
+data STUnit s = STUnit
+-- newtype STUnit s = STUnit ()
+  
+
+instance STSplittable STUnit where
+  type SplitIdx STUnit = ()
+  {-# INLINE splitST #-}
+  splitST () STUnit = (STUnit,STUnit)
+
 ------------------------------------------------------------
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
--- to be last.
+-- to be last.  Also carries the `Unbox` constraint.
 data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)  
 
 instance STSplittable (UVectorFlp a) where
   type SplitIdx (UVectorFlp a) = Int
+  {-# INLINE splitST #-}
   splitST mid (UFlp vec) = 
     let lvec = MU.slice 0 mid vec
         rvec = MU.slice mid (MU.length vec - mid) vec
     in (UFlp lvec, UFlp rvec)
+
+-- | An annoying type alias simply for the purpose of arranging for the 's' parameter
+-- to be last.  Also carries the `Storable` constraint.
+data SVectorFlp a s = (MS.Storable a) => SFlp (MS.MVector s a)
+
+instance STSplittable (SVectorFlp a) where
+  type SplitIdx (SVectorFlp a) = Int
+  {-# INLINE splitST #-}
+  splitST mid (SFlp vec) = 
+    let lvec = MS.slice 0 mid vec
+        rvec = MS.slice mid (MS.length vec - mid) vec
+    in (SFlp lvec, SFlp rvec)
 
 --------------------------------------------------------------------------------
 
@@ -149,6 +180,7 @@ newtype ParST stState parM ans =
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
 -- runParST has a rank-2 type, with a phantom type @s1@.
+{-# INLINE runParST #-}
 runParST :: forall stt s0 parM ans . (ParThreadSafe parM) => 
              stt s0
              -> (forall s1 . ParST (stt s1) parM ans)
@@ -161,16 +193,20 @@ runParST initVal (ParST st) = do
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
 instance ParThreadSafe parM =>
          S.MonadState stts (ParST stts parM) where
+  {-# INLINE get #-}           
   get = reify
+  {-# INLINE put #-}
   put = install
 
 -- | A `ParST` computation that results in the current value of the state, which is
 -- typically some combination of `STRef` and `STVector`s.  These require `ST`
 -- computation to do anything with the state.
+{-# INLINE reify #-}
 reify :: ParThreadSafe parM => ParST stt parM stt
 reify = ParST S.get
 
 -- | Installs a new piece of ST-mutable state.
+{-# INLINE install #-}
 install :: ParThreadSafe parM => stt -> ParST stt parM ()
 install val = ParST (S.put val)
 
@@ -182,6 +218,7 @@ install val = ParST (S.put val)
 -- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
 -- `fork`.  So the continuation of @forkWithVec@ will not run until both child
 -- computations return, and are thus done accessing the state.
+{-# INLINE forkSTSplit #-}
 forkSTSplit :: forall a b s0 parM stt.
                (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM a,
                 Eq a, STSplittable stt) =>
@@ -200,18 +237,43 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ do
 
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead. 
+{-# INLINE liftST #-}
 liftST :: ParThreadSafe parM => ST s1 a -> ParST (stt s1) parM a
 liftST st = ParST (lift (unsafeParIO io))
  where
    io = unsafeSTToIO st 
 
 -- | Lift an ordinary `Par` computation into `ParST`.
+{-# INLINE liftPar #-}
 liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
 liftPar m = ParST (lift m)
 
+{-# INLINE transmute #-}
+transmute :: forall a b s parM ans . 
+             (ParThreadSafe parM, 
+              STSplittable a,
+              STSplittable b)              
+              => (b s -> a s) -> ParST (a s) parM ans -> ParST (b s) parM ans
+transmute fn (ParST comp) = ParST$ do
+  orig <- S.get
+  let newSt :: a s
+      newSt = fn orig
+  (res,_) <- lift$ S.runStateT comp newSt
+  return $! res
+  
+instance ParMonad parM => ParMonad (ParST stt1 parM) where
+  {-# INLINE internalLiftIO #-}
+  internalLiftIO io = ParST (lift (internalLiftIO io))
+  {-# INLINE fork #-}
+  fork (ParST task) = ParST $ 
+    lift $ PC.fork $ do
+      (res,_) <- S.runStateT task
+                 (error "fork: This child thread does not have permission to touch the array!")
+      return res
+
 -- | A conditional instance which will only be usable if unsafe imports are made.
-instance MonadIO parM => MonadIO (ParST stt1 parM) where
-  liftIO io = ParST (liftIO io)
+-- instance MonadIO parM => MonadIO (ParST stt1 parM) where
+--   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
@@ -219,21 +281,20 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
   -- | The `Future` type and `FutContents` constraint are the same as the underlying `Par` monad.
   type Future      (ParST sttt parM)   = PC.Future      parM
   type FutContents (ParST sttt parM) a = PC.FutContents parM a
+  {-# INLINE spawn_ #-}
   spawn_ (ParST task) = ParST $
      lift $ PC.spawn_ $ do
            (res,_) <- S.runStateT task
                       (error "spawn_: This child thread does not have permission to touch the array!")
            return res     
+  {-# INLINE get #-}
   get iv = ParST $ lift $ PC.get iv
 
 
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
-  fork (ParST task) = ParST $ 
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task
-                 (error "fork: This child thread does not have permission to touch the array!")
-      return res
+  {-# INLINE new #-}
   new       = ParST$ lift PC.new
+  {-# INLINE put_ #-}
   put_ iv v = ParST$ lift$ PC.put_ iv v
 
 --------------------------------------------------------------------------------
@@ -275,9 +336,11 @@ mkParMapM reader writer getsize mksplit fn = do
             return ()
   return ()
 
+{-# INLINE overPartition #-}
 overPartition :: Int
 overPartition = 8
 
+{-# INLINE numProcs #-}
 numProcs :: Int
 numProcs = unsafeDupablePerformIO getNumProcessors
 

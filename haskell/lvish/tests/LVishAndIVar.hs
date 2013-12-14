@@ -15,7 +15,7 @@ import Test.Framework (Test, defaultMain, testGroup)
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
 import Test.Framework.TH (testGroupGenerator)
 
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
 import Control.Monad
@@ -124,9 +124,9 @@ escape01B =
 -- disallowed, but blocked ones are tolerated.
 case_i3f :: Assertion
 case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
+i3f :: IO ()
 #ifdef NO_DANGLING_THREADS
 -- | A test to make sure that we get an error when we block on an unavailable ivar.
-i3f :: IO ()
 i3f = runParIO$ do
   iv <- IV.new
   fork $ do IV.get iv
@@ -374,3 +374,4 @@ case_show01 :: Assertion
 case_show01 = assertEqual "show for IVar" "Just 3" show01
 show01 :: String
 show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
+

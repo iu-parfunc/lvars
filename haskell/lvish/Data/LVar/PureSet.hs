@@ -163,14 +163,14 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
        IV.get res
   where
     deltCB x = return$ Just$ unWrapPar$ callback x
-    initCB hp resIV ref = do
+    initCB hp resIV ref = (do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
-      set <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ do
+      set <- L.liftIO $ readIORef ref -- Snapshot
+      unWrapPar $ do
         F.foldlM (\() v -> forkHP (Just hp)$ callback v) () set -- Non-allocating traversal.
         res <- action -- Any additional puts here trigger the callback.
-        IV.put_ resIV res
+        IV.put_ resIV res) :: L.Par ()
 
 -- | Get the exact contents of the set.  As with any
 -- quasi-deterministic operation, using `freezeSet` may cause your
@@ -213,8 +213,8 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
     return ()
   where
     globalCB ref = do
-      set <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ 
+      set <- L.liftIO$ readIORef ref -- Snapshot
+      unWrapPar $ 
         F.foldlM (\() v -> forkHP hp $ callb v) () set -- Non-allocating traversal.
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
@@ -391,6 +391,6 @@ cartesianProdsHP mh ls = do
     peeksR <- liftIO$ mapM (readIORef . state . unISet) right
 
 --    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
-    return undefined
+    (error "FINISHME - pure set cartesianProdHP")
 #endif
 

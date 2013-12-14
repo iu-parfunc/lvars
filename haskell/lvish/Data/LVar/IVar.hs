@@ -128,7 +128,7 @@ new = WrapPar$ fmap (IVar . WrapLVar) $
 -- IVar.
 get :: IVar s a -> Par d s a
 get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
-  where globalThresh ref _ = readIORef ref    -- past threshold iff Jusbt _
+  where globalThresh ref _ = readIORef ref    -- past threshold iff Just _
         deltaThresh  x     = return $ Just x  -- always past threshold
 
 {-# INLINE put_ #-}
@@ -168,12 +168,13 @@ whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
+    -- The threshold is ALWAYS met when a put occurs:
     fn' x = return (Just (I.unWrapPar (fn x)))
     globalCB ref = do
-      mx <- readIORef ref -- Snapshot
+      mx <- LI.liftIO $ readIORef ref -- Snapshot
       case mx of
-        Nothing -> return Nothing
-        Just v  -> fn' v
+        Nothing -> return ()
+        Just v  -> I.unWrapPar$ fn v
   
 --------------------------------------------------------------------------------
 
@@ -205,7 +206,6 @@ instance PC.ParFuture (Par d s) where
   get = get
 
 instance PC.ParIVar (Par d s) where
-  fork = LV.fork  
   put_ = put_
   new = new
 

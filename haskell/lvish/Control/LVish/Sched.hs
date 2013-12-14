@@ -34,7 +34,7 @@ module Control.LVish.Sched
     quiesce, quiesceAll,
 
     -- * Debug facilities
-    logStrLn, logLnAt_, dbgLvl,
+    logStrLn, logLnAt_, dbgLvl, printLog, 
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,
@@ -150,7 +150,7 @@ dbgLvl = case lookup "DEBUG" theEnv of
        Just "0" -> defaultDbg
        Just s   ->
          case reads s of
-           ((n,_):_) -> trace (" [!] Responding to env Var: DEBUG="++show n) n
+           ((n,_):_) -> trace (" [!] LVish responding to env Var: DEBUG="++show n) n
            [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
 #else 
 dbgLvl = 0
@@ -480,10 +480,10 @@ closeInPool (Just hp) dedup c = do
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> LVar a d                    -- ^ LVar to listen to
-           -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+           -> (a -> Par ())               -- ^ initial snapshot callback on handler registration
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
-addHandler hp LVar {state, status, handlerStatus, name} globalThresh updateThresh = 
+addHandler hp LVar {state, status, handlerStatus, name} globalCB updateThresh = 
   let acqLock q = when (not $ Queue.idemp q) $ do
         ticket    <- readForCAS handlerStatus
         let (newStatus, wait) = case peekTicket ticket of
@@ -509,6 +509,7 @@ addHandler hp LVar {state, status, handlerStatus, name} globalThresh updateThres
       spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
+          logLnAt_ 5 " [dbg-lvish] addHandler: Delta threshold triggered, pushing work.."          
           -- deduplicate only if we ARE assuming idempotence (since then
           -- termination task might itself be duplicated)
           closed <- closeInPool hp (Queue.idemp q) cb
@@ -522,11 +523,18 @@ addHandler hp LVar {state, status, handlerStatus, name} globalThresh updateThres
     case curStatus of
       Active listeners ->             -- enroll the handler as a listener
         do B.put listeners $ Listener onUpdate onFreeze; return ()
-      Frozen -> return ()             -- frozen, so no need to enroll 
-    spawnWhen (globalThresh state) q  -- poll globally to see whether we should
-                                      -- launch any callbacks now
+      Frozen -> return ()             -- frozen, so no need to enroll
+
+    logLnAt_ 4 " [dbg-lvish] addHandler: calling globalCB.."
+    -- At registration time, traverse (globally) over the previously inserted items
+    -- to launch any required callbacks.
+    exec (close (globalCB state) nullCont) q
+    
     relLock q  
     exec (k ()) q 
+
+
+nullCont = (\() -> ClosedPar (\_ -> return ()))
 
 -- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()
@@ -555,7 +563,7 @@ quiesceAll = mkPar $ \k q -> do
 
 -- This is quasi-deterministic.
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
-              -> (a -> IO (Maybe (Par ())))  -- ^ initial callback
+              -> (a -> Par ())               -- ^ initial snapshot callback on handler registration
               -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
               -> Par ()
 freezeLVAfter lv globalCB updateCB = do

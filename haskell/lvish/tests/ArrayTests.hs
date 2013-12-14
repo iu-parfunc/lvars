@@ -15,9 +15,10 @@ import Test.Framework (Test, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
 import Test.Framework.TH (testGroupGenerator)
-
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import qualified Test.HUnit as HU
+import TestHelpers (defaultMainSeqTests)
+
 import Control.Applicative
 import Control.Monad
 import Control.Concurrent
@@ -68,7 +69,7 @@ import qualified Data.Concurrent.SkipListMap as SLM
 import TestHelpers as T
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]
 
 -- SADLY, this use of template-Haskell, together with the atomic-primops dependency,
 -- triggers a GHC linking bug:
@@ -96,7 +97,7 @@ v9a = runParIO$ do
 -- i9b = runParIO$ do
 --   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
 --   fork $ do NA.get arr 5
---             logStrLn "Unblocked!  Shouldn't see this."
+--             logDbgLn "Unblocked!  Shouldn't see this."
 --             return ()
 --   return 9
 -- #endif
@@ -107,7 +108,7 @@ i9c :: IO Word8
 i9c = runParIO$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
-            logStrLn "Unblocked!  Shouldn't see this."
+            logDbgLn 1 "Unblocked!  Shouldn't see this."
             NA.put arr 6 99
   NA.get arr 6 
 
@@ -117,15 +118,17 @@ v9d :: IO Word8
 v9d = runParIO$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
-            logStrLn "Unblocked! Good."
+            logDbgLn 1 "Unblocked! Good."
             NA.put arr 6 99
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   NA.put arr 5 5
   NA.get arr 6 
 
 in9e :: Int
--- in9e = 100000  -- This was where lots of problems happen.
-in9e = 10000 -- Wait... still plenty of problems at this size.
+in9e = case numElems of
+        Just x -> x
+        -- 100000  -- This was where lots of problems happen.        
+        Nothing -> 10000 -- Wait... still plenty of problems at this size.
 
 out9e :: Word64
 out9e = fromIntegral$ in9e * (in9e + 1) `quot` 2 -- 5000050000
@@ -138,7 +141,7 @@ v9e = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       NA.put arr ix (fromIntegral ix + 1) -- Can't put 0
-  logStrLn "After fork."
+  logDbgLn 1 $ "v9e: After fork.  Filling array of size "++show size
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- NA.get arr ix
                                      loop (acc+v) (ix+1)
@@ -170,11 +173,15 @@ i9i = runParIO$ do
 -- Array of IVar
 --------------------------------------------------------------------------------
 
--- | Here's the same test with an actual array of IVars.
+-- | Here's the same test  as v9e with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
 case_v9f_ivarArr :: Assertion
 -- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
 -- thread-blocked-indefinitely problem here.
+-- [2013.12.13] It can even happen at NUMELEMS=1000 (with debug messages slowing it)
+--              Could this possibly be a GHC bug?
+-- [2013.12.13] Runaway duplication of callbacks is ALSO possible on this test.
+--              Bafflingly that happens on DEBUG=2 but not 5.
 case_v9f_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
@@ -184,11 +191,14 @@ v9f = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       IV.put_ (arr V.! ix) (fromIntegral ix + 1)
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
+                                     when (ix `mod` 1000 == 0) $
+                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix
                                      loop (acc+v) (ix+1)
   loop 0 0
+
 
 
 --------------------------------------------------------------------------------
@@ -205,7 +215,7 @@ v9g = runParIO$ do
   fork $
     forM_ [0..size-1] $ \ix ->
       ISt.put_ arr ix (fromIntegral ix + 1)
-  logStrLn "After fork."
+  logDbgLn 1 "After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- ISt.get arr ix
                                      loop (acc+v) (ix+1)

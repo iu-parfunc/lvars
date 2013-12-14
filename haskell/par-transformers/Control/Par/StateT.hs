@@ -23,6 +23,7 @@ import qualified Control.Monad.Trans.State.Lazy as SL
 
 -- import qualified Control.Monad.Par.Class as PC
 import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (ParMonad(..), ParThreadSafe(..))
 
 ---------------------------------------------------------------------------------
 --- Make Par computations with state work.
@@ -47,13 +48,29 @@ class SplittableState a where
 ----------------------------------------------------------------------------------------------------
 -- Strict State:
 
+instance ParThreadSafe p => ParThreadSafe (S.StateT s p) where
+  {-# INLINE unsafeParIO #-}
+  unsafeParIO io = lift (unsafeParIO io)
+
+instance (SplittableState s, ParMonad p) => ParMonad (S.StateT s p) where  
+  {-# INLINE fork #-}
+  fork (task :: S.StateT s p ()) =
+              do s <- S.get
+                 let (s1,s2) = splitState s
+                 S.put s2
+                 lift$ PC.fork $ do S.runStateT task s1; return ()
+  {-# INLINE internalLiftIO #-}
+  internalLiftIO io = lift (internalLiftIO io)
+
 -- | Adding State to a `ParFuture` monad yields another `ParFuture` monad.
 instance (SplittableState s, PC.ParFuture p)
       =>  PC.ParFuture (S.StateT s p)
  where
   type Future (S.StateT s p)        = PC.Future p
   type FutContents (S.StateT s p) a = PC.FutContents p a
+  {-# INLINE get #-}
   get = lift . PC.get
+  {-# INLINE spawn_ #-}
   spawn_ (task :: S.StateT s p ans) =
     do s <- S.get
        let (s1,s2) = splitState s
@@ -64,14 +81,11 @@ instance (SplittableState s, PC.ParFuture p)
 instance (SplittableState s, PC.ParIVar p)
       =>  PC.ParIVar (S.StateT s p)
  where
-  fork (task :: S.StateT s p ()) =
-              do s <- S.get
-                 let (s1,s2) = splitState s
-                 S.put s2
-                 lift$ PC.fork $ do S.runStateT task s1; return ()
-
+  {-# INLINE new #-}
   new      = lift PC.new
+  {-# INLINE put_ #-}
   put_ v x = lift$ PC.put_ v x
+  {-# INLINE newFull_ #-}
   newFull_ = lift . PC.newFull_
 
 ----------------------------------------------------------------------------------------------------
@@ -79,13 +93,29 @@ instance (SplittableState s, PC.ParIVar p)
 
 -- <DUPLICATE_CODE>
 
+instance ParThreadSafe p => ParThreadSafe (SL.StateT s p) where
+  {-# INLINE unsafeParIO #-}
+  unsafeParIO io = lift (unsafeParIO io)
+
+instance (SplittableState s, ParMonad p) => ParMonad (SL.StateT s p) where  
+  {-# INLINE fork #-}
+  fork (task :: SL.StateT s p ()) =
+              do s <- SL.get
+                 let (s1,s2) = splitState s
+                 SL.put s2
+                 lift$ PC.fork $ do SL.runStateT task s1; return ()
+  {-# INLINE internalLiftIO #-}                                    
+  internalLiftIO io = lift (internalLiftIO io)
+
 -- | Adding State to a `ParFuture` monad yield s another `ParFuture` monad.
 instance (SplittableState s, PC.ParFuture p)
       =>  PC.ParFuture (SL.StateT s p)
  where
   type Future (SL.StateT s p)        = PC.Future p
   type FutContents (SL.StateT s p) a = PC.FutContents p a   
+  {-# INLINE get #-}
   get = lift . PC.get
+  {-# INLINE spawn_ #-}
   spawn_ (task :: SL.StateT s p ans) =
     do s <- SL.get
        let (s1,s2) = splitState s
@@ -96,14 +126,11 @@ instance (SplittableState s, PC.ParFuture p)
 instance (SplittableState s, PC.ParIVar p)
       =>  PC.ParIVar (SL.StateT s p)
  where
-  fork (task :: SL.StateT s p ()) =
-              do s <- SL.get
-                 let (s1,s2) = splitState s
-                 SL.put s2
-                 lift$ PC.fork $ do SL.runStateT task s1; return ()
-
+  {-# INLINE new #-}
   new      = lift PC.new
+  {-# INLINE put_ #-}
   put_ v x = lift$ PC.put_ v x
+  {-# INLINE newFull_ #-}
   newFull_ = lift . PC.newFull_
 
 

@@ -30,7 +30,7 @@ popOther = CL.tryPopR
 pushYield = pushMine -- for now...  
 
 #else
-
+#warning "Compiling with non-scalable deque."
 ------------------------------------------------------------------------------
 -- A nonscalable deque for work-stealing
 ------------------------------------------------------------------------------

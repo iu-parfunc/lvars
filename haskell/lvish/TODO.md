@@ -3,22 +3,10 @@
 Also see issues for the initial release:
   https://github.com/iu-parfunc/lvars/issues?milestone=1&state=open
 
-  * Do Hackage release as soon as possible
-
-  * REMOVE extra frozen Map type in SLMap, obsolete.
-
-  * (?) Make sure there are SHOW instances.  
-  * (Ryan) Use modern (released) HSBencher.  
-  
-  * ~~  (Ryan) Factor out Data.LVar.Generic.
-  * ~~  (Ryan) Finish providing instances/methods for LVarData1.
-  * ~~   (Lindsey) Turn on Safe Haskell for real. [LK: I need help figuring out how to do this]
-  * ~~ (Lindsey) Finish factoring out the old implementation into its own cabal pkg.~~ [LK: done 9/16/2013]
-  * ~~ (Lindsey) Finish porting LVars (those not done) to the shiny new
-    DeepFrz method (use IVar as an example):
-      * Set, Structure, etc ...~~ [LK: done 9/20/2013]
-  
-  * (NOT DOING) New monad-par release with necessary tweaks 
+<Q> Can we have a kind of "Relay" LVar that stores nothing but is just
+a place to hang handlers?  It could not have a globalThresh and it
+would have to have the property that any addHandler after the first
+Put is an error.
 
 
 ## Scheduler and data-structure layer concerns

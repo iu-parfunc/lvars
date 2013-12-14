@@ -8,6 +8,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE DefaultSignatures #-}
+
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -32,14 +36,20 @@
 
 module Control.Par.Class
   (
-  -- * Futures: the most basic functionality
-    ParFuture(..)
+  -- * The essence of Par monads: forking control flow
+    ParMonad(fork)
+  -- * Futures: basic parallelism with communication
+  , ParFuture(..)
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
 
   --  Monotonically growing finite maps
---  , ParIMap(..)
+--  , ParIMap(..) -- Not ready yet.
 
+   -- * Data structures that can be consumed in parallel
+  , ParFoldable(..)
+  , Generator(..)    
+    
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
   , ParQuasi (..), ParSealed(..)
@@ -58,6 +68,7 @@ where
 
 import Control.DeepSeq
 import Control.Par.Class.Unsafe
+import Data.Splittable.Class as Sp 
 import GHC.Prim (Constraint)
 
 import qualified Data.Foldable as F
@@ -71,9 +82,9 @@ import qualified Data.Foldable as F
 --   A minimal implementation consists of `spawn_` and `get`.
 --   However, for monads that are also a member of `ParIVar` it is
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
--- 
--- class Monad m => ParFuture future m | m -> future where
-class (Functor m, Monad m) => ParFuture m where
+--
+class ParMonad m => ParFuture m where
+-- class (Monad m, Functor m) => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
   type Future m :: * -> *
@@ -93,10 +104,10 @@ class (Functor m, Monad m) => ParFuture m where
   -- >    return r
   --
   spawn  :: (NFData a, FutContents m a) => m a -> m (Future m a)
-  
-  -- | Like 'spawn', but the result is only head-strict, not fully-strict.
-  spawn_ :: FutContents m a => m a -> m (Future m a)
 
+-- | Like 'spawn', but the result is only head-strict, not fully-strict.
+  spawn_ :: FutContents m a => m a -> m (Future m a)
+              
   -- | Wait for the result of a future, and then return it.
   get    :: Future m a -> m a
 
@@ -109,6 +120,9 @@ class (Functor m, Monad m) => ParFuture m where
   spawn  p = spawn_ (do x <- p; deepseq x (return x))
   spawnP a = spawn (return a)
 
+  default spawn_ :: (ParIVar m, FutContents m a) => m a -> m (Future m a)
+  spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
+
 --------------------------------------------------------------------------------
 
 -- | A simple type alias.  A hint.
@@ -120,11 +134,6 @@ type IVar m a = Future m a
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
 class ParFuture m  => ParIVar m  where
   
-  -- | Forks a computation to happen in parallel.  The forked
-  -- computation may exchange values with other computations using
-  -- @IVar@s.
-  fork :: m () -> m ()
-
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
   new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
@@ -240,7 +249,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 
 --------------------------------------------------------------------------------
 
---  | A commonly desired monotonic data structure an insertion-only Map or Set.
+--  | A commonly desired monotonic data structure is an insertion-only Map or Set.
 --   This captures Par monads which are able to provide that capability.
 class (Functor m, Monad m) => ParIMap m  where
   -- | The type of a future that goes along with the particular `Par`
@@ -288,6 +297,81 @@ class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
   -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
 
 data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
+
+
+--------------------------------------------------------------------------------
+
+
+-- | We have a problem where some types (like Ranges) are splittable, but they are
+--   not containers for arbitrary data.  Thus we introduce a more limited concept of
+--   a data source that can generate only a particular kind of element (but cannot be
+--   constructed or traversed).
+--
+--   It is trivial to provide an instance for any type that is already a `Functor`:
+--   
+-- > import Data.Foldable as F
+-- > instance Foldable f => Generator (f a) where
+-- >   type ElemOf (f a) = a
+-- >   foldrM = F.foldrM 
+--
+--   However, we don't provide this blanket instance because it would conflict with
+--   more tailored instances that may be desired for particular containers.  For
+--   example, a "Data.Map" generator might include keys as well as values.
+--
+--   Finally, note that a much more general version of this class can be found in
+--   "Data.Generator" from the reducers package.
+class Generator c where
+  type ElemOf c :: *
+  -- | Fold all outputs from the generator, sequentially.
+  --   The ordering is determined by the generator type, and is whatever
+  --   the natural and inexpensive ordering for that type is.
+  --        
+  --   In general this should be used with commutative, associative functions.
+  --   This fold is strict in the accumulator.       
+  fold :: (acc -> ElemOf c -> acc) -> acc -> c -> acc
+
+  -- | A monadic version of `fold`.
+  foldM :: (Monad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc  
+  foldM fn zer = fold (\ !acc elm -> acc >>= (`fn2` elm)) (return zer)
+     where fn2 !acc elm = fn acc elm
+
+  -- | If the monad in question is a Par monad, then this version can sometimes be
+  -- more efficient than `foldM`.
+  foldMP :: (ParMonad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
+  foldMP f z c = foldM f z c
+  -- This default implementation was going VERY slowly for me with the Trace
+  -- scheduler (100X slower, [2013.12.07]).  It's weird though, because simply
+  -- duplicating the foldM function for foldMP (Range instances) fixes the problem
+  -- entirely.
+
+  -- | Execute an action for each output of the generator.
+  forM_ :: (Monad m) => c -> (ElemOf c -> m ()) -> m ()
+  forM_ c fn = foldM (\ () x -> fn x) () c 
+
+  -- | The same as `forM_` but for a Par monad.
+  forMP_ :: (ParMonad m) => c -> (ElemOf c -> m ()) -> m ()
+  forMP_ c fn= foldMP (\ () x -> fn x) () c 
+
+
+-- instance F.Foldable f => Generator (f a) where
+--   type ElemOf (f a) = a
+--   {-# INLINE foldrM #-}
+--   foldrM = F.foldrM 
+   
+--------------------------------------------------------------------------------
+
+-- class Sp.Generator c e => ParFoldable c e | c -> e where
+
+-- | Collection types which can be consumed in parallel.
+class Generator c => ParFoldable c where  
+  pmapFold :: forall m a t .
+              (ParFuture m, FutContents m a)
+              => (ElemOf c -> m a) -- ^ compute one result
+              -> (a -> a -> m a)   -- ^ combine two results 
+              -> a                 -- ^ initial accumulator value
+              -> c                 -- ^ element generator to consume              
+              -> m a
 
 --------------------------------------------------------------------------------
 

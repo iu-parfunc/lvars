@@ -131,8 +131,8 @@ member elm (ISet (WrapLVar lv)) =
 instance F.Foldable (ISet Frzn) where
   foldr fn zer (ISet (WrapLVar lv)) =
     unsafeDupablePerformIO $
-    SLM.foldlWithKey (\ a k _v -> return (fn k a))
-                           zer (L.state lv)
+    SLM.foldlWithKey id (\ a k _v -> return (fn k a))
+                        zer (L.state lv)
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (ISet Trvrsbl) where
@@ -198,11 +198,12 @@ withCallbacksThenFreeze (ISet lv) callback action = do
   hp  <- newPool 
   res <- IV.new -- TODO, specialize to skip this when the init action returns ()
   let deltCB x = return$ Just$ unWrapPar$ callback x
-      initCB slm = do
+      initCB slm = 
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
-        return $ Just $ unWrapPar $ do
-          SLM.foldlWithKey (\() v () -> forkHP (Just hp) $ callback v) () slm
+        unWrapPar $ do
+          SLM.foldlWithKey LI.liftIO
+            (\() v () -> forkHP (Just hp) $ callback v) () slm
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
   WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
@@ -225,8 +226,9 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
   where
     globalCB slm = 
-      return $ Just $ unWrapPar $
-        SLM.foldlWithKey (\() v () -> forkHP hp $ callb v) () slm
+      unWrapPar $
+        SLM.foldlWithKey LI.liftIO
+           (\() v () -> forkHP hp $ callb v) () slm
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set.
@@ -258,7 +260,7 @@ waitSize !sz (ISet (WrapLVar lv)) = WrapPar$
     getLV lv globalThresh deltaThresh
   where
     globalThresh slm _ = do
-      snapSize <- SLM.foldlWithKey (\n _ _ -> return $ n+1) 0 slm
+      snapSize <- SLM.foldlWithKey id (\n _ _ -> return $ n+1) 0 slm
       case snapSize >= sz of
         True  -> return (Just ())
         False -> return (Nothing)
@@ -360,7 +362,8 @@ cartesianProdHP mh s1 s2 = do
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
   fn outSet other@(ISet lv) cmbn elm1 = 
-    SLM.foldlWithKey (\() elm2 () -> insert (cmbn elm1 elm2) outSet) () (state lv)
+    SLM.foldlWithKey LI.liftIO
+       (\() elm2 () -> insert (cmbn elm1 elm2) outSet) () (state lv)
 
 -- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
 cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
@@ -392,6 +395,6 @@ cartesianProdsHP mh ls = do
     peeksR <- liftIO$ mapM (readIORef . state . unISet) right
 
 --    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
-    return undefined
+    return (error "FINISHME: set cartesianProdHP")
 #endif
 

@@ -79,7 +79,7 @@ import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 import           Data.LVar.Generic
 
-import           Control.LVish as LV hiding (addHandler)
+import           Control.LVish as LV hiding (addHandler, put,get)
 import           Control.LVish.DeepFrz.Internal  as DF
 import           Control.LVish.Internal as LI
 import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
@@ -164,7 +164,7 @@ forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     return ()
   where
     deltaCB (ix,x) = return$ Just$ unWrapPar$ callb ix x
-    globalCB vec = return$ Just$ unWrapPar$
+    globalCB vec = unWrapPar$
       -- FIXME / TODO: need a better (parallel) for loop:
       forVec vec $ \ ix elm ->
         -- FIXME: When it starts off, it is SPARSE... there must be a good way to
@@ -200,7 +200,7 @@ put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt) =>
        NatArray s elt -> Int -> elt -> Par d s ()
 put _ !ix 0 = throw (LVarSpecificExn$ "NatArray: violation!  Attempt to put zero to index: "++show ix)
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
-  where putter ix vec@(M.MVector offset fptr) =
+  where putter ix vec@(M.MVector _len fptr) =
           withForeignPtr fptr $ \ ptr -> do 
             let offset = sizeOf (undefined::elt) * ix
             -- ARG, if it weren't for the idempotency requirement we could use fetchAndAdd here:
