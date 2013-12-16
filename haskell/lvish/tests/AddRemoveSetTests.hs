@@ -42,3 +42,61 @@ v1 = runParIO $
         ARS.insert 3 s
         ARS.waitAddedSize 3 s
         ARS.freezeSet s
+
+case_v2 :: Assertion
+case_v2 = v2 >>= assertEqual "freeze with 10 elements added, asynchronously"
+          (S.fromList [1..10] :: S.Set Int)
+
+v2 :: IO (S.Set Int)
+v2 = runParIO $
+     do s <- ARS.newEmptySet
+        mapM_ (\n -> fork $ ARS.insert n s) [1..10]
+        ARS.waitAddedSize 10 s 
+        ARS.freezeSet s
+
+case_v3 :: Assertion
+case_v3 = assertEqual "freeze with 3 elements added, purely and asynchronously"
+          () v3
+
+-- If we're doing a guaranteed-deterministic computation we can't
+-- actually read out the contents of the set.
+v3 :: ()
+v3 = runPar $
+     do s <- ARS.newEmptySet
+        mapM_ (\n -> fork $ ARS.insert n s) [1..10]
+        ARS.waitAddedSize 10 s
+
+-- Getting occasional failures here with -N2, don't know what's
+-- wrong. :(
+case_v4 :: Assertion
+case_v4 = v4 >>= assertEqual "additions and removals"
+          (S.fromList [1..10] :: S.Set Int)
+
+
+v4 :: IO (S.Set Int)
+v4 = runParIO $
+     do s <- ARS.newEmptySet
+        mapM_ (\n -> fork $ ARS.insert n s) [1..15]
+        mapM_ (\n -> fork $ ARS.remove n s) [11..15]
+        ARS.waitAddedSize 15 s 
+        ARS.waitRemovedSize 5 s 
+        ARS.freezeSet s
+
+-- This one is intentionally undersynchronized.
+case_i1 :: Assertion
+case_i1 = do
+  allowSomeExceptions ["Attempt to change a frozen LVar"] $
+    do x <- i1
+       assertEqual "additions and removals, undersynchronized"
+         (S.fromList [1..10] :: S.Set Int) x
+  return ()
+
+i1 :: IO (S.Set Int)
+i1 = runParIO $
+     do s <- ARS.newEmptySet
+        mapM_ (\n -> fork $ ARS.insert n s) [1..15]
+        mapM_ (\n -> fork $ ARS.remove n s) [11..15]
+        -- If we don't wait for 15 additions, they might not all be
+        -- there when we check.
+        ARS.waitRemovedSize 5 s 
+        ARS.freezeSet s
