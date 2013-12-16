@@ -319,9 +319,11 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
 #if GET_ONCE
           execFlag <- newIORef False
           let winnerCheck tru fal = do                
-                  ticket <- readForCAS execFlag
-                  unless (peekTicket ticket) $ do
-                    (winner, _) <- casIORef execFlag ticket True
+                  precheck <- readIORef execFlag
+                  unless precheck $ do
+                    winner <- atomicModifyIORef' execFlag $ \ b ->
+                                     if b then (True,False)
+                                          else (True,True)
                     logLnAt_ 4 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
                                ++": winner check? " ++show winner
                     if winner then tru else fal

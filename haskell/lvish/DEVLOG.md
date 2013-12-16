@@ -382,6 +382,17 @@ writing thread is getting enough ahead that usually no gets block at
 all.
 
 Actually... now, with my "fix", I'm seing duplication AND deadlock
-with GET_ONCE.  Hmm.
+with GET_ONCE.  Hmm.  Note: it really is deadlock, not livelock: no CPU load.
+
+Ok, in the debug output I'm seeing winner checks on a stable name for
+which I never see the "blocking" message.  How can that be?  The
+blocking message should necessarily come first!!  It's printed before
+the listeners are even registered.  Ok, jeez.  I suppose its possible
+that the physical identity of the thing changed in the meantime?
+Wait, I think stablename shouldn't change nevertheless... 
+
+
+
+
 
 
