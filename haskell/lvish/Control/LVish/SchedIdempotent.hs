@@ -54,6 +54,7 @@ import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
+import qualified Data.Atomics.Counter as C2
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
@@ -317,24 +318,30 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
           
 #if GET_ONCE
           execFlag <- newIORef False
+          let winnerCheck tru fal = do                
+                  ticket <- readForCAS execFlag
+                  unless (peekTicket ticket) $ do
+                    (winner, _) <- casIORef execFlag ticket True
+                    logLnAt_ 4 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+                               ++": winner check? " ++show winner
+                    if winner then tru else fal
+              {-# INLINE winnerCheck #-}
 #endif
-  
+          let execFlag = ()
           let onUpdate d = unblockWhen $ deltaThresh d
               onFreeze   = unblockWhen $ globalThresh state True
-              
+              {-# INLINE unblockWhen #-}
               unblockWhen thresh tok q = do
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
                   B.remove tok
 #if GET_ONCE
-                  ticket <- readForCAS execFlag
-                  unless (peekTicket ticket) $ do
-                    (winner, _) <- casIORef execFlag ticket True
-                    when winner $ Sched.pushWork q (k b) 
+                  winnerCheck (Sched.pushWork q (k b)) (return ())
 #else 
                   Sched.pushWork q (k b)                     
 #endif
-          logLnAt_ 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
+          logLnAt_ 4$ " [dbg-lvish] getLV "++show(unsafeName execFlag)++
+                      ": blocking on LVar, registering listeners..."
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 
@@ -346,10 +353,13 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
           case tripped' of
             Just b -> do
               B.remove tok  -- remove the listener we just added, and
+#if GET_ONCE
+              winnerCheck (exec (k b) q) (sched q)
+#else              
               exec (k b) q  -- execute the continuation. this work might be
                             -- redundant, but by idempotence that's OK
+#endif
             Nothing -> sched q
-
 
 -- | Update an LVar.
 putLV_ :: LVar a d                 -- ^ the LVar

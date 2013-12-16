@@ -364,3 +364,24 @@ v9f is interesting however...  It uses no callbacks or handler pools.
 It simply writes N ivars and then reads them.
 
 
+[2013.12.16] {Working on fixing a scheduler bug}
+--------------------------------------------------------------------------------
+
+The bug is that the final global poll check on getLV doesn't obey the
+GET_ONCE stricture.
+
+This is in the context of the v9f test.  Alas... the fix that I tried
+(simply doing the execFlag check), is leading to deadlock or
+blocked-indefinitely-on-mvar exceptions.
+
+It takes about NUMELEMS=3000 to trigger the the deadlock in a
+reasonable number of iterations.
+
+Interestingly not MANY of these iterations are blocking at all.  The
+writing thread is getting enough ahead that usually no gets block at
+all.
+
+Actually... now, with my "fix", I'm seing duplication AND deadlock
+with GET_ONCE.  Hmm.
+
+
