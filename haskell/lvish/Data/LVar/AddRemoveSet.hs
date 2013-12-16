@@ -23,7 +23,7 @@ import qualified Data.Set as S
 import           Control.LVish
 import           Control.LVish.Internal
 import qualified Data.LVar.SLSet as SLS
-
+import Control.Applicative
 
 -- | The set datatype.
 data AddRemoveSet s a =
@@ -32,16 +32,22 @@ data AddRemoveSet s a =
 
 -- | Create a new, empty `AddRemoveSet`.
 newEmptySet :: Ord a => Par d s (AddRemoveSet s a)
-newEmptySet = undefined
+newEmptySet = newSet S.empty
 
 -- | Create a new `AddRemoveSet` populated with initial elements.
 newSet :: Ord a => S.Set a -> Par d s (AddRemoveSet s a)
-newSet set = undefined
-
+-- Here we're creating two new SLSets, one from the provided initial
+-- elements (the "add" set) and one empty (the "remove" set), and
+-- then, since both of those return `Par` computations, we're using
+-- our friends `<$>` and `<*>`.
+newSet set = AddRemoveSet <$> (SLS.newSet set) <*> SLS.newEmptySet
+-- Alternate version that works if we import `Control.Monad`:
+-- newSet set = ap (fmap AddRemoveSet (SLS.newSet set)) SLS.newEmptySet
+  
 -- | A simple convenience function.  Create a new 'ISet' drawing
 -- initial elements from an existing list.
 newFromList :: Ord a => [a] -> Par d s (AddRemoveSet s a)
-newFromList ls = undefined
+newFromList ls = newSet (S.fromList ls)
 
 -- | Put a single element in the set.  (WHNF) Strict in the element
 -- being put in the set.
