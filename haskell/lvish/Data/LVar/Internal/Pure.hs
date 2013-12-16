@@ -21,7 +21,12 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
+         newPureLVar, putPureLVar,
+
+         waitPureLVar, freezePureLVar,
+         getPureLVar, unsafeGetPureLVar,
+
+         -- * Verifying lattice structure
          verifyFiniteJoin, verifyFiniteGet
        ) where
 
@@ -121,6 +126,19 @@ checkThresholds currentState thrshSet = case thrshSet of
   (thrsh : thrshs) -> if thrsh `joinLeq` currentState
                       then Just thrsh
                       else checkThresholds currentState thrshs
+
+-- | Like `getPureLVar` but uses a threshold function rather than an explicit set.
+unsafeGetPureLVar :: (JoinSemiLattice t, Eq t) => PureLVar s t -> (t -> Bool) -> Par d s t
+unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
+  WrapPar$ LI.getLV lv globalThresh deltaThresh
+  where globalThresh ref _ = do
+          x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] unsafeGetPureLVar: read the ref."
+          deltaThresh x
+        deltaThresh x =          
+          return $! if thrsh x
+                    then Just x
+                    else Nothing
 
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)
