@@ -304,7 +304,9 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
       case tripped of
         Just b -> exec (k b) q -- already past the threshold; invoke the
                                -- continuation immediately                    
-        Nothing -> sched q     
+        Nothing -> sched q     -- We'll NEVER be above the threshold.
+                               -- Shouldn't this be an ERROR? (blocked-indefinitely)
+                               -- Depends on our semantics for runPar quiescence / errors states.
     Active listeners -> do
       tripped <- globalThresh state False
       case tripped of
