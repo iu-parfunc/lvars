@@ -18,6 +18,7 @@ type Bag a   = IORef (M.Map UID a)
 atomicIncr :: IORef Int -> IO Int
 atomicIncr cntr = atomicModifyIORef' cntr (\c -> (c+1,c))
 
+{-# NOINLINE uidCntr #-}
 uidCntr :: IORef UID
 uidCntr = unsafePerformIO (newIORef 0)
 

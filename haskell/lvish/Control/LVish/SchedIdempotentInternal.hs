@@ -103,6 +103,7 @@ steal State{ idle, states, no=my_no } = do
   -- printf "cpu %d stealing\n" my_no
   go states
   where
+    -- After a failed sweep, go idle:
     go [] = do m <- newEmptyMVar
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
                if length r == numCapabilities - 1
@@ -144,6 +145,7 @@ yieldWork :: State a s -> a -> IO ()
 yieldWork State { workpool } t = 
   pushYield workpool t -- AJT: should this also wake an idle thread?
 
+-- ^ Create a new set of scheduler states.
 new :: Int -> s -> IO [State a s]
 new n s = do
   idle <- newIORef []

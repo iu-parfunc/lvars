@@ -61,7 +61,6 @@ import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
 import           System.Mem.StableName (makeStableName, hashStableName)
-import           Text.Printf (printf)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import           System.Random (random)
 
@@ -82,6 +81,7 @@ import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 -- This should probably be moved into its own module...
 
+{-# NOINLINE globalLog #-}
 globalLog :: IORef [String]
 globalLog = unsafePerformIO $ newIORef []
 
@@ -193,6 +193,7 @@ newLVID = newIORef ()
 -- represent Maybe (LVarID) with the type LVarID -- i.e., without any allocation.
 noName :: LVarID
 noName = unsafePerformIO $ newLVID
+{-# NOINLINE noName #-}
 
 -- | The frozen bit of an LVar is tied together with the bag of waiting listeners,
 -- which allows the entire bag to become garbage immediately after freezing.
@@ -200,8 +201,8 @@ noName = unsafePerformIO $ newLVID
 -- may still reference the bag, which is necessary to ensure that all listeners
 -- are informed of the @put@ prior to freezing.)
 data Status d 
-  = Frozen                       -- further changes to the state are forbidden
-  | Active (B.Bag (Listener d))  -- bag of blocked threshold reads and handlers
+  = Frozen                       -- ^ further changes to the state are forbidden
+  | Active (B.Bag (Listener d))  -- ^ bag of blocked threshold reads and handlers
 
 -- | A listener for an LVar is informed of each change to the LVar's state
 -- (represented as a delta) and the event of the LVar freezing.  The listener is
