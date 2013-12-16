@@ -61,6 +61,9 @@ import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (insert)
 
+-- LK: Why is it ok to just write WrapPar and LVar instead of LI.WrapPar
+-- and LI.LVar?  Where are they being imported from?
+
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
