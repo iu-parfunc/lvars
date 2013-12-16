@@ -4,7 +4,7 @@ import           Control.Monad
 import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
 import           Data.IORef
-import qualified Data.Map as M
+import qualified Data.IntMap as M
 
 ------------------------------------------------------------------------------
 -- A nonscalable implementation of a concurrent bag
@@ -12,7 +12,7 @@ import qualified Data.Map as M
 
 type UID     = Int
 type Token a = (Bag a, UID)
-type Bag a   = IORef (M.Map UID a)
+type Bag a   = IORef (M.IntMap a)
 
 -- Return the old value.  Could replace with a true atomic op.
 atomicIncr :: IORef Int -> IO Int
