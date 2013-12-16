@@ -6,7 +6,7 @@
 #          $(shell find ../Control/ -name "*.hs")
 LIBSRC =
 
-ARGS = -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
+ARGS = -DGET_ONCE=1 -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
 # -fforce-recomp
 
 ALLEXES = ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe Main_wfailing.exe 
