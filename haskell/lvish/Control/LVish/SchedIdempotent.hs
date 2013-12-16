@@ -57,6 +57,7 @@ import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
+import qualified Data.Atomics.Counter as C2
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
@@ -254,11 +255,19 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
           
 #if GET_ONCE
           execFlag <- newIORef False
+          let winnerCheck tru fal = do                
+                  ticket <- readForCAS execFlag
+                  unless (peekTicket ticket) $ do
+                    (winner, _) <- casIORef execFlag ticket True
+                    logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+                               ++": winner check? " ++show winner
+                    if winner then tru else fal
+              {-# INLINE winnerCheck #-}
 #endif
-  
+          let execFlag = ()
           let onUpdate d = unblockWhen $ deltaThresh d
               onFreeze   = unblockWhen $ globalThresh state True
-              
+              {-# INLINE unblockWhen #-}
               unblockWhen thresh tok q = do
                 let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
                 logWith q 7$ " [dbg-lvish] getLV (active): callback: check thresh"++uniqsuf
@@ -266,16 +275,12 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                 whenJust tripped $ \b -> do        
                   B.remove tok
 #if GET_ONCE
-                  logWith q 8$ " [dbg-lvish] getLV (active): read execFlag for dedup"++uniqsuf
-                  ticket <- readForCAS execFlag
-                  unless (peekTicket ticket) $ do
-                    (winner, _) <- do logWith q 8$ " [dbg-lvish] getLV (active): CAS execFlag dedup"++uniqsuf
-                                      casIORef execFlag ticket True
-                    when winner $ Sched.pushWork q (k b) 
+                  winnerCheck (Sched.pushWork q (k b)) (return ())
 #else 
                   Sched.pushWork q (k b)                     
 #endif
-          logWith q 4$ " [dbg-lvish] getLV: blocking on LVar, registering listeners"++uniqsuf
+          logWith q 8$ " [dbg-lvish] getLV "++show(unsafeName execFlag)++
+                       ": blocking on LVar, registering listeners..."
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 
@@ -290,10 +295,15 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
             Just b -> do
               logWith q 7$ " [dbg-lvish] getLV (active): second globalThresh tripped, remove tok"++uniqsuf
               B.remove tok  -- remove the listener we just added, and
+#if GET_ONCE
+              winnerCheck (exec (k b) q) (sched q)
+#else              
               exec (k b) q  -- execute the continuation. this work might be
                             -- redundant, but by idempotence that's OK
+#endif
             Nothing -> sched q
 
+    --------------------------------------------------------------------------------
     -- Freezing or Frozen:
     _ -> do
       logWith q 7$ " [dbg-lvish] getLV (frozen): about to check globalThresh"++uniqsuf
@@ -305,6 +315,10 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
         Nothing -> sched q     -- We'll NEVER be above the threshold.
                                -- Shouldn't this be an ERROR? (blocked-indefinitely)
                                -- Depends on our semantics for runPar quiescence / errors states.
+
+
+
+
 
 -- | Update an LVar.
 putLV_ :: LVar a d                 -- ^ the LVar
