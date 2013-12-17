@@ -9,7 +9,7 @@ LIBSRC =
 ARGS = -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
 # -fforce-recomp
 
-ALLEXES = AddRemoveSetTests.exe ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe Main_wfailing.exe 
+ALLEXES = AddRemoveSetTests.exe ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe PNCounterTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe Main_wfailing.exe 
 
  .SUFFIXES: .hs .exe
 

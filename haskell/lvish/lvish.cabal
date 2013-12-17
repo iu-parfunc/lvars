@@ -118,6 +118,7 @@ library
                       Data.LVar.NatArray
                       Data.LVar.MaxCounter
                       Data.LVar.AddRemoveSet
+                      Data.LVar.PNCounter
 --                      Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
