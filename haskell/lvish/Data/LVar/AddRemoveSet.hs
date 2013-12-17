@@ -23,7 +23,7 @@ import qualified Data.Set as S
 import           Control.LVish
 import           Control.LVish.Internal
 import qualified Data.LVar.PureSet as PS
-import Control.Applicative
+import           Control.Applicative
 
 -- | The set datatype.
 data AddRemoveSet s a =
