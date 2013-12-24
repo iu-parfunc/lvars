@@ -54,9 +54,9 @@ instance Show a => Show (PureLVar Frzn a) where
 {-# INLINE waitPureLVar #-}
 {-# INLINE freezePureLVar #-}
 
--- | Takes a join operation (e.g., for an instance of JoinSemiLattice)
--- and returns an error message if the lattice properties don't hold.
--- Don't try this for an infinite lattice!
+-- | Takes a finite set of states and a join operation (e.g., for an
+-- instance of JoinSemiLattice) and returns an error message if the
+-- join-semilattice properties don't hold.
 verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
 verifyFiniteJoin allStates join =
   case (isCommutative, isAssociative, isIdempotent) of
