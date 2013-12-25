@@ -33,7 +33,7 @@ module Control.LVish.SchedIdempotent
     -- * Quasi-deterministic operations
     quiesce, quiesceAll,
 
-    -- * Debug facilities
+    -- * Re-exported debug facilities
     logStrLn, logLnAt_, dbgLvl, printLog, 
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
@@ -50,6 +50,7 @@ import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
+import           Control.LVish.Logging (logStrLn_, logLnAt_, dbgLvl, printLog, printLogThread, globalLog)
 import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
@@ -73,91 +74,6 @@ import           Data.Traversable
 
 import Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
-
-
-----------------------------------------------------------------------------------------------------
--- THREAD-SAFE LOGGING
-----------------------------------------------------------------------------------------------------
-
--- This should probably be moved into its own module...
-
-{-# NOINLINE globalLog #-}
-globalLog :: IORef [String]
-globalLog = unsafePerformIO $ newIORef []
-
--- | Atomically add a line to the given log.
-logStrLn  :: String -> Par ()
-logStrLn_ :: String -> IO ()
-logLnAt_ :: Int -> String -> IO ()
-#ifdef DEBUG_LVAR
-#warning "Compiling in LVish DEBUG mode."
-logStrLn = liftIO . logStrLn_
-logStrLn_ s = logLnAt_ 1 s
-logLnAt_ lvl s | dbgLvl >= 5   = putStrLn s
-               | dbgLvl >= lvl = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
-               | otherwise     = return ()
-#else 
-logStrLn _  = return ()
-logStrLn_ _ = return ()
-logLnAt_ _ _ = return ()
-{-# INLINE logStrLn #-}
-{-# INLINE logStrLn_ #-}
-#endif
-
--- | Print all accumulated log lines.
-printLog :: IO ()
-printLog = do
-  -- Clear the log when we read it:
-  lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
-  mapM_ putStrLn $ reverse lines  
-
--- | The idea here is that while a runPar is underway, we periodically flush out the
--- debug messages.
-printLogThread :: IO (IO ())
-printLogThread = do
-  tid <- forkIO $
-         E.catch loop (\ (e :: E.AsyncException) -> do
-                        -- One last time on kill:
-                        printLog
-                        putStrLn " [dbg-log-printer] Shutting down."
-                      )
-  return (do killThread tid
-             let wait = do
-                   stat <- threadStatus tid
-                   case stat of
-                     ThreadRunning -> threadDelay 1000 >> wait
-                     _             -> return ()
-             wait)
- where
-   loop = do
-     -- Flush the log at 5Hz:
-     printLog
-     threadDelay (200 * 1000)
-     loop
-
-{-# NOINLINE theEnv #-}
-theEnv :: [(String, String)]
-theEnv = unsafePerformIO getEnvironment
-
-{-# NOINLINE dbgLvl #-}
--- | Debugging flag shared by several modules.
---   This is activated by setting the environment variable @DEBUG=1..5@.
-dbgLvl :: Int
-#ifdef DEBUG_LVAR
-dbgLvl = case lookup "DEBUG" theEnv of
-       Nothing  -> defaultDbg
-       Just ""  -> defaultDbg
-       Just "0" -> defaultDbg
-       Just s   ->
-         case reads s of
-           ((n,_):_) -> trace (" [!] LVish responding to env Var: DEBUG="++show n) n
-           [] -> error$"Attempt to parse DEBUG env var as Int failed: "++show s
-#else 
-dbgLvl = 0
-#endif
-
-defaultDbg :: Int
-defaultDbg = 0
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation
@@ -270,7 +186,14 @@ isFrozen (LVar {status}) = do
   case curStatus of
     Active _ -> return False
     Frozen   -> return True
-    
+
+logStrLn  :: String -> Par ()
+#ifdef DEBUG_LVAR
+logStrLn = liftIO . logStrLn_
+#else
+logStrLn _  = return ()
+#endif
+
 ------------------------------------------------------------------------------
 -- LVar operations
 ------------------------------------------------------------------------------
