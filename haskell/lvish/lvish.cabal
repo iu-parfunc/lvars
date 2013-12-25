@@ -148,6 +148,7 @@ library
                  random, 
                  transformers,
                  ghc-prim,
+                 async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
   if flag(generic)
@@ -199,6 +200,7 @@ test-suite test-lvish
                    random, 
                    transformers,
                    ghc-prim,
+                   async,
                    -- Used in NatArray:
                    bits-atomic, missing-foreign
     if flag(generic)
