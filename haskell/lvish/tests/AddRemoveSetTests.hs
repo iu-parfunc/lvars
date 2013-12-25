@@ -5,6 +5,7 @@
 
 module AddRemoveSetTests(tests, runTests) where
 
+import Control.Concurrent
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMain, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
@@ -18,6 +19,7 @@ import qualified Data.LVar.AddRemoveSet as ARS
 
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
+import           Control.LVish.Internal (liftIO)
 
 --------------------------------------------------------------------------------
 
@@ -50,8 +52,13 @@ case_v2 = v2 >>= assertEqual "freeze with 10 elements added, asynchronously"
 v2 :: IO (S.Set Int)
 v2 = runParIO $
      do s <- ARS.newEmptySet
-        mapM_ (\n -> fork $ ARS.insert n s) [1..10]
-        ARS.waitAddedSize 10 s 
+        mapM_ (\n -> fork $ do
+                     liftIO$ threadDelay 5000 
+                     logDbgLn 4$ " [AR-v2] Doing one insert: "++show n
+                     ARS.insert n s) [1..10]
+        logDbgLn 4$ " [AR-v2] now waiting.."
+        ARS.waitAddedSize 10 s
+        logDbgLn 4$ " [AR-v2] now freezing.."
         ARS.freezeSet s
 
 case_v3 :: Assertion
