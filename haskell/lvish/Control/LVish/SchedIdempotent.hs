@@ -637,7 +637,11 @@ hpId_ (HandlerPool cnt bag) = do
            " transient cnt "++show c
 
 
--- | Exceptions that walk up the fork tree of threads.
+-- | Exceptions that walk up the fork-tree of threads.
+--   
+--   WARNING: By holding onto the ThreadId we keep the parent thread from being
+--   garbage collected (at least as of GHC 7.6).  This means that even if it was
+--   complete, it will still be hanging around to accept the exception below.
 forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
 forkWithExceptions forkit descr action = do 
    parent <- myThreadId
