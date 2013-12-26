@@ -273,7 +273,6 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                             -- redundant, but by idempotence that's OK
             Nothing -> sched q
 
-
 -- | Update an LVar.
 putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's

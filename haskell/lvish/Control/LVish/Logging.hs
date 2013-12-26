@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 
 {-|
 
@@ -33,10 +33,13 @@ module Control.LVish.Logging
 import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Data.IORef
+import           Data.List (sortBy)
 import           GHC.Conc hiding (yield)
 import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO (stderr)
 import           System.Environment(getEnvironment)
+import           Text.Printf (hPrintf)
 
 import Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
@@ -50,55 +53,161 @@ import qualified Control.LVish.SchedIdempotentInternal as Sched
 data Logger = Logger { coordinator :: A.Async () -- ThreadId
                                       -- ^ (private) The thread that chooses which action to unblock next
                                       -- and handles printing to the screen as well.
-                     , checkPoint :: Chan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
+                     , checkPoint :: SmplChan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
                      , logged :: IORef [LogMsg] -- ^ (private) The actual log of messages.
                      , closeIt :: IO () -- ^ (public) A method to complete flushing, close down the helper thread,
                                         -- and generally wrap up.
-                     , numWorkers :: Int -- ^ How many threads must check-in each round before proceeding?
+                     , waitWorkers :: WaitMode  
                      }
 
 -- | A single thread attempting to log a message.  It only unblocks when the attached
 -- MVar is filled.
 data Writer = Writer { who :: String
                      , continue :: MVar ()
+                     , lvl :: Int -- ^ Verbosity-level for the printed message.  
                      , msg :: LogMsg
                        -- TODO: Indicate whether this writer has useful work to do or
                        -- is about to block... this provides a simple notion of
                        -- priority.
                      }
 
+-- | Several different ways we know to wait for quiescence in the concurrent mutator
+-- before proceeding.
+data WaitMode = WaitTids [ThreadId] -- ^ Wait until a certain set of threads is blocked before proceeding.
+              | WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
+                            -- num workers starts at 1 and then is modified
+                            -- with `incrTasks` and `decrTasks`.
+              | WaitNum Int -- ^ UNFINISHED: A fixed set of threads must check-in each round before proceeding.
+
 -- | We allow logging in O(1) time in String or ByteString format.  In practice the
 -- distinction is not that important, because only *thunks* should be logged; the
 -- thread printing the logs should deal with forcing those thunks.
 data LogMsg = StrMsg String 
 
+toString (StrMsg s) = s
+
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
-newLogger :: Int -> IO Logger
-newLogger numWorkers = do
+newLogger :: WaitMode -> IO Logger
+newLogger waitWorkers = do
   logged <- newIORef []
-  checkPoint <- newChan
+--  checkPoint <- newChan
+  checkPoint  <- newSmplChan
   coordinator <- A.async $ do
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
-    let loop = do
+    let schedloop !num !waiting = do
           -- PROBLEM: how do we detect quiescence?  How do we know how many threads
           -- should check-in?
           --
           -- HEURISTIC: require that we be initialized with a number of worker
           -- threads.  ALL workers are expected to check-in in some form each round.
-          error "FINISHME"
-          yield
-          loop
+          let keepWaiting = do yield; schedloop num waiting
+              waitMore    = do w <- readSmplChan checkPoint
+                               yield
+                               schedloop (num+1) (w:waiting)
+          case waitWorkers of
+            WaitNum target | num >= target -> pickAndProceed waiting
+                           | otherwise     -> waitMore
+            WaitTids ls -> do
+              b <- checkTids ls
+              case b of
+                True  -> do ls <- flushChan waiting
+                            pickAndProceed ls
+                False -> keepWaiting
+
+        -- When all threads are quiescent, we can flush the remaining messagers from
+        -- the channel to get the whole set of waiting tasks.
+        flushChan !acc = do
+          x <- tryReadSmplChan checkPoint
+          case x of
+            Just h  -> flushChan (h:acc)
+            Nothing -> return acc
+
+        -- Take the set of logically-in-parallel tasks, choose one, execute it, and
+        -- then return to the main scheduler loop.
+        pickAndProceed [] = chatter " [Logger] No active tasks, shutting down."
+        pickAndProceed waiting = do
+          putStr (show (length waiting) ++" ") -- TEMP
+          let order a b =
+                let s1 = toString (msg a)
+                    s2 = toString (msg b) in
+                case compare s1 s2 of
+                  GT -> GT
+                  LT -> LT
+                  EQ -> error $" [Logger] Need in-parallel log messages to have an ordering, got two equal:\n "++s1
+              sorted = sortBy order waiting
+              hd:rst = sorted
+          unblockTask hd
+          -- Return to the scheduler to wait for the next quiescent point.
+          schedloop (length rst) rst
+
+        unblockTask Writer{who,continue,lvl,msg} = do
+          -- Print out the message.
+          hPrintf stderr (toString msg)
+          -- Signal that the thread may continue.
+          putMVar continue ()
+          
+        -- Check whether the worker threads are all quiesced 
+        checkTids [] = return True
+        checkTids (tid:rst) = do 
+          st <- threadStatus tid
+          case st of
+            ThreadRunning   -> return False
+            ThreadFinished  -> checkTids rst
+            ThreadBlocked _ -> checkTids rst
+            ThreadDied      -> checkTids rst -- Should this be an error condition!?
     return ()
   let closeIt = A.cancel coordinator
-  return $! Logger { coordinator, logged, checkPoint, closeIt, numWorkers  }
+  return $! Logger { coordinator, logged, checkPoint, closeIt, waitWorkers }
+
+chatter :: String -> IO ()
+chatter = hPrintf stderr 
+
+-- UNFINISHED:
+incrTasks = undefined
+decrTasks = undefined
+
+-- | Write a log message from the current thread.  
+logOn :: Logger -> LogMsg -> IO ()
+logOn = undefined
+
+----------------------------------------------------------------------------------------------------
+-- Simple channels: we need non-blocking reads so we can't use
+-- Control.Concurrent.Chan.  We could use TChan, but I don't want to bring STM into
+-- it right now.
+
+-- type MyChan a = Chan a
+
+-- -- | A simple channel.  Take-before-put is the protocol.
+-- type SmplChan a = MVar [a]
+
+-- | Simple channels that don't support real blocking.
+type SmplChan a = IORef [a]
+
+newSmplChan = newIORef []
+
+-- | Non-blocking read.
+tryReadSmplChan ch = do
+  ls <- readIORef ch
+  x <- atomicModifyIORef' ch $ \ ls -> 
+       case ls of
+         []  -> ([], Nothing)
+         h:t -> (t, Just h)
+  return x
+
+-- | Blocking OR busy-waiting read.
+readSmplChan ch = do
+  x <- tryReadSmplChan ch
+  case x of
+    Nothing -> do yield; readSmplChan ch
+    Just h  -> return h
 
 ----------------------------------------------------------------------------------------------------
 
 -- | A target for global log messages.
 globalLogger :: Logger
-globalLogger = unsafePerformIO $ newLogger numCapabilities
+globalLogger = unsafePerformIO $ newLogger (WaitNum numCapabilities)
 {-# NOINLINE globalLogger #-}
 
 
@@ -111,9 +220,6 @@ globalLog = unsafePerformIO $ newIORef []
 
 -- | The global coordinator that all threads check in with before proceeding.
 
-
-
-  
 -- | Atomically add a line to the given log.
 logStrLn_ :: String -> IO ()
 logLnAt_ :: Int -> String -> IO ()
