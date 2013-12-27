@@ -33,6 +33,7 @@ module Control.LVish.Logging
        )
        where
 
+import           Control.Monad
 import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Data.IORef
@@ -137,7 +138,6 @@ newLogger waitWorkers = do
         -- then return to the main scheduler loop.
         pickAndProceed [] = error "pickAndProceed: this should only be called on a non-empty list"
         pickAndProceed waiting = do
-          putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
           let order a b =
                 let s1 = toString (msg a)
                     s2 = toString (msg b) in
@@ -147,11 +147,19 @@ newLogger waitWorkers = do
                   EQ -> error $" [Logger] Need in-parallel log messages to have an ordering, got two equal:\n "++s1
               sorted = sortBy order waiting
               hd:rst = sorted
+          printOptions sorted
           unblockTask hd -- The task will asynchronously run when it can.
           yield -- If running on one thread, give it a chance to run.
           -- Return to the scheduler to wait for the next quiescent point:
           schedloop (length rst) rst =<< newBackoff maxWait
 
+        printOptions sorted = do
+          putStrLn "-----"          
+          forM_ (zip [1..] sorted) $ \ (ix,Writer{msg}) -> 
+            putStrLn $ "  "++ show ix ++": "++toString msg
+          putStrLn "-----"
+    -- putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
+          
         unblockTask Writer{who,continue,msg} = do
           -- Print out the message.
           hPrintf stderr "%s\n" (toString msg)

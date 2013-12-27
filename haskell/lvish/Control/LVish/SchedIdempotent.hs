@@ -200,13 +200,13 @@ logStrLn str = when (dbgLvl >= 1) $ do
 logStrLn _  = return ()
 #endif
 
-logWith :: Sched.State a s -> String -> IO ()
+logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
-logWith q str = when (dbgLvl >= 1) $ do
+logWith q lvl str = when (dbgLvl >= 1) $ do
   lgr <- readIORef (Sched.logger q)
-  L.logOn lgr (L.StrMsg 1 str)
+  L.logOn lgr (L.StrMsg lvl str)
 #else
-logWith _ _ = return ()
+logWith _ _ _ = return ()
 #endif
 
 ------------------------------------------------------------------------------
@@ -272,7 +272,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
 #else 
                   Sched.pushWork q (k b)                     
 #endif
-          logLnAt_ 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
+          logWith q 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 
@@ -293,7 +293,8 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
-putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do  
+putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
+  logWith q 5 " [dbg-lvish] putLV: about to mutate"
   Sched.setStatus q name         -- publish our intent to modify the LVar
   let cont (delta, ret) = ClosedPar $ \q -> do
         curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
@@ -303,7 +304,7 @@ putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
             Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
             Active listeners -> 
               B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-        exec (k ret) q 
+        exec (k ret) q
   exec (close (doPut state) cont) q            -- possibly modify the LVar  
   
 -- | Update an LVar without generating a result.  
@@ -337,7 +338,7 @@ newPool = mkPar $ \k q -> do
   cnt <- C.new
   bag <- B.new
   let hp = HandlerPool cnt bag
-  hpMsg " [dbg-lvish] Created new pool" hp
+  hpMsg q " [dbg-lvish] Created new pool" hp
   exec (k hp) q
   
 -- | Convenience function.  Execute a @Par@ computation in the context of a fresh handler pool.
@@ -381,7 +382,7 @@ closeInPool (Just hp) c = do
           C.dec cnt                 -- record handler completion in pool
           quiescent <- C.poll cnt   -- check for (transient) quiescence
           when quiescent $ do       -- wake any threads waiting on quiescence
-            hpMsg " [dbg-lvish] -> Quiescent now.. waking conts" hp 
+            hpMsg q " [dbg-lvish] -> Quiescent now.. waking conts" hp 
             let invoke t tok = do
                   B.remove tok
                   Sched.pushWork q t                
@@ -403,7 +404,7 @@ addHandler hp LVar {state, status} globalCB updateThresh =
   let spawnWhen thresh q = do
         tripped <- thresh
         whenJust tripped $ \cb -> do
-          logLnAt_ 5 " [dbg-lvish] addHandler: Delta threshold triggered, pushing work.."
+          logWith q 5 " [dbg-lvish] addHandler: Delta threshold triggered, pushing work.."
           closed <- closeInPool hp cb
           Sched.pushWork q closed
       onUpdate d _ q = spawnWhen (updateThresh d) q
@@ -420,7 +421,7 @@ addHandler hp LVar {state, status} globalCB updateThresh =
         do B.put listeners $ Listener onUpdate onFreeze; return ()
       Frozen -> return ()             -- frozen, so no need to enroll
 
-    logLnAt_ 4 " [dbg-lvish] addHandler: calling globalCB.."
+    logWith q 4 " [dbg-lvish] addHandler: calling globalCB.."
     -- At registration time, traverse (globally) over the previously inserted items
     -- to launch any required callbacks.
     exec (close (globalCB state) nullCont) q
@@ -431,24 +432,24 @@ nullCont = (\() -> ClosedPar (\_ -> return ()))
 -- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()
 quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
-  hpMsg " [dbg-lvish] Begin quiescing pool, identity= " hp
+  hpMsg q " [dbg-lvish] Begin quiescing pool, identity= " hp
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
   quiescent <- C.poll cnt
   if quiescent then do
     B.remove tok
-    hpMsg " [dbg-lvish] -> Quiescent already!" hp
+    hpMsg q " [dbg-lvish] -> Quiescent already!" hp
     exec (k ()) q 
   else do 
-    hpMsg " [dbg-lvish] -> Not quiescent yet, back to sched" hp
+    hpMsg q " [dbg-lvish] -> Not quiescent yet, back to sched" hp
     sched q
 
 -- | A global barrier.
 quiesceAll :: Par ()
 quiesceAll = mkPar $ \k q -> do
   sched q
-  logWith q " [dbg-lvish] Return from global barrier."
+  logWith q 1 " [dbg-lvish] Return from global barrier."
   exec (k ()) q
 
 -- | Freeze an LVar after a given handler quiesces.
@@ -477,7 +478,7 @@ forkHP :: Maybe HandlerPool -> Par () -> Par ()
 forkHP mh child = mkPar $ \k q -> do
   closed <- closeInPool mh child
   Sched.pushWork q (k ()) -- "Work-first" policy.
---  hpMsg " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
+--  hpMsg q " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
   exec closed q  
   
 -- | Fork a child thread.
@@ -551,15 +552,13 @@ runPar_internal2 c = do
   -- Debugging: spin the main thread (not beginning work) until we can fully
   -- initialize the logging data structure.
   --
-  -- TODO: This would be easier to deal with if we used the current thread as the main worker thread...
+  -- TODO: This would be easier to deal with if we used the current thread as the
+  -- main worker thread...
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then do putStrLn $" TEMP: CALL NEW LOGGER"
-                  lgr <- L.newLogger (L.WaitTids ls)
-                  putStrLn $" TEMP: DONE NEW LOGGER"
+          then do lgr <- L.newLogger (L.WaitTids ls)
                   L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
-                  putStrLn $" TEMP: DONE FIRST LOG MSG"                  
                   -- Setting one of them sets all of them -- this field is shared:
                   writeIORef (Sched.logger (Prelude.head queues)) lgr
                   return ()
@@ -577,9 +576,9 @@ runPar_internal2 c = do
                               -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
                         in do 
 #ifdef DEBUG_LVAR
+                              -- This is painful, we may need to spin and wait for everybody to be forked:
                               when (dbgLvl >= 1) setLogger
 #endif
-                              putStrLn $" TEMP: DONE WITH SET LOGGER"
                               exec (close c k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
                    -- the main thread exits.  Subsequent exceptions on child threads, even if
@@ -592,14 +591,14 @@ runPar_internal2 c = do
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        logWith (Prelude.head queues) $ " [dbg-lvish] Killing off workers due to exception: "++show tids
+        logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         mytid <- myThreadId
         when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
-  logWith (Prelude.head queues) " [dbg-lvish] parent thread escaped unscathed"
+  logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
   lgr <- readIORef (Sched.logger (Prelude.head queues))
   L.closeIt lgr
   return ans
@@ -667,16 +666,17 @@ unsafeName x = unsafePerformIO $ do
    return (hashStableName sn)
 
 {-# INLINE hpMsg #-}
-hpMsg :: String -> HandlerPool -> IO ()
-hpMsg msg hp = 
+hpMsg :: Sched.State a s -> String -> HandlerPool -> IO ()
+hpMsg q msg hp = 
   when (dbgLvl >= 3) $ do
     s <- hpId_ hp
-    logLnAt_ 3 $ msg++", pool identity= " ++s
+    logWith q 3 $ msg++", pool identity= " ++s
 
 {-# NOINLINE hpId #-}   
 hpId :: HandlerPool -> String
 hpId hp = unsafePerformIO (hpId_ hp)
 
+-- | Debugging tool for printing which HandlerPool
 hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
   sn1 <- makeStableName cnt
