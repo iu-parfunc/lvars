@@ -91,6 +91,9 @@ data LogMsg = StrMsg { lvl::Int, body::String }
 
 toString x@(StrMsg{}) = body x
 
+maxWait :: Int
+maxWait = 10*1000 -- 10ms
+
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: WaitMode -> IO Logger
@@ -100,21 +103,26 @@ newLogger waitWorkers = do
   coordinator <- A.async $ do
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
-    let schedloop !num !waiting = do
+    let schedloop !num !waiting !bkoff = do
 --          putStrLn (" TEMP: schedloop "++show num) -- TEMP/DEBUGGING
-          let keepWaiting = do myyield; schedloop num waiting
+          let keepWaiting = do b <- backoff bkoff
+                               schedloop num waiting b
               waitMore    = do w <- readSmplChan checkPoint
-                               myyield
-                               schedloop (num+1) (w:waiting)
+                               b <- newBackoff maxWait -- We got something, reset this.
+                               schedloop (num+1) (w:waiting) b
           case waitWorkers of
             WaitNum target | num >= target -> pickAndProceed waiting
                            | otherwise     -> waitMore
             WaitTids tids -> do
-              b <- checkTids tids
-              case b of
+              bl <- checkTids tids
+              case bl of
                 True  -> do ls <- flushChan waiting
 --                            putStrLn$ " TEMP: tids ("++show tids++") are ready"
-                            pickAndProceed ls
+                            case ls of
+                              [] -> do chatter " [Logger] Warning: No active tasks?"
+                                       bk2 <- backoff bkoff
+                                       schedloop 0 [] bk2
+                              _ -> pickAndProceed ls
                 False -> keepWaiting
 
         -- When all threads are quiescent, we can flush the remaining messagers from
@@ -127,8 +135,7 @@ newLogger waitWorkers = do
 
         -- Take the set of logically-in-parallel tasks, choose one, execute it, and
         -- then return to the main scheduler loop.
-        pickAndProceed [] = do chatter " [Logger] Warning: No active tasks?"
-                               myyield; schedloop 0 []
+        pickAndProceed [] = error "pickAndProceed: this should only be called on a non-empty list"
         pickAndProceed waiting = do
           putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
           let order a b =
@@ -140,9 +147,10 @@ newLogger waitWorkers = do
                   EQ -> error $" [Logger] Need in-parallel log messages to have an ordering, got two equal:\n "++s1
               sorted = sortBy order waiting
               hd:rst = sorted
-          unblockTask hd
-          -- Return to the scheduler to wait for the next quiescent point.
-          schedloop (length rst) rst
+          unblockTask hd -- The task will asynchronously run when it can.
+          yield -- If running on one thread, give it a chance to run.
+          -- Return to the scheduler to wait for the next quiescent point:
+          schedloop (length rst) rst =<< newBackoff maxWait
 
         unblockTask Writer{who,continue,msg} = do
           -- Print out the message.
@@ -164,7 +172,7 @@ newLogger waitWorkers = do
             ThreadBlocked BlockedOnMVar -> checkTids rst
             ThreadBlocked _ -> return False
             ThreadDied      -> checkTids rst -- Should this be an error condition!?
-    schedloop 0 [] -- Kick things off:
+    schedloop 0 [] =<< newBackoff maxWait -- Kick things off.
     return () -- End: async thread
   let closeIt = A.cancel coordinator
   return $! Logger { coordinator, checkPoint, closeIt, waitWorkers } -- logged, 
@@ -187,13 +195,13 @@ logOn Logger{checkPoint} msg = do
 ----------------------------------------------------------------------------------------------------
 -- Simple back-off strategy.
 
-myyield = yield
--- myyield = threadDelay (10 * 1000)
-
 -- | The state for an exponential backoff.
 data Backoff = Backoff { current :: !Int
                        , cap :: !Int  -- ^ Maximum nanoseconds to wait.
                        }
+
+newBackoff :: Int -> IO Backoff
+newBackoff cap = return Backoff{cap,current=0}
 
 backoff :: Backoff -> IO Backoff
 backoff Backoff{current,cap} =
@@ -232,11 +240,14 @@ tryReadSmplChan ch = do
 
 -- | Blocking OR busy-waiting read.
 readSmplChan :: SmplChan a -> IO a
-readSmplChan ch = do
-  x <- tryReadSmplChan ch
-  case x of
-    Nothing -> do myyield; readSmplChan ch
-    Just h  -> return h
+readSmplChan ch = loop =<< newBackoff maxWait
+ where
+   loop bk = do
+     x <- tryReadSmplChan ch
+     case x of
+       Nothing -> do b2 <- backoff bk
+                     loop b2
+       Just h  -> return h
 
 -- | Always succeeds.  Asynchronous write to channel.
 writeSmplChan :: SmplChan a -> a -> IO ()

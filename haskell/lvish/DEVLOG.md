@@ -384,4 +384,19 @@ We're talking slow enough for me to read it as it scrolls by.
 With that print disabled, it runs in the SAME time whether we use
 "yield" or "threadDelay" for 10ms...
 
+-----------
+
+Update: I just switched it to exponential backoff everywhere it
+spins/polls.  I'm still seeing the same times.
+
+Ah!  Interesting.  Now it runs much faster when running on multiple
+real threads!  Maybe there are insufficient yield points to enable it
+to run quickly (cooperatively) on one thread?  Or maybe the
+differences in the threaded RTS matter here... (the threaded RTS
+should be linked either way, but perhaps parts of it are inactive in
+-N1).
+
+Is there a path around schedloop that does NOT yield?  
+
+
 
