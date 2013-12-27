@@ -4,7 +4,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
+  State(logger), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
@@ -16,6 +16,8 @@ import Control.Applicative
 import Data.IORef 
 import GHC.Conc
 import System.Random (StdGen, mkStdGen)
+
+import qualified Control.LVish.Logging as L
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
@@ -76,7 +78,11 @@ data State a s = State
       status   :: IORef s,
       workpool :: Deque a,         
       idle     :: IORef [MVar Bool], -- global list of idle workers
-      states   :: [State a s]        -- global list of all worker states.
+      states   :: [State a s],       -- global list of all worker states.
+      logger   :: IORef L.Logger
+        -- ^ The Logger object used by the current Par session.  (This should not
+        -- change during runtime, it is mutable only to support deferred
+        -- initialization.)
     }
     
 -- | Process the next item on the work queue or, failing that, go into
@@ -149,11 +155,12 @@ yieldWork State { workpool } t =
 new :: Int -> s -> IO [State a s]
 new n s = do
   idle <- newIORef []
+  logger <- newIORef (error "Internal error: Sched logger read before initialized.")
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
-        return State { no = i, workpool, idle, status, states, prng }
+        return State { no = i, workpool, idle, status, states, prng, logger }
   rec states <- forM [0..(n-1)] $ mkState states
   return states
 

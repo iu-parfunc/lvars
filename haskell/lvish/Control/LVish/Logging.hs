@@ -26,7 +26,10 @@ module Control.LVish.Logging
          logStrLn_, logLnAt_,
 
          -- * Global variables
-         globalLog, dbgLvl
+         globalLog, dbgLvl, 
+
+         -- * New logger interface
+         newLogger, logOn, Logger(closeIt), WaitMode(..), LogMsg(..)
        )
        where
 
@@ -40,9 +43,10 @@ import           System.IO.Unsafe (unsafePerformIO)
 import           System.IO (stderr)
 import           System.Environment(getEnvironment)
 import           Text.Printf (hPrintf)
+import           Debug.Trace (trace)
 
 import Control.LVish.Types
-import qualified Control.LVish.SchedIdempotentInternal as Sched
+-- import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 ----------------------------------------------------------------------------------------------------
 
@@ -54,7 +58,7 @@ data Logger = Logger { coordinator :: A.Async () -- ThreadId
                                       -- ^ (private) The thread that chooses which action to unblock next
                                       -- and handles printing to the screen as well.
                      , checkPoint :: SmplChan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
-                     , logged :: IORef [LogMsg] -- ^ (private) The actual log of messages.
+--                     , logged :: IORef [LogMsg] -- ^ (private) The actual log of messages.
                      , closeIt :: IO () -- ^ (public) A method to complete flushing, close down the helper thread,
                                         -- and generally wrap up.
                      , waitWorkers :: WaitMode  
@@ -64,7 +68,6 @@ data Logger = Logger { coordinator :: A.Async () -- ThreadId
 -- MVar is filled.
 data Writer = Writer { who :: String
                      , continue :: MVar ()
-                     , lvl :: Int -- ^ Verbosity-level for the printed message.  
                      , msg :: LogMsg
                        -- TODO: Indicate whether this writer has useful work to do or
                        -- is about to block... this provides a simple notion of
@@ -78,30 +81,27 @@ data WaitMode = WaitTids [ThreadId] -- ^ Wait until a certain set of threads is 
                             -- num workers starts at 1 and then is modified
                             -- with `incrTasks` and `decrTasks`.
               | WaitNum Int -- ^ UNFINISHED: A fixed set of threads must check-in each round before proceeding.
+  deriving Show
 
 -- | We allow logging in O(1) time in String or ByteString format.  In practice the
 -- distinction is not that important, because only *thunks* should be logged; the
 -- thread printing the logs should deal with forcing those thunks.
-data LogMsg = StrMsg String 
+data LogMsg = StrMsg { lvl::Int, body::String }
+--          | ByteStrMsg { lvl::Int,  }
 
-toString (StrMsg s) = s
+toString x@(StrMsg{}) = body x
 
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: WaitMode -> IO Logger
 newLogger waitWorkers = do
-  logged <- newIORef []
---  checkPoint <- newChan
+  logged      <- newIORef []
   checkPoint  <- newSmplChan
   coordinator <- A.async $ do
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
     let schedloop !num !waiting = do
-          -- PROBLEM: how do we detect quiescence?  How do we know how many threads
-          -- should check-in?
-          --
-          -- HEURISTIC: require that we be initialized with a number of worker
-          -- threads.  ALL workers are expected to check-in in some form each round.
+--          putStrLn (" TEMP: schedloop "++show num) -- TEMP/DEBUGGING
           let keepWaiting = do yield; schedloop num waiting
               waitMore    = do w <- readSmplChan checkPoint
                                yield
@@ -109,10 +109,11 @@ newLogger waitWorkers = do
           case waitWorkers of
             WaitNum target | num >= target -> pickAndProceed waiting
                            | otherwise     -> waitMore
-            WaitTids ls -> do
-              b <- checkTids ls
+            WaitTids tids -> do
+              b <- checkTids tids
               case b of
                 True  -> do ls <- flushChan waiting
+--                            putStrLn$ " TEMP: tids ("++show tids++") are ready"
                             pickAndProceed ls
                 False -> keepWaiting
 
@@ -126,9 +127,9 @@ newLogger waitWorkers = do
 
         -- Take the set of logically-in-parallel tasks, choose one, execute it, and
         -- then return to the main scheduler loop.
-        pickAndProceed [] = chatter " [Logger] No active tasks, shutting down."
+        pickAndProceed [] = do yield; schedloop 0 []
         pickAndProceed waiting = do
-          putStr (show (length waiting) ++" ") -- TEMP
+          putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
           let order a b =
                 let s1 = toString (msg a)
                     s2 = toString (msg b) in
@@ -142,9 +143,11 @@ newLogger waitWorkers = do
           -- Return to the scheduler to wait for the next quiescent point.
           schedloop (length rst) rst
 
-        unblockTask Writer{who,continue,lvl,msg} = do
+        unblockTask Writer{who,continue,msg} = do
           -- Print out the message.
-          hPrintf stderr (toString msg)
+          hPrintf stderr "%s\n" (toString msg)
+          -- TODO: Update 'logged', and don't print immediately...
+          
           -- Signal that the thread may continue.
           putMVar continue ()
           
@@ -155,11 +158,15 @@ newLogger waitWorkers = do
           case st of
             ThreadRunning   -> return False
             ThreadFinished  -> checkTids rst
-            ThreadBlocked _ -> checkTids rst
+            -- WARNING: this design is flawed because it is possible when compiled
+            -- with -threaded that IO will spuriously showed up as BlockedOnMVar:
+            ThreadBlocked BlockedOnMVar -> checkTids rst
+            ThreadBlocked _ -> return False
             ThreadDied      -> checkTids rst -- Should this be an error condition!?
-    return ()
+    schedloop 0 [] -- Kick things off:
+    return () -- End: async thread
   let closeIt = A.cancel coordinator
-  return $! Logger { coordinator, logged, checkPoint, closeIt, waitWorkers }
+  return $! Logger { coordinator, checkPoint, closeIt, waitWorkers } -- logged, 
 
 chatter :: String -> IO ()
 chatter = hPrintf stderr 
@@ -170,7 +177,10 @@ decrTasks = undefined
 
 -- | Write a log message from the current thread.  
 logOn :: Logger -> LogMsg -> IO ()
-logOn = undefined
+logOn Logger{checkPoint} msg = do
+  continue <- newEmptyMVar
+  writeSmplChan checkPoint Writer{who="",continue,msg}
+  takeMVar continue -- Block until we're given permission to proceed.
 
 ----------------------------------------------------------------------------------------------------
 -- Simple channels: we need non-blocking reads so we can't use
@@ -185,11 +195,12 @@ logOn = undefined
 -- | Simple channels that don't support real blocking.
 type SmplChan a = IORef [a]
 
+newSmplChan :: IO (SmplChan a)
 newSmplChan = newIORef []
 
 -- | Non-blocking read.
+tryReadSmplChan :: SmplChan a -> IO (Maybe a)
 tryReadSmplChan ch = do
-  ls <- readIORef ch
   x <- atomicModifyIORef' ch $ \ ls -> 
        case ls of
          []  -> ([], Nothing)
@@ -197,11 +208,18 @@ tryReadSmplChan ch = do
   return x
 
 -- | Blocking OR busy-waiting read.
+readSmplChan :: SmplChan a -> IO a
 readSmplChan ch = do
   x <- tryReadSmplChan ch
   case x of
     Nothing -> do yield; readSmplChan ch
     Just h  -> return h
+
+-- | Always succeeds.  Asynchronous write to channel.
+writeSmplChan :: SmplChan a -> a -> IO ()
+writeSmplChan ch x = do
+  atomicModifyIORef' ch $ \ ls -> (x:ls,())
+
 
 ----------------------------------------------------------------------------------------------------
 

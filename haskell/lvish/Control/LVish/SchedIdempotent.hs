@@ -46,11 +46,12 @@ module Control.LVish.SchedIdempotent
 
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
+import qualified Control.Concurrent as Conc
 import qualified Control.Exception as E
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
-import           Control.LVish.Logging (logStrLn_, logLnAt_, dbgLvl, printLog, printLogThread, globalLog)
+import           Control.LVish.Logging as L
 import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
@@ -63,6 +64,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
+import qualified Prelude
 import           System.Random (random)
 
 #ifdef DEBUG_LVAR               
@@ -187,11 +189,24 @@ isFrozen (LVar {status}) = do
     Active _ -> return False
     Frozen   -> return True
 
+-- | Logging within the (internal) Par monad.
 logStrLn  :: String -> Par ()
 #ifdef DEBUG_LVAR
-logStrLn = liftIO . logStrLn_
+-- logStrLn = liftIO . logStrLn_
+logStrLn str = do
+  lgr <- getLogger
+  liftIO$ L.logOn lgr (L.StrMsg 1 str)
 #else
 logStrLn _  = return ()
+#endif
+
+logWith :: Sched.State a s -> String -> IO ()
+#ifdef DEBUG_LVAR
+logWith q str = do
+  lgr <- readIORef (Sched.logger q)
+  L.logOn lgr (L.StrMsg 1 str)
+#else
+logWith _ _ = return ()
 #endif
 
 ------------------------------------------------------------------------------
@@ -433,7 +448,7 @@ quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
 quiesceAll :: Par ()
 quiesceAll = mkPar $ \k q -> do
   sched q
-  logStrLn_ " [dbg-lvish] Return from global barrier."
+  logWith q " [dbg-lvish] Return from global barrier."
   exec (k ()) q
 
 -- | Freeze an LVar after a given handler quiesces.
@@ -474,7 +489,14 @@ liftIO :: IO a -> Par a
 liftIO io = mkPar $ \k q -> do
   r <- io
   exec (k r) q
-  
+
+-- | IF compiled with debugging support, this will return the Logger used by the
+-- current Par session, otherwise it will simply throw an exception.
+getLogger :: Par L.Logger
+getLogger = mkPar $ \k q -> do
+  lgr <- readIORef (Sched.logger q)
+  exec (k lgr) q
+
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
 instance MonadToss Par where  
   toss = mkPar $ \k q -> do  
@@ -516,42 +538,68 @@ runPar_internal c = do
 
 runPar_internal2 :: Par a -> IO a
 runPar_internal2 c = do
-  queues <- Sched.new numCapabilities noName
+  let numWrkrs = numCapabilities
+  queues <- Sched.new numWrkrs noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
   answerMV <- newEmptyMVar
-
-#if 1
   wrkrtids <- newIORef []
+
+  -- Debugging: spin the main thread (not beginning work) until we can fully
+  -- initialize the logging data structure.
+  --
+  -- TODO: This would be easier to deal with if we used the current thread as the main worker thread...
+  let setLogger = do
+        ls <- readIORef wrkrtids
+        if length ls == numWrkrs
+          then do putStrLn $" TEMP: CALL NEW LOGGER"
+                  lgr <- L.newLogger (L.WaitTids ls)
+                  putStrLn $" TEMP: DONE NEW LOGGER"
+                  L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
+                  putStrLn $" TEMP: DONE FIRST LOG MSG"                  
+                  -- Setting one of them sets all of them -- this field is shared:
+                  writeIORef (Sched.logger (Prelude.head queues)) lgr
+                  return ()
+          else do Conc.yield
+                  putStrLn $" TEMP: NOT READY TO MAKE LOGGER: "++show (length ls)
+                  setLogger
+#if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
-        tid <- forkWithExceptions (forkOn cpu) "worker thread" $
+        tid <- forkWithExceptions (forkOn cpu) "worker thread" $ do
+                 putStrLn $" TEMP: WORKER THREAD STARTED "++show (cpu,main_cpu)
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
                               sched q            -- ensure any remaining, enabled threads run to 
                               putMVar answerMV x -- completion prior to returning the result
                               -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
-                        in exec (close c k) q
+                        in do 
+#ifdef DEBUG_LVAR
+                              setLogger
+#endif
+                              putStrLn $" TEMP: DONE WITH SET LOGGER"
+                              exec (close c k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
                    -- the main thread exits.  Subsequent exceptions on child threads, even if
                    -- forwarded asynchronously, can arrive much later at the main thread
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
-  logStrLn_ " [dbg-lvish] About to fork workers..."      
+  -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
+  putStrLn " TEMP: [dbg-lvish] About to fork workers..."
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
-        logStrLn_$ " [dbg-lvish] Killing off workers due to exception: "++show tids
+        logWith (Prelude.head queues) $ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         mytid <- myThreadId
         when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
-  logStrLn_ " [dbg-lvish] parent thread escaped unscathed"
+  logWith (Prelude.head queues) " [dbg-lvish] parent thread escaped unscathed"
   return ans
 #else
   -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
