@@ -364,3 +364,24 @@ v9f is interesting however...  It uses no callbacks or handler pools.
 It simply writes N ivars and then reads them.
 
 
+[2013.12.26] {Adding a schedule-control facility to the debug-logging one}
+
+The first draft is now running... but it's chewing up a bunch of user
+time.  A tiny 0.3 second test goes to 2 seconds, and then if I turn on
+more print messages (on every time around "schedloop"), I get this:
+
+      100.12 real        97.08 user         3.01 sys
+
+Ok, there is some busy-waiting in there.  One weird thing is that ONE
+test runs quickly.  Oh, I see.  The logger threads aren't getting
+killed so they continue to spin after things are shut down.
+
+I fixed that problem... but when printing out each schedloop
+invocation it still goes crazy slowly (21.8s user).  It should be able
+to spam messages to the terminal a heck of a lot faster than that.
+We're talking slow enough for me to read it as it scrolls by. 
+
+With that print disabled, it runs in the SAME time whether we use
+"yield" or "threadDelay" for 10ms...
+
+

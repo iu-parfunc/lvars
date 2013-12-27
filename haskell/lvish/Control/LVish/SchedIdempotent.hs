@@ -193,7 +193,7 @@ isFrozen (LVar {status}) = do
 logStrLn  :: String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
-logStrLn str = do
+logStrLn str = when (dbgLvl >= 1) $ do
   lgr <- getLogger
   liftIO$ L.logOn lgr (L.StrMsg 1 str)
 #else
@@ -202,7 +202,7 @@ logStrLn _  = return ()
 
 logWith :: Sched.State a s -> String -> IO ()
 #ifdef DEBUG_LVAR
-logWith q str = do
+logWith q str = when (dbgLvl >= 1) $ do
   lgr <- readIORef (Sched.logger q)
   L.logOn lgr (L.StrMsg 1 str)
 #else
@@ -577,7 +577,7 @@ runPar_internal2 c = do
                               -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
                         in do 
 #ifdef DEBUG_LVAR
-                              setLogger
+                              when (dbgLvl >= 1) setLogger
 #endif
                               putStrLn $" TEMP: DONE WITH SET LOGGER"
                               exec (close c k) q
@@ -600,6 +600,8 @@ runPar_internal2 c = do
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logWith (Prelude.head queues) " [dbg-lvish] parent thread escaped unscathed"
+  lgr <- readIORef (Sched.logger (Prelude.head queues))
+  L.closeIt lgr
   return ans
 #else
   -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:

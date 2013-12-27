@@ -42,7 +42,7 @@ import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.IO (stderr)
 import           System.Environment(getEnvironment)
-import           Text.Printf (hPrintf)
+import           Text.Printf (printf, hPrintf)
 import           Debug.Trace (trace)
 
 import Control.LVish.Types
@@ -102,9 +102,9 @@ newLogger waitWorkers = do
     -- pick one.  We log the series of decisions we make for reproducability.
     let schedloop !num !waiting = do
 --          putStrLn (" TEMP: schedloop "++show num) -- TEMP/DEBUGGING
-          let keepWaiting = do yield; schedloop num waiting
+          let keepWaiting = do myyield; schedloop num waiting
               waitMore    = do w <- readSmplChan checkPoint
-                               yield
+                               myyield
                                schedloop (num+1) (w:waiting)
           case waitWorkers of
             WaitNum target | num >= target -> pickAndProceed waiting
@@ -127,7 +127,8 @@ newLogger waitWorkers = do
 
         -- Take the set of logically-in-parallel tasks, choose one, execute it, and
         -- then return to the main scheduler loop.
-        pickAndProceed [] = do yield; schedloop 0 []
+        pickAndProceed [] = do chatter " [Logger] Warning: No active tasks?"
+                               myyield; schedloop 0 []
         pickAndProceed waiting = do
           putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
           let order a b =
@@ -169,7 +170,8 @@ newLogger waitWorkers = do
   return $! Logger { coordinator, checkPoint, closeIt, waitWorkers } -- logged, 
 
 chatter :: String -> IO ()
-chatter = hPrintf stderr 
+-- chatter = hPrintf stderr
+chatter = printf "%s\n"
 
 -- UNFINISHED:
 incrTasks = undefined
@@ -181,6 +183,27 @@ logOn Logger{checkPoint} msg = do
   continue <- newEmptyMVar
   writeSmplChan checkPoint Writer{who="",continue,msg}
   takeMVar continue -- Block until we're given permission to proceed.
+
+----------------------------------------------------------------------------------------------------
+-- Simple back-off strategy.
+
+myyield = yield
+-- myyield = threadDelay (10 * 1000)
+
+-- | The state for an exponential backoff.
+data Backoff = Backoff { current :: !Int
+                       , cap :: !Int  -- ^ Maximum nanoseconds to wait.
+                       }
+
+backoff :: Backoff -> IO Backoff
+backoff Backoff{current,cap} =
+  case current of
+    -- Yield once before we start delaying:
+    0 -> do yield
+            return Backoff{cap,current=1}
+    n -> do let next = min cap (2*n)
+            threadDelay n
+            return Backoff{cap,current=next}
 
 ----------------------------------------------------------------------------------------------------
 -- Simple channels: we need non-blocking reads so we can't use
@@ -212,7 +235,7 @@ readSmplChan :: SmplChan a -> IO a
 readSmplChan ch = do
   x <- tryReadSmplChan ch
   case x of
-    Nothing -> do yield; readSmplChan ch
+    Nothing -> do myyield; readSmplChan ch
     Just h  -> return h
 
 -- | Always succeeds.  Asynchronous write to channel.
