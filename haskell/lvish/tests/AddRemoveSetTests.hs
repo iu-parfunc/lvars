@@ -47,19 +47,24 @@ v1 = runParIO $
 
 case_v2 :: Assertion
 case_v2 = v2 >>= assertEqual "freeze with 10 elements added, asynchronously"
-          (S.fromList [1..10] :: S.Set Int)
+          (S.fromList [1.. v2size] :: S.Set Int)
 
 v2 :: IO (S.Set Int)
 v2 = runParIO $
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ do
-                     liftIO$ threadDelay 5000 
+                     -- liftIO$ threadDelay 5000 
                      logDbgLn 4$ " [AR-v2] Doing one insert: "++show n
-                     ARS.insert n s) [1..10]
+                     ARS.insert n s) [1.. v2size]
         logDbgLn 4$ " [AR-v2] now waiting.."
-        ARS.waitAddedSize 10 s
+        ARS.waitAddedSize v2size s
         logDbgLn 4$ " [AR-v2] now freezing.."
         ARS.freezeSet s
+
+v2size =
+  case numElems of
+    Just x -> x
+    Nothing -> 10
 
 case_v3 :: Assertion
 case_v3 = assertEqual "freeze with 3 elements added, purely and asynchronously"
