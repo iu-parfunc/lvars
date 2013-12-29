@@ -7,7 +7,7 @@
 LIBSRC =
 
 ARGS = -DGET_ONCE=1 -DGENERIC_PAR -rtsopts -threaded -DDEBUG_LVAR $(GHC_ARGS)
-ARGS += -O2
+ARGS += -O2 -eventlog
 # -fforce-recomp
 
 ALLEXES = AddRemoveSetTests.exe ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe PNCounterTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe Main_wfailing.exe 

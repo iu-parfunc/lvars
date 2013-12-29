@@ -294,7 +294,8 @@ putLV_ :: LVar a d                 -- ^ the LVar
                                    -- value changed
        -> Par b
 putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
-  logWith q 5 " [dbg-lvish] putLV: about to mutate"
+  logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar "
+                ++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
   Sched.setStatus q name         -- publish our intent to modify the LVar
   let cont (delta, ret) = ClosedPar $ \q -> do
         curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
@@ -562,7 +563,7 @@ runPar_internal2 c = do
                   setLogger
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
-        tid <- forkWithExceptions (forkOn cpu) "worker thread" $ do
+        tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
                               sched q            -- ensure any remaining, enabled threads run to 
@@ -680,29 +681,4 @@ hpId_ (HandlerPool cnt bag) = do
            " transient cnt "++show c
 
 
--- | Exceptions that walk up the fork-tree of threads.
---   
---   WARNING: By holding onto the ThreadId we keep the parent thread from being
---   garbage collected (at least as of GHC 7.6).  This means that even if it was
---   complete, it will still be hanging around to accept the exception below.
-forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
-forkWithExceptions forkit descr action = do 
-   parent <- myThreadId
-   forkit $ do
-      tid <- myThreadId
-      E.catch action
-	 (\ e -> 
-           case E.fromException e of 
-             Just E.ThreadKilled -> do
--- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
-#ifdef DEBUG_LVAR
-               printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
-#endif
-               return ()
-	     _  -> do
-#ifdef DEBUG_LVAR               
-                      printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
-#endif
-                      E.throwTo parent (e :: E.SomeException)
-	 )
 

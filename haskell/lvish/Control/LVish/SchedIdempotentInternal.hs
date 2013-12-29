@@ -4,7 +4,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(logger), initLogger,
+  State(logger, no), initLogger,
   new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
 

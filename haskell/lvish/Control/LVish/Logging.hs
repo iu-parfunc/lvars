@@ -30,7 +30,10 @@ module Control.LVish.Logging
          globalLog, dbgLvl, 
 
          -- * New logger interface
-         newLogger, logOn, Logger(closeIt), WaitMode(..), LogMsg(..)
+         newLogger, logOn, Logger(closeIt), WaitMode(..), LogMsg(..),
+
+         -- * General utilities
+         forkWithExceptions
        )
        where
 
@@ -42,11 +45,11 @@ import           Data.List (sortBy)
 import           GHC.Conc hiding (yield)
 import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.IO (stderr)
+import           System.IO (stderr, stdout, hFlush, hPutStrLn)
 import           System.Environment(getEnvironment)
 import           System.Random
 import           Text.Printf (printf, hPrintf)
-import           Debug.Trace (trace)
+import           Debug.Trace (trace, traceEventIO)
 
 import Control.LVish.Types
 -- import qualified Control.LVish.SchedIdempotentInternal as Sched
@@ -116,23 +119,38 @@ andM (hd:tl) t f = do
   if b then andM tl t f
        else f
 
+catchAll :: ThreadId -> E.SomeException -> IO ()
+catchAll parent exn =
+  case E.fromException exn of 
+    Just E.ThreadKilled -> return ()
+    _ -> do
+     hPutStrLn stderr ("! Exception on Logger thread: "++show exn)
+     hFlush stderr
+     E.throwTo parent exn
+     E.throwIO exn
+
 --------------------------------------------------------------------------------
 
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: WaitMode -> IO Logger
-newLogger waitWorkers = do
+newLogger waitWorkers = do 
   logged      <- newIORef []
   checkPoint  <- newSmplChan
-  coordinator <- A.async $ do
+  parent      <- myThreadId
+  coordinator <- A.async $ E.handle (catchAll parent) $ do
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
-    let schedloop !num !waiting !bkoff = do
+    let schedloop !iters !num !waiting !bkoff = do
+          when (iters > 0 && iters `mod` 500 == 0) $
+            putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show num++" are waiting."
+          hFlush stdout
+          
           let keepWaiting = do b <- backoff bkoff
-                               schedloop num waiting b
-              waitMore    = do w <- readSmplChan checkPoint
+                               schedloop (iters+1) num waiting b
+              waitMore    = do w <- readSmplChan checkPoint -- Blocking! (or spinning)
                                b <- newBackoff maxWait -- We got something, reset this.
-                               schedloop (num+1) (w:waiting) b
+                               schedloop (iters+1) (num+1) (w:waiting) b
           case waitWorkers of
             WaitNum target extra -> do
               n <- extra -- Atomically check how many extra workers are blocked.
@@ -146,7 +164,7 @@ newLogger waitWorkers = do
                        case ls of
                          [] -> do chatter " [Logger] Warning: No active tasks?"
                                   bk2 <- backoff bkoff
-                                  schedloop 0 [] bk2
+                                  schedloop (iters+1) 0 [] bk2
                          _ -> pickAndProceed ls)
                    keepWaiting
 
@@ -176,15 +194,18 @@ newLogger waitWorkers = do
           let pick = sorted !! pos
               (pref,suf) = splitAt pos sorted
               rst = pref ++ tail suf
-              
           unblockTask pos len pick -- The task will asynchronously run when it can.
           yield -- If running on one thread, give it a chance to run.
           -- Return to the scheduler to wait for the next quiescent point:
-          schedloop (length rst) rst =<< newBackoff maxWait
+          bnew <- newBackoff maxWait
+          tid <- myThreadId
+          schedloop 0 (length rst) rst bnew
 
         unblockTask pos len Writer{who,continue,msg} = do
+          let str = show (lvl msg)++ "| #"++show (1+pos)++" of "++show len ++": "++ toString msg
           -- Print out the message:
-          putStrLn $ show (lvl msg)++ "| #"++show (1+pos)++" of "++show len ++": "++ toString msg
+          hPrintf stderr "%s\n" str
+          traceEventIO str
           -- Signal that the thread may continue.
           putMVar continue ()
           
@@ -200,7 +221,7 @@ newLogger waitWorkers = do
             ThreadBlocked BlockedOnMVar -> checkTids rst
             ThreadBlocked _ -> return False
             ThreadDied      -> checkTids rst -- Should this be an error condition!?
-    schedloop 0 [] =<< newBackoff maxWait -- Kick things off.
+    schedloop 0 0 [] =<< newBackoff maxWait -- Kick things off.
     return () -- End: async thread
   let closeIt = A.cancel coordinator
   return $! Logger { coordinator, checkPoint, closeIt, waitWorkers } -- logged, 
@@ -209,6 +230,8 @@ chatter :: String -> IO ()
 -- chatter = hPrintf stderr
 -- chatter = printf "%s\n"
 chatter _ = return ()
+
+printNTrace s = do putStrLn s; traceEventIO s; hFlush stdout
 
 -- UNFINISHED:
 incrTasks = undefined
@@ -231,12 +254,15 @@ logOn Logger{checkPoint} msg
 data Backoff = Backoff { current :: !Int
                        , cap :: !Int  -- ^ Maximum nanoseconds to wait.
                        }
+  deriving Show
+
 
 newBackoff :: Int -> IO Backoff
 newBackoff cap = return Backoff{cap,current=0}
 
 backoff :: Backoff -> IO Backoff
-backoff Backoff{current,cap} =
+-- backoff b = do yield; return b
+backoff Backoff{current,cap} =                                   
   case current of
     -- Yield once before we start delaying:
     0 -> do yield
@@ -244,7 +270,7 @@ backoff Backoff{current,cap} =
     n -> do let next = min cap (2*n)
             threadDelay n
             return Backoff{cap,current=next}
-
+  
 ----------------------------------------------------------------------------------------------------
 -- Simple channels: we need non-blocking reads so we can't use
 -- Control.Concurrent.Chan.  We could use TChan, but I don't want to bring STM into
@@ -383,3 +409,30 @@ defaultDbg = 0
 
 replayDbg :: Int
 replayDbg = 100
+
+
+-- | Exceptions that walk up the fork-tree of threads.
+--   
+--   WARNING: By holding onto the ThreadId we keep the parent thread from being
+--   garbage collected (at least as of GHC 7.6).  This means that even if it was
+--   complete, it will still be hanging around to accept the exception below.
+forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
+forkWithExceptions forkit descr action = do 
+   parent <- myThreadId
+   forkit $ do
+      tid <- myThreadId
+      E.catch action 
+	 (\ e -> 
+           case E.fromException e of 
+             Just E.ThreadKilled -> do
+-- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
+#ifdef DEBUG_LVAR
+               printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
+#endif
+               return ()
+	     _  -> do
+#ifdef DEBUG_LVAR               
+                      printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
+#endif
+                      E.throwTo parent (e :: E.SomeException)
+	 )
