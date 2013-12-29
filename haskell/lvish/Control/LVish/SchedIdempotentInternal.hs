@@ -183,8 +183,8 @@ initLogger [] _ = error "initLogger: cannot take empty list of workers"
 initLogger queues@(hd:_) tids
   | len1 /= len2 = error "initLogger: length of arguments did not match"
   | otherwise = do
-    lgr <- L.newLogger (L.WaitTids tids (pollDeques queues))
-    -- lgr <- L.newLogger (L.WaitNum len1 countIdle)
+    lgr <- L.newLogger Nothing (L.WaitTids tids (pollDeques queues))
+    -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
     L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
     -- Setting one of them sets all of them -- this field is shared:
     writeIORef (logger hd) lgr

@@ -202,6 +202,7 @@ logStrLn _ _  = return ()
 
 logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
+-- Only when the debug level is 1 or higher is the logger even initialized:
 logWith q lvl str = when (dbgLvl >= 1) $ do
   lgr <- readIORef (Sched.logger q)
   L.logOn lgr (L.StrMsg lvl str)

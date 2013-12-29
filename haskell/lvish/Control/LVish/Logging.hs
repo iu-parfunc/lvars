@@ -63,11 +63,12 @@ import Control.LVish.Types
 data Logger = Logger { coordinator :: A.Async () -- ThreadId
                                       -- ^ (private) The thread that chooses which action to unblock next
                                       -- and handles printing to the screen as well.
+                     , lgrLvl :: Int  -- ^ The minimum level of messages accepted by this logger.
                      , checkPoint :: SmplChan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
 --                     , logged :: IORef [LogMsg] -- ^ (private) The actual log of messages.
                      , closeIt :: IO () -- ^ (public) A method to complete flushing, close down the helper thread,
                                         -- and generally wrap up.
-                     , waitWorkers :: WaitMode  
+                     , waitWorkers :: WaitMode
                      }
 
 -- | A single thread attempting to log a message.  It only unblocks when the attached
@@ -133,8 +134,11 @@ catchAll parent exn =
 
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
-newLogger :: WaitMode -> IO Logger
-newLogger waitWorkers = do 
+newLogger :: Maybe Int -- ^ What minimum level of messages do we accept?  Defaults to `dbgLvl`.
+             -> WaitMode
+             -> IO Logger
+newLogger Nothing w = newLogger (Just dbgLvl) w
+newLogger (Just lgrLvl) waitWorkers = do 
   logged      <- newIORef []
   checkPoint  <- newSmplChan
   parent      <- myThreadId
@@ -224,7 +228,7 @@ newLogger waitWorkers = do
     schedloop 0 0 [] =<< newBackoff maxWait -- Kick things off.
     return () -- End: async thread
   let closeIt = A.cancel coordinator
-  return $! Logger { coordinator, checkPoint, closeIt, waitWorkers } -- logged, 
+  return $! Logger { coordinator, checkPoint, closeIt, waitWorkers, lgrLvl } -- logged, 
 
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
@@ -240,8 +244,8 @@ decrTasks = undefined
 -- | Write a log message from the current thread, IF `dbgLvl` is higher than the
 -- provided message's level, otherwise, the message is ignored.
 logOn :: Logger -> LogMsg -> IO ()
-logOn Logger{checkPoint} msg
-  | lvl msg <= dbgLvl = do
+logOn Logger{checkPoint,lgrLvl} msg
+  | lvl msg <= lgrLvl = do
      continue <- newEmptyMVar
      writeSmplChan checkPoint Writer{who="",continue,msg}
      takeMVar continue -- Block until we're given permission to proceed.
