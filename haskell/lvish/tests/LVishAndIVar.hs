@@ -170,12 +170,12 @@ lp01 = runParIO$ do
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
 lp02 = runParIO$ do
-  logDbgLn 1 " [lp02] Starting parForL loop..."
+  logDbgLn 2 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp02]  iter "++show ix
+    logDbgLn 2$ " [lp02]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp02] after loop..."
+  logDbgLn 2$ " [lp02] after loop..."
   IV.get x
 
 -- [2013.08.05] RRN: I'm seeing this hang sometimes.  It live-locks

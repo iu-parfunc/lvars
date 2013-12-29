@@ -132,7 +132,7 @@ runPar (WrapPar p) = L.runPar p
 -- debug level by setting the env var DEBUG, e.g. @DEBUG=5@.
 logDbgLn :: Int -> String -> Par d s ()
 #ifdef DEBUG_LVAR
-logDbgLn n = WrapPar . L.liftIO . L.logLnAt_ n 
+logDbgLn n = WrapPar . L.logStrLn n 
 #else 
 logDbgLn _ _  = return ()
 {-# INLINE logDbgLn #-}

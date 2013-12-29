@@ -190,14 +190,14 @@ isFrozen (LVar {status}) = do
     Frozen   -> return True
 
 -- | Logging within the (internal) Par monad.
-logStrLn  :: String -> Par ()
+logStrLn  :: Int -> String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
-logStrLn str = when (dbgLvl >= 1) $ do
+logStrLn lvl str = when (dbgLvl >= 1) $ do
   lgr <- getLogger
-  liftIO$ L.logOn lgr (L.StrMsg 1 str)
+  liftIO$ L.logOn lgr (L.StrMsg lvl str)
 #else
-logStrLn _  = return ()
+logStrLn _ _  = return ()
 #endif
 
 logWith :: Sched.State a s -> Int -> String -> IO ()
@@ -563,7 +563,6 @@ runPar_internal2 c = do
                   writeIORef (Sched.logger (Prelude.head queues)) lgr
                   return ()
           else do Conc.yield
-                  putStrLn $" TEMP: NOT READY TO MAKE LOGGER: "++show (length ls)
                   setLogger
       pollDeques [] = return True
       pollDeques (h:t) = do b <- Sched.nullQ (Sched.workpool h)
@@ -572,7 +571,6 @@ runPar_internal2 c = do
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- forkWithExceptions (forkOn cpu) "worker thread" $ do
-                 putStrLn $" TEMP: WORKER THREAD STARTED "++show (cpu,main_cpu)
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
                               sched q            -- ensure any remaining, enabled threads run to 
@@ -591,7 +589,6 @@ runPar_internal2 c = do
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
   -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
-  putStrLn " TEMP: [dbg-lvish] About to fork workers..."
   ans <- E.catch (forkit >> takeMVar answerMV)
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids

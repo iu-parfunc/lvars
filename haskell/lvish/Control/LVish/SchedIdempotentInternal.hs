@@ -212,4 +212,5 @@ currentCPU =
 
 
 chatter :: String -> IO ()
-chatter s = putStrLn s
+-- chatter s = putStrLn s
+chatter _ = return ()

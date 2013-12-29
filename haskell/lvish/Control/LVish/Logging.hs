@@ -44,6 +44,7 @@ import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.IO (stderr)
 import           System.Environment(getEnvironment)
+import           System.Random
 import           Text.Printf (printf, hPrintf)
 import           Debug.Trace (trace)
 
@@ -121,7 +122,6 @@ newLogger waitWorkers = do
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
     let schedloop !num !waiting !bkoff = do
---          putStrLn (" TEMP: schedloop "++show num) -- TEMP/DEBUGGING
           let keepWaiting = do b <- backoff bkoff
                                schedloop num waiting b
               waitMore    = do w <- readSmplChan checkPoint
@@ -133,23 +133,12 @@ newLogger waitWorkers = do
             WaitTids tids poll -> do
               andM [checkTids tids, poll, checkTids tids, poll]
                    (do ls <- flushChan waiting
-                       putStrLn$ " TEMP: tids ("++show tids++") are ready"                       
                        case ls of
                          [] -> do chatter " [Logger] Warning: No active tasks?"
                                   bk2 <- backoff bkoff
                                   schedloop 0 [] bk2
                          _ -> pickAndProceed ls)
                    keepWaiting
---               bl <- checkTids tids
---               case bl of
---                 True  -> do ls <- flushChan waiting
--- --                            putStrLn$ " TEMP: tids ("++show tids++") are ready"
---                             case ls of
---                               [] -> do chatter " [Logger] Warning: No active tasks?"
---                                        bk2 <- backoff bkoff
---                                        schedloop 0 [] bk2
---                               _ -> pickAndProceed ls
---                 False -> keepWaiting
 
         -- When all threads are quiescent, we can flush the remaining messagers from
         -- the channel to get the whole set of waiting tasks.
@@ -171,19 +160,26 @@ newLogger waitWorkers = do
                   LT -> LT
                   EQ -> error $" [Logger] Need in-parallel log messages to have an ordering, got two equal:\n "++s1
               sorted = sortBy order waiting
-              hd:rst = sorted
-          printOptions sorted
-          unblockTask hd -- The task will asynchronously run when it can.
+              len = length waiting
+          -- For now let's randomly pick an action:
+          pos <- randomRIO (0,len-1)
+          let pick = sorted !! pos
+              (pref,suf) = splitAt pos sorted
+              rst = pref ++ tail suf
+--          printOptions sorted
+          putStrLn $ "#"++show (1+pos)++" of "++show len ++": "++ toString (msg pick)
+              
+          unblockTask pick -- The task will asynchronously run when it can.
           yield -- If running on one thread, give it a chance to run.
           -- Return to the scheduler to wait for the next quiescent point:
           schedloop (length rst) rst =<< newBackoff maxWait
 
+        -- Verbose, print all the options available at each step:
         printOptions sorted = do
-          putStrLn "-----"          
-          forM_ (zip [1..] sorted) $ \ (ix,Writer{msg}) -> 
+          putStrLn "-----"
+          forM_ (zip [0..] sorted) $ \ (ix,Writer{msg}) -> 
             putStrLn $ "  "++ show ix ++": "++toString msg
           putStrLn "-----"
-    -- putStr (show (length waiting) ++" ") -- TEMP/DEBUGGING
           
         unblockTask Writer{who,continue,msg} = do
           -- Print out the message.
@@ -212,7 +208,8 @@ newLogger waitWorkers = do
 
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
-chatter = printf "%s\n"
+-- chatter = printf "%s\n"
+chatter _ = return ()
 
 -- UNFINISHED:
 incrTasks = undefined
