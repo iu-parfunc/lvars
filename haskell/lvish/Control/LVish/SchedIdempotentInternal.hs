@@ -4,7 +4,8 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(logger, workpool), new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
+  State(logger), initLogger,
+  new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
@@ -162,7 +163,7 @@ yieldWork :: State a s -> a -> IO ()
 yieldWork State { workpool } t = 
   pushYield workpool t -- AJT: should this also wake an idle thread?
 
--- ^ Create a new set of scheduler states.
+-- | Create a new set of scheduler states.
 new :: Int -> s -> IO [State a s]
 new n s = do
   idle <- newIORef []
@@ -174,6 +175,30 @@ new n s = do
         return State { no = i, workpool, idle, status, states, prng, logger }
   rec states <- forM [0..(n-1)] $ mkState states
   return states
+
+-- | Takes a full set of worker states and correspoding threadIds and initializes the
+-- loggers.
+initLogger :: [State a s] -> [ThreadId] -> IO ()
+initLogger [] _ = error "initLogger: cannot take empty list of workers"
+initLogger queues@(hd:_) tids
+  | len1 /= len2 = error "initLogger: length of arguments did not match"
+  | otherwise = do
+    lgr <- L.newLogger (L.WaitTids tids (pollDeques queues))
+    -- lgr <- L.newLogger (L.WaitNum len1 countIdle)
+    L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
+    -- Setting one of them sets all of them -- this field is shared:
+    writeIORef (logger hd) lgr
+    -- TODO: ASSERT that they are all actually the same IORef?
+    return ()
+ where
+   len1 = length queues
+   len2 = length tids
+   countIdle = do ls <- readIORef (idle hd)
+                  return $! length ls
+   pollDeques [] = return True
+   pollDeques (h:t) = do b <- nullQ (workpool h)
+                         if b then pollDeques t
+                              else return False
 
 number :: State a s -> Int
 number State { no } = no

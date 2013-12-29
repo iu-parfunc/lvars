@@ -86,11 +86,17 @@ data WaitMode = WaitTids [ThreadId] (IO Bool)
               | WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
                             -- num workers starts at 1 and then is modified
                             -- with `incrTasks` and `decrTasks`.
-              | WaitNum Int -- ^ UNFINISHED: A fixed set of threads must check-in each round before proceeding.
+              | WaitNum {
+                numThreads  :: Int,   -- ^ How many threads total must check in?
+                downThreads :: IO Int -- ^ Poll how many threads won't participate this round.
+                } -- ^ A fixed set of threads must check-in each round before proceeding.
   deriving Show
 
 instance Show (IO Bool) where
-  show _ = "<polling_action>"
+  show _ = "<IO Bool>"
+  
+instance Show (IO Int) where
+  show _ = "<IO Int>"
 
 -- | We allow logging in O(1) time in String or ByteString format.  In practice the
 -- distinction is not that important, because only *thunks* should be logged; the
@@ -128,9 +134,13 @@ newLogger waitWorkers = do
                                b <- newBackoff maxWait -- We got something, reset this.
                                schedloop (num+1) (w:waiting) b
           case waitWorkers of
-            WaitNum target | num >= target -> pickAndProceed waiting
-                           | otherwise     -> waitMore
+            WaitNum target extra -> do
+              n <- extra -- Atomically check how many extra workers are blocked.
+              if (num + n >= target)
+                then pickAndProceed waiting
+                else waitMore
             WaitTids tids poll -> do
+              -- FIXME: This is not watertight... it will work with high probability but can't be trusted:
               andM [checkTids tids, poll, checkTids tids, poll]
                    (do ls <- flushChan waiting
                        case ls of
@@ -279,10 +289,10 @@ writeSmplChan ch x = do
 
 ----------------------------------------------------------------------------------------------------
 
--- | A target for global log messages.
-globalLogger :: Logger
-globalLogger = unsafePerformIO $ newLogger (WaitNum numCapabilities)
-{-# NOINLINE globalLogger #-}
+-- -- | A target for global log messages.
+-- globalLogger :: Logger
+-- globalLogger = unsafePerformIO $ newLogger (WaitNum numCapabilities)
+-- {-# NOINLINE globalLogger #-}
 
 
 -- | A global log for global log messages.
