@@ -600,8 +600,9 @@ runPar_internal2 c = do
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
-  lgr <- readIORef (Sched.logger (Prelude.head queues))
-  L.closeIt lgr
+  when (dbgLvl >= 1) $ do 
+    lgr <- readIORef (Sched.logger (Prelude.head queues))
+    L.closeIt lgr
   return ans
 #else
   -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
