@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 
 {-|
@@ -77,12 +78,18 @@ data Writer = Writer { who :: String
 
 -- | Several different ways we know to wait for quiescence in the concurrent mutator
 -- before proceeding.
-data WaitMode = WaitTids [ThreadId] -- ^ Wait until a certain set of threads is blocked before proceeding.
+data WaitMode = WaitTids [ThreadId] (IO Bool)
+                -- ^ Wait until a certain set of threads is blocked before proceeding.
+                --   If that conditional holds ALSO make sure the provided polling action
+                --   returns True as well.
               | WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
                             -- num workers starts at 1 and then is modified
                             -- with `incrTasks` and `decrTasks`.
               | WaitNum Int -- ^ UNFINISHED: A fixed set of threads must check-in each round before proceeding.
   deriving Show
+
+instance Show (IO Bool) where
+  show _ = "<polling_action>"
 
 -- | We allow logging in O(1) time in String or ByteString format.  In practice the
 -- distinction is not that important, because only *thunks* should be logged; the
@@ -94,6 +101,15 @@ toString x@(StrMsg{}) = body x
 
 maxWait :: Int
 maxWait = 10*1000 -- 10ms
+
+andM :: [IO Bool] -> IO a -> IO a -> IO a
+andM [] t _f = t
+andM (hd:tl) t f = do
+  b <- hd
+  if b then andM tl t f
+       else f
+
+--------------------------------------------------------------------------------
 
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
@@ -114,17 +130,26 @@ newLogger waitWorkers = do
           case waitWorkers of
             WaitNum target | num >= target -> pickAndProceed waiting
                            | otherwise     -> waitMore
-            WaitTids tids -> do
-              bl <- checkTids tids
-              case bl of
-                True  -> do ls <- flushChan waiting
---                            putStrLn$ " TEMP: tids ("++show tids++") are ready"
-                            case ls of
-                              [] -> do chatter " [Logger] Warning: No active tasks?"
-                                       bk2 <- backoff bkoff
-                                       schedloop 0 [] bk2
-                              _ -> pickAndProceed ls
-                False -> keepWaiting
+            WaitTids tids poll -> do
+              andM [checkTids tids, poll, checkTids tids, poll]
+                   (do ls <- flushChan waiting
+                       putStrLn$ " TEMP: tids ("++show tids++") are ready"                       
+                       case ls of
+                         [] -> do chatter " [Logger] Warning: No active tasks?"
+                                  bk2 <- backoff bkoff
+                                  schedloop 0 [] bk2
+                         _ -> pickAndProceed ls)
+                   keepWaiting
+--               bl <- checkTids tids
+--               case bl of
+--                 True  -> do ls <- flushChan waiting
+-- --                            putStrLn$ " TEMP: tids ("++show tids++") are ready"
+--                             case ls of
+--                               [] -> do chatter " [Logger] Warning: No active tasks?"
+--                                        bk2 <- backoff bkoff
+--                                        schedloop 0 [] bk2
+--                               _ -> pickAndProceed ls
+--                 False -> keepWaiting
 
         -- When all threads are quiescent, we can flush the remaining messagers from
         -- the channel to get the whole set of waiting tasks.
@@ -162,7 +187,7 @@ newLogger waitWorkers = do
           
         unblockTask Writer{who,continue,msg} = do
           -- Print out the message.
-          hPrintf stderr "%s\n" (toString msg)
+--          hPrintf stderr "%s\n" (toString msg)
           -- TODO: Update 'logged', and don't print immediately...
           
           -- Signal that the thread may continue.

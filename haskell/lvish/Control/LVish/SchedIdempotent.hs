@@ -557,7 +557,7 @@ runPar_internal2 c = do
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then do lgr <- L.newLogger (L.WaitTids ls)
+          then do lgr <- L.newLogger (L.WaitTids ls (pollDeques queues))
                   L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
                   -- Setting one of them sets all of them -- this field is shared:
                   writeIORef (Sched.logger (Prelude.head queues)) lgr
@@ -565,6 +565,10 @@ runPar_internal2 c = do
           else do Conc.yield
                   putStrLn $" TEMP: NOT READY TO MAKE LOGGER: "++show (length ls)
                   setLogger
+      pollDeques [] = return True
+      pollDeques (h:t) = do b <- Sched.nullQ (Sched.workpool h)
+                            if b then pollDeques t
+                                 else return False
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- forkWithExceptions (forkOn cpu) "worker thread" $ do

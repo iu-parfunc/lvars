@@ -398,5 +398,30 @@ should be linked either way, but perhaps parts of it are inactive in
 
 Is there a path around schedloop that does NOT yield?  
 
+Deterministically exposing the task-graph 
+-----------------------------------------
+
+Test v1a is currently demonstrating a problem with nondeterminism,
+sometimes the infrastructure observes the parallelism, seeing these
+tasks together:
+
+    1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    2:  [dbg-lvish] putLV: about to mutate
+    
+And sometimes it doesn't:
+
+    -----
+      1:  [dbg-lvish] Initializing Logger...
+    -----
+      1:  [dbg-lvish] putLV: about to mutate
+    -----
+      1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    -----
+
+Actually on one thread it always fails to observe the
+parallelism... On -N2 or -N4 it sometimes does.  In fact, on one
+thread it doesn't observe the getLV in the logger at all!
+
+
 
 

@@ -4,7 +4,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(logger), new, number, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
+  State(logger, workpool), new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
 
@@ -16,6 +16,7 @@ import Control.Applicative
 import Data.IORef 
 import GHC.Conc
 import System.Random (StdGen, mkStdGen)
+import Text.Printf
 
 import qualified Control.LVish.Logging as L
 
@@ -30,6 +31,7 @@ pushMine = CL.pushL
 popMine  = CL.tryPopL
 popOther = CL.tryPopR 
 pushYield = pushMine -- for now...  
+nullQ = CL.nullQ
 
 #else
 #warning "Compiling with non-scalable deque."
@@ -55,6 +57,12 @@ popMine deque = do
     case ts of
       []      -> ([], Nothing)
       (t:ts') -> (ts', Just t)
+
+nullQ :: Deque a -> IO Bool
+nullQ deque = do
+  ls <- readIORef deque
+  return $! null ls
+
 
 -- | Add low-priority work to a thread's own work deque
 pushYield :: Deque a -> a -> IO ()
@@ -106,7 +114,7 @@ next state@State{ workpool } = do
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
 steal State{ idle, states, no=my_no } = do
-  -- printf "cpu %d stealing\n" my_no
+  chatter $ printf "!cpu %d stealing\n" my_no
   go states
   where
     -- After a failed sweep, go idle:
@@ -114,17 +122,18 @@ steal State{ idle, states, no=my_no } = do
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
                if length r == numCapabilities - 1
                   then do
-                     -- printf "cpu %d initiating shutdown\n" my_no
+                     chatter$ printf "!cpu %d initiating shutdown\n" my_no
                      mapM_ (\m -> putMVar m True) r
                      return Nothing
                   else do
+                    chatter $ printf "!cpu %d going idle...\n" my_no
                     done <- takeMVar m
                     if done
                        then do
-                         -- printf "cpu %d shutting down\n" my_no
+                         chatter $ printf "!cpu %d shutting down\n" my_no
                          return Nothing
                        else do
-                         -- printf "cpu %d woken up\n" my_no
+                         chatter $ printf "!cpu %d woken up\n" my_no
                          go states
     go (x:xs)
       | no x == my_no = go xs
@@ -138,6 +147,8 @@ steal State{ idle, states, no=my_no } = do
 
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: State a s -> a -> IO ()
+-- TODO: If we're really going to do wakeup on every push we could consider giving
+-- the formerly-idle worker the work item directly and thus avoid touching the deque.
 pushWork State { workpool, idle } t = do
   pushMine workpool t
   idles <- readIORef idle
@@ -198,3 +209,7 @@ currentCPU =
   --
   return 0
 #endif
+
+
+chatter :: String -> IO ()
+chatter s = putStrLn s
