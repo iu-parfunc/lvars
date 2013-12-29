@@ -166,26 +166,15 @@ newLogger waitWorkers = do
           let pick = sorted !! pos
               (pref,suf) = splitAt pos sorted
               rst = pref ++ tail suf
---          printOptions sorted
-          putStrLn $ "#"++show (1+pos)++" of "++show len ++": "++ toString (msg pick)
               
-          unblockTask pick -- The task will asynchronously run when it can.
+          unblockTask pos len pick -- The task will asynchronously run when it can.
           yield -- If running on one thread, give it a chance to run.
           -- Return to the scheduler to wait for the next quiescent point:
           schedloop (length rst) rst =<< newBackoff maxWait
 
-        -- Verbose, print all the options available at each step:
-        printOptions sorted = do
-          putStrLn "-----"
-          forM_ (zip [0..] sorted) $ \ (ix,Writer{msg}) -> 
-            putStrLn $ "  "++ show ix ++": "++toString msg
-          putStrLn "-----"
-          
-        unblockTask Writer{who,continue,msg} = do
-          -- Print out the message.
---          hPrintf stderr "%s\n" (toString msg)
-          -- TODO: Update 'logged', and don't print immediately...
-          
+        unblockTask pos len Writer{who,continue,msg} = do
+          -- Print out the message:
+          putStrLn $ show (lvl msg)++ "| #"++show (1+pos)++" of "++show len ++": "++ toString msg
           -- Signal that the thread may continue.
           putMVar continue ()
           
@@ -215,12 +204,15 @@ chatter _ = return ()
 incrTasks = undefined
 decrTasks = undefined
 
--- | Write a log message from the current thread.  
+-- | Write a log message from the current thread, IF `dbgLvl` is higher than the
+-- provided message's level, otherwise, the message is ignored.
 logOn :: Logger -> LogMsg -> IO ()
-logOn Logger{checkPoint} msg = do
-  continue <- newEmptyMVar
-  writeSmplChan checkPoint Writer{who="",continue,msg}
-  takeMVar continue -- Block until we're given permission to proceed.
+logOn Logger{checkPoint} msg
+  | lvl msg <= dbgLvl = do
+     continue <- newEmptyMVar
+     writeSmplChan checkPoint Writer{who="",continue,msg}
+     takeMVar continue -- Block until we're given permission to proceed.
+  | otherwise = return ()
 
 ----------------------------------------------------------------------------------------------------
 -- Simple back-off strategy.

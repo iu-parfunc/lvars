@@ -160,10 +160,10 @@ i3g = runParIO$ do
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
 lp01 = runParIO$ do
-  logDbgLn 1 " [lp01] Starting parForSimple loop..."
+  logDbgLn 2 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp01]  iter "++show ix
+    logDbgLn 2$ " [lp01]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
   IV.get x
 
@@ -186,23 +186,23 @@ lp02 = runParIO$ do
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParIO$ do
-  logDbgLn 1 " [lp03] Starting parForTree loop..."
+  logDbgLn 2 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp03]  iter "++show ix
+    logDbgLn 2$ " [lp03]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp03] after loop..."
+  logDbgLn 2$ " [lp03] after loop..."
   IV.get x
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParIO$ do
-  logDbgLn 1 " [lp04] Starting parForTiled loop..."
+  logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
   parForTiled 16 (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp04]  iter "++show ix
+    logDbgLn 2$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp04] after loop..."
+  logDbgLn 2$ " [lp04] after loop..."
   IV.get x
 
 --------------------------------------------------------------------------------
