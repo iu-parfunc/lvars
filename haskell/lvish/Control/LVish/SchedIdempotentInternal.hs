@@ -208,10 +208,14 @@ setStatus State { status } s = writeIORef status s
 
 -- This is a hard-spinning busy-wait.
 await :: State a s -> (s -> Bool) -> IO ()
-await State { states } p = 
-  let awaitOne state@(State { status }) = do
+await State { states, logger, no=no1 } p = 
+  let awaitOne state@(State { status, no=no2 }) = do
         cur <- readIORef status
-        unless (p cur) $ awaitOne state
+        unless (p cur) $ do
+          lgr <- readIORef logger
+          L.logOn lgr (L.StrMsg 7 (" [dbg-lvish] busy-waiting on worker "++show no1++
+                                   ", for status to change on worker "++show no2))
+          awaitOne state
   in mapM_ awaitOne states
 
 -- | the CPU executing the current thread (0 if not supported)

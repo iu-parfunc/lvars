@@ -119,7 +119,8 @@ noName = unsafePerformIO $ newLVID
 -- may still reference the bag, which is necessary to ensure that all listeners
 -- are informed of the @put@ prior to freezing.)
 data Status d 
-  = Frozen                       -- ^ further changes to the state are forbidden
+  = Freezing                     -- ^ further changes to the state are forbidden
+  | Frozen                       -- ^ further changes to the state are forbidden
   | Active (B.Bag (Listener d))  -- ^ bag of blocked threshold reads and handlers
 
 -- | A listener for an LVar is informed of each change to the LVar's state
@@ -187,7 +188,7 @@ isFrozen (LVar {status}) = do
   curStatus <- readIORef status
   case curStatus of
     Active _ -> return False
-    Frozen   -> return True
+    _        -> return True
 
 -- | Logging within the (internal) Par monad.
 logStrLn  :: Int -> String -> Par ()
@@ -240,16 +241,6 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   logWith q 7$ " [dbg-lvish] getLV: first readIORef "++uniqsuf
   curStatus <- readIORef status
   case curStatus of
-    Frozen -> do
-      logWith q 7$ " [dbg-lvish] getLV (frozen): about to check globalThresh"++uniqsuf
-      tripped <- globalThresh state True
-      case tripped of
-        Just b -> do -- logWith q 9$ " [dbg-lvish] getLV (frozen): thresh met, invoking continuation "++uniqsuf
-                     exec (k b) q -- already past the threshold; invoke the
-                                  -- continuation immediately                    
-        Nothing -> sched q     -- We'll NEVER be above the threshold.
-                               -- Shouldn't this be an ERROR? (blocked-indefinitely)
-                               -- Depends on our semantics for runPar quiescence / errors states.
     Active listeners -> do
       logWith q 7$ " [dbg-lvish] getLV (active): check globalThresh"++uniqsuf
       tripped <- globalThresh state False
@@ -301,6 +292,18 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                             -- redundant, but by idempotence that's OK
             Nothing -> sched q
 
+    -- Freezing or Frozen:
+    _ -> do
+      logWith q 7$ " [dbg-lvish] getLV (frozen): about to check globalThresh"++uniqsuf
+      tripped <- globalThresh state True
+      case tripped of
+        Just b -> do -- logWith q 9$ " [dbg-lvish] getLV (frozen): thresh met, invoking continuation "++uniqsuf
+                     exec (k b) q -- already past the threshold; invoke the
+                                  -- continuation immediately                    
+        Nothing -> sched q     -- We'll NEVER be above the threshold.
+                               -- Shouldn't this be an ERROR? (blocked-indefinitely)
+                               -- Depends on our semantics for runPar quiescence / errors states.
+
 -- | Update an LVar.
 putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
@@ -308,23 +311,31 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> Par b
 putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
   let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
-  logWith q 8 $ " [dbg-lvish] putLV: setStatus,"++uniqsuf
-  Sched.setStatus q name         -- publish our intent to modify the LVar
-  let cont (delta, ret) = ClosedPar $ \q -> do
-        logWith q 8 $ " [dbg-lvish] putLV: read final status before unsetting"++uniqsuf
-        curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
-        logWith q 8 $ " [dbg-lvish] putLV: UN-setStatus"++uniqsuf
-        Sched.setStatus q noName       -- retract our modification intent
-        whenJust delta $ \d -> do
-          case curStatus of
-            Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
-            Active listeners -> do
-              logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
-              B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-        exec (k ret) q
-  logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar"++uniqsuf
-  exec (close (doPut state) cont) q
-  
+      putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
+  logWith q 8 $ " [dbg-lvish] putLV: initial lvar status read"++uniqsuf
+  fstStatus <- readIORef status
+  case fstStatus of
+    Freezing -> putAfterFrzExn
+    Frozen   -> putAfterFrzExn
+    Active listeners -> do
+      logWith q 8 $ " [dbg-lvish] putLV: setStatus,"++uniqsuf
+      Sched.setStatus q name         -- publish our intent to modify the LVar
+      let cont (delta, ret) = ClosedPar $ \q -> do
+            logWith q 8 $ " [dbg-lvish] putLV: read final status before unsetting"++uniqsuf
+            sndStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
+            logWith q 8 $ " [dbg-lvish] putLV: UN-setStatus"++uniqsuf
+            Sched.setStatus q noName       -- retract our modification intent
+            -- AFTER the retraction, freezeLV is allowed to set the state to Frozen.
+            whenJust delta $ \d -> do
+              case sndStatus of
+                Frozen -> putAfterFrzExn
+                _ -> do
+                  logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
+                  B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
+            exec (k ret) q
+      logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar"++uniqsuf
+      exec (close (doPut state) cont) q
+
 
 -- | Update an LVar without generating a result.  
 putLV :: LVar a d             -- ^ the LVar
@@ -339,16 +350,19 @@ putLV lv doPut = putLV_ lv doPut'
 freezeLV :: LVar a d -> Par ()
 freezeLV LVar {name, status} = mkPar $ \k q -> do
   let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
-  logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status"++uniqsuf
-  oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
+  logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status to Freezing"++uniqsuf
+  oldStatus <- atomicModifyIORef status $ \s -> (Freezing, s)    
   case oldStatus of
-    Frozen -> return ()
+    Frozen   -> return ()
+    Freezing -> return ()
     Active listeners -> do
       logWith q 7 $ " [dbg-lvish] freezeLV: begin busy-wait for putter status"++uniqsuf
       Sched.await q (name /=)  -- wait until all currently-running puts have
                                -- snapshotted the active status
       logWith q 7 $ " [dbg-lvish] freezeLV: calling each listener's onFreeze"++uniqsuf
       B.foreach listeners $ \Listener {onFreeze} tok -> onFreeze tok q
+      logWith q 7 $ " [dbg-lvish] freezeLV: finalizing status as Frozen"++uniqsuf
+      writeIORef status Frozen
   exec (k ()) q
   
 ------------------------------------------------------------------------------
@@ -442,7 +456,8 @@ addHandler hp LVar {state, status} globalCB updateThresh =
     case curStatus of
       Active listeners ->             -- enroll the handler as a listener
         do B.put listeners $ Listener onUpdate onFreeze; return ()
-      Frozen -> return ()             -- frozen, so no need to enroll
+      Frozen   -> return ()           -- frozen, so no need to enroll
+      Freezing -> return ()           -- frozen, so no need to enroll
 
     logWith q 4 " [dbg-lvish] addHandler: calling globalCB.."
     -- At registration time, traverse (globally) over the previously inserted items
