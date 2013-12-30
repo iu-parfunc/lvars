@@ -22,14 +22,17 @@ import GHC.Conc
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions, printLog)
-import Control.LVish  (logDbgLn_)
+import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+-- import Control.LVish  (logDbgLn_)
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
 import Debug.Trace
 
 import TestHelpers as T
+
+-- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
+logDbgLn_ _ _ = return ()
 
 --------------------------------------------------------------------------------
 -- Parameters and helpers
@@ -87,7 +90,7 @@ halveTest mend ls = do
                 Nothing -> id
                 Just end -> filter ((< end) . fst)
       ls' = capit ls
-  printLog                
+--  printLog                
   case res of
     Nothing -> assertBool "un-halvable things should be size 0 or 1" (length ls' <= 1)
     Just (l,r) -> do
@@ -125,7 +128,8 @@ slm1 = do
   Just s0 <- SLM.find slm 0
   Just s1 <- SLM.find slm 1
   dbg <- SLM.debugShow (SLM.toSlice slm)
-  logDbgLn_ 1 dbg; printLog
+  logDbgLn_ 1 dbg
+  -- printLog
   return $ s0 ++ s1
   
 case_slm1 :: Assertion  
@@ -159,7 +163,7 @@ insertionTest chunks = do
   sliceCheck slm    
   matches <- SLM.foldlWithKey id (\b k v -> if k == v then return b else return False) True slm
   summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
-  printLog
+--  printLog
   return (matches, summed)
 --  Just n <- SLM.find slm (slm2Count/2)  -- test find function
 --  return n

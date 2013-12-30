@@ -22,6 +22,7 @@ import           Control.Exception (Exception)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
+import           Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
@@ -138,7 +139,10 @@ logDbgLn _ _  = return ()
 {-# INLINE logDbgLn #-}
 #endif
 
-
+-- | IF compiled with debugging support, this will return the Logger used by the
+-- current Par session, otherwise it will simply throw an exception.
+getLogger :: Par d s Lg.Logger
+getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------
 -- Extras
