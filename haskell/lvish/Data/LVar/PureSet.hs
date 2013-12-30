@@ -264,7 +264,7 @@ waitSize !sz (ISet lv) = WrapPar$
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.a
+    -- the threshold.
     deltaThresh _ = globalThresh (state lv) False
 
 --------------------------------------------------------------------------------

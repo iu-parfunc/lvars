@@ -183,7 +183,7 @@ initLogger [] _ = error "initLogger: cannot take empty list of workers"
 initLogger queues@(hd:_) tids
   | len1 /= len2 = error "initLogger: length of arguments did not match"
   | otherwise = do
-    lgr <- L.newLogger Nothing (L.WaitTids tids (pollDeques queues))
+    lgr <- L.newLogger (Just (4,10)) (L.WaitTids tids (pollDeques queues))
     -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
     L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
     -- Setting one of them sets all of them -- this field is shared:
@@ -206,6 +206,7 @@ number State { no } = no
 setStatus :: State a s -> s -> IO ()
 setStatus State { status } s = writeIORef status s
 
+-- This is a hard-spinning busy-wait.
 await :: State a s -> (s -> Bool) -> IO ()
 await State { states } p = 
   let awaitOne state@(State { status }) = do

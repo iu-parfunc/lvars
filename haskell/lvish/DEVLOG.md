@@ -422,6 +422,83 @@ Actually on one thread it always fails to observe the
 parallelism... On -N2 or -N4 it sometimes does.  In fact, on one
 thread it doesn't observe the getLV in the logger at all!
 
+`
 
+[2013.12.30] {Debugging issue #57}
+-----------------------------------
 
+I'm dropping in more logging messages to try to find what the
+data-race is.  One thing I wasn't expecting is that there are TWO
+getLV threshold checks racing with eachother in parallel:
+
+    8| #3 of 4:  [dbg-lvish] putLV: setStatus 19 on worker 3
+    8| #2 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV: first readIORef 19 on worker 2
+    5| #3 of 4:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 3
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh 19 on worker 2
+    5| #1 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 1
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 4
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 1
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 4
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 1
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 3
+    10| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, 19 on worker 4
+    10| #3 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 4
+    ! Exception on Logger thread:  [Logger] Need in-parallel log messages to have an ordering, got two equal:
+      [dbg-lvish] getLV (active): callback: check thresh 19 on worker 2
+
+How can they both be on worker 2!  Oh, that uniq suf was grabbed too early.
+
+Still, it looks like LOTS of things are racing here.  The second
+globalThresh poll, plus MULTIPLE onUpdate checks.  
+
+----------------------------------------
+
+There it is!  A little bit more debugging prints and we got a very nice example of a bad-interleaving.
+
+    7| #1 of 4:  [dbg-lvish] getLV: first readIORef , lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 6
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 5
+    8| #4 of 4:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh, lv 19 on worker 2
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 6
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 5
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 6
+    5| #2 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 1
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners, lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 5
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check, lv 19 on worker 2
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check, lv 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 5
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 19 on worker 2
+    7| #1 of 3:  [dbg-lvish] getLV (active): callback: check thresh, lv 19 on worker 6
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 5
+    8| #2 of 3:  [dbg-lvish] getLV (active): read execFlag for dedup, lv 19 on worker 6
+    5| #1 of 2:  [dbg-lvish] freezeLV: atomic modify status, lv 19 on worker 2
+    8| #2 of 2:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 1
+    8| #2 of 2:  [dbg-lvish] getLV (active): CAS execFlag dedup, lv 19 on worker 6
+    8| #2 of 2:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 1
+    7| #2 of 2:  [dbg-lvish] freezeLV: begin busy-wait for
+      Exception inside child thread "worker thread", ThreadId 8: PutAfterFreezeExn "Attempt to change a frozen LVar"    
+    putter status, lv 19 on worker 2
+
+It seems that the key problem is the putLV "read final status" bit
+happening long after the actual mutation, thus racing with the freeze.  
+
+Hmm, it seems like the intent was for the status to serve as a form of
+lock.  But in that case freezeLV seems wrong because it doesn't wait
+until those "locks" are released before mutating the status...
+
+Do we perhaps need a three-state protocol?  Active->Freezing->Frozen
+
+A put finishing while in Freezing state is ok, but a put beginning
+while in Freezing state is bad.  
 

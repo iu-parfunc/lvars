@@ -54,11 +54,11 @@ v2 = runParIO $
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ do
                      -- liftIO$ threadDelay 5000 
-                     logDbgLn 4$ " [AR-v2] Doing one insert: "++show n
+                     logDbgLn 3$ " [AR-v2] Doing one insert: "++show n
                      ARS.insert n s) [1.. v2size]
-        logDbgLn 4$ " [AR-v2] now waiting.."
+        logDbgLn 3$ " [AR-v2] now waiting.."
         ARS.waitAddedSize v2size s
-        logDbgLn 4$ " [AR-v2] now freezing.."
+        logDbgLn 3$ " [AR-v2] now freezing.."
         ARS.freezeSet s
 
 v2size =

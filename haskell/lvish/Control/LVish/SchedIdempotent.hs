@@ -235,18 +235,23 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   -- that, if we are not currently above the threshhold, we will have to poll
   -- /again/ after enrolling the callback.  This race may also result in the
   -- continuation being executed twice, which is permitted by idempotence.
-
+  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  
+  logWith q 7$ " [dbg-lvish] getLV: first readIORef "++uniqsuf
   curStatus <- readIORef status
   case curStatus of
-    Frozen -> do 
+    Frozen -> do
+      logWith q 7$ " [dbg-lvish] getLV (frozen): about to check globalThresh"++uniqsuf
       tripped <- globalThresh state True
       case tripped of
-        Just b -> exec (k b) q -- already past the threshold; invoke the
-                               -- continuation immediately                    
+        Just b -> do -- logWith q 9$ " [dbg-lvish] getLV (frozen): thresh met, invoking continuation "++uniqsuf
+                     exec (k b) q -- already past the threshold; invoke the
+                                  -- continuation immediately                    
         Nothing -> sched q     -- We'll NEVER be above the threshold.
                                -- Shouldn't this be an ERROR? (blocked-indefinitely)
                                -- Depends on our semantics for runPar quiescence / errors states.
     Active listeners -> do
+      logWith q 7$ " [dbg-lvish] getLV (active): check globalThresh"++uniqsuf
       tripped <- globalThresh state False
       case tripped of
         Just b -> exec (k b) q -- already past the threshold; invoke the
@@ -262,28 +267,35 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
               onFreeze   = unblockWhen $ globalThresh state True
               
               unblockWhen thresh tok q = do
+                let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+                logWith q 7$ " [dbg-lvish] getLV (active): callback: check thresh"++uniqsuf
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
                   B.remove tok
 #if GET_ONCE
+                  logWith q 8$ " [dbg-lvish] getLV (active): read execFlag for dedup"++uniqsuf
                   ticket <- readForCAS execFlag
                   unless (peekTicket ticket) $ do
-                    (winner, _) <- casIORef execFlag ticket True
+                    (winner, _) <- do logWith q 8$ " [dbg-lvish] getLV (active): CAS execFlag dedup"++uniqsuf
+                                      casIORef execFlag ticket True
                     when winner $ Sched.pushWork q (k b) 
 #else 
                   Sched.pushWork q (k b)                     
 #endif
-          logWith q 4 " [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched..."
+          logWith q 4$ " [dbg-lvish] getLV: blocking on LVar, registering listeners"++uniqsuf
           -- add listener, i.e., move the continuation to the waiting bag
           tok <- B.put listeners $ Listener onUpdate onFreeze
 
           -- but there's a race: the threshold might be passed (or the LVar
           -- frozen) between our check and the enrollment as a listener, so we
           -- must poll again
+          logWith q 8$ " [dbg-lvish] getLV (active): second frozen check"++uniqsuf
           frozen <- isFrozen lv
+          logWith q 7$ " [dbg-lvish] getLV (active): second globalThresh check"++uniqsuf
           tripped' <- globalThresh state frozen
           case tripped' of
             Just b -> do
+              logWith q 7$ " [dbg-lvish] getLV (active): second globalThresh tripped, remove tok"++uniqsuf
               B.remove tok  -- remove the listener we just added, and
               exec (k b) q  -- execute the continuation. this work might be
                             -- redundant, but by idempotence that's OK
@@ -295,20 +307,25 @@ putLV_ :: LVar a d                 -- ^ the LVar
                                    -- value changed
        -> Par b
 putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
-  logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar "
-                ++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  logWith q 8 $ " [dbg-lvish] putLV: setStatus,"++uniqsuf
   Sched.setStatus q name         -- publish our intent to modify the LVar
   let cont (delta, ret) = ClosedPar $ \q -> do
+        logWith q 8 $ " [dbg-lvish] putLV: read final status before unsetting"++uniqsuf
         curStatus <- readIORef status  -- read the frozen bit *while q's status is marked*
+        logWith q 8 $ " [dbg-lvish] putLV: UN-setStatus"++uniqsuf
         Sched.setStatus q noName       -- retract our modification intent
         whenJust delta $ \d -> do
           case curStatus of
             Frozen -> E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
-            Active listeners -> 
+            Active listeners -> do
+              logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
               B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
         exec (k ret) q
-  exec (close (doPut state) cont) q            -- possibly modify the LVar  
+  logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar"++uniqsuf
+  exec (close (doPut state) cont) q
   
+
 -- | Update an LVar without generating a result.  
 putLV :: LVar a d             -- ^ the LVar
       -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
@@ -321,12 +338,16 @@ putLV lv doPut = putLV_ lv doPut'
 --   It is the data structure implementor's responsibility to expose this as quasi-deterministc.
 freezeLV :: LVar a d -> Par ()
 freezeLV LVar {name, status} = mkPar $ \k q -> do
+  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status"++uniqsuf
   oldStatus <- atomicModifyIORef status $ \s -> (Frozen, s)    
   case oldStatus of
     Frozen -> return ()
     Active listeners -> do
+      logWith q 7 $ " [dbg-lvish] freezeLV: begin busy-wait for putter status"++uniqsuf
       Sched.await q (name /=)  -- wait until all currently-running puts have
                                -- snapshotted the active status
+      logWith q 7 $ " [dbg-lvish] freezeLV: calling each listener's onFreeze"++uniqsuf
       B.foreach listeners $ \Listener {onFreeze} tok -> onFreeze tok q
   exec (k ()) q
   
