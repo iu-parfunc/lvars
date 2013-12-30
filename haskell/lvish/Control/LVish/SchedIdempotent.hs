@@ -34,7 +34,7 @@ module Control.LVish.SchedIdempotent
     quiesce, quiesceAll,
 
     -- * Re-exported debug facilities
-    logStrLn, logLnAt_, dbgLvl, printLog, 
+    logStrLn, dbgLvl, 
        
     -- * Unsafe operations; should be used only by experts to build new abstractions
     newLV, getLV, putLV, putLV_, freezeLV, freezeLVAfter,

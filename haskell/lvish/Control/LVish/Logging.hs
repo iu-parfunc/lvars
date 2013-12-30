@@ -24,7 +24,7 @@ module Control.LVish.Logging
        (
          -- * Log to a shared, global log
          printLog, printLogThread,
-         logStrLn_, logLnAt_,
+--         logStrLn_, logLnAt_,
 
          -- * Global variables
          globalLog, dbgLvl, 
