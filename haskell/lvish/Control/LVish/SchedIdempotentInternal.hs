@@ -17,6 +17,7 @@ import Control.Applicative
 import Data.IORef 
 import GHC.Conc
 import System.Random (StdGen, mkStdGen)
+import System.IO (stdout)
 import Text.Printf
 
 import qualified Control.LVish.Logging as L
@@ -178,12 +179,13 @@ new n s = do
 
 -- | Takes a full set of worker states and correspoding threadIds and initializes the
 -- loggers.
-initLogger :: [State a s] -> [ThreadId] -> IO ()
-initLogger [] _ = error "initLogger: cannot take empty list of workers"
-initLogger queues@(hd:_) tids
+initLogger :: [State a s] -> [ThreadId] -> (Maybe(Int,Int)) -> [L.OutDest] -> IO ()
+initLogger [] _ _ _ = error "initLogger: cannot take empty list of workers"
+initLogger queues@(hd:_) tids bounds outDests 
   | len1 /= len2 = error "initLogger: length of arguments did not match"
   | otherwise = do
-    lgr <- L.newLogger (Just (4,10)) (L.WaitTids tids (pollDeques queues))
+    lgr <- L.newLogger bounds outDests
+                       (L.WaitTids tids (pollDeques queues))
     -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
     L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
     -- Setting one of them sets all of them -- this field is shared:

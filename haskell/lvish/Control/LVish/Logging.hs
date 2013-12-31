@@ -27,7 +27,8 @@ module Control.LVish.Logging
          dbgLvl, 
 
          -- * New logger interface
-         newLogger, logOn, Logger(closeIt), WaitMode(..), LogMsg(..),
+         newLogger, logOn, Logger(closeIt, flushLogs),
+         WaitMode(..), LogMsg(..), OutDest(..),
 
          -- * General utilities
          forkWithExceptions
@@ -42,7 +43,7 @@ import           Data.List (sortBy)
 import           GHC.Conc hiding (yield)
 import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.IO (stderr, stdout, hFlush, hPutStrLn)
+import           System.IO (stderr, stdout, hFlush, hPutStrLn, Handle)
 import           System.Environment(getEnvironment)
 import           System.Random
 import           Text.Printf (printf, hPrintf)
@@ -63,11 +64,20 @@ data Logger = Logger { coordinator :: A.Async () -- ThreadId
                      , minLvl :: Int  -- ^ The minimum level of messages accepted by this logger (usually 0).
                      , maxLvl :: Int  -- ^ The maximum level of messages accepted by this logger.
                      , checkPoint :: SmplChan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
---                     , logged :: IORef [LogMsg] -- ^ (private) The actual log of messages.
                      , closeIt :: IO () -- ^ (public) A method to complete flushing, close down the helper thread,
                                         -- and generally wrap up.
+                     , outDests :: [OutDest] -- ^ Where to send output.  If empty, messages dropped entirely.
+                     , logged   :: IORef [String] -- ^ (private) In-memory buffer of messages, if OutputInMemory is selected.
+                                                  -- This is stored in reverse-temporal order during execution.
+                     , flushLogs :: IO [String] -- ^ Clear buffered log messages and return in the order they occurred.
                      , waitWorkers :: WaitMode
                      }
+
+-- | A destination ofr log messages
+data OutDest = -- NoOutput -- ^ Drop them entirely.
+               OutputEvents    -- ^ Output via GHC's `traceEvent` runtime events.
+             | OutputTo Handle -- ^ Printed human-readable output to a handle.
+             | OutputInMemory  -- ^ Accumulate output in memory and flush when appropriate.
 
 -- | A single thread attempting to log a message.  It only unblocks when the attached
 -- MVar is filled.
@@ -133,14 +143,17 @@ catchAll parent exn =
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: Maybe (Int,Int) -- ^ What inclusive range of messages do we accept?  Defaults to `(0,dbgLvl)`.
+             -> [OutDest]
              -> WaitMode
              -> IO Logger
-newLogger Nothing w = newLogger (Just (0,dbgLvl)) w
-newLogger (Just (minLvl, maxLvl)) waitWorkers = do 
-  logged      <- newIORef []
+newLogger Nothing o w = newLogger (Just (0,dbgLvl)) o w
+newLogger (Just (minLvl, maxLvl)) outDests waitWorkers = do
+  logged      <- newIORef []  
   checkPoint  <- newSmplChan
   parent      <- myThreadId
-  coordinator <- A.async $ E.handle (catchAll parent) $ do
+  let flushLogs = atomicModifyIORef' logged $ \ ls -> ([],reverse ls)
+  
+  coordinator <- A.async $ E.handle (catchAll parent) $ do    
     -- Proceed in rounds, gather the set of actions that may happen in parallel, then
     -- pick one.  We log the series of decisions we make for reproducability.
     let schedloop !iters !num !waiting !bkoff = do
@@ -205,12 +218,17 @@ newLogger (Just (minLvl, maxLvl)) waitWorkers = do
 
         unblockTask pos len Writer{who,continue,msg} = do
           let str = show (lvl msg)++ "| #"++show (1+pos)++" of "++show len ++": "++ toString msg
-          -- Print out the message:
-          hPrintf stderr "%s\n" str
-          traceEventIO str
+          mapM_ (printOne str) outDests
           -- Signal that the thread may continue.
           putMVar continue ()
-          
+
+        printOne str (OutputTo h)   = hPrintf h "%s\n" str
+        printOne str OutputEvents = traceEventIO str
+        printOne str OutputInMemory =
+          -- This needs to be atomic because other messages might be calling "flush"
+          -- at the same time.
+          atomicModifyIORef' logged $ \ ls -> (str:ls,())
+    
         -- Check whether the worker threads are all quiesced 
         checkTids [] = return True
         checkTids (tid:rst) = do 
@@ -226,7 +244,9 @@ newLogger (Just (minLvl, maxLvl)) waitWorkers = do
     schedloop 0 0 [] =<< newBackoff maxWait -- Kick things off.
     return () -- End: async thread
   let closeIt = A.cancel coordinator
-  return $! Logger { coordinator, checkPoint, closeIt, waitWorkers, minLvl, maxLvl } -- logged, 
+  return $! Logger { coordinator, checkPoint, closeIt, outDests,
+                     logged, flushLogs,
+                     waitWorkers, minLvl, maxLvl }
 
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr

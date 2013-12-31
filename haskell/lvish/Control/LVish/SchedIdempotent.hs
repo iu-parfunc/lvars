@@ -26,7 +26,8 @@ module Control.LVish.SchedIdempotent
     
     -- * Safe, deterministic operations
     yield, newPool, fork, forkHP,
-    runPar, runParIO, runParLogged,
+    runPar, runParIO,
+    runParDetailed, runParLogged,
     withNewPool, withNewPool_,
     forkWithExceptions,
     
@@ -564,9 +565,16 @@ sched q = do
 instance NFData (LVar a d) where
   rnf _ = ()
 
-runPar_internal :: Par a -> IO a
-runPar_internal c = do
-  let numWrkrs = numCapabilities
+-- | A variant with full control over the relevant knobs.
+--   
+--   Returns a list of flushed debug messages at the end (if in-memory logging was
+--   enabled, otherwise the list is empty).
+runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
+               -> [L.OutDest]      -- ^ Destinations for debug log messages.
+               -> Int              -- ^ How many worker threads to use. 
+               -> Par a            -- ^ The computation to run.
+               -> IO ([String],a)
+runParDetailed bounds outDests numWrkrs comp = do
   queues <- Sched.new numWrkrs noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
@@ -584,7 +592,7 @@ runPar_internal c = do
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then Sched.initLogger queues ls
+          then Sched.initLogger queues ls bounds outDests
           else do Conc.yield
                   setLogger
 #if 1
@@ -600,7 +608,7 @@ runPar_internal c = do
                               -- This is painful, we may need to spin and wait for everybody to be forked:
                               when (dbgLvl >= 1) setLogger
 #endif
-                              exec (close c k) q
+                              exec (close comp k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
                    -- the main thread exits.  Subsequent exceptions on child threads, even if
                    -- forwarded asynchronously, can arrive much later at the main thread
@@ -619,10 +627,12 @@ runPar_internal c = do
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
-  when (dbgLvl >= 1) $ do 
-    Just lgr <- readIORef (Sched.logger (Prelude.head queues))
-    L.closeIt lgr
-  return ans
+  logs <- if (dbgLvl >= 1) then do 
+             Just lgr <- readIORef (Sched.logger (Prelude.head queues))
+             L.closeIt lgr
+             L.flushLogs lgr -- If in-memory logging is off, this will be empty.
+          else return []
+  return $! (logs,ans)
 #else
   -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
   ----------------------------------------------------------------------------------
@@ -632,7 +642,7 @@ runPar_internal c = do
            else let k x = ClosedPar $ \q -> do 
                       sched q      -- ensure any remaining, enabled threads run to 
                       putMVar answerMV x  -- completion prior to returning the result
-                in exec (close c k) q
+                in exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = mapM_ wait asyncs
@@ -659,26 +669,28 @@ runPar_internal c = do
 #endif
 
 
+defaultRun = fmap snd .
+             runParDetailed (Just (0,dbgLvl)) [L.OutputTo stderr, L.OutputEvents] numCapabilities
+
 -- | Run a deterministic parallel computation as pure.
 runPar :: Par a -> a
-runPar = unsafePerformIO . runPar_internal
+runPar = unsafePerformIO . defaultRun
 
 -- | A version that avoids an internal `unsafePerformIO` for calling
 -- contexts that are already in the `IO` monad.
 runParIO :: Par a -> IO a
-runParIO = runPar_internal
+runParIO = defaultRun
 
 -- | Debugging aid.  Return debugging logs, in realtime order, in addition to the
--- final result.
+-- final result.  This is like `runParDetailed` but uses the default settings.
 runParLogged :: Par a -> IO ([String],a)
-runParLogged c =
-  do res   <- runPar_internal c
-     -- lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
-     return ([], res)
+runParLogged comp =
+  runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] numCapabilities comp
+
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
-atomicModifyIORef_ ref fn = atomicModifyIORef ref (\ x -> (fn x,()))
+atomicModifyIORef_ ref fn = atomicModifyIORef' ref (\ x -> (fn x,()))
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
