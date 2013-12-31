@@ -516,3 +516,25 @@ leading to this problem:
 
 Hmm, where was that call?
 
+
+[2013.12.31] {Trying stressTest for the first time}
+---------------------------------------------------
+
+I'm getting "blocked indefinitely" errors.  But, I can never get them
+from running one test once.  I'm working on AddRemoveSetTests, and I
+can get these errors running v3 & v4 together in one process (but not
+individually).  OR I can get it with v3 alone but ONLY when I turn the
+#reps up to 8.  Eight seems to be the magic number.  I can run
+hundreds of times with 7 reps, and I never see the exception.
+
+Actually, this makes sense because it must relate to whether a GC is
+triggered that will catch the blocked-indefinitely business.
+
+Yep, that did it.  Performing GC after testing (which is tricky
+because test-framewrok tries to exit the process) will force the
+errors out.
+
+Hmm.. For thread hygiene ideally test-framework would enforce that
+tests don't leave stray threads running.  But checking that would
+require being able to enumarate the global set of threads....
+

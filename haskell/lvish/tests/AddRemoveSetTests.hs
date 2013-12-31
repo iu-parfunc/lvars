@@ -27,7 +27,7 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = T.defaultMainSeqTests [tests]
 
 --------------------------------------------------------------------------------
 
@@ -67,13 +67,13 @@ v2size =
     Nothing -> 10
 
 case_v3 :: Assertion
-case_v3 = assertEqual "freeze with 3 elements added, purely and asynchronously"
-          () v3
+case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 
+-- "freeze with 3 elements added, asynchronously"
 -- If we're doing a guaranteed-deterministic computation we can't
 -- actually read out the contents of the set.
-v3 :: ()
-v3 = runPar $
+v3 :: Par d s ()
+v3 = 
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..10]
         ARS.waitAddedSize 10 s
@@ -81,12 +81,11 @@ v3 = runPar $
 -- Getting occasional failures here with -N2, don't know what's
 -- wrong. :(
 case_v4 :: Assertion
-case_v4 = v4 >>= assertEqual "additions and removals"
-          (S.fromList [1..10] :: S.Set Int)
+case_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int))
 
-
-v4 :: IO (S.Set Int)
-v4 = runParIO $
+-- "additions and removals"
+v4 :: Par QuasiDet s (S.Set Int)
+v4 = 
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..15]
         mapM_ (\n -> fork $ ARS.remove n s) [11..15]

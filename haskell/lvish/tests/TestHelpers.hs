@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
 
 -- | To make it easier to build (multithreaded) tests
 
@@ -11,15 +11,15 @@ module TestHelpers
    setTestThreads,
 
    -- * Test initialization, reading common configs
-   stdTestHarness,
+   stdTestHarness, stressTest, stressTestReps,
+   
+   -- * A replacement for defaultMain that uses a 1-thread worker pool 
+   defaultMainSeqTests,
 
    -- * Misc utilities
    nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit, 
    -- timeOutPure, 
-   exceptionOrTimeOut, allowSomeExceptions, assertException,
-
-   -- * A replacement for defaultMain that uses a 1-thread worker pool 
-   defaultMainSeqTests
+   exceptionOrTimeOut, allowSomeExceptions, assertException
  )
  where 
 
@@ -29,6 +29,7 @@ import Control.Exception
 --import Control.Concurrent.MVar
 import GHC.Conc
 import Data.IORef
+import Data.Word
 import Data.Time.Clock
 import Data.List (isInfixOf, intersperse, nub)
 import Text.Printf
@@ -36,8 +37,10 @@ import Control.Concurrent (forkOS, forkIO, ThreadId)
 -- import Control.Exception (catch, SomeException, fromException, bracket, AsyncException(ThreadKilled))
 import Control.Exception (bracket)
 import System.Environment (withArgs, getArgs, getEnvironment)
-import System.IO (hFlush, stdout)
+import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Mem (performGC)
+import System.Exit
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 
@@ -48,6 +51,8 @@ import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import Control.LVish (runParDetailed, Par)
+import qualified Control.LVish.Logging as L
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -169,6 +174,43 @@ stdTestHarness genTests = do
                           return all_tests
               _ -> return$ TestList [ setTestThreads n all_tests | n <- all_threads ]
     TF.defaultMain$ hUnitTestToTests tests
+
+-- | Run a test repeatedly while using the debugging infrastructure to randomly
+-- (artificially) vary thread interleavings.  When a schedule resulting in an
+-- incorrect answer (or exception) is found, it is printed.
+stressTest :: Show a =>
+              Word -- ^ Number of repetitions 
+           -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
+                   -- number of tasks that can run in parallel; otherwise this will deadlock.
+           -> (forall s . Par d s a)   -- ^ Computation to run
+           -> (a -> Bool) -- ^ Test oracle
+           -> IO ()
+stressTest 0 _workers _comp _oracle = return ()
+stressTest reps workers comp oracle = do 
+  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory] workers comp
+  if oracle res
+     then do putStr "."
+             stressTest (reps-1) workers comp oracle
+     else do hPutStrLn stderr "stressTest: Found FAILING schedule:"
+             hPutStrLn stderr "-----------------------------------"
+             mapM_ (hPutStrLn stderr) logs
+             hPutStrLn stderr "-----------------------------------"
+             HU.assertFailure ("Bad test result: "++show res)
+
+defaultNST :: Word
+defaultNST = 1
+
+stressTestReps :: Word
+{-# NOINLINE stressTestReps #-}
+stressTestReps = case lookup "STRESSTESTS" theEnv of
+       Nothing  -> defaultNST
+       Just ""  -> defaultNST
+       Just "0" -> defaultNST
+       Just s   ->
+         case reads s of
+           ((n,_):_) -> trace (" [!] responding to env Var: STRESSTESTS="++show n) n
+           [] -> error$"Attempt to parse STRESSTESTS env var as Int failed: "++show s
+
 
 ----------------------------------------------------------------------------------------------------
 -- DEBUGGING
@@ -357,12 +399,20 @@ timeit ioact = do
 --   threads to one by default, unless the user explicitly overrules it with "-j".
 defaultMainSeqTests :: [TF.Test] -> IO ()
 defaultMainSeqTests tests = do
+  putStrLn " [*] Default test harness..."
   args <- getArgs
   x <- interpretArgs args
-  case x of
-    Left err -> error$ "defaultMainSeqTests: "++err
-    Right (opts,_) -> defaultMainWithOpts tests
-                       ((mempty{ ropt_threads= Just 1
-                               , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
-                        `mappend` opts)
-  return ()
+  res <- try (case x of
+             Left err -> error$ "defaultMainSeqTests: "++err
+             Right (opts,_) -> defaultMainWithOpts tests
+                                ((mempty{ ropt_threads= Just 1
+                                        , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                                 `mappend` opts))
+  case res of
+    Left (e::ExitCode) -> do
+       putStrLn$ " [*] test-framework exiting with: "++show e
+       performGC
+       putStrLn " [*] GC finished on main thread."
+       threadDelay (30 * 1000)
+       putStrLn " [*] Main thread exiting."
+       exitWith e
