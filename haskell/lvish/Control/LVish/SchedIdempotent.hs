@@ -673,8 +673,8 @@ runParIO = runPar_internal
 runParLogged :: Par a -> IO ([String],a)
 runParLogged c =
   do res   <- runPar_internal c
-     lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
-     return (reverse lines, res)
+     -- lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
+     return ([], res)
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()

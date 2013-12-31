@@ -24,7 +24,7 @@ module Control.LVish.Logging
        (
 
          -- * Global variables
-         globalLog, dbgLvl, 
+         dbgLvl, 
 
          -- * New logger interface
          newLogger, logOn, Logger(closeIt), WaitMode(..), LogMsg(..),
@@ -315,41 +315,7 @@ writeSmplChan :: SmplChan a -> a -> IO ()
 writeSmplChan ch x = do
   atomicModifyIORef' ch $ \ ls -> (x:ls,())
 
-
 ----------------------------------------------------------------------------------------------------
-
--- -- | A target for global log messages.
--- globalLogger :: Logger
--- globalLogger = unsafePerformIO $ newLogger (WaitNum numCapabilities)
--- {-# NOINLINE globalLogger #-}
-
-
--- | A global log for global log messages.
-globalLog :: IORef [String]
-globalLog = unsafePerformIO $ newIORef []
-{-# NOINLINE globalLog #-}
-
-----------------------------------------------------------------------------------------------------
-
--- | The global coordinator that all threads check in with before proceeding.
-
--- | Atomically add a line to the given log.
-logStrLn_ :: String -> IO ()
-logLnAt_ :: Int -> String -> IO ()
-#ifdef DEBUG_LVAR
-#warning "Compiling in LVish DEBUG mode."
-logStrLn_ s = logLnAt_ 1 s
-logLnAt_ lvl s | dbgLvl >= 5   = putStrLn s
-               | dbgLvl >= lvl = atomicModifyIORef globalLog $ \ss -> (s:ss, ())
-               | otherwise     = return ()
-#else 
-logStrLn _  = return ()
-logStrLn_ _ = return ()
-logLnAt_ _ _ = return ()
-{-# INLINE logStrLn #-}
-{-# INLINE logStrLn_ #-}
-#endif
-
 
 {-# NOINLINE theEnv #-}
 theEnv :: [(String, String)]
