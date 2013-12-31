@@ -538,3 +538,19 @@ Hmm.. For thread hygiene ideally test-framework would enforce that
 tests don't leave stray threads running.  But checking that would
 require being able to enumarate the global set of threads....
 
+-----------
+
+Ok, I fixed some old dependencies on numCapabilities and things are
+working better now (idling dependended on it).
+
+Still, right now I can get an actual deadlock if I stress-test at 500
+reps.  Also, I can get a detected blocked-indefinitely on v3:
+
+      v3: [Failed]
+    ERROR: thread blocked indefinitely in an MVar operation
+    ....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................  v4: [Running]
+
+Ok, now if I can get log printing on failures, that would help us
+figure this one out.
+
+

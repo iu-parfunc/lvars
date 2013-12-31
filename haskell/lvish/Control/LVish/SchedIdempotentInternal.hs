@@ -83,12 +83,13 @@ popOther = popMine
 
 -- All the state relevant to a single worker thread
 data State a s = State
-    { no       :: {-# UNPACK #-} !Int,
-      prng     :: IORef StdGen,      -- core-local random number generation
-      status   :: IORef s,
-      workpool :: Deque a,         
-      idle     :: IORef [MVar Bool], -- global list of idle workers
-      states   :: [State a s],       -- global list of all worker states.
+    { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
+      numWorkers :: Int,               -- ^ Total number of workers in this runPar
+      prng     :: IORef StdGen,        -- ^ core-local random number generation
+      status   :: IORef s,             -- ^ A thread-local flag
+      workpool :: Deque a,             -- ^ The thread-local work deque
+      idle     :: IORef [MVar Bool],   -- ^ global list of idle workers
+      states   :: [State a s],         -- ^ global list of all worker states.
       logger   :: IORef (Maybe L.Logger)
         -- ^ The Logger object used by the current Par session.  (This should not
         -- change during runtime, it is mutable only to support deferred
@@ -115,14 +116,14 @@ next state@State{ workpool } = do
 --   This function does NOT return until the complete runPar session is complete (all
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
-steal State{ idle, states, no=my_no } = do
+steal State{ idle, states, no=my_no, numWorkers } = do
   chatter $ printf "!cpu %d stealing\n" my_no
   go states
   where
     -- After a failed sweep, go idle:
     go [] = do m <- newEmptyMVar
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
-               if length r == numCapabilities - 1
+               if length r == numWorkers - 1
                   then do
                      chatter$ printf "!cpu %d initiating shutdown\n" my_no
                      mapM_ (\m -> putMVar m True) r
@@ -166,15 +167,15 @@ yieldWork State { workpool } t =
 
 -- | Create a new set of scheduler states.
 new :: Int -> s -> IO [State a s]
-new n s = do
+new numWorkers s = do
   idle   <- newIORef []
   logger <- newIORef Nothing
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
-        return State { no = i, workpool, idle, status, states, prng, logger }
-  rec states <- forM [0..(n-1)] $ mkState states
+        return State { no = i, workpool, idle, status, states, prng, logger, numWorkers }
+  rec states <- forM [0..(numWorkers-1)] $ mkState states
   return states
 
 -- | Takes a full set of worker states and correspoding threadIds and initializes the

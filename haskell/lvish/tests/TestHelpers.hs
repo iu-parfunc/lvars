@@ -198,7 +198,7 @@ stressTest reps workers comp oracle = do
              HU.assertFailure ("Bad test result: "++show res)
 
 defaultNST :: Word
-defaultNST = 1
+defaultNST = 100
 
 stressTestReps :: Word
 {-# NOINLINE stressTestReps #-}
