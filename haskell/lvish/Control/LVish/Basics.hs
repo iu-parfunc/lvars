@@ -15,7 +15,16 @@
 
 -- | An internal module simply reexported by Control.LVish.
 
-module Control.LVish.Basics where
+module Control.LVish.Basics
+  ( Par(), LVar(),
+    Determinism(..), liftQD,
+    LVishException(..), L.HandlerPool(), 
+    fork, yield, runPar, runParIO,
+    parForL, parForSimple, parForTree, parForTiled, for_,
+    newPool, withNewPool, withNewPool_, 
+    quiesce, forkHP, logDbgLn, runParLogged
+  )
+  where
 
 import qualified Data.Foldable    as F
 import           Control.Exception (Exception)
