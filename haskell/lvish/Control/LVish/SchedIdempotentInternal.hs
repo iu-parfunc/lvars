@@ -88,7 +88,7 @@ data State a s = State
       workpool :: Deque a,         
       idle     :: IORef [MVar Bool], -- global list of idle workers
       states   :: [State a s],       -- global list of all worker states.
-      logger   :: IORef L.Logger
+      logger   :: IORef (Maybe L.Logger)
         -- ^ The Logger object used by the current Par session.  (This should not
         -- change during runtime, it is mutable only to support deferred
         -- initialization.)
@@ -166,8 +166,8 @@ yieldWork State { workpool } t =
 -- | Create a new set of scheduler states.
 new :: Int -> s -> IO [State a s]
 new n s = do
-  idle <- newIORef []
-  logger <- newIORef (error "Internal error: Sched logger read before initialized.")
+  idle   <- newIORef []
+  logger <- newIORef Nothing
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
@@ -187,7 +187,7 @@ initLogger queues@(hd:_) tids
     -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
     L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
     -- Setting one of them sets all of them -- this field is shared:
-    writeIORef (logger hd) lgr
+    writeIORef (logger hd) (Just lgr)
     -- TODO: ASSERT that they are all actually the same IORef?
     return ()
  where
@@ -212,9 +212,11 @@ await State { states, logger, no=no1 } p =
   let awaitOne state@(State { status, no=no2 }) = do
         cur <- readIORef status
         unless (p cur) $ do
-          lgr <- readIORef logger
-          L.logOn lgr (L.StrMsg 7 (" [dbg-lvish] busy-waiting on worker "++show no1++
-                                   ", for status to change on worker "++show no2))
+          mlgr <- readIORef logger
+          case mlgr of
+            Nothing -> return ()
+            Just lgr -> L.logOn lgr (L.StrMsg 7 (" [dbg-lvish] busy-waiting on worker "++show no1++
+                                                 ", for status to change on worker "++show no2))
           awaitOne state
   in mapM_ awaitOne states
 

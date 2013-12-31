@@ -205,7 +205,7 @@ logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 -- Only when the debug level is 1 or higher is the logger even initialized:
 logWith q lvl str = when (dbgLvl >= 1) $ do
-  lgr <- readIORef (Sched.logger q)
+  Just lgr <- readIORef (Sched.logger q)
   L.logOn lgr (L.StrMsg lvl str)
 #else
 logWith _ _ _ = return ()
@@ -533,7 +533,7 @@ liftIO io = mkPar $ \k q -> do
 -- current Par session, otherwise it will simply throw an exception.
 getLogger :: Par L.Logger
 getLogger = mkPar $ \k q -> do
-  lgr <- readIORef (Sched.logger q)
+  Just lgr <- readIORef (Sched.logger q)
   exec (k lgr) q
 
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
@@ -620,7 +620,7 @@ runPar_internal c = do
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
   when (dbgLvl >= 1) $ do 
-    lgr <- readIORef (Sched.logger (Prelude.head queues))
+    Just lgr <- readIORef (Sched.logger (Prelude.head queues))
     L.closeIt lgr
   return ans
 #else
