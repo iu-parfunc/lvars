@@ -502,3 +502,17 @@ Do we perhaps need a three-state protocol?  Active->Freezing->Frozen
 A put finishing while in Freezing state is ok, but a put beginning
 while in Freezing state is bad.  
 
+[2013.12.30] {A problem with the current logging framework}
+-----------------------------------------------------------
+
+Right now the protocol is that the "logger" field never gets set when
+dbgLvl < 1.  But that is a naughty, dirty thing, and right now it's
+leading to this problem:
+
+      i1: [Failed]
+    Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "LVarSpecificExn \"EXCEPTION in runPar(ThreadId 5): Internal error: Sched logger read before initialized.\""
+
+Hmm, where was that call?
+

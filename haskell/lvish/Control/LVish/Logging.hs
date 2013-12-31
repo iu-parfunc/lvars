@@ -22,9 +22,6 @@ deterministic replay (and quickcheck-style testing of different interleavings).
 
 module Control.LVish.Logging
        (
-         -- * Log to a shared, global log
-         printLog, printLogThread,
---         logStrLn_, logLnAt_,
 
          -- * Global variables
          globalLog, dbgLvl, 
@@ -353,36 +350,6 @@ logLnAt_ _ _ = return ()
 {-# INLINE logStrLn_ #-}
 #endif
 
--- | Print all accumulated log lines.
-printLog :: IO ()
-printLog = do
-  -- Clear the log when we read it:
-  lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
-  mapM_ putStrLn $ reverse lines  
-
--- | The idea here is that while a runPar is underway, we periodically flush out the
--- debug messages.
-printLogThread :: IO (IO ())
-printLogThread = do
-  tid <- forkIO $
-         E.catch loop (\ (e :: E.AsyncException) -> do
-                        -- One last time on kill:
-                        printLog
-                        putStrLn " [dbg-log-printer] Shutting down."
-                      )
-  return (do killThread tid
-             let wait = do
-                   stat <- threadStatus tid
-                   case stat of
-                     ThreadRunning -> threadDelay 1000 >> wait
-                     _             -> return ()
-             wait)
- where
-   loop = do
-     -- Flush the log at 5Hz:
-     printLog
-     threadDelay (200 * 1000)
-     loop
 
 {-# NOINLINE theEnv #-}
 theEnv :: [(String, String)]

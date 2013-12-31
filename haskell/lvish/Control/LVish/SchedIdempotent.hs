@@ -566,17 +566,6 @@ instance NFData (LVar a d) where
 
 runPar_internal :: Par a -> IO a
 runPar_internal c = do
-  closeLogger <- if dbgLvl >= 1
-                 then printLogThread
-                 else return (return ())    
-  res <- runPar_internal2 c
-  -- printLog
-  closeLogger
-  hFlush stdout
-  return res
-
-runPar_internal2 :: Par a -> IO a
-runPar_internal2 c = do
   let numWrkrs = numCapabilities
   queues <- Sched.new numWrkrs noName
   
@@ -626,7 +615,7 @@ runPar_internal2 c = do
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         mytid <- myThreadId
-        when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
+        -- when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
         E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
@@ -683,7 +672,7 @@ runParIO = runPar_internal
 -- final result.
 runParLogged :: Par a -> IO ([String],a)
 runParLogged c =
-  do res <- runPar_internal2 c
+  do res   <- runPar_internal c
      lines <- atomicModifyIORef globalLog $ \ss -> ([], ss)
      return (reverse lines, res)
 
