@@ -87,7 +87,7 @@ module Control.LVish
     module Data.LVar.IVar,
     
     -- * Debug facilities and internal bits
-    logDbgLn, runParLogged,
+    logDbgLn, runParLogged, runParDetailed,
     LVar()
   ) where
 

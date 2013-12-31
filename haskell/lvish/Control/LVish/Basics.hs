@@ -19,10 +19,11 @@ module Control.LVish.Basics
   ( Par(), LVar(),
     Determinism(..), liftQD,
     LVishException(..), L.HandlerPool(), 
-    fork, yield, runPar, runParIO,
+    fork, yield,
+    runPar, runParIO, runParLogged, runParDetailed,
     parForL, parForSimple, parForTree, parForTiled, for_,
     newPool, withNewPool, withNewPool_, 
-    quiesce, forkHP, logDbgLn, runParLogged
+    quiesce, forkHP, logDbgLn, 
   )
   where
 
@@ -31,7 +32,7 @@ import           Control.Exception (Exception)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
-import           Control.LVish.Logging as Lg
+import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
@@ -123,7 +124,18 @@ runParIO_ (WrapPar p) = L.runParIO p >> return ()
 -- | Useful for debugging.  Returns debugging logs, in realtime order, in addition to
 -- the final result.
 runParLogged :: (forall s . Par d s a) -> IO ([String],a)
-runParLogged (WrapPar p) = L.runParLogged p 
+runParLogged (WrapPar p) = L.runParLogged p
+
+-- | A variant with full control over the relevant knobs.
+--   
+--   Returns a list of flushed debug messages at the end (if in-memory logging was
+--   enabled, otherwise the list is empty).
+runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
+               -> [Lg.OutDest]      -- ^ Destinations for debug log messages.
+               -> Int              -- ^ How many worker threads to use. 
+               -> (forall s . Par d s a) -- ^ The computation to run.
+               -> IO ([String],a)
+runParDetailed mb od nw (WrapPar p) = L.runParDetailed mb od nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,
