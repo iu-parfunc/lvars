@@ -180,7 +180,7 @@ new numWorkers s = do
 
 -- | Takes a full set of worker states and correspoding threadIds and initializes the
 -- loggers.
-initLogger :: [State a s] -> [ThreadId] -> (Maybe(Int,Int)) -> [L.OutDest] -> IO ()
+initLogger :: [State a s] -> [ThreadId] -> (Int,Int) -> [L.OutDest] -> IO ()
 initLogger [] _ _ _ = error "initLogger: cannot take empty list of workers"
 initLogger queues@(hd:_) tids bounds outDests 
   | len1 /= len2 = error "initLogger: length of arguments did not match"

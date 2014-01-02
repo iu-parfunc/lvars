@@ -187,15 +187,18 @@ stressTest :: Show a =>
            -> IO ()
 stressTest 0 _workers _comp _oracle = return ()
 stressTest reps workers comp oracle = do 
-  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory] workers comp
-  if oracle res
-     then do putStr "."
-             stressTest (reps-1) workers comp oracle
-     else do hPutStrLn stderr "stressTest: Found FAILING schedule:"
-             hPutStrLn stderr "-----------------------------------"
-             mapM_ (hPutStrLn stderr) logs
-             hPutStrLn stderr "-----------------------------------"
-             HU.assertFailure ("Bad test result: "++show res)
+  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] workers comp
+  let failit s = do threadDelay (500 * 1000)
+                    hPutStrLn stderr "\nstressTest: Found FAILING schedule:"
+                    hPutStrLn stderr "-----------------------------------"
+                    mapM_ (hPutStrLn stderr) logs
+                    hPutStrLn stderr "-----------------------------------"
+                    HU.assertFailure s
+  case res of
+    Left exn                 -> failit ("Bad test outcome--exception: "++show exn)
+    Right x | not (oracle x) -> failit ("Bad test result: "++show x)
+            | otherwise -> do putStr "."
+                              stressTest (reps-1) workers comp oracle
 
 defaultNST :: Word
 defaultNST = 100

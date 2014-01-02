@@ -569,11 +569,16 @@ instance NFData (LVar a d) where
 --   
 --   Returns a list of flushed debug messages at the end (if in-memory logging was
 --   enabled, otherwise the list is empty).
+--
+--   This version of runPar catches ALL exceptions that occur within the runPar, and
+--   returns them via an Either.  The reason for this is that even if an error
+--   occurs, it is still useful to observe the log messages that lead to the failure.
+--   
 runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
                -> [L.OutDest]      -- ^ Destinations for debug log messages.
                -> Int              -- ^ How many worker threads to use. 
                -> Par a            -- ^ The computation to run.
-               -> IO ([String],a)
+               -> IO ([String], Either E.SomeException a)
 runParDetailed bounds outDests numWrkrs comp = do
   queues <- Sched.new numWrkrs noName
   
@@ -592,9 +597,12 @@ runParDetailed bounds outDests numWrkrs comp = do
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then Sched.initLogger queues ls bounds outDests
+          then Sched.initLogger queues ls (minLvl,maxLvl) outDests
           else do Conc.yield
                   setLogger
+      (minLvl, maxLvl) = case bounds of
+                           Just b  -> b
+                           Nothing -> (0,dbgLvl)
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
@@ -606,7 +614,7 @@ runParDetailed bounds outDests numWrkrs comp = do
                         in do 
 #ifdef DEBUG_LVAR
                               -- This is painful, we may need to spin and wait for everybody to be forked:
-                              when (dbgLvl >= 1) setLogger
+                              when (maxLvl >= 1) setLogger
 #endif
                               exec (close comp k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
@@ -616,22 +624,23 @@ runParDetailed bounds outDests numWrkrs comp = do
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
   -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
-  ans <- E.catch (forkit >> takeMVar answerMV)
+  ans <- E.catch (forkit >> fmap Right (takeMVar answerMV))
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
         logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
         -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
         mytid <- myThreadId
-        -- when (dbgLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
-        E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
+        -- when (maxLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
+        -- E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
+        return $! Left e
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
-  logs <- if (dbgLvl >= 1) then do 
-             Just lgr <- readIORef (Sched.logger (Prelude.head queues))
-             L.closeIt lgr
-             L.flushLogs lgr -- If in-memory logging is off, this will be empty.
-          else return []
+  mlgr <- readIORef (Sched.logger (Prelude.head queues))
+  logs <- case mlgr of 
+            Nothing -> return []
+            Just lgr -> do L.closeIt lgr
+                           L.flushLogs lgr -- If in-memory logging is off, this will be empty.
   return $! (logs,ans)
 #else
   -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
@@ -669,7 +678,7 @@ runParDetailed bounds outDests numWrkrs comp = do
 #endif
 
 
-defaultRun = fmap snd .
+defaultRun = fmap (fromRight . snd) .
              runParDetailed (Just (0,dbgLvl)) [L.OutputTo stderr, L.OutputEvents] numCapabilities
 
 -- | Run a deterministic parallel computation as pure.
@@ -684,9 +693,14 @@ runParIO = defaultRun
 -- | Debugging aid.  Return debugging logs, in realtime order, in addition to the
 -- final result.  This is like `runParDetailed` but uses the default settings.
 runParLogged :: Par a -> IO ([String],a)
-runParLogged comp =
-  runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] numCapabilities comp
+runParLogged comp = do 
+  (logs,ans) <- runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] numCapabilities comp
+  return $! (logs,fromRight ans)
 
+-- | Convert from a Maybe back to an exception.
+fromRight :: Either E.SomeException a -> a
+fromRight (Right x) = x
+fromRight (Left e) = E.throw e
 
 {-# INLINE atomicModifyIORef_ #-}
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
@@ -700,10 +714,13 @@ unsafeName x = unsafePerformIO $ do
 
 {-# INLINE hpMsg #-}
 hpMsg :: Sched.State a s -> String -> HandlerPool -> IO ()
-hpMsg q msg hp = 
-  when (dbgLvl >= 3) $ do
+hpMsg q msg hp = do
+#ifdef DEBUG_LVAR
     s <- hpId_ hp
     logWith q 3 $ msg++", pool identity= " ++s
+#else
+     return ()
+#endif
 
 {-# NOINLINE hpId #-}   
 hpId :: HandlerPool -> String

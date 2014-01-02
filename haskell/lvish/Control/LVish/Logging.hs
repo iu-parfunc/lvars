@@ -142,12 +142,11 @@ catchAll parent exn =
 
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
-newLogger :: Maybe (Int,Int) -- ^ What inclusive range of messages do we accept?  Defaults to `(0,dbgLvl)`.
-             -> [OutDest]
-             -> WaitMode
-             -> IO Logger
-newLogger Nothing o w = newLogger (Just (0,dbgLvl)) o w
-newLogger (Just (minLvl, maxLvl)) outDests waitWorkers = do
+newLogger :: (Int,Int) -- ^ What inclusive range of messages do we accept?  Defaults to `(0,dbgLvl)`.
+          -> [OutDest]
+          -> WaitMode
+          -> IO Logger
+newLogger (minLvl, maxLvl) outDests waitWorkers = do
   logged      <- newIORef []  
   checkPoint  <- newSmplChan
   parent      <- myThreadId

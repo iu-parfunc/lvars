@@ -28,7 +28,7 @@ module Control.LVish.Basics
   where
 
 import qualified Data.Foldable    as F
-import           Control.Exception (Exception)
+import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
@@ -130,11 +130,16 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   
 --   Returns a list of flushed debug messages at the end (if in-memory logging was
 --   enabled, otherwise the list is empty).
-runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
+--   
+--   This version of runPar catches ALL exceptions that occur within the runPar, and
+--   returns them via an Either.  The reason for this is that even if an error
+--   occurs, it is still useful to observe the log messages that lead to the failure.
+--   
+runParDetailed :: (Maybe(Int,Int))  -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
                -> [Lg.OutDest]      -- ^ Destinations for debug log messages.
-               -> Int              -- ^ How many worker threads to use. 
+               -> Int               -- ^ How many worker threads to use. 
                -> (forall s . Par d s a) -- ^ The computation to run.
-               -> IO ([String],a)
+               -> IO ([String], Either SomeException a)
 runParDetailed mb od nw (WrapPar p) = L.runParDetailed mb od nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
