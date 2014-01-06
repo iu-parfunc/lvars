@@ -168,12 +168,13 @@ whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
+    -- The threshold is ALWAYS met when a put occurs:
     fn' x = return (Just (I.unWrapPar (fn x)))
     globalCB ref = do
-      mx <- readIORef ref -- Snapshot
+      mx <- LI.liftIO $ readIORef ref -- Snapshot
       case mx of
-        Nothing -> return Nothing
-        Just v  -> fn' v
+        Nothing -> return ()
+        Just v  -> I.unWrapPar$ fn v
   
 --------------------------------------------------------------------------------
 

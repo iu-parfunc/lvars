@@ -301,10 +301,10 @@ pMergeTo2 threshold ma = do
 --  if len < threshold then
   if l1 < threshold || l2 < threshold then 
     case ma of 
-      TMerge -> sMergeTo2
+--      TMerge -> sMergeTo2
       CMerge -> cilkSeqMerge
       MPMerge -> seqmerge
-      _ -> sMergeTo2
+      _ -> seqmerge
    else do
     (splitL, splitR) <- findSplit
     let mid = splitL + splitR
@@ -312,7 +312,7 @@ pMergeTo2 threshold ma = do
       (pMergeTo2 threshold ma)
       (pMergeTo2 threshold ma)
     return ()
-      
+{-      
 -- | Sequential merge kernel.      
 sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
             ParVec21T s elt parM ()
@@ -343,7 +343,7 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
      else do
       write2 index right
       sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
-    
+-}    
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
 {-# INLINE mergeTo1 #-}
@@ -422,7 +422,7 @@ type ParVec12T s elt parM ans = ParST (STTup2
     
                        
 -- | Helpers for manipulating ParVec12T and ParVec21T                                
-                                
+{-                                
 indexL1 :: (ParThreadSafe parM) => Int -> ParVec21T s elt parM elt
 indexL1 index = do
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
@@ -476,7 +476,7 @@ lengthLR2 = do
   let lenL = MV.length vecL
       lenR = MV.length vecR
   return$ (lenL, lenR)
-
+-}
 -----
   
 {-# INLINE morphToVec21 #-}

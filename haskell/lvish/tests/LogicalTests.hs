@@ -11,6 +11,7 @@ import Test.Framework.Providers.HUnit
 -- import Test.Framework.Providers.QuickCheck2
 import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (testGroupGenerator)
+import TestHelpers (defaultMainSeqTests)
 
 --------------------------------------------------------------------------------
 -- TESTS:
@@ -80,4 +81,4 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMainSeqTests [tests]

@@ -161,7 +161,7 @@ forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     return ()
   where
     deltaCB (ix,x) = return$ Just$ unWrapPar$ callb ix x
-    globalCB vec = return$ Just$ unWrapPar$
+    globalCB vec = unWrapPar$
       -- FIXME / TODO: need a better (parallel) for loop:
       forVec vec $ \ ix elm ->
         -- FIXME: When it starts off, it is SPARSE... there must be a good way to

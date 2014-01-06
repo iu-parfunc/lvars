@@ -106,8 +106,8 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
     globalCB ref = do
-      mp <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ 
+      mp <- L.liftIO $ readIORef ref -- Snapshot
+      unWrapPar $ 
         traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
 
 ------------------------------------------------------------------------------

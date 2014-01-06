@@ -15,13 +15,24 @@
 
 -- | An internal module simply reexported by Control.LVish.
 
-module Control.LVish.Basics where
+module Control.LVish.Basics
+  ( Par(), LVar(),
+    Determinism(..), liftQD,
+    LVishException(..), L.HandlerPool(), 
+    fork, yield,
+    runPar, runParIO, runParLogged, runParDetailed,
+    parForL, parForSimple, parForTree, parForTiled, for_,
+    newPool, withNewPool, withNewPool_, 
+    quiesce, forkHP, logDbgLn, 
+  )
+  where
 
 import qualified Data.Foldable    as F
-import           Control.Exception (Exception)
+import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
@@ -113,7 +124,23 @@ runParIO_ (WrapPar p) = L.runParIO p >> return ()
 -- | Useful for debugging.  Returns debugging logs, in realtime order, in addition to
 -- the final result.
 runParLogged :: (forall s . Par d s a) -> IO ([String],a)
-runParLogged (WrapPar p) = L.runParLogged p 
+runParLogged (WrapPar p) = L.runParLogged p
+
+-- | A variant with full control over the relevant knobs.
+--   
+--   Returns a list of flushed debug messages at the end (if in-memory logging was
+--   enabled, otherwise the list is empty).
+--   
+--   This version of runPar catches ALL exceptions that occur within the runPar, and
+--   returns them via an Either.  The reason for this is that even if an error
+--   occurs, it is still useful to observe the log messages that lead to the failure.
+--   
+runParDetailed :: (Maybe(Int,Int))  -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
+               -> [Lg.OutDest]      -- ^ Destinations for debug log messages.
+               -> Int               -- ^ How many worker threads to use. 
+               -> (forall s . Par d s a) -- ^ The computation to run.
+               -> IO ([String], Either SomeException a)
+runParDetailed mb od nw (WrapPar p) = L.runParDetailed mb od nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,
@@ -132,24 +159,16 @@ runPar (WrapPar p) = L.runPar p
 -- debug level by setting the env var DEBUG, e.g. @DEBUG=5@.
 logDbgLn :: Int -> String -> Par d s ()
 #ifdef DEBUG_LVAR
-logDbgLn n = WrapPar . L.liftIO . L.logLnAt_ n 
+logDbgLn n = WrapPar . L.logStrLn n 
 #else 
 logDbgLn _ _  = return ()
 {-# INLINE logDbgLn #-}
 #endif
 
-
--- | Same as `logDbgLn` except in the @IO@ rather than @Par@ monad.
-logDbgLn_ :: Int -> String -> IO ()
-#ifdef DEBUG_LVAR
-logDbgLn_ = L.logLnAt_ 
-#else 
-logDbgLn_ _ _  = return ()
-{-# INLINE logDbgLn_ #-}
-#endif
-
-
-
+-- | IF compiled with debugging support, this will return the Logger used by the
+-- current Par session, otherwise it will simply throw an exception.
+getLogger :: Par d s Lg.Logger
+getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------
 -- Extras

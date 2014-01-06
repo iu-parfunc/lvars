@@ -15,7 +15,7 @@ import Test.Framework (Test, defaultMain, testGroup)
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
 import Test.Framework.TH (testGroupGenerator)
 
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
 import Control.Monad
@@ -124,9 +124,9 @@ escape01B =
 -- disallowed, but blocked ones are tolerated.
 case_i3f :: Assertion
 case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
+i3f :: IO ()
 #ifdef NO_DANGLING_THREADS
 -- | A test to make sure that we get an error when we block on an unavailable ivar.
-i3f :: IO ()
 i3f = runParIO$ do
   iv <- IV.new
   fork $ do IV.get iv
@@ -160,22 +160,22 @@ i3g = runParIO$ do
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
 lp01 = runParIO$ do
-  logDbgLn 1 " [lp01] Starting parForSimple loop..."
+  logDbgLn 2 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp01]  iter "++show ix
+    logDbgLn 2$ " [lp01]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
   IV.get x
 
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
 lp02 = runParIO$ do
-  logDbgLn 1 " [lp02] Starting parForL loop..."
+  logDbgLn 2 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp02]  iter "++show ix
+    logDbgLn 2$ " [lp02]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp02] after loop..."
+  logDbgLn 2$ " [lp02] after loop..."
   IV.get x
 
 -- [2013.08.05] RRN: I'm seeing this hang sometimes.  It live-locks
@@ -186,23 +186,23 @@ lp02 = runParIO$ do
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParIO$ do
-  logDbgLn 1 " [lp03] Starting parForTree loop..."
+  logDbgLn 2 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp03]  iter "++show ix
+    logDbgLn 2$ " [lp03]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp03] after loop..."
+  logDbgLn 2$ " [lp03] after loop..."
   IV.get x
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParIO$ do
-  logDbgLn 1 " [lp04] Starting parForTiled loop..."
+  logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
   parForTiled 16 (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp04]  iter "++show ix
+    logDbgLn 2$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp04] after loop..."
+  logDbgLn 2$ " [lp04] after loop..."
   IV.get x
 
 --------------------------------------------------------------------------------
@@ -374,3 +374,4 @@ case_show01 :: Assertion
 case_show01 = assertEqual "show for IVar" "Just 3" show01
 show01 :: String
 show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
+

@@ -23,6 +23,10 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
+flag newcontainers
+  description: Use (forthcoming) new version of containers.
+  default: False
+
 Library
   Source-repository head
     type:     git
@@ -31,8 +35,12 @@ Library
 
   Exposed-modules:
      Data.Par
+     Data.Par.Splittable
+     Data.Par.Traversable
      Data.Par.Range
-     Data.Splittable
+     Data.Par.List
+     Data.Par.Map
+     Data.Par.Set     
      
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
@@ -43,5 +51,46 @@ Library
                , transformers >= 0.2
                , par-classes  >= 1.0
 
-  ghc-options: -O2
+               -- These are so we can provide instances for existing collections:
+               , primitive    >= 0.5  && < 0.6
+               , vector       >= 0.10 && < 0.11
+
+  if flag(newcontainers)
+    cpp-options: -DNEWCONTAINERS
+    build-depends: containers >= 0.5.3.2
+  else 
+    build-depends: containers >= 0.5 && < 0.5.3.2
+
+  ghc-options: -O2 -rtsopts
   Other-modules:
+
+
+Test-suite test-par-collections
+  Type: exitcode-stdio-1.0
+  hs-source-dirs: ./tests/
+  Main-is: Main.hs
+  -- Build depends that are used directly by the test files, including:
+  -- (1) Self dependency:
+  Build-depends: par-collections
+  -- (2) Dependencies common to test files and the library:
+  Build-depends: base >= 4 && < 5
+               , time >= 1.4 
+               , par-classes >= 1.0 && < 2.0
+               , monad-par >= 0.3.4.6
+               , atomic-primops >= 0.4
+  --              , mtl    >= 2.0
+  --              , transformers >= 0.2
+  --              , vector >= 0.9
+  --              , ghc-prim 
+
+  -- (3) Additional depends to test concrete instances:
+--  Build-depends: lvish  >= 1.0.0.4
+
+  -- (4) Additional build depends for testing:
+  Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
+
+  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
+  ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
+
+

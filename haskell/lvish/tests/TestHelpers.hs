@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
 
 -- | To make it easier to build (multithreaded) tests
 
@@ -11,10 +11,13 @@ module TestHelpers
    setTestThreads,
 
    -- * Test initialization, reading common configs
-   stdTestHarness,
+   stdTestHarness, stressTest, stressTestReps,
+   
+   -- * A replacement for defaultMain that uses a 1-thread worker pool 
+   defaultMainSeqTests,
 
    -- * Misc utilities
-   nTimes, assertOr, timeOut,
+   nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit, 
    -- timeOutPure, 
    exceptionOrTimeOut, allowSomeExceptions, assertException
  )
@@ -26,21 +29,30 @@ import Control.Exception
 --import Control.Concurrent.MVar
 import GHC.Conc
 import Data.IORef
+import Data.Word
 import Data.Time.Clock
-import Data.List (isInfixOf, intersperse)
-import qualified Data.Set as S
+import Data.List (isInfixOf, intersperse, nub)
 import Text.Printf
 import Control.Concurrent (forkOS, forkIO, ThreadId)
 -- import Control.Exception (catch, SomeException, fromException, bracket, AsyncException(ThreadKilled))
 import Control.Exception (bracket)
 import System.Environment (withArgs, getArgs, getEnvironment)
-import System.IO (hFlush, stdout)
+import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Mem (performGC)
+import System.Exit
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
+
+import Data.Monoid (mappend, mempty)
+import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
+import Test.Framework.Runners.Options (RunnerOptions'(..))
+import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+-- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import Control.LVish (runParDetailed, Par)
+import qualified Control.LVish.Logging as L
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -69,11 +81,11 @@ theEnv = unsafePerformIO getEnvironment
 -- configuration record, so that it can be changed programmatically.
 
 -- How many elements should each of the tests pump through the queue(s)?
-numElems :: Int
+numElems :: Maybe Int
 numElems = case lookup "NUMELEMS" theEnv of 
-             Nothing  -> 100 * 1000 -- 500000
+             Nothing  -> Nothing -- 100 * 1000 -- 500000
              Just str -> warnUsing ("NUMELEMS = "++str) $ 
-                         read str
+                         Just (read str)
 
 forkThread :: IO () -> IO ThreadId
 forkThread = case lookup "OSTHREADS" theEnv of 
@@ -148,8 +160,7 @@ stdTestHarness genTests = do
   -- of benchmarks is quite limited.
   let all_threads = case lookup "NUMTHREADS" theEnv of
                       Just str -> [read str]
-                      Nothing -> S.toList$ S.fromList$
-                        [1, 2, np `quot` 2, np, 2*np ]
+                      Nothing -> nub [1, 2, np `quot` 2, np, 2*np ]
   putStrLn $"Running tests for these thread settings: "  ++show all_threads
   all_tests <- genTests 
 
@@ -163,6 +174,46 @@ stdTestHarness genTests = do
                           return all_tests
               _ -> return$ TestList [ setTestThreads n all_tests | n <- all_threads ]
     TF.defaultMain$ hUnitTestToTests tests
+
+-- | Run a test repeatedly while using the debugging infrastructure to randomly
+-- (artificially) vary thread interleavings.  When a schedule resulting in an
+-- incorrect answer (or exception) is found, it is printed.
+stressTest :: Show a =>
+              Word -- ^ Number of repetitions 
+           -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
+                   -- number of tasks that can run in parallel; otherwise this will deadlock.
+           -> (forall s . Par d s a)   -- ^ Computation to run
+           -> (a -> Bool) -- ^ Test oracle
+           -> IO ()
+stressTest 0 _workers _comp _oracle = return ()
+stressTest reps workers comp oracle = do 
+  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] workers comp
+  let failit s = do threadDelay (500 * 1000)
+                    hPutStrLn stderr "\nstressTest: Found FAILING schedule:"
+                    hPutStrLn stderr "-----------------------------------"
+                    mapM_ (hPutStrLn stderr) logs
+                    hPutStrLn stderr "-----------------------------------"
+                    HU.assertFailure s
+  case res of
+    Left exn                 -> failit ("Bad test outcome--exception: "++show exn)
+    Right x | not (oracle x) -> failit ("Bad test result: "++show x)
+            | otherwise -> do putStr "."
+                              stressTest (reps-1) workers comp oracle
+
+defaultNST :: Word
+defaultNST = 100
+
+stressTestReps :: Word
+{-# NOINLINE stressTestReps #-}
+stressTestReps = case lookup "STRESSTESTS" theEnv of
+       Nothing  -> defaultNST
+       Just ""  -> defaultNST
+       Just "0" -> defaultNST
+       Just s   ->
+         case reads s of
+           ((n,_):_) -> trace (" [!] responding to env Var: STRESSTESTS="++show n) n
+           [] -> error$"Attempt to parse STRESSTESTS env var as Int failed: "++show s
+
 
 ----------------------------------------------------------------------------------------------------
 -- DEBUGGING
@@ -209,11 +260,11 @@ assertException msgs action = do
             (\e -> do putStrLn $ "Good.  Caught exception: " ++ show (e :: SomeException)
                       return (Just $ show e))
  case x of 
-  Nothing -> error "Failed to get an exception!"
+  Nothing -> HU.assertFailure "Failed to get an exception!"
   Just s -> 
    if  any (`isInfixOf` s) msgs
    then return () 
-   else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
+   else HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
         ++ "\nInstead got this exception:\n  " ++ show s
 
 -- | For testing quasi-deterministic programs: programs that always
@@ -224,25 +275,36 @@ allowSomeExceptions msgs action = do
        (\e ->
          let estr = show e in
          if  any (`isInfixOf` estr) msgs
-          then do when (dbgLvl>=1) $
+          then do when True $ -- (dbgLvl>=1) $
                     putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
                   return (Left e)
-          else error $ "Got the wrong exception, expected one of the strings: "++ show msgs
-               ++ "\nInstead got this exception:\n  " ++ show estr)
+          else do HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
+                    ++ "\nInstead got this exception:\n  " ++ show estr
+                  error "Should not reach this..."
+       )
 
-exceptionOrTimeOut :: Double -> [String] -> IO a -> IO ()
+exceptionOrTimeOut :: Show a => Double -> [String] -> IO a -> IO ()
 exceptionOrTimeOut time msgs action = do
   x <- timeOut time $
        allowSomeExceptions msgs action
   case x of
-    Just (Right _val) -> error "exceptionOrTimeOut: action returned successfully!" 
+    Just (Right _val) -> HU.assertFailure "exceptionOrTimeOut: action returned successfully!" 
     Just (Left _exn)  -> return () -- Error, yay!
     Nothing           -> return () -- Timeout.
 
+-- | Simple wrapper around `timeOut` that throws an error if timeOut occurs.
+assertNoTimeOut :: Show a => Double -> IO a -> IO a
+assertNoTimeOut t a = do
+  m <- timeOut t a
+  case m of
+    Nothing -> do HU.assertFailure$ "assertNoTimeOut: thread failed or timeout occurred after "++show t++" seconds"
+                  error "Should not reach this #2"
+    Just a  -> return a  
+
 -- | Time-out an IO action by running it on a separate thread, which is killed when
--- the timer expires.  This requires that the action do allocation, otherwise it will
+-- the timer (in seconds) expires.  This requires that the action do allocation, otherwise it will
 -- be non-preemptable.
-timeOut :: Double -> IO a -> IO (Maybe a)
+timeOut :: Show a => Double -> IO a -> IO (Maybe a)
 timeOut interval act = do
   result <- newIORef Nothing
   tid <- forkIO (act >>= writeIORef result . Just)
@@ -251,18 +313,20 @@ timeOut interval act = do
         stat <- threadStatus tid
         case stat of
           ThreadFinished  -> readIORef result
-          ThreadBlocked _ -> do putStrLn " [lvish-tests] Test timed out -- thread blocked!"
+          ThreadBlocked r -> timeCheckAndLoop
+          ThreadDied      -> do putStrLn " [lvish-tests] Time-out check -- thread died!"
                                 return Nothing
-          ThreadDied      -> do putStrLn " [lvish-tests] Test timed out -- thread died!"
-                                return Nothing
-          ThreadRunning   -> do 
+          ThreadRunning   -> timeCheckAndLoop
+      timeCheckAndLoop = do 
             now <- getCurrentTime
             let delt :: Double
                 delt = fromRational$ toRational$ diffUTCTime now t0
             if delt >= interval
-              then do killThread tid -- TODO: should probably wait for it to show up as dead.
+              then do putStrLn " [lvish-tests] Time-out: out of time, killing test thread.."
+                      killThread tid
+                      -- TODO: <- should probably wait for it to show up as dead.
                       return Nothing
-              else do threadDelay (10 * 1000)
+              else do threadDelay (10 * 1000) -- Sleep 10ms.
                       loop   
   loop
 
@@ -273,7 +337,7 @@ timeOut interval act = do
 -- WARNING: This doesn't seem to work properly yet!  I am seeing spurious failures.
 -- -RRN [2013.10.24]
 --
-timeOutPure :: Double -> a -> Maybe a
+timeOutPure :: Show a => Double -> a -> Maybe a
 timeOutPure tm thnk =
   unsafePerformIO (timeOut tm (evaluate thnk))
 
@@ -287,3 +351,71 @@ nTimes :: Int -> (Int -> IO a) -> IO ()
 nTimes 0 _ = return ()
 nTimes n c = c n >> nTimes (n-1) c
 
+{-# INLINE for_ #-}
+-- | Inclusive/Inclusive
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) fn | start > end = forDown_ (end, start) fn
+for_ (start, end) fn = loop start
+  where
+  loop !i | i > end  = return ()
+          | otherwise = do fn i; loop (i+1)
+
+
+-- | Inclusive/Inclusive, iterate downward.
+forDown_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+forDown_ (start, end) _fn | start > end = error "forDown_: start is greater than end"
+forDown_ (start, end) fn = loop end
+  where
+  loop !i | i < start = return ()
+          | otherwise = do fn i; loop (i-1)
+
+
+-- | Split an inclusive range into N chunks.
+--   This may return less than the desired number of pieces if there aren't enough
+--   elements in the range.
+splitRange :: Int -> (Int,Int) -> [(Int,Int)]
+splitRange pieces (start,end)
+  | len < pieces = [ (i,i) | i <- [start .. end]]
+  | otherwise = chunks
+ where
+    len = end - start + 1 
+    chunks = map largepiece [0..remain-1] ++
+             map smallpiece [remain..pieces-1]
+    (portion, remain) = len `quotRem` pieces
+    largepiece i =
+        let offset = start + (i * (portion + 1))
+        in (offset, (offset + portion))
+    smallpiece i =
+        let offset = start + (i * portion) + remain
+        in (offset, (offset + portion - 1))
+
+-- | Print out a SELFTIMED message reporting the time from a given test.
+timeit :: IO a -> IO a 
+timeit ioact = do 
+   start <- getCurrentTime
+   res <- ioact
+   end   <- getCurrentTime
+   putStrLn$ "SELFTIMED: " ++ show (diffUTCTime end start)
+   return res
+
+-- | An alternate version of `defaultMain` which sets the number of test running
+--   threads to one by default, unless the user explicitly overrules it with "-j".
+defaultMainSeqTests :: [TF.Test] -> IO ()
+defaultMainSeqTests tests = do
+  putStrLn " [*] Default test harness..."
+  args <- getArgs
+  x <- interpretArgs args
+  res <- try (case x of
+             Left err -> error$ "defaultMainSeqTests: "++err
+             Right (opts,_) -> defaultMainWithOpts tests
+                                ((mempty{ ropt_threads= Just 1
+                                        , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                                 `mappend` opts))
+  case res of
+    Left (e::ExitCode) -> do
+       putStrLn$ " [*] test-framework exiting with: "++show e
+       performGC
+       putStrLn " [*] GC finished on main thread."
+       threadDelay (30 * 1000)
+       putStrLn " [*] Main thread exiting."
+       exitWith e

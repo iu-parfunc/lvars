@@ -21,7 +21,12 @@ join-semilattice (<http://en.wikipedia.org/wiki/Semilattice>).
 
 module Data.LVar.Internal.Pure
        ( PureLVar(..),
-         newPureLVar, putPureLVar, waitPureLVar, freezePureLVar, getPureLVar,
+         newPureLVar, putPureLVar,
+
+         waitPureLVar, freezePureLVar,
+         getPureLVar, unsafeGetPureLVar,
+
+         -- * Verifying lattice structure
          verifyFiniteJoin, verifyFiniteGet
        ) where
 
@@ -31,12 +36,15 @@ import Control.LVish.Internal
 import Data.IORef
 import qualified Control.LVish.SchedIdempotent as LI 
 import Algebra.Lattice
-import           GHC.Prim (unsafeCoerce#)
-
+import GHC.Prim (unsafeCoerce#)
+import System.IO.Unsafe (unsafePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
 newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
+
+instance Show a => Show (PureLVar Frzn a) where
+  show (PureLVar lv) = show$ unsafePerformIO$ readIORef$ state lv
 
 -- data PureLVar s t = BoundedJoinSemiLattice t => PureLVar (LVar s (IORef t) t)
 
@@ -46,9 +54,9 @@ newtype PureLVar s t = PureLVar (LVar s (IORef t) t)
 {-# INLINE waitPureLVar #-}
 {-# INLINE freezePureLVar #-}
 
--- | Takes a join operation (e.g., for an instance of JoinSemiLattice
--- and returns an error message if th lattice properties don't hold.
--- Don't try this for an infinite lattice!
+-- | Takes a finite set of states and a join operation (e.g., for an
+-- instance of JoinSemiLattice) and returns an error message if the
+-- join-semilattice properties don't hold.
 verifyFiniteJoin :: (Eq a, Show a) => [a] -> (a -> a -> a) -> Maybe String
 verifyFiniteJoin allStates join =
   case (isCommutative, isAssociative, isIdempotent) of
@@ -119,6 +127,19 @@ checkThresholds currentState thrshSet = case thrshSet of
                       then Just thrsh
                       else checkThresholds currentState thrshs
 
+-- | Like `getPureLVar` but uses a threshold function rather than an explicit set.
+unsafeGetPureLVar :: (JoinSemiLattice t, Eq t) => PureLVar s t -> (t -> Bool) -> Par d s t
+unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
+  WrapPar$ LI.getLV lv globalThresh deltaThresh
+  where globalThresh ref _ = do
+          x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] unsafeGetPureLVar: read the ref."
+          deltaThresh x
+        deltaThresh x =          
+          return $! if thrsh x
+                    then Just x
+                    else Nothing
+
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)
 waitPureLVar :: (JoinSemiLattice t, Eq t) =>
@@ -174,3 +195,5 @@ instance DeepFrz a => DeepFrz (PureLVar s a) where
   type FrzType (PureLVar s a) = PureLVar Frzn (FrzType a)
   frz = unsafeCoerce#
 
+-- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
+logDbgLn_ _ _ = return ()

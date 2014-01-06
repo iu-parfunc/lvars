@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A concurrent finite map represented as a single linked list.  
 --
@@ -16,8 +17,13 @@
 -- data structures, e.g. SkipListMap.
 
 module Data.Concurrent.LinkedMap (
-  LMap(), newLMap, Token(), value, find, FindResult(..), tryInsert,
-  foldlWithKey, map, reverse)
+  LMap(), LMList(..),
+  newLMap, Token(), value, find, FindResult(..), tryInsert,
+  foldlWithKey, map, reverse, head, toList, fromList, findIndex,
+  
+  -- * Utilities for splitting/slicing
+  halve, halve', dropUntil
+  )
 where
   
 import Data.IORef
@@ -25,7 +31,8 @@ import Data.Atomics
 import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                        -- to use it.
 import Control.Monad.IO.Class
-import Prelude hiding (reverse, map)
+import Control.Exception (assert)
+import Prelude hiding (reverse, map, head)
 
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
@@ -81,14 +88,17 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
-foldlWithKey :: MonadIO m => (a -> k -> v -> m a) -> a -> LMap k v -> m a
-foldlWithKey f a m = do
-  n <- liftIO $ readIORef m
+--
+-- Strict in the accumulator.  
+foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
+                (a -> k -> v -> m a) -> a -> LMap k v -> m a
+foldlWithKey liftIO f !a !m = do
+  n <- liftIO$ readIORef m
   case n of
     Empty -> return a
     Node k v next -> do
       a' <- f a k v
-      foldlWithKey f a' next
+      foldlWithKey liftIO f a' next
 
 
 -- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
@@ -96,7 +106,8 @@ foldlWithKey f a m = do
 -- same.
 map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
 map fn mp = do 
- tmp <- foldlWithKey (\ acc k v -> do
+ tmp <- foldlWithKey liftIO
+                     (\ acc k v -> do
                       r <- liftIO (newIORef acc)
                       return$! Node k (fn v) r)
                      Empty mp
@@ -115,3 +126,93 @@ reverse mp = liftIO . newIORef =<< loop Empty mp
         Node k v next -> do
           r <- liftIO (newIORef acc)
           loop (Node k v r) next
+
+head :: LMap k v -> IO (Maybe k)
+head lm = do
+  x <- readIORef lm
+  case x of
+    Empty      -> return Nothing
+    Node k _ _ -> return $! Just k
+
+-- | Convert to a list
+toList :: LMap k v -> IO [(k,v)]
+toList lm = do
+  x <- readIORef lm
+  case x of
+    Empty       -> return []
+    Node k v tl -> do
+      ls <- toList tl
+      return $! (k,v) : ls 
+
+-- | Convert from a list.
+fromList :: [(k,v)] -> IO (LMap k v)
+fromList ls = do
+  let loop [] = return Empty
+      loop ((k,v):tl) = do
+        tl' <- loop tl
+        ref <- newIORef tl'
+        return $! Node k v ref
+  lm <- loop ls
+  newIORef lm
+
+
+halve' :: Ord k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
+halve' mend lm = do 
+  lml <- readIORef lm
+  res <- halve mend lml
+  case res of
+    Nothing -> return Nothing
+    Just (len1,_len2,tailhd) -> do
+      ls <- toList lm
+      l' <- fromList (take len1 ls)
+      r' <- newIORef tailhd
+      return $! Just $! (l',r')
+          
+
+-- | Attempt to split into two halves.
+--    
+--   This optionally takes an upper bound key, which is treated as an alternate
+--   end-of-list signifier.
+--
+--   Result: If there is only one element, then return Nothing.  If there are more,
+--   return the number of elements in the first and second halves, plus a pointer to
+--   the beginning of the second half.  It is a contract of this function that the
+--   two Ints returned are non-zero.
+--
+halve :: Ord k => Maybe k -> LMList k v -> IO (Maybe (Int, Int, LMList k v))
+{-# INLINE halve #-}
+halve mend ls = loop 0 ls ls
+  where
+    isEnd Empty = True
+    isEnd (Node k _ _) =
+       case mend of
+         Just end -> k >= end
+         Nothing -> False
+    emptCheck (0,l2,t) = return Nothing
+    emptCheck !x       = return $! Just x
+
+    loop len tort hare | isEnd hare =
+      emptCheck (len, len, tort)
+    loop len tort@(Node _ _ next1) (Node k v next2) = do 
+      next2' <- readIORef next2
+      case next2' of
+        x | isEnd x -> emptCheck (len, len+1, tort)
+        Node _ _ next3 -> do next1' <- readIORef next1
+                             next3' <- readIORef next3
+                             loop (len+1) next1' next3'
+
+-- | Drop from the front of the list until the first key is equal or greater than the
+-- given key.
+dropUntil :: Ord k => k -> LMList k v -> IO (LMList k v)
+dropUntil _ Empty = return Empty
+dropUntil stop nd@(Node k v tl)
+  | stop <= k = return nd
+  | otherwise = do tl' <- readIORef tl
+                   dropUntil stop tl' 
+
+-- | Given a pointer into the middle of the list, find how deep it is.
+-- findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
+findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)                   
+findIndex ls1 ls2 =
+  error "FINISHME - LinkedMap.findIndex"
+

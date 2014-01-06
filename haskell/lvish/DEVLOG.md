@@ -209,3 +209,347 @@ And this setting for numCapabilities seems to effect the
 test-framework driver as well.
 
 
+[2013.12.02] {Debugging pmapFold for SLMap}
+-------------------------------------------
+
+
+[2013.12.11] {Debugging issue with testing framework}
+------------------------------------------------------------
+
+It was appearing as spurious thread blocked failures:
+
+       Common:
+	 SLMapTests:
+	   v7a: [OK]
+	   v8c: [OK]
+	   v8d: [OK]
+      [lvish-tests] Test timed out -- thread blocked!
+	   v9a: [Failed]
+     assertNoTimeOut: timeout occurred after 1.0 seconds
+	   handlrDup: [OK]
+	      Test Cases  Total
+      Passed  5           5
+      Failed  1           1
+      Total   6           6
+     real	0m0.009s
+     user	0m0.004s
+     sys	0m0.003s
+
+This was a bug.  Misinterpreting ThreadBlocked, fixed now.
+
+[2013.12.12] {More testing woes}
+------------------------------------------------------------
+
+We appear to be consistently locking up on test v9e atm.
+Oh wait.. is it just taking an excessive amount of time?
+
+No, sometimes its getting past that test and going a couple tests
+further, possibly getting stuck on v9f.  I hope test-framework is
+flushing stdout and giving us an accurate representation of how many
+tests we've gotten through...
+
+Test-framework *does* have systematic timeouts.  They just don't
+actually work.  It still gets stuck.  Though they seem to work better
+if -j1 is provided.
+
+    time ./Main.exe -j1 --timeout=1 +RTS -N4
+    
+These stuck tests do seem to be deadlock rather than livelock --
+they're not burning CPU.  With the above single-threaded timeout
+approach we can get through all the tests, but a nondeterministic
+number of them pass.
+
+I'm seeing 7-10 failures out of 57 currently.  That's with -N4.  With
+-N1 everything works fine.
+
+As mentioned in the discussion of issue #11, some of these failures
+manifest not as timeouts but as indefinite-blockage:
+
+    ERROR: LVarSpecificExn "EXCEPTION in runPar(ThreadId 5): thread blocked indefinitely in an MVar operation"
+
+E.g. for v3d.  
+
+Note that this pattern of test failures existed before the change to
+addHandler...  Actually, the test failures seem to have been worse
+before.  It would deadlock even with "-j1 --timeout=3".
+
+Debugging v9e:
+-----------------------------
+
+This is actually a pretty nice situation, because it will fail even
+with one test enabled, and on only two threads:
+
+    cd lvish/tests
+    time ./Main.exe -tv9e -j1 --timeout=1 +RTS -N2
+
+This is fine too:
+
+    DEBUG=3 time ./ArrayTests.exe -tv9e -j1 --timeout=1 +RTS -N2
+
+Looking for a different test to debug...
+----------------------------------------
+
+Are there any that fail but don't use istructure or map variants?
+    
+Ok, as of rev 88d540d (depth 898), we COULD pass the basic tests, or
+at least 48 of them, on four threads.  Namely, these tests.
+
+     :LVishAndIVarv0
+     :LVishAndIVarv1a
+     :LVishAndIVarv1b
+     :LVishAndIVari3f
+     :LVishAndIVari3g
+     :LVishAndIVarlp01
+     :LVishAndIVarlp02
+     :LVishAndIVarlp03
+     :LVishAndIVarlp04
+     :LVishAndIVardftest0
+     :LVishAndIVardftest1
+     :LVishAndIVardftest3
+     :LVishAndIVarshow01
+     :MemoTests02seq
+     :MemoTests03seq
+     :MemoTests04seq
+     :LogicalTestsand1
+     :LogicalTestsand2
+     :LogicalTestsand3
+     :LogicalTestsand4
+     :LogicalTestsor1
+     :LogicalTestsor2
+     :LogicalTestsor3
+     :LogicalTestsor4
+     :LogicalTestsandMap01
+     :LogicalTestsorMap01
+     :MapTestsv7a
+     :MapTestsi7b
+     :MapTestsv7c
+     :MapTestsv8c
+     :MapTestsv8d
+     :MapTestsshow02
+     :MapTestsshow03
+     :SetTestsv2a
+     :SetTestsv2b
+     :SetTestsv2c
+     :SetTestsv3b
+     :SetTestsi3c
+     :SetTestsv3d
+     :SetTestsv3e
+     :SetTestsv8a
+     :SetTestsv8b
+     :SetTestsshow05
+     :SetTestsshow06
+     :SetTestsshow05B
+     :SetTestsshow06B
+     :MaxCounterTestsmc1
+     :MaxCounterTestsmc2
+
+But now we're having failures on 8 tests.  Even when we disable the
+new generic tests (-f-generic).  Here are some of the failures:
+
+ * v9e - natarray
+ * v9g - istruct
+ * v9f - ivar array
+ * v8d - map test: traverse, union, foreach
+   (traverse property for maps also fails)
+
+ * i3c - sets: undersynchronized
+ * v3e - sets: foreach, waitElem
+ * v8a - sets: cartesian product
+ * v8b - sets: 3-way cartesian
+
+Ok, from all this it looks like there might be a general failure in
+callbacks/addHandler.  Or perhaps a general failure in handler pools.
+
+v9f is interesting however...  It uses no callbacks or handler pools.
+It simply writes N ivars and then reads them.
+
+
+[2013.12.26] {Adding a schedule-control facility to the debug-logging one}
+
+The first draft is now running... but it's chewing up a bunch of user
+time.  A tiny 0.3 second test goes to 2 seconds, and then if I turn on
+more print messages (on every time around "schedloop"), I get this:
+
+      100.12 real        97.08 user         3.01 sys
+
+Ok, there is some busy-waiting in there.  One weird thing is that ONE
+test runs quickly.  Oh, I see.  The logger threads aren't getting
+killed so they continue to spin after things are shut down.
+
+I fixed that problem... but when printing out each schedloop
+invocation it still goes crazy slowly (21.8s user).  It should be able
+to spam messages to the terminal a heck of a lot faster than that.
+We're talking slow enough for me to read it as it scrolls by. 
+
+With that print disabled, it runs in the SAME time whether we use
+"yield" or "threadDelay" for 10ms...
+
+-----------
+
+Update: I just switched it to exponential backoff everywhere it
+spins/polls.  I'm still seeing the same times.
+
+Ah!  Interesting.  Now it runs much faster when running on multiple
+real threads!  Maybe there are insufficient yield points to enable it
+to run quickly (cooperatively) on one thread?  Or maybe the
+differences in the threaded RTS matter here... (the threaded RTS
+should be linked either way, but perhaps parts of it are inactive in
+-N1).
+
+Is there a path around schedloop that does NOT yield?  
+
+Deterministically exposing the task-graph 
+-----------------------------------------
+
+Test v1a is currently demonstrating a problem with nondeterminism,
+sometimes the infrastructure observes the parallelism, seeing these
+tasks together:
+
+    1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    2:  [dbg-lvish] putLV: about to mutate
+    
+And sometimes it doesn't:
+
+    -----
+      1:  [dbg-lvish] Initializing Logger...
+    -----
+      1:  [dbg-lvish] putLV: about to mutate
+    -----
+      1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    -----
+
+Actually on one thread it always fails to observe the
+parallelism... On -N2 or -N4 it sometimes does.  In fact, on one
+thread it doesn't observe the getLV in the logger at all!
+
+`
+
+[2013.12.30] {Debugging issue #57}
+-----------------------------------
+
+I'm dropping in more logging messages to try to find what the
+data-race is.  One thing I wasn't expecting is that there are TWO
+getLV threshold checks racing with eachother in parallel:
+
+    8| #3 of 4:  [dbg-lvish] putLV: setStatus 19 on worker 3
+    8| #2 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV: first readIORef 19 on worker 2
+    5| #3 of 4:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 3
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh 19 on worker 2
+    5| #1 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 1
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 4
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 1
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 4
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 1
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 3
+    10| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, 19 on worker 4
+    10| #3 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 4
+    ! Exception on Logger thread:  [Logger] Need in-parallel log messages to have an ordering, got two equal:
+      [dbg-lvish] getLV (active): callback: check thresh 19 on worker 2
+
+How can they both be on worker 2!  Oh, that uniq suf was grabbed too early.
+
+Still, it looks like LOTS of things are racing here.  The second
+globalThresh poll, plus MULTIPLE onUpdate checks.  
+
+----------------------------------------
+
+There it is!  A little bit more debugging prints and we got a very nice example of a bad-interleaving.
+
+    7| #1 of 4:  [dbg-lvish] getLV: first readIORef , lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 6
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 5
+    8| #4 of 4:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh, lv 19 on worker 2
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 6
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 5
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 6
+    5| #2 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 1
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners, lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 5
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check, lv 19 on worker 2
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check, lv 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 5
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 19 on worker 2
+    7| #1 of 3:  [dbg-lvish] getLV (active): callback: check thresh, lv 19 on worker 6
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 5
+    8| #2 of 3:  [dbg-lvish] getLV (active): read execFlag for dedup, lv 19 on worker 6
+    5| #1 of 2:  [dbg-lvish] freezeLV: atomic modify status, lv 19 on worker 2
+    8| #2 of 2:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 1
+    8| #2 of 2:  [dbg-lvish] getLV (active): CAS execFlag dedup, lv 19 on worker 6
+    8| #2 of 2:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 1
+    7| #2 of 2:  [dbg-lvish] freezeLV: begin busy-wait for
+      Exception inside child thread "worker thread", ThreadId 8: PutAfterFreezeExn "Attempt to change a frozen LVar"    
+    putter status, lv 19 on worker 2
+
+It seems that the key problem is the putLV "read final status" bit
+happening long after the actual mutation, thus racing with the freeze.  
+
+Hmm, it seems like the intent was for the status to serve as a form of
+lock.  But in that case freezeLV seems wrong because it doesn't wait
+until those "locks" are released before mutating the status...
+
+Do we perhaps need a three-state protocol?  Active->Freezing->Frozen
+
+A put finishing while in Freezing state is ok, but a put beginning
+while in Freezing state is bad.  
+
+[2013.12.30] {A problem with the current logging framework}
+-----------------------------------------------------------
+
+Right now the protocol is that the "logger" field never gets set when
+dbgLvl < 1.  But that is a naughty, dirty thing, and right now it's
+leading to this problem:
+
+      i1: [Failed]
+    Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "LVarSpecificExn \"EXCEPTION in runPar(ThreadId 5): Internal error: Sched logger read before initialized.\""
+
+Hmm, where was that call?
+
+
+[2013.12.31] {Trying stressTest for the first time}
+---------------------------------------------------
+
+I'm getting "blocked indefinitely" errors.  But, I can never get them
+from running one test once.  I'm working on AddRemoveSetTests, and I
+can get these errors running v3 & v4 together in one process (but not
+individually).  OR I can get it with v3 alone but ONLY when I turn the
+#reps up to 8.  Eight seems to be the magic number.  I can run
+hundreds of times with 7 reps, and I never see the exception.
+
+Actually, this makes sense because it must relate to whether a GC is
+triggered that will catch the blocked-indefinitely business.
+
+Yep, that did it.  Performing GC after testing (which is tricky
+because test-framewrok tries to exit the process) will force the
+errors out.
+
+Hmm.. For thread hygiene ideally test-framework would enforce that
+tests don't leave stray threads running.  But checking that would
+require being able to enumarate the global set of threads....
+
+-----------
+
+Ok, I fixed some old dependencies on numCapabilities and things are
+working better now (idling dependended on it).
+
+Still, right now I can get an actual deadlock if I stress-test at 500
+reps.  Also, I can get a detected blocked-indefinitely on v3:
+
+      v3: [Failed]
+    ERROR: thread blocked indefinitely in an MVar operation
+    ....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................  v4: [Running]
+
+Ok, now if I can get log printing on failures, that would help us
+figure this one out.
+

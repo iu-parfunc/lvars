@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 -- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 
 {-|
 
@@ -62,6 +63,16 @@ import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
+#ifdef GENERIC_PAR
+-- From here we get a Generator and, in the future, ParFoldable instance for Map:
+import Data.Par.Map ()
+
+import qualified Control.Par.Class as PC
+import Control.Par.Class.Unsafe (internalLiftIO)
+-- import qualified Data.Splittable.Class as Sp
+-- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
+#endif
+
 --------------------------------------------------------------------------------
 
 -- | Create a fresh map with nothing in it.
@@ -93,12 +104,12 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> IO (Maybe (L.Par ()))
+    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> L.Par ()
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
-      mp <- readIORef ref -- Snapshot
-      return $ Just $ unWrapPar $ do 
+      mp <- L.liftIO $ readIORef ref -- Snapshot
+      unWrapPar $ do 
         traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) mp
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
@@ -145,18 +156,18 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
   let ref = state lv      
   mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
-    Just lv2 -> do L.logStrLn$ " [Map.modify] key already present: "++show key++
-                               " adding to inner "++show(unsafeName lv2)
+    Just lv2 -> do L.logStrLn 3 $ " [Map.modify] key already present: "++show key++
+                                 " adding to inner "++show(unsafeName lv2)
                    unWrapPar$ fn lv2
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
-      L.logStrLn$ " [Map.modify] allocated new inner "++show(unsafeName bot)
+      L.logStrLn 3$ " [Map.modify] allocated new inner "++show(unsafeName bot)
       let putter _ = L.liftIO$ atomicModifyIORef' ref $ \ mp2 ->
             case M.lookup key mp2 of
               Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
               Nothing  -> (M.insert key bot mp2,
                            (Just (key, bot), 
-                            do L.logStrLn$ " [Map.modify] key absent, adding the new one."
+                            do L.logStrLn 3$ " [Map.modify] key absent, adding the new one."
                                unWrapPar$ fn bot))
       act <- putLV_ (unWrapLVar lv) putter
       act
@@ -164,7 +175,7 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
-gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+gmodify :: forall f a b d s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
@@ -175,7 +186,7 @@ gmodify map key fn = modify map key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 -- 
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+getOrInit :: forall f a b d s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           key -> IMap key s (f s a) -> Par d s (f s a)
 getOrInit key mp = gmodify mp key return
 
@@ -320,3 +331,25 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
+
+--------------------------------------------------------------------------------
+-- Interfaces for generic programming with containers:
+
+#ifdef GENERIC_PAR
+#warning "Creating instances for generic programming with IMaps"
+instance PC.Generator (IMap k Frzn a) where
+  type ElemOf (IMap k Frzn a) = (k,a)
+  {-# INLINE fold #-}
+  {-# INLINE foldM #-}    
+  {-# INLINE foldMP #-}  
+  fold   fn zer (IMap (WrapLVar lv)) = PC.fold   fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+  foldM  fn zer (IMap (WrapLVar lv)) = PC.foldM  fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+  foldMP fn zer (IMap (WrapLVar lv)) = PC.foldMP fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
+
+-- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
+-- instance.  
+-- instance Show k => PC.ParFoldable (IMap k Frzn a) where
+
+#endif  
+
+
