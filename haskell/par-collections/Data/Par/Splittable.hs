@@ -95,8 +95,10 @@ pmapReduceWith_ :: forall c e m a t .
 {-# INLINE pmapReduceWith_ #-}      
 pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 
--- | Execute a side-effect in parallel for each element generated.  This is
---   synchronous; that is, it does not return until all of the actions are executed.
+-- | Execute a side-effect in parallel for each element generated.
+-- 
+--  This is SYNCHRONOUS; that is, it does not return until all of the actions are
+--  executed.
 pforEach :: (Split c, Generator c, ParFuture m, FutContents m ())
       => c                  -- ^ element generator to consume
       -> (ElemOf c -> m ()) -- ^ compute one result

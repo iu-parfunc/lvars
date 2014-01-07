@@ -18,6 +18,9 @@ import Control.Par.Class (LVarSched(returnToSched))
 -- import Data.LVar.NatArray
 import Data.LVar.NatArray.Unsafe (NatArray, unsafePeek)
 
+import Data.Par.Splittable (pforEach)
+import Data.Par.Range (range)
+
 import qualified Data.Foldable as F
 import qualified Data.Set as S
 import           Data.LVar.PureSet as IS
@@ -44,8 +47,9 @@ getNB (RetryHub fails) arr ind = do
 desired_tasks :: Int
 desired_tasks = 16 -- FIXME: num procs * overpartition
 
--- | Aborts and retries failed iterations in bulk.
---   `forSpeculative` continues retrying until all iterations have completed.
+-- | A parallel for-loop which aborts and retries failed iterations in bulk.
+-- 
+--   `forSpeculative` continues retrying until ALL iterations have completed.
 forSpeculative :: (Int, Int) -> (RetryHub s -> Int -> Par QuasiDet s ()) -> Par QuasiDet s ()
 -- TODO: Requires idempotency!!
 forSpeculative (st,end) bodyfn = do
@@ -56,7 +60,7 @@ forSpeculative (st,end) bodyfn = do
       -- One approach that might make sense would be to auto-tune based on the
       -- time/iteration observed.  That is, gradually increase to try to approximate a
       -- minimum reasonable task size and no bigger.
-  pool <- newPool  
+      
   -- Outer loop of "rounds", in which we try a prefix of the iteration space.
 
   let flush leftover fails =
@@ -73,9 +77,9 @@ forSpeculative (st,end) bodyfn = do
         fails <- newEmptySet
         let chunkend = offset + (min prefix remain)        
                 
-        parForTiled (Just pool) desired_tasks (offset,chunkend) $ \ix -> do
+        -- A synchronous loop:
+        pforEach (range offset chunkend) $ \ix -> 
           bodyfn (RetryHub fails) ix
-        quiesce pool
         snap <- freezeSet fails
         loop snap chunkend (remain - (chunkend - offset))
   loop S.empty 0 sz       

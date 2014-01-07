@@ -302,7 +302,9 @@ data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 --------------------------------------------------------------------------------
 
 
--- | We have a problem where some types (like Ranges) are splittable, but they are
+-- | Collections that can generate a sequence of elements of the same element type.
+-- 
+--   Reason: We have a problem where some types (like Ranges) are splittable, but they are
 --   not containers for arbitrary data.  Thus we introduce a more limited concept of
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).
