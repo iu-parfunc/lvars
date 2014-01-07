@@ -189,10 +189,12 @@ stressTest 0 _workers _comp _oracle = return ()
 stressTest reps workers comp oracle = do 
   (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] workers comp
   let failit s = do threadDelay (500 * 1000)
-                    hPutStrLn stderr "\nstressTest: Found FAILING schedule:"
+                    hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
                     hPutStrLn stderr "-----------------------------------"
                     mapM_ (hPutStrLn stderr) logs
                     hPutStrLn stderr "-----------------------------------"
+                    writeFile "failing_sched.log" (unlines logs)
+                    hPutStrLn stderr "Wrote to file: failing_sched.log"
                     HU.assertFailure s
   case res of
     Left exn                 -> failit ("Bad test outcome--exception: "++show exn)
