@@ -128,10 +128,10 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
                    return result
   loop :: c -> m a
   loop gen =
-    trace ("[DBG] Looping around mkMapReduce...") $ 
+    -- trace ("[DBG] Looping around mkMapReduce...") $ 
     case splitter gen of
       -- Sequential case, use Generator class:
-      [seqchunk] ->  trace ("[DBG]   Bottoming out to sequential fold..") $ 
+      [seqchunk] -> -- trace ("[DBG]   Bottoming out to sequential fold..") $ 
                     seqfold mapred init seqchunk
         -- foldM mapred init [min..max]
       [a,b] -> do iv <- spawner$ loop a

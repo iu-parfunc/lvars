@@ -236,6 +236,13 @@ class (Monad m, ParSealed m) => LVarSched m  where
    -- | Drop the current continuation and return to the scheduler.
    returnToSched :: m a
 
+   -- -- | Log a line of debugging output, if supported by the scheduler.
+   -- -- The debug message is associated with a "chatter level".
+   -- -- 
+   -- -- The default implementation is for this to be a no-op.
+   -- logDbgLn :: Int -> String -> m ()
+   -- logDbgLn _ _ = return ()
+
    -- TODO: should we expose a MonadCont instance?
 
 -- | An LVar scheduler with the quasi-determinism capability.  This interface is

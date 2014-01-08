@@ -409,10 +409,12 @@ defaultMainSeqTests tests = do
   x <- interpretArgs args
   res <- try (case x of
              Left err -> error$ "defaultMainSeqTests: "++err
-             Right (opts,_) -> defaultMainWithOpts tests
-                                ((mempty{ ropt_threads= Just 1
-                                        , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
-                                 `mappend` opts))
+             Right (opts,_) -> do let opts' = ((mempty{ ropt_threads= Just 1
+                                                      , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                                               `mappend` opts)
+                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " worker threads for testing."
+                                  defaultMainWithOpts tests opts'
+                               )
   case res of
     Left (e::ExitCode) -> do
        putStrLn$ " [*] test-framework exiting with: "++show e
