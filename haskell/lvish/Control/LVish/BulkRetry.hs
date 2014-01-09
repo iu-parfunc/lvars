@@ -40,7 +40,8 @@ getNB (RetryHub fails) arr ind = do
   x <- unsafePeek arr ind
   -- if empty, don't block, do this:
   case x of
-    Nothing  -> do insert ind fails
+    Nothing  -> do logDbgLn 4 $ " [dbg-lvish] getNB: iteration failed, enqueue for retry: "++show ind
+                   insert ind fails
                    returnToSched
     Just res -> return res
 
@@ -59,16 +60,15 @@ forSpeculative (st,end) bodyfn = do
       -- TODO: automatic strategies for tuning the input prefix size would be helpful.
       -- One approach that might make sense would be to auto-tune based on the
       -- time/iteration observed.  That is, gradually increase to try to approximate a
-      -- minimum reasonable task size and no bigger.
-      
-  -- Outer loop of "rounds", in which we try a prefix of the iteration space.
+      -- minimum reasonable task size and no bigger.  
 
   let flush leftover fails =
         -- unless (S.null leftover) $ do
           -- TODO: need parallel fold, this is sequential...
           F.foldrM (\ ix () -> bodyfn (RetryHub fails) ix)
-                   () leftover        
-  
+                   () leftover
+
+  -- Outer loop of "rounds", in which we try a prefix of the iteration space.  
   let loop leftover offset 0 = do
         fails <- newEmptySet
         flush leftover fails -- Sequential, no failures...

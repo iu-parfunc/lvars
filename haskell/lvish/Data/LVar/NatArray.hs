@@ -86,6 +86,7 @@ import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+import           Data.LVar.NatArray.Unsafe (NatArray(..))
 
 ------------------------------------------------------------------------------
 -- Toggles
@@ -94,12 +95,6 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- A low-level optimization below.
 
 ------------------------------------------------------------------------------
-
--- | An array of bit-fields with a monotonic OR operation.  This can be used to model
---   a set of Ints by setting the vector entries to zero or one, but it can also
---   model other finite lattices for each index.
--- newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
-data NatArray s a = Storable a => NatArray !(LVar s (M.IOVector a) (Int,a))
 
 unNatArray (NatArray lv) = lv
 

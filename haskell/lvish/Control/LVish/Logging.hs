@@ -158,7 +158,7 @@ newLogger (minLvl, maxLvl) outDests waitWorkers = do
   let flushLogs = atomicModifyIORef' logged $ \ ls -> ([],reverse ls)
 
   let -- When all threads are quiescent, we can flush the remaining messagers from
-      -- the channel to get the whole set of waiting tasks.
+      -- the channel to get the whole set of waiting tasks.  Return in chronological order.
       flushChan !acc = do
         x <- tryReadSmplChan checkPoint
         case x of
@@ -355,18 +355,18 @@ backoff Backoff{current,cap} =
 -- type SmplChan a = MVar [a]
 
 -- | Simple channels that don't support real blocking.
-type SmplChan a = IORef [a]
+type SmplChan a = IORef (Seq.Seq a) -- New elements pushed on right.
 
 newSmplChan :: IO (SmplChan a)
-newSmplChan = newIORef []
+newSmplChan = newIORef Seq.empty
 
 -- | Non-blocking read.
 tryReadSmplChan :: SmplChan a -> IO (Maybe a)
 tryReadSmplChan ch = do
-  x <- atomicModifyIORef' ch $ \ ls -> 
-       case ls of
-         [] -> ([], Nothing)
-         h:t -> (t, Just h)
+  x <- atomicModifyIORef' ch $ \ sq -> 
+       case Seq.viewl sq of
+         Seq.EmptyL -> (Seq.empty, Nothing)
+         h Seq.:< t -> (t, Just h)
   return x
 
 -- | A synchronous read that must block or busy-wait until a value is available.
@@ -383,7 +383,7 @@ readSmplChan ch = loop =<< newBackoff maxWait
 -- | Always succeeds.  Asynchronous write to channel.
 writeSmplChan :: SmplChan a -> a -> IO ()
 writeSmplChan ch x = do
-  atomicModifyIORef' ch $ \ ls -> (x:ls,())
+  atomicModifyIORef' ch $ \ s -> (s Seq.|> x,())
 
 ----------------------------------------------------------------------------------------------------
 
