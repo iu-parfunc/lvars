@@ -4,6 +4,7 @@
 
 module BulkRetryTests(tests, runTests) where
 
+import Control.Monad
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMain, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
@@ -39,6 +40,14 @@ case_br_v1 = assertEqual "simple forSpeculative" "hi" =<< runParIO v1
 v1 = do 
   (na :: NatArray s Int) <- NA.newNatArray 5
   forSpeculative (0,5) $ \ hub ix -> do
-    logDbgLn 1 $ "ForSpeculative, iter "++show ix
+    logDbgLn 1 $ "ForSpeculative, START iter "++show ix
+    case ix of
+      0 -> return ()
+      1 -> void$ NA.get na 0
+      2 -> void$ NA.get na 0
+      3 -> return ()
+      4 -> void$ NA.get na 2
+    NA.put na ix (100 + ix)
+    logDbgLn 1 $ "ForSpeculative, END iter "++show ix
     return ()
   return "hi"

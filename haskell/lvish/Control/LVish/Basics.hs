@@ -137,10 +137,11 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   
 runParDetailed :: (Maybe(Int,Int))  -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
                -> [Lg.OutDest]      -- ^ Destinations for debug log messages.
+               -> Bool              -- ^ Debug scheduler interleavings.
                -> Int               -- ^ How many worker threads to use. 
                -> (forall s . Par d s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)
-runParDetailed mb od nw (WrapPar p) = L.runParDetailed mb od nw p
+runParDetailed mb od ds nw (WrapPar p) = L.runParDetailed mb od ds nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,

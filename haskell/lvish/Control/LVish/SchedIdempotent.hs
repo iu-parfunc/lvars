@@ -574,12 +574,15 @@ instance NFData (LVar a d) where
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
 --   
-runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
+runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept
+                                   --   (filter on priority level), Nothing is default level.
                -> [L.OutDest]      -- ^ Destinations for debug log messages.
+               -> Bool             -- ^ In additional to logging debug messages, control
+                                   --   thread interleaving at these points when this is True.
                -> Int              -- ^ How many worker threads to use. 
                -> Par a            -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
-runParDetailed bounds outDests numWrkrs comp = do
+runParDetailed bounds outDests debugScheduling numWrkrs comp = do
   queues <- Sched.new numWrkrs noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
@@ -597,7 +600,7 @@ runParDetailed bounds outDests numWrkrs comp = do
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then Sched.initLogger queues ls (minLvl,maxLvl) outDests
+          then Sched.initLogger queues ls (minLvl,maxLvl) outDests debugScheduling
           else do Conc.yield
                   setLogger
       (minLvl, maxLvl) = case bounds of
@@ -677,9 +680,9 @@ runParDetailed bounds outDests numWrkrs comp = do
   takeMVar answerMV  
 #endif
 
-
+defaultRun :: Par b -> IO b
 defaultRun = fmap (fromRight . snd) .
-             runParDetailed (Just (0,dbgLvl)) [L.OutputTo stderr, L.OutputEvents] numCapabilities
+             runParDetailed (Just (0,dbgLvl)) [L.OutputTo stderr, L.OutputEvents] False numCapabilities
 
 -- | Run a deterministic parallel computation as pure.
 runPar :: Par a -> a
@@ -694,7 +697,7 @@ runParIO = defaultRun
 -- final result.  This is like `runParDetailed` but uses the default settings.
 runParLogged :: Par a -> IO ([String],a)
 runParLogged comp = do 
-  (logs,ans) <- runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] numCapabilities comp
+  (logs,ans) <- runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] False numCapabilities comp
   return $! (logs,fromRight ans)
 
 -- | Convert from a Maybe back to an exception.

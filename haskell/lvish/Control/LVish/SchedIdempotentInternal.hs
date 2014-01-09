@@ -180,13 +180,13 @@ new numWorkers s = do
 
 -- | Takes a full set of worker states and correspoding threadIds and initializes the
 -- loggers.
-initLogger :: [State a s] -> [ThreadId] -> (Int,Int) -> [L.OutDest] -> IO ()
-initLogger [] _ _ _ = error "initLogger: cannot take empty list of workers"
-initLogger queues@(hd:_) tids bounds outDests 
+initLogger :: [State a s] -> [ThreadId] -> (Int,Int) -> [L.OutDest] -> Bool -> IO ()
+initLogger [] _ _ _ _ = error "initLogger: cannot take empty list of workers"
+initLogger queues@(hd:_) tids bounds outDests debugScheduling
   | len1 /= len2 = error "initLogger: length of arguments did not match"
   | otherwise = do
     lgr <- L.newLogger bounds outDests
-                       (L.WaitTids tids (pollDeques queues))
+              (if debugScheduling then waitAll else L.DontWait)
     -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
     L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
     -- Setting one of them sets all of them -- this field is shared:
@@ -194,6 +194,8 @@ initLogger queues@(hd:_) tids bounds outDests
     -- TODO: ASSERT that they are all actually the same IORef?
     return ()
  where
+   waitAll = (L.WaitTids tids (pollDeques queues))
+   
    len1 = length queues
    len2 = length tids
    countIdle = do ls <- readIORef (idle hd)

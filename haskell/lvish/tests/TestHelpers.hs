@@ -187,7 +187,7 @@ stressTest :: Show a =>
            -> IO ()
 stressTest 0 _workers _comp _oracle = return ()
 stressTest reps workers comp oracle = do 
-  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] workers comp
+  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] True workers comp
   let failit s = do threadDelay (500 * 1000)
                     hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
                     hPutStrLn stderr "-----------------------------------"
