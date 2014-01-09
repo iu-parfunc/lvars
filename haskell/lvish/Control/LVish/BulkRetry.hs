@@ -31,7 +31,8 @@ import           Data.LVar.PureSet as IS
 --------------------------------------------------------------------------------
 
 -- | The point where users send abort messages.
-newtype RetryHub s = RetryHub (ISet s Int) -- ^ This stores the iterations that fail.
+data RetryHub s = RetryHub (ISet s Int) -- ^ This stores the iterations that fail.
+                           Int -- ^ This is the current iteration
 
 -- -- | Non-blocking get on a `NatArray`.
 -- getNB :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
@@ -62,15 +63,17 @@ getNB_cps :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
          -> (elt -> Par d s ()) -- ^ Delimited continuation.
          -> Par d s ()
 -- LVarSched (Par d s)         
-getNB_cps (RetryHub fails) arr ind cont = do
+getNB_cps (RetryHub fails thisiter) arr ind cont = do
   x <- unsafePeek arr ind
   -- if empty, don't block, do this:
   case x of
-    Nothing  -> do logDbgLn 4 $ " [dbg-lvish] getNB: iteration failed, enqueue for retry due to get on ind "++show ind
-                   insert ind fails
+    Nothing  -> do logDbgLn 4 $ " [dbg-lvish] getNB: iteration "++ show thisiter
+                                ++" failed, due to get on index "++show ind
+                   insert thisiter fails
                    return ()
-    Just res -> do logDbgLn 4 $ " [dbg-lvish] getNB: result available, calling continuation (iter "++show ind++")"
+    Just res -> do logDbgLn 4 $ " [dbg-lvish] getNB: result available, calling continuation (iter "++show thisiter++")"
                    cont res
+{-# INLINE getNB_cps #-}
 
 desired_tasks :: Int
 desired_tasks = 16 -- FIXME: num procs * overpartition
@@ -104,14 +107,14 @@ forSpeculative (st,end) bodyfn = do
           -- TODO: need parallel fold, this is sequential...
           F.foldlM (\ () ix -> do
                        logDbgLn 3 $ " [dbg-lvish] forSpeculative: flushing iter "++show ix
-                       body' (RetryHub fails) ix)
+                       body' (RetryHub fails ix) ix)
                    () leftover
   let flushLoop leftover =  do
         fails <- newEmptySet
         -- FIXME:
-        flush leftover fails -- Sequential, NO failures allowed...
-        logDbgLn 3 $ " [dbg-lvish] forSpeculative: did one sequential flush"
+        flush leftover fails -- Sequential...        
         snap <- unsafeDet $ freezeSet fails
+        logDbgLn 3 $ " [dbg-lvish] forSpeculative: did one sequential flush, remaining: "++show snap
         unless (S.null snap) $
           -- error$ "forSpeculative: failures not flushed with a sequential run!:\n "++show snap
           flushLoop snap
@@ -134,20 +137,20 @@ forSpeculative (st,end) bodyfn = do
         
         -- FINISHME: need Split instance:
         -- pforEach leftover $ bodyfn (RetryHub fails)
-        logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures.."
-        F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails) ix)) () leftover
+        logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures: "++show leftover
+        F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails ix) ix)) () leftover
         -- TODO: if we keep failing it's better to expand the prefix.  That way we
         -- end up with a logarithmic number of retries for each iterate in the worst
         -- case, rather than linear (making the whole loop unnecessarily quadratic).
 
         logDbgLn 4 $ " [dbg-lvish] forSpeculative launching new batch: "++show (offset,chunkend)
         asyncForEachHP (Just hp) (range offset chunkend) $ \ ix -> 
-          body' (RetryHub fails) ix
+          body' (RetryHub fails ix) ix
         logDbgLn 4 $ " [dbg-lvish] forSpeculative: return from par for-loop; now quiesce."
         quiesce hp
         logDbgLn 4 $ " [dbg-lvish] forSpeculative: quiesce finished, next freeze failed set."
         snap <- unsafeDet $ freezeSet fails
-        logDbgLn 5 $ " [dbg-lvish] forSpeculative finish round; failed iterates: "++show snap
+        logDbgLn 4 $ " [dbg-lvish] forSpeculative finish round; failed iterates: "++show snap
         loop (round+1) snap chunkend (remain - (chunkend - offset))
   loop 0 S.empty 0 sz       
   -- After the last quiesce, we're done.

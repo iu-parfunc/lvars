@@ -40,8 +40,8 @@ runTests = defaultMainSeqTests [tests]
 --------------------------------------------------------------------------------
 
 case_br_v1 = do
-  (logs,Right res) <- runParDetailed (Just(0,4)) [L.OutputTo stderr] False numCapabilities v1
-  assertEqual "simple forSpeculative" "hi" res
+  (logs,Right res) <- runParDetailed Nothing [L.OutputTo stderr] False numCapabilities v1
+  assertEqual "simple par for loop" [100,101,102,103,104] res
 
 -- | In the blocking version we should only execute each iteration once, and thus see
 -- an exact number of log messages.
@@ -59,13 +59,18 @@ v1 = do
     NA.put na ix (100 + ix)
     logDbgLn 1 $ "ForSpeculative, END iter "++show ix
     return ()
-  return "hi"
+  a <- NA.get na 0
+  b <- NA.get na 1
+  c <- NA.get na 2
+  d <- NA.get na 3
+  e <- NA.get na 4
+  return [a,b,c,d,e]
 
 case_br_v2 = do
-  (logs,res) <- runParDetailed (Just(0,4)) [L.OutputTo stderr] False numCapabilities v2
+  (logs,res) <- runParDetailed Nothing [L.OutputTo stderr] False numCapabilities v2
   case res of
     Left e -> throw e
-    Right x -> assertEqual "simple forSpeculative" "hi" x
+    Right x -> assertEqual "simple forSpeculative" [100,101,102,103,104] x
 
 -- v2 = do 
 --   (na :: NatArray s Int) <- NA.newNatArray 5
@@ -95,6 +100,12 @@ v2 = do
       3 -> getNB_cps hub na 4 cont
       4 -> cont 4
     return ()
-  return "hi"
+  logDbgLn 1 $ "DONE with for loop, reading final results."
+  a <- NA.get na 0
+  b <- NA.get na 1
+  c <- NA.get na 2
+  d <- NA.get na 3
+  e <- NA.get na 4
+  return [a,b,c,d,e]
 
 
