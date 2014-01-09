@@ -20,7 +20,7 @@ module Data.Par.Splittable
     -- return they can perform more balanced traversals that are more tolerant of
     -- fine-granularity.
     pmapReduce, pmapReduce_, pmapReduceWith_,
-    pforEach,
+    pforEach, asyncForEach,
 
     -- * The underlying, general version of which the above are specializations
     mkMapReduce
@@ -95,14 +95,30 @@ pmapReduceWith_ :: forall c e m a t .
 {-# INLINE pmapReduceWith_ #-}      
 pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 
--- | Execute a side-effect in parallel for each element generated.  This is
---   synchronous; that is, it does not return until all of the actions are executed.
+-- | Execute a side-effect for each element generated.  Use the `Split` instance to
+-- determine the degree of parallelism (granularity).
+-- 
+--  This is SYNCHRONOUS; that is, it does not return until all of the actions are
+--  executed.
 pforEach :: (Split c, Generator c, ParFuture m, FutContents m ())
       => c                  -- ^ element generator to consume
       -> (ElemOf c -> m ()) -- ^ compute one result
       -> m ()
 {-# INLINE pforEach #-}
 pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
+
+-- | Non-blocking version of pforEach.  
+asyncForEach :: (Split c, Generator c, ParFuture m, FutContents m ())
+      => c                  -- ^ element generator to consume
+      -> (ElemOf c -> m ()) -- ^ compute one result
+      -> m ()
+-- asyncForEach = asyncForEachHP Nothing
+asyncForEach gen fn =
+  case split gen of
+    [seqchunk] -> PC.forM_ seqchunk fn
+    ls -> M.forM_ ls $ \ gen_i -> 
+            fork $
+              PC.forM_ gen_i fn 
 
 -- | Make a parallel map-reduce function given a custom
 --   function for spawning work.
@@ -126,10 +142,10 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
                    return result
   loop :: c -> m a
   loop gen =
-    trace ("[DBG] Looping around mkMapReduce...") $ 
+    -- trace ("[DBG] Looping around mkMapReduce...") $ 
     case splitter gen of
       -- Sequential case, use Generator class:
-      [seqchunk] ->  trace ("[DBG]   Bottoming out to sequential fold..") $ 
+      [seqchunk] -> -- trace ("[DBG]   Bottoming out to sequential fold..") $ 
                     seqfold mapred init seqchunk
         -- foldM mapred init [min..max]
       [a,b] -> do iv <- spawner$ loop a

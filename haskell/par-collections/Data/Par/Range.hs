@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, NamedFieldPuns #-}
 
 {-|
 
@@ -11,6 +11,10 @@ A mechanism to describe iteration spaces supporting parallel execution.
 module Data.Par.Range
   (
     -- * Constructing iteration spaces
+    
+    -- | Beware that ranges include information about whether or not sequential
+    -- "bottoming-out" is permitted.  If you are executing parallel loops with
+    -- inter-iteration dependencies, be careful to use `fullpar`.
     Range(..), range, irange, zrange, fullpar,
 
     -- * Combined MapReduce operations on ranges
@@ -119,19 +123,19 @@ zrange :: Int -> Range
 zrange n = mkInclusiveRange 0 (n-1)
 {-# INLINE zrange #-}
 
--- | Tweak an iteration range to exploit all parallelism; never bottom-out to
--- sequential loops.
+-- | Tweak an iteration range to exploit all parallelism.  That is, never bottom-out
+-- to sequential loops.
 fullpar :: Range -> Range
 fullpar (InclusiveRange s e _) = InclusiveRange s e 1
 {-# INLINE fullpar #-}
 
 -- By default we produce a range that bottoms out to sequential.
 mkInclusiveRange :: Int -> Int -> Range
-mkInclusiveRange s e = InclusiveRange s e thresh
+mkInclusiveRange startInd endInd = InclusiveRange {startInd,endInd,seqThresh}
   where
-    thresh = min max_iterations_seq chunksize
+    seqThresh = min max_iterations_seq chunksize
     chunksize = len `quot` (auto_partition_factor * num_procs)
-    len = e - s + 1 
+    len = endInd - startInd + 1 
 {-# INLINE mkInclusiveRange #-}
 
 --------------------------------------------------------------------------------

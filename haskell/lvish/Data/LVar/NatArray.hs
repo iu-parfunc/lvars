@@ -89,6 +89,7 @@ import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+import           Data.LVar.NatArray.Unsafe (NatArray(..))
 
 ------------------------------------------------------------------------------
 -- Toggles

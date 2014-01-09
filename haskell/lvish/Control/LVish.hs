@@ -69,6 +69,7 @@ module Control.LVish
 --    quiesceAll,    
     
     -- * Various loop constructs
+    asyncForEachHP,
     parForL, parForSimple, parForTree, parForTiled, for_,
 
     -- * Logical control flow operators
@@ -88,6 +89,7 @@ module Control.LVish
     
     -- * Debug facilities and internal bits
     logDbgLn, runParLogged, runParDetailed,
+    OutDest(..),
     LVar()
   ) where
 
@@ -99,6 +101,7 @@ import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 
+import           Control.LVish.Logging (OutDest(..))
 import           Data.LVar.IVar 
 
 import Data.IORef
