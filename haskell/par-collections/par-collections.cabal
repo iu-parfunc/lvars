@@ -84,7 +84,7 @@ Test-suite test-par-collections
   --              , ghc-prim 
 
   -- (3) Additional depends to test concrete instances:
---  Build-depends: lvish  >= 1.0.0.4
+  -- Build-depends: lvish  >= 1.1.1.0
 
   -- (4) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit

@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.0.3
+version:             1.1.1.0
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -20,6 +20,7 @@ version:             1.1.0.3
 -- 1.0.0.6 -- tighten up dependencies; remove unused flags; very minor doc fixes.
 -- 1.1.0.2 -- add verifyFiniteJoin
 -- 1.1.0.3 -- expose BulkRetry prototype
+-- 1.1.1.0 -- expose logging routines
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -116,6 +117,7 @@ library
     exposed-modules: 
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
+                      Data.LVar.NatArray.Unsafe
                       Data.LVar.MaxCounter
                       Data.LVar.AddRemoveSet
                       Data.LVar.PNCounter

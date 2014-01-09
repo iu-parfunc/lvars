@@ -51,8 +51,7 @@ import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import Control.LVish (runParDetailed, Par)
-import qualified Control.LVish.Logging as L
+import Control.LVish (runParDetailed, Par, OutDest(..))
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -187,7 +186,7 @@ stressTest :: Show a =>
            -> IO ()
 stressTest 0 _workers _comp _oracle = return ()
 stressTest reps workers comp oracle = do 
-  (logs,res) <- runParDetailed (Just(4,10)) [L.OutputInMemory, L.OutputEvents] True workers comp
+  (logs,res) <- runParDetailed (Just(4,10)) [OutputInMemory, OutputEvents] True workers comp
   let failit s = do threadDelay (500 * 1000)
                     hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
                     hPutStrLn stderr "-----------------------------------"
