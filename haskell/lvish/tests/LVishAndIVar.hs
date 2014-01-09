@@ -199,7 +199,7 @@ case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParIO$ do
   logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
-  parForTiled 16 (0,10) $ \ ix -> do
+  parForTiled Nothing 16 (0,10) $ \ ix -> do
     logDbgLn 2$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
   logDbgLn 2$ " [lp04] after loop..."
