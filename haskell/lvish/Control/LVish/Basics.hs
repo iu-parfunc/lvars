@@ -21,12 +21,15 @@ module Control.LVish.Basics
     LVishException(..), L.HandlerPool(), 
     fork, yield,
     runPar, runParIO, runParLogged, runParDetailed,
-    parForL, parForSimple, parForTree, parForTiled, for_,
     newPool, withNewPool, withNewPool_, 
-    quiesce, forkHP, logDbgLn, 
+    quiesce, forkHP, logDbgLn,
+
+    parForL, parForSimple, parForTree, parForTiled, for_,
+    asyncForEachHP
   )
   where
 
+import Control.Monad (forM_)
 import qualified Data.Foldable    as F
 import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
@@ -39,6 +42,8 @@ import           Prelude hiding (rem)
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class.Unsafe as PU
+import qualified Control.Par.Class     as PC
+import qualified Data.Splittable.Class as SC
 
 instance PU.ParMonad (Par d s) where
   fork = fork  
@@ -242,3 +247,15 @@ for_ (start, end) fn = loop start
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
 
+-- | Non-blocking version of pforEach.  
+asyncForEachHP :: (SC.Split c, PC.Generator c)
+      => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
+      -> c                    -- ^ element generator to consume
+      -> (PC.ElemOf c -> Par d s ()) -- ^ compute one result
+      -> Par d s ()
+asyncForEachHP mh gen fn =
+  case SC.split gen of
+    [seqchunk] -> PC.forM_ seqchunk fn
+    ls -> forM_ ls $ \ gen_i -> 
+            forkHP mh $
+              PC.forM_ gen_i fn 

@@ -69,6 +69,7 @@ module Control.LVish
 --    quiesceAll,    
     
     -- * Various loop constructs
+    asyncForEachHP,
     parForL, parForSimple, parForTree, parForTiled, for_,
 
     -- * Logical control flow operators

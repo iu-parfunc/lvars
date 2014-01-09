@@ -197,7 +197,8 @@ logStrLn  :: Int -> String -> Par ()
 -- logStrLn = liftIO . logStrLn_
 logStrLn lvl str = when (dbgLvl >= 1) $ do
   lgr <- getLogger
-  liftIO$ L.logOn lgr (L.StrMsg lvl str)
+  num <- getWorkerNum
+  liftIO$ L.logOn lgr (L.StrMsg lvl ("(wrkr"++show num ++") "++ str))
 #else
 logStrLn _ _  = return ()
 #endif
@@ -536,6 +537,10 @@ getLogger :: Par L.Logger
 getLogger = mkPar $ \k q -> do
   Just lgr <- readIORef (Sched.logger q)
   exec (k lgr) q
+
+-- | Return the worker that we happen to be running on.  (NONDETERMINISTIC.)
+getWorkerNum :: Par Int
+getWorkerNum = mkPar $ \k q -> exec (k (Sched.no q)) q
 
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
 instance MonadToss Par where  
