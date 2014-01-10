@@ -1,8 +1,3 @@
--- | Use Data.LVar.SLMap to represent disjoint-set data structure
--- Keys are node IDs
--- Values are a record containing nodeID, parentID, rank of parent
--- Need to make record an instance of Eq, based on nodeID
-
 -- | Minimum spanning forests in LVish
 
 module Data.LVar.Graph.MSF where
@@ -13,23 +8,6 @@ import qualified Data.LVar.SLMap as SLM
 import qualified Data.LVar.IStructure as IS
 import Data.Graph.Adjacency as Adj
 
--- Having the id inside NodeInfo is a hack to use inserts as "updates"
--- and to circumvent any multiple-puts errors
-
--- data NodeInfo = NI {id :: NodeID, parent :: NodeID, rank :: Int}
-
--- Defining this instance on the assumption that SLMap inserts on pre-existing
--- keys will raise a multiple put error unless the values are the same (==)
-
--- ASSUMPTION: inserting on an existing key with an == value will put this
--- "new" value against the key
-
--- instance Eq NodeInfo where
---     NI a _ _ == NI b _ _ = a == b
---     NI a _ _ /= NI b _ _ = a /= b
-
--- A NodeInfo is a 2-element array. First element is parentID, second element is rank
--- Taking advantage of the fact that: type of parentID = Adj.NodeID = Int = type of rank
 type NodeInfo s = IS.IStructure s Int
 
 parent :: NodeInfo s -> Par d s NodeID
