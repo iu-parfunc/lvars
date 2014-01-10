@@ -21,85 +21,59 @@ import qualified Data.LVar.MaxCounter as MC
 import Data.Par.Range (range)
 import Data.Par.Splittable (pforEach, pmapReduce_)
 
-
 --------------------------------------------------------------------------------
 
 data EdgeGraph = EdgeGraph
                  { edges :: (U.Vector (NodeID, NodeID))
                  , numVerts :: Int }
 
-
-msf_kruskal :: EdgeGraph -> Par QuasiDet s (IS.IStructure s ())
-msf_kruskal EdgeGraph{edges,numVerts} = do
-  -- reserves0 <- IS.newIStructure numEdges
-  reserves0 <- V.generateM numEdges MC.newMaxCounter -- TODO: could parallelize the alloc?
-  round0    <- IS.newIStructure numVerts
-  -- Everyone starts in their own singleton set:
-  pforEach (range 0 numVerts) $ \ ix -> IS.put round0 ix ix
-  round1    <- IS.newIStructure numVerts
-  loop reserves0 round0 round1
- where
-   numEdges = U.length edges
-   loop reserves lastRound nextRound = do
-
-     ------------------------------------- Reserve Phase --------------------
-     -- First the reserve phase, for each edge we lock the relevant vertices:
-     pforEach (range 0 numEdges) $ \ eid -> do
-       let (u,_v) = edges ! eid
-       uset <- IS.get lastRound u 
-       -- Attempt to reserve one endpoint using edge id as priority:
-       MC.put (reserves V.! uset) eid
-
-     ------------------------------------- Commit Phase ---------------------
-     pforEach (range 0 numEdges) $ \ eid -> do
-       let (u,v) = edges ! eid
-       uset <- IS.get lastRound u
-       winner <- MC.freezeMaxCounter (reserves V.! uset)
-       -- If we are the winner, we commit.
-       when (winner == eid) $ do
-         vset <- IS.get lastRound v
-         -- We link together 
-         let new = max uset vset
-         IS.put nextRound uset new
-         IS.put nextRound vset new
-       return ()
-       
-     -- -- After the loop is finished we can freeze reserves:
-     -- pforEach (range 0 numVerts) $ \ vid -> do
-     --   winner <- MC.freezeMaxCounter (reserves V.! vid)
-     --   -- Take the winning edge ID ...
-     --   undefined
-       
-     loop reserves lastRound nextRound
+data MsfState s = MsfState { lastSets :: !(V.Vector NodeID)
+                           , thisSets :: !(IS.IStructure s NodeID)
+                           , reserves :: !(V.Vector (MC.MaxCounter s))
+                           }
 
 msf3 :: EdgeGraph -> Par QuasiDet s (IS.IStructure s ())
 msf3 EdgeGraph{edges,numVerts} = do
   -- The state keeps track of which set each vertex is in.  Sets are represented by
   -- an elected leader ID from within the set, where the leader is always the minimum ID.
-  let state0 = V.generate numVerts id
-  state1 <- IS.newIStructure numVerts
-  output <- IS.newIStructure numEdges
+  let lastSets = V.generate numVerts id
+  thisSets <- IS.newIStructure numVerts
+  reserves <- newCounters
+  output   <- IS.newIStructure numEdges
   -- Everyone starts in their own singleton set:
-  -- pforEach (range 0 numVerts) $ \ ix -> IS.put state0 ix ix
-  forSpeculative (0,numEdges) (state0,state1) reserve (commit output) update
+  forSpeculative (0,numEdges) MsfState{lastSets,thisSets,reserves} reserve (commit output) update
   return output
   where
     numEdges = U.length edges
+    newCounters = V.generateM numEdges (\_ -> MC.newMaxCounter 0)
     
-    reserve ix st = do
-      return Nothing
+    reserve eid MsfState{lastSets,reserves} = do
+       let (u,_v) = edges ! eid
+           uset = lastSets V.! u
+       MC.put (reserves V.! uset) eid  -- Attempt a reservation.
+       return Nothing
       
-    commit finalOutput ix st (Just ()) = do
-      -- IS.put 
-      return ()
-      
-    update (_,newState) = do
-      is2 <- IS.newIStructure numEdges
+    commit finalOutput eid MsfState{lastSets,thisSets,reserves} () = do
+       let (u,v) = edges ! eid      
+           uset  = lastSets V.! u
+           vset  = lastSets V.! v
+       -- Freeze is ok here, because we're after the barrier between reserve/commit.
+       winner <- MC.freezeMaxCounter (reserves V.! uset)
+       when (winner == eid) $ do         
+         let new = min uset vset -- link them together..
+         IS.put thisSets uset $! new
+         IS.put thisSets vset $! new
+       return ()
+
+    -- Lots of allocation!:
+    update MsfState{lastSets,thisSets,reserves} = do
       -- Freeze the values we wrote in the commit phase.
-      vec <- IS.freezeIStructure newState
+      vec2 <- IS.freezeIStructure thisSets
+      is2  <- IS.newIStructure numEdges
+      counters <- newCounters
       let fn ix Nothing  = ix
           fn _ (Just id) = id
-      return (V.imap fn vec, is2)
+      return $! MsfState (V.imap fn vec2) is2 counters
 
 -- | Inefficient, out-of-place deterministic reservations.
 --      
