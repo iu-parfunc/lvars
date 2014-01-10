@@ -7,6 +7,10 @@ import Control.LVish
 import qualified Data.LVar.SLMap as SLM
 import qualified Data.LVar.IStructure as IS
 import Data.Graph.Adjacency as Adj
+import qualified Data.Vector.Unboxed as U
+
+--- A NodeInfo is a 2-element array. First element is parentID, second element is rank
+--- Taking advantage of the fact that: type of parentID = Adj.NodeID = Int = type of rank
 
 type NodeInfo s = IS.IStructure s Int
 
@@ -23,7 +27,10 @@ make_set nd = do
   ni <- IS.newIStructure 2
   IS.put ni 0 nd >> return ni
 
-union :: DisjointSet s -> NodeID -> NodeID -> Par d s (DisjointSet s)
+
+-- Implements "union by rank", where the rank approximates subtree size
+
+union :: DisjointSet s -> NodeID -> NodeID -> Par d s ()
 union ds x y = do
   [px,py] <- mapM (find_set ds) [x,y]
   rankPx <- SLM.getKey px ds >>= rank
@@ -34,7 +41,7 @@ union ds x y = do
   when (rankPx == rankPy) $ do
        SLM.modify ds py (make_set py) $ update_rank (rankPy + 1)
        return ()
-  return ds
+  return ()
                  
 
 -- Implements path compression
@@ -61,4 +68,25 @@ update_rank :: Int -> NodeInfo s -> Par d s (NodeInfo s)
 update_rank r info = do
   ni <- IS.newIStructure 2
   parent info >>= IS.put ni 0 >> IS.put ni 1 r >> return ni
-  
+
+
+-- Using EdgeGraph representation for this algorithm. Defining it here for now.
+
+data EdgeGraph = EdgeGraph (U.Vector (NodeID, NodeID))
+
+type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+
+-- Minimum spanning forest via Kruskal's algorithm
+
+msf_kruskal :: ParFor d s -> EdgeGraph -> Par d s (IS.IStructure s Bool)
+msf_kruskal parFor (EdgeGraph edges) = do
+  msf <- IS.newIStructure (U.length edges)
+  let maxV = U.foldl (\a (u,v) -> max a $ max u v) 0 edges
+      vids = [0..maxV]
+  infos <- mapM make_set vids
+  ds <- SLM.newFromList $ zip vids infos
+  parFor (0,U.length edges) $ \ ed -> do
+    let (u,v) = edges U.! (fromIntegral ed)
+    [uset, vset] <- mapM (find_set ds) [u,v]
+    when (uset /= vset) $ IS.put_ msf (fromIntegral ed) True >> union ds u v
+  return msf
