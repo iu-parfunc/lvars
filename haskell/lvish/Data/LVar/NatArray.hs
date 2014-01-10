@@ -122,8 +122,10 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 -- | /O(1)/ Freeze operation that directly returns a nice, usable, representation of
 -- the array data.
 freezeNatArray :: Storable a => NatArray s a -> LV.Par QuasiDet s (U.Vector a)
-freezeNatArray (NatArray lv) =
-  error "FINISHME"
+freezeNatArray (NatArray lv) = do
+--  freezeLV 
+--  U.unsafeFreeze (state lv))
+  error "FINISHME -- freezeNatArray "
   -- LI.liftIO $ U.unsafeFreeze (LI.state lv)
 
 --------------------------------------------------------------------------------

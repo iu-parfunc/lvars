@@ -111,7 +111,7 @@ forSpeculative (st,end) bodyfn = do
                    () leftover
   let flushLoop leftover =  do
         fails <- newEmptySet
-        -- FIXME:
+        -- FIXME: Add parallelism
         flush leftover fails -- Sequential...        
         snap <- unsafeDet $ freezeSet fails
         logDbgLn 3 $ " [dbg-lvish] forSpeculative: did one sequential flush, remaining: "++show snap
@@ -135,9 +135,10 @@ forSpeculative (st,end) bodyfn = do
         -- Here we keep the failed iterations "to the left" of the new batch, i.e. we
         -- fork them first.
         
-        -- FINISHME: need Split instance:
+        -- FINISHME: need Split instance.
         -- pforEach leftover $ bodyfn (RetryHub fails)
         logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures: "++show leftover
+        -- This version is poor because it forks on a per-iteration basis upon retry:
         F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails ix) ix)) () leftover
         -- TODO: if we keep failing it's better to expand the prefix.  That way we
         -- end up with a logarithmic number of retries for each iterate in the worst

@@ -22,7 +22,10 @@ module Data.LVar.IStructure
          put, put_, get, getLength,
 
          -- * Iteration and callbacks
-         forEachHP
+         forEachHP, 
+
+         -- * Freezing
+         freezeIStructure
          -- forEach,         
        ) where
 
@@ -140,9 +143,7 @@ newIStructureWithCallback len fn =
 -- | /O(N)/ complexity, unfortunately. This implementation of `IStructure`s requires
 -- freezing each of the individual IVars stored in the array.
 freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
-freezeIStructure (IStructure vec) = do
-  v <- V.mapM IV.freezeIVar vec
-  return v
+freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 
 {-# INLINE forEachHP #-}
 -- | Add an (asynchronous) callback that listens for all new elements added to
