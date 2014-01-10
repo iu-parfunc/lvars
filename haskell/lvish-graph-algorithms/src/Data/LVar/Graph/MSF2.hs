@@ -5,16 +5,18 @@
 module Data.LVar.Graph.MSF2 where
 
 import           Control.Monad
-import           Data.Vector.Unboxed as U hiding ((++)) 
+import           Data.Vector.Unboxed as U hiding ((++), update) 
 import qualified Data.Vector         as V
 import qualified Data.Set            as S
+import qualified Data.Foldable       as F
 import           Data.Maybe (fromJust)
 
 import           Control.LVish
-import           Control.LVish.Internal (unsafeDet)
+import           Control.LVish.Internal (unsafeDet, liftIO)
 import qualified Data.LVar.SLMap as SLM
 import qualified Data.LVar.IStructure as IS
 import           Data.Graph.Adjacency as Adj
+import           Data.LVar.PureSet as PS
 
 import qualified Data.LVar.MaxCounter as MC
 
@@ -32,6 +34,20 @@ data MsfState s = MsfState { lastSets :: !(V.Vector NodeID)
                            , reserves :: !(V.Vector (MC.MaxCounter s))
                            }
 
+main :: IO ()
+main = do
+  vec <- runParIO $ do
+           let fn 0 = (0,9)
+               fn i = (i,i-1)
+               edges = U.generate 10 fn
+           liftIO$ putStrLn $"Starting test with edges: "++show edges
+           logDbgLn 1 $"Starting test with edges: "++show edges
+           -- let is :: IS.IStructure s NodeID
+           --     is = undefined
+           is <- msf3 EdgeGraph{edges,numVerts=10}      
+           IS.freezeIStructure is
+  putStrLn $ "Final result: "++ show vec
+
 msf3 :: EdgeGraph -> Par QuasiDet s (IS.IStructure s ())
 msf3 EdgeGraph{edges,numVerts} = do
   -- The state keeps track of which set each vertex is in.  Sets are represented by
@@ -40,6 +56,7 @@ msf3 EdgeGraph{edges,numVerts} = do
   thisSets <- IS.newIStructure numVerts
   reserves <- newCounters
   output   <- IS.newIStructure numEdges
+  
   -- Everyone starts in their own singleton set:
   forSpeculative (0,numEdges) MsfState{lastSets,thisSets,reserves} reserve (commit output) update
   return output
@@ -48,10 +65,14 @@ msf3 EdgeGraph{edges,numVerts} = do
     newCounters = V.generateM numEdges (\_ -> MC.newMaxCounter 0)
     
     reserve eid MsfState{lastSets,reserves} = do
-       let (u,_v) = edges ! eid
+       let (u,v) = edges ! eid
            uset = lastSets V.! u
-       MC.put (reserves V.! uset) eid  -- Attempt a reservation.
-       return Nothing
+       if u == v
+         then return Nothing
+-- FIXME: must reserve the greater one:
+         else do logDbgLn 3 $ " [msf] bidding for reservation, "++show (uset,eid)
+                 MC.put (reserves V.! uset) eid  -- Attempt a reservation.
+                 return (Just ())
       
     commit finalOutput eid MsfState{lastSets,thisSets,reserves} () = do
        let (u,v) = edges ! eid      
@@ -59,20 +80,23 @@ msf3 EdgeGraph{edges,numVerts} = do
            vset  = lastSets V.! v
        -- Freeze is ok here, because we're after the barrier between reserve/commit.
        winner <- MC.freezeMaxCounter (reserves V.! uset)
-       when (winner == eid) $ do         
-         let new = min uset vset -- link them together..
-         IS.put thisSets uset $! new
-         IS.put thisSets vset $! new
+       logDbgLn 3 $ " [msf] Winner for "++show uset++" was "++show winner
+       when (winner == eid) $ do
+         logDbgLn 3 $ " [msf] WE are the winner, linking: "++show(uset,vset)         
+         IS.put finalOutput eid () -- Mark this edge as included in the final output.
+         let newId = min uset vset -- link them together..
+         IS.put thisSets uset $! newId
+         IS.put thisSets vset $! newId
        return ()
 
     -- Lots of allocation!:
-    update MsfState{lastSets,thisSets,reserves} = do
+    update MsfState{thisSets} = do
       -- Freeze the values we wrote in the commit phase.
       vec2 <- IS.freezeIStructure thisSets
       is2  <- IS.newIStructure numEdges
       counters <- newCounters
-      let fn ix Nothing  = ix
-          fn _ (Just id) = id
+      let fn ix Nothing   = ix
+          fn _ (Just nid) = nid
       return $! MsfState (V.imap fn vec2) is2 counters
 
 -- | Inefficient, out-of-place deterministic reservations.
@@ -81,7 +105,7 @@ msf3 EdgeGraph{edges,numVerts} = do
 --
 --   The update phase enables the creation of "single use" LVars that are frozen in
 --   either the reserve or commit rounds and reallocated in the next round.
-forSpeculative :: (Ord b) =>
+forSpeculative :: (Ord b, Show b) =>
                   (Int,Int)             -- ^ Start and end (inclusive/exclusive)
                 -> st                    -- ^ Initial state
                 -> (Int -> st -> Par d s (Maybe b)) -- ^ Reserve function
@@ -95,15 +119,34 @@ forSpeculative (st,en) state0 reserve commit update = do
    mainloop hp !round state leftover numberDone
     | numberDone == total = return ()
     | otherwise = do
+--     liftIO$ putStrLn $"msf3: inside forSpeculative"
+      
      let remain     = total - numberDone
          prefixSize = (min maxRound remain)
          prefixEnd  = numberDone + prefixSize
-     logDbgLn 3 $ " [dbg-lvish] forSpeculative starting round "++
-                  show round++": numDone "++show numberDone++", of "++show total
+     logDbgLn 2 $ " [forSpeculative] starting round "++
+                  show round++": numDone "++show numberDone++", of "++show total++", prefix "++show prefixSize
 
-     reserved <- IS.newIStructure prefixSize
+--     reserved     <- IS.newIStructure prefixSize
+     reserved     <- IS.newIStructure total -- FIXME: could be prefix size.
+     newLeftovers <- newEmptySet
 
-     -- TODO: fork a task for the leftovers...     
+     let doReserve ix = do
+           b <- reserve ix state
+           case b of 
+             Nothing  -> do logDbgLn 3 $ " [forSpeculative] reserve failed, iter "++show ix
+                            PS.insert ix newLeftovers
+             Just res -> do logDbgLn 3 $ " [forSpeculative] reserve SUCCEEDED, iter "++show ix
+                            IS.put_ reserved ix res
+     
+     -- TODO: do the leftovers in PARALLEL..
+     F.foldrM (\ ix () -> do
+                logDbgLn 3 $ " [forSpeculative] attempting reserve for leftover, iter "++show ix
+                doReserve ix) () leftover
+     pforEach (range numberDone prefixEnd)
+              (\ ix -> do logDbgLn 3 $ " [forSpeculative] attempting reserve, iter "++show ix
+                          doReserve ix)
+     leftover' <- unsafeDet$ freezeSet newLeftovers
 {-
      -- Would be nice to have a parallel generate for a BitVector here:
      winners <- pmapReduce_ (range numberDone prefixEnd)
@@ -113,31 +156,25 @@ forSpeculative (st,en) state0 reserve commit update = do
                      Just res -> return $! S.singleton (ix,res))
        (\ a b -> return $! S.union a b)
        S.empty
-     -- FIXME: need good splittable parallel map on sets:
+     -- FIXME: need good splittable parallel map on sets...
 -}
-     pforEach (range numberDone prefixEnd) $ \ ix -> do 
-        b <- reserve ix state
-        case b of 
-          Nothing  -> return () -- FIXME: Failed iterates need to be collected for later.
-          Just res -> IS.put_ reserved ix res
      reserved' <- unsafeDet $ IS.freezeIStructure reserved
 --     quiesce hp
-     logDbgLn 3 $ " [dbg-lvish] forSpeculative finished reserve phase, round "++show round
+     logDbgLn 5 $ " [forSpeculative] finished reserve phase, round "
+                  ++show round++", new leftovers: "++show leftover'++" reserves: "++show reserved'
      
      pforEach (range numberDone prefixEnd) $ \ ix -> do
+       logDbgLn 3 $ " [forSpeculative] checking if we should do commit: "++show ix
        case reserved' V.! ix of
          Nothing  -> return ()
-         Just val -> commit ix state val
-
+         Just val -> do logDbgLn 3 $ " [forSpeculative] doing commit, iter "++show ix
+                        commit ix state val
 --     quiesce hp
-     logDbgLn 3 $ " [dbg-lvish] forSpeculative finished commit phase, round "++show round
-     state' <- update state
-     logDbgLn 3 $ " [dbg-lvish] forSpeculative finished update phase, round "++show round     
-
-     let leftover'   = undefined
-         numberDone' = undefined
+     logDbgLn 3 $ " [forSpeculative] finished commit phase, round "++show round
+     state' <- update state     
+     logDbgLn 3 $ " [forSpeculative] finished update phase, round "++show round
+     let numberDone' = prefixEnd - S.size leftover'
      mainloop hp (round+1) state' leftover' numberDone'
-     error "FINSHME"
    
    total = en - st
    maxRound = max 1 (total `quot` granularity)
