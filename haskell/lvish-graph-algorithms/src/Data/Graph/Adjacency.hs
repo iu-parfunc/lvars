@@ -33,7 +33,7 @@ module Data.Graph.Adjacency
          t0,t1,t2,t3,t3B,t4,t5,
          unitTests,
 
-         main -- TEMP
+         -- main -- TEMP
        ) where 
 
 import Control.Monad   (foldM)
