@@ -37,6 +37,7 @@ executable lvish-graph-benchmarks
                        containers >=0.5,
                        fgl >= 5.4, deepseq >= 1.3,
                        lvish >=1.0, par-collections >= 1.0, 
-                       HUnit, bytestring-mmap >= 0.2, bytestring >= 0.10
+                       HUnit, bytestring-mmap >= 0.2, bytestring >= 0.10, 
+                       rdtsc, split
 --                       pbbs-haskell, monad-par-extras >=0.3
   default-language:    Haskell2010

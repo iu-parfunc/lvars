@@ -8,7 +8,7 @@ import Data.LVar.Graph.MIS
 
 -- Benchmark utils:
 -- import PBBS.FileReader
--- import PBBS.Timing (wait_clocks, runAndReport)
+import Data.PBBS.Timing (wait_clocks, runAndReport)
 -- calibrate, measureFreq, commaint,
 
 import Control.LVish
@@ -177,7 +177,7 @@ main = do
                        par4 = bfs_async_arr2 gr 0
                    _ <- runParIO_ par4
                    return ()
-{-
+
       ----------------------------------------
       "misN1" -> do 
               putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
@@ -225,7 +225,7 @@ main = do
               evaluate $ maximalIndependentSet3 gr
               return ()
 
-
+{-
       ----------------------------------------
       "bfsN_misI" -> do 
               putStrLn " ! Version 10: BFS and then MIS w/ NatArrays/IStructure"
