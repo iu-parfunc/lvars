@@ -45,6 +45,7 @@ import Control.LVish as LV
 import Control.LVish.Internal (liftIO)
 import qualified Data.LVar.IVar as I
 import qualified Data.Par.Range as R
+import qualified Data.Par.Splittable as Sp
 
 import Data.Word
 import Data.Char (isSpace)
@@ -52,7 +53,7 @@ import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
-import qualified Data.ByteString as S
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Unsafe (unsafeTail, unsafeHead)
 import Data.Time.Clock
@@ -180,13 +181,13 @@ testReadNumFile path = do
 -- Be warned that this function is very permissive -- all non-digit characters are
 -- treated as separators.
 parReadNats :: forall nty d s . (U.Unbox nty, Num nty, Eq nty) =>
-               Int -> S.ByteString -> Par d s [PartialNums nty]
+               Int -> BS.ByteString -> Par d s [PartialNums nty]
 parReadNats chunks bs = par
   where
-    (each,left) = S.length bs `quotRem` chunks
+    (each,left) = BS.length bs `quotRem` chunks
     mapper ind = do
       let howmany = each + if ind==chunks-1 then left else 0
-          mychunk = S.take howmany $ S.drop (ind * each) bs
+          mychunk = BS.take howmany $ BS.drop (ind * each) bs
  --              liftIO $ putStrLn$ "(monad-par/tree) Launching chunk of "++show howmany
       partial <- liftIO (readNatsPartial mychunk) -- TODO: move to ST.
       return [partial]
@@ -196,7 +197,8 @@ parReadNats chunks bs = par
     par = do _ <- I.new
              -- parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
              --                      mapper reducer []              
-             R.parMapReduceThresh 1 (R.range 0 chunks)
+             -- R.parMapReduceThresh 1
+             Sp.pmapReduce (R.range 0 chunks)
                 mapper reducer [] 
 
 --------------------------------------------------------------------------------                          
@@ -273,24 +275,24 @@ sewEnds origls = loop Nothing origls
 -- Efficient sequential parsing
 --------------------------------------------------------------------------------
 
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word] #-}
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word8] #-}  
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word16] #-}
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word32] #-}
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Word64] #-}
--- {-# SPECIALIZE readNatsPartial :: S.ByteString -> IO [PartialNums Int] #-}
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Word] #-}
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Word8] #-}  
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Word16] #-}
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Word32] #-}
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Word64] #-}
+-- {-# SPECIALIZE readNatsPartial :: BS.ByteString -> IO [PartialNums Int] #-}
 -- | Sequentially reads all the unsigned decimal (ASCII) numbers within a a
 -- bytestring, which is typically a slice of a larger bytestring.  Extra complexity
 -- is needed to deal with the cases where numbers are cut off at the boundaries.
--- readNatsPartial :: S.ByteString -> IO [PartialNums Word]
-readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => S.ByteString -> IO (PartialNums nty)
+-- readNatsPartial :: BS.ByteString -> IO [PartialNums Word]
+readNatsPartial :: forall nty . (U.Unbox nty, Num nty, Eq nty) => BS.ByteString -> IO (PartialNums nty)
 readNatsPartial bs
- | bs == S.empty = return (Single (MiddleFrag 0 0))
+ | bs == BS.empty = return (Single (MiddleFrag 0 0))
  | otherwise = do   
-  let hd         = S.head bs
-      charsTotal = S.length bs
+  let hd         = BS.head bs
+      charsTotal = BS.length bs
   initV <- M.new (vecSize charsTotal)
-  (vs,lfrg) <- scanfwd charsTotal 0 initV [] hd (S.tail bs)
+  (vs,lfrg) <- scanfwd charsTotal 0 initV [] hd (BS.tail bs)
   -- putStrLn$ " Got back "++show(length vs)++" partial reads"
   
   -- Once we are done looping we need some logic to figure out the corner cases:
@@ -300,7 +302,7 @@ readNatsPartial bs
     (let first = U.head $ head vs -- The first (possibly partial) number parsed.
          rest  = U.tail (head vs) : tail vs
          -- If we start in the middle of a number, then the RightFrag goes till the first whitespace:
-         rfrag = Just (RightFrag (fromJust$ S.findIndex (not . digit) bs) first) in
+         rfrag = Just (RightFrag (fromJust$ BS.findIndex (not . digit) bs) first) in
      if total == 0 
      then case lfrg of
            Nothing           -> return (Compound rfrag [] Nothing)
@@ -313,7 +315,7 @@ readNatsPartial bs
    -- vecSize n = min chunkSize ((n `quot` 2) + 1) -- At minimum numbers must be one character.
    vecSize n = ((n `quot` 4) + 1) -- Assume at least 3 digit numbers... tunable parameter.
    
-   -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> S.ByteString ->
+   -- loop :: Int -> Int -> nty -> M.IOVector nty -> Word8 -> BS.ByteString ->
    --         IO (M.IOVector nty, Maybe (LeftFrag nty), Int)
    loop !lmt !ind !acc !vec !vecacc !nxt !rst
      -- Extend the currently accumulating number in 'acc':
@@ -327,7 +329,7 @@ readNatsPartial bs
      | ind >= M.length vec = do
          -- putStrLn$ " [!] Overflow at "++show ind++", next chunk!"
          -- putStr$ show ind ++ " "
-         fresh <- M.new (vecSize$ S.length rst) :: IO (M.IOVector nty)
+         fresh <- M.new (vecSize$ BS.length rst) :: IO (M.IOVector nty)
          vec'  <- U.unsafeFreeze vec
          loop lmt 0 acc fresh (vec':vecacc) nxt rst
 
@@ -359,19 +361,19 @@ readNatsPartial bs
 unitTests :: [Test]
 unitTests =
   [ TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] Nothing) =<<
-              readNatsPartial (S.take 4 "123 4")
+              readNatsPartial (BS.take 4 "123 4")
   , TestCase$ assertEqual "t1" (Compound (Just (RightFrag 3 (123::Word))) [U.fromList []] (Just (LeftFrag 4))) =<<
-              readNatsPartial (S.take 5 "123 4")
+              readNatsPartial (BS.take 5 "123 4")
   , TestCase$ assertEqual "t3" (Single (MiddleFrag 3 (123::Word))) =<<
-              readNatsPartial (S.take 3 "123")
+              readNatsPartial (BS.take 3 "123")
   , TestCase$ assertEqual "t4" (Single (MiddleFrag 2 (12::Word))) =<<
-              readNatsPartial (S.take 2 "123")
+              readNatsPartial (BS.take 2 "123")
   , TestCase$ assertEqual "t5" (Compound Nothing [] (Just (LeftFrag (12::Word32)))) =<<
-              readNatsPartial (S.take 3 " 123")
+              readNatsPartial (BS.take 3 " 123")
 
   , TestCase$ assertEqual "t6"
               (Compound (Just (RightFrag 3 23)) [U.fromList [456]] (Just (LeftFrag (78::Word64)))) =<<
-              readNatsPartial (S.take 10 "023 456 789")
+              readNatsPartial (BS.take 10 "023 456 789")
   ]
 
 -- Simple graphs:
@@ -422,7 +424,7 @@ t3 = do bs <- unsafeMMapFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgri
 t3B :: IO [PartialNums Word]
 t3B = do putStrLn "Sequential version + readFile"
          t0_ <- getCurrentTime
-         bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+         bs <- BS.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
          t1_ <- getCurrentTime
          putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1_ t0_)
          pn <- readNatsPartial bs
@@ -433,7 +435,7 @@ t3B = do putStrLn "Sequential version + readFile"
 t4 :: IO [PartialNums Word]
 t4 = do putStrLn$ "Using parReadNats + readFile"
         t0_ <- getCurrentTime
-        bs <- S.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
+        bs <- BS.readFile "../../pbbs/breadthFirstSearch/graphData/data/3Dgrid_J_10000000"
         t1_ <- getCurrentTime
         putStrLn$ "Time to read file sequentially: "++show (diffUTCTime t1_ t0_)
         pns <- runParIO $ parReadNats 4 bs
