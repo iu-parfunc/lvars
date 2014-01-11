@@ -21,6 +21,7 @@ import Data.LVar.NatArray.Unsafe (NatArray, unsafePeek)
 
 import Data.Par.Splittable (pforEach)
 import Data.Par.Range (range)
+import Data.Par.Set () -- Instances only.
 
 import qualified Data.Foldable as F
 import qualified Data.Set as S
@@ -136,11 +137,12 @@ forSpeculative (st,end) bodyfn = do
         -- fork them first.
         
         -- FINISHME: need Split instance.
-        -- pforEach leftover $ bodyfn (RetryHub fails)
         logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures: "++show leftover
         -- This version is poor because it forks on a per-iteration basis upon retry:
         -- F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails ix) ix)) () leftover
-        F.foldrM (\ ix () -> body' (RetryHub fails ix) ix) () leftover
+        -- F.foldrM (\ ix () -> body' (RetryHub fails ix) ix) () leftover
+        -- pforEach leftover $ bodyfn (RetryHub fails)
+        asyncForEachHP (Just hp) leftover $ \ ix -> bodyfn (RetryHub fails ix) ix
         
         -- TODO: if we keep failing it's better to expand the prefix.  That way we
         -- end up with a logarithmic number of retries for each iterate in the worst
