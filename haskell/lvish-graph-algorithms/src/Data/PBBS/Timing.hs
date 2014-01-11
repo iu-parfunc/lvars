@@ -92,6 +92,7 @@ calibrate = do
 
 ------------------------------------------------------------------------------------------
 
+{-# NOINLINE first_hit #-}
 #ifdef FIRSTHIT_RDTSC
 first_hit :: IORef Word64
 first_hit = unsafePerformIO$ newIORef maxBound
