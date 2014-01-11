@@ -139,7 +139,9 @@ forSpeculative (st,end) bodyfn = do
         -- pforEach leftover $ bodyfn (RetryHub fails)
         logDbgLn 4 $ " [dbg-lvish] forSpeculative RElaunching failures: "++show leftover
         -- This version is poor because it forks on a per-iteration basis upon retry:
-        F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails ix) ix)) () leftover
+        -- F.foldrM (\ ix () -> forkHP (Just hp) (body' (RetryHub fails ix) ix)) () leftover
+        F.foldrM (\ ix () -> body' (RetryHub fails ix) ix) () leftover
+        
         -- TODO: if we keep failing it's better to expand the prefix.  That way we
         -- end up with a logarithmic number of retries for each iterate in the worst
         -- case, rather than linear (making the whole loop unnecessarily quadratic).
