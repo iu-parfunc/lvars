@@ -225,10 +225,17 @@ main = do
               evaluate $ maximalIndependentSet3 gr
               return ()
 
+      ----------------------------------------
+      "misBR" -> do
+              putStrLn " ! Version 10: MIS only, BulkRetry"
+              let par :: Par d0 s0 (NatArray s0 Word8)
+                  par = maximalIndependentSetBR gr
+              _ <- runParIO_ par
+              return ()
 {-
       ----------------------------------------
       "bfsN_misI" -> do 
-              putStrLn " ! Version 10: BFS and then MIS w/ NatArrays/IStructure"
+              putStrLn " ! Version 11: BFS and then MIS w/ NatArrays/IStructure"
               let par :: Par d0 s0 (IStructure s0 Word8)
                   par = do natarr <- bfs_async_arr2 gr 0
                            maximalIndependentSet4 gr natarr
@@ -237,7 +244,7 @@ main = do
 
       ----------------------------------------
       "bfsN_misI_deg" -> do 
-              putStrLn " ! Version 11: BFS, MIS, and maxDegree"
+              putStrLn " ! Version 12: BFS, MIS, and maxDegree"
               let par :: Par d0 s0 (MaxCounter s0)
                   par = do natarr <- bfs_async_arr2 gr 0
                            narr2 <- maximalIndependentSet4 gr natarr
@@ -248,7 +255,7 @@ main = do
 
       ----------------------------------------
       "bfsN_work" -> do
-              putStrLn " ! Version 12: BFS and per-vertex work"
+              putStrLn " ! Version 13: BFS and per-vertex work"
               let par :: Par d0 s0 ()
                   par = do natarr <- bfs_async_arr2 gr 0
                            workEachNode amountWork natarr
@@ -257,7 +264,7 @@ main = do
 
       ----------------------------------------
       "bfsN_barrier_work" -> do
-              putStrLn " ! Version 13: BFS, barrier, and per-vertex work"
+              putStrLn " ! Version 14: BFS, barrier, and per-vertex work"
               let -- par :: Par d0 s0 ()
                   par = bfs_async_arr2 gr 0
               NatArraySnap vec <- runParThenFreezeIO par
@@ -267,7 +274,7 @@ main = do
 
       ----------------------------------------
       "misI_work" -> do
-              putStrLn " ! Version 14: MIS and per-vertex work"
+              putStrLn " ! Version 15: MIS and per-vertex work"
               let par :: Par d0 s0 ()
                   par = do istrct <- maximalIndependentSet2 parForL gr
                            workEachNodeI amountWork istrct
@@ -276,7 +283,7 @@ main = do
 
       ----------------------------------------
       "misI_barrier_work" -> do
-              putStrLn " ! Version 15: "
+              putStrLn " ! Version 16: "
               let -- par :: Par d0 s0 ()
                   par = maximalIndependentSet2 parForL gr 
               IStructSnap vec <- runParThenFreezeIO par
@@ -285,7 +292,7 @@ main = do
 
       ----------------------------------------
       "bfsN_misI_work" -> do
-              putStrLn " ! Version 16: "
+              putStrLn " ! Version 17: "
               let par :: Par d0 s0 ()
                   par = do natarr <- bfs_async_arr2 gr 0
                            istrct <- maximalIndependentSet4 gr natarr
@@ -295,7 +302,7 @@ main = do
 
       ----------------------------------------
       "bfsN_barrier_misI_work" -> do
-              putStrLn " ! Version 17: "
+              putStrLn " ! Version 18: "
               let par = bfs_async_arr2 gr 0
               NatArraySnap vec <- runParThenFreezeIO par
               let vec2 = maximalIndependentSet3B gr vec -- Sequential

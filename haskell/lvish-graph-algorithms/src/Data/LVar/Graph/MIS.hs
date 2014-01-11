@@ -14,6 +14,7 @@ module Data.LVar.Graph.MIS where
 
 import Control.LVish
 import Control.Monad
+import Control.LVish.BulkRetry
 import Data.Word
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
@@ -218,4 +219,43 @@ maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
   NArr.forEach vertSubset $ \ ndIx _ -> 
         let nds = nbrs gr (fromIntegral ndIx) in
         loop (U.length nds) nds ndIx  0
+  return flagsArr
+
+
+---------------------------------------------------------------------------------------------------------------
+-- MIS using BulkRetry
+---------------------------------------------------------------------------------------------------------------
+
+maximalIndependentSetBR :: AdjacencyGraph -> Par d s (NatArray s Word8) -- Operate on a whole graph.
+maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
+  -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
+  let numVerts = U.length vvec
+  flagsArr :: NatArray s Word8 <- newNatArray numVerts
+  let       
+      -- Here's the loop that scans through the neighbors of a node.
+      loop retryhub !numNbrs !nbrs !selfInd !i 
+        | i == numNbrs = thisNodeWins
+        | otherwise = do
+          -- logDbgLn 3$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
+              selfInd' = fromIntegral selfInd
+          -- If we got to the end of the neighbors below us, then we are NOT disqualified:
+          if nbrInd > selfInd
+            then thisNodeWins
+            else do
+              -- This should never block in a single-thread execution:
+              logDbgLn 3 (" [MIS] ! Getting on nbrInd "++show nbrInd)
+              getNB_cps retryhub flagsArr (fromIntegral nbrInd) $
+                 \ nbrFlag -> do
+                        logDbgLn 3 (" [MIS] ! Get completed on nbrInd "++show nbrInd)
+                        if nbrFlag == flag_CHOSEN
+                          then NArr.put flagsArr selfInd' flag_NBRCHOSEN
+                          else loop retryhub numNbrs nbrs selfInd (i+1)
+        where
+          thisNodeWins = logDbgLn 3 (" [MIS] ! Node chosen: "++show selfInd) >> 
+                         NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
+  forSpeculative (0,numVerts) $ \ retryhub ndIx -> do 
+      let nds = nbrs gr (fromIntegral ndIx)
+      -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      loop retryhub (U.length nds) nds ndIx  0
   return flagsArr
