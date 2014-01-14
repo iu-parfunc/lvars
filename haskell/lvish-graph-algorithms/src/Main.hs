@@ -226,12 +226,14 @@ main = do
               return ()
 
       ----------------------------------------
+#ifdef NEW_CONTAINERS
       "misBR" -> do
               putStrLn " ! Version 10: MIS only, BulkRetry"
               let par :: Par d0 s0 (NatArray s0 Word8)
                   par = maximalIndependentSetBR gr
               _ <- runParIO_ par
               return ()
+#endif
 {-
       ----------------------------------------
       "bfsN_misI" -> do 

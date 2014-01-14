@@ -14,7 +14,6 @@ module Data.LVar.Graph.MIS where
 
 import Control.LVish
 import Control.Monad
-import Control.LVish.BulkRetry
 import Data.Word
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as M
@@ -22,6 +21,10 @@ import qualified Data.Vector.Storable as UV
 import qualified Data.Vector.Storable.Mutable as MV
 
 import Data.Graph.Adjacency
+
+#ifdef NEW_CONTAINERS
+import Control.LVish.BulkRetry
+#endif
 
 -- define DEBUG_CHECKS
 
@@ -226,6 +229,8 @@ maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
 -- MIS using BulkRetry
 ---------------------------------------------------------------------------------------------------------------
 
+#ifdef NEW_CONTAINERS
+
 maximalIndependentSetBR :: AdjacencyGraph -> Par d s (NatArray s Word8) -- Operate on a whole graph.
 maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
@@ -259,3 +264,5 @@ maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
       -- logDbgLn 3$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop retryhub (U.length nds) nds ndIx  0
   return flagsArr
+#endif
+
