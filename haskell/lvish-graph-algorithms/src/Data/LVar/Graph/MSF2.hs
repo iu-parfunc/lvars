@@ -16,7 +16,8 @@ import           Control.LVish.Internal (unsafeDet, liftIO)
 import qualified Data.LVar.SLMap as SLM
 import qualified Data.LVar.IStructure as IS
 import           Data.Graph.Adjacency as Adj
-import           Data.LVar.PureSet as PS
+-- import           Data.LVar.PureSet as PS
+import           Data.LVar.SLSet as PS
 
 import qualified Data.LVar.MaxCounter as MC
 
@@ -65,7 +66,8 @@ msf3 EdgeGraph{edges,numVerts} = do
     newCounters = V.generateM numEdges (\_ -> MC.newMaxCounter 0)
     
     reserve eid MsfState{lastSets,reserves} = do
-       let (u,v) = edges ! eid
+       let (a,b) = edges ! eid
+           (u,v) = if a>b then (b,a) else (a,b)
            uset = lastSets V.! u
        if u == v
          then return Nothing
@@ -107,7 +109,7 @@ msf3 EdgeGraph{edges,numVerts} = do
 --   either the reserve or commit rounds and reallocated in the next round.
 forSpeculative :: (Ord b, Show b) =>
                   (Int,Int)             -- ^ Start and end (inclusive/exclusive)
-                -> st                    -- ^ Initial state
+                -> st                   -- ^ Initial state
                 -> (Int -> st -> Par d s (Maybe b)) -- ^ Reserve function
                 -> (Int -> st -> b -> Par d s ())   -- ^ Commit function
                 -> (st -> Par d s st)    -- ^ State update function after each round of commits.

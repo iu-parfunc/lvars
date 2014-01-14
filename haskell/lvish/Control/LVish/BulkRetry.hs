@@ -25,7 +25,9 @@ import Data.Par.Set () -- Instances only.
 
 import qualified Data.Foldable as F
 import qualified Data.Set as S
-import           Data.LVar.PureSet as IS
+-- import           Data.LVar.PureSet as IS
+import           Data.LVar.SLSet as IS
+import           Data.LVar.Generic (freeze)
 
 -- import Data.Par.Range
 
@@ -114,7 +116,7 @@ forSpeculative (st,end) bodyfn = do
         fails <- newEmptySet
         -- FIXME: Add parallelism
         flush leftover fails -- Sequential...        
-        snap <- unsafeDet $ freezeSet fails
+        snap <- unsafeDet $ freeze fails
         logDbgLn 3 $ " [dbg-lvish] forSpeculative: did one sequential flush, remaining: "++show snap
         unless (S.null snap) $
           -- error$ "forSpeculative: failures not flushed with a sequential run!:\n "++show snap
@@ -154,7 +156,7 @@ forSpeculative (st,end) bodyfn = do
         logDbgLn 4 $ " [dbg-lvish] forSpeculative: return from par for-loop; now quiesce."
         quiesce hp
         logDbgLn 4 $ " [dbg-lvish] forSpeculative: quiesce finished, next freeze failed set."
-        snap <- unsafeDet $ freezeSet fails
+        snap <- unsafeDet $ freeze fails
         logDbgLn 4 $ " [dbg-lvish] forSpeculative finish round; failed iterates: "++show snap
         loop (round+1) snap chunkend (remain - (chunkend - offset))
   loop 0 S.empty 0 sz       

@@ -60,6 +60,10 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
 
+flag newcontainers
+  description: Use a pre-release version of containers to enable splitting.
+  default: False
+
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
@@ -121,6 +125,9 @@ library
                       Data.LVar.MaxCounter
                       Data.LVar.AddRemoveSet
                       Data.LVar.PNCounter
+
+  if flag(beta) && flag(newcontainers)
+    exposed-modules: 
                       Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
@@ -143,7 +150,6 @@ library
   -- Other library packages from which modules are imported.
   build-depends: base    >= 4.6 && <= 4.8, 
                  deepseq >= 1.3, 
-                 containers >= 0.5.3.2, 
                  lattices   >= 1.2, 
                  vector >=0.10,
                  atomic-primops >= 0.4, 
@@ -153,6 +159,8 @@ library
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
+  if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
+   else { build-depends: containers >= 0.5 }
   if flag(generic)
     cpp-options: -DGENERIC_PAR
     build-depends: par-classes     >= 1.0 && < 2.0,
