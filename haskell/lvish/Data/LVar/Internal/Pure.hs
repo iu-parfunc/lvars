@@ -101,7 +101,7 @@ verifyFiniteGet allStates (bot,top) getter =
 
 
 -- | A new pure LVar populated with the provided initial state.
-newPureLVar :: BoundedJoinSemiLattice t =>
+newPureLVar :: JoinSemiLattice t =>
                t -> Par d s (PureLVar s t)
 newPureLVar st = WrapPar$ fmap (PureLVar . WrapLVar) $
                  LI.newLV $ newIORef st
