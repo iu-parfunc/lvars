@@ -11,7 +11,7 @@ import Test.Framework (Test, defaultMain, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
-import           TestHelpers as T
+import           TestHelpers2 as T
 
 import qualified Data.Set as S
 

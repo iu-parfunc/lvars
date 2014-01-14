@@ -47,7 +47,7 @@ import qualified Control.LVish.Internal as I
 import           Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import qualified Control.LVish.SchedIdempotent as L
 
-import           TestHelpers as T
+import           TestHelpers2 as T
 
 --------------------------------------------------------------------------------
 
@@ -60,6 +60,10 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 --------------------------------------------------------------------------------
+
+-- | This stress test does nothing but run runPar again and again.
+case_runParStress :: HU.Assertion
+case_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 
 -- Disabling thread-variation due to below bug:
 
