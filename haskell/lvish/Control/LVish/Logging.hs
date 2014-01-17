@@ -67,18 +67,13 @@ data Logger = Logger { coordinator :: A.Async () -- ThreadId
                      , checkPoint :: SmplChan Writer -- ^ The serialized queue of writers attempting to log dbg messages.
                      , closeIt :: IO () -- ^ (public) A method to complete flushing, close down the helper thread,
                                         -- and generally wrap up.
-                     , outDests :: [OutDest] -- ^ Where to send output.  If empty, messages dropped entirely.
+                     , loutDests :: [OutDest] -- ^ Where to send output.  If empty, messages dropped entirely.
                      , logged   :: IORef [String] -- ^ (private) In-memory buffer of messages, if OutputInMemory is selected.
                                                   -- This is stored in reverse-temporal order during execution.
                      , flushLogs :: IO [String] -- ^ Clear buffered log messages and return in the order they occurred.
                      , waitWorkers :: WaitMode
                      }
 
--- | A destination ofr log messages
-data OutDest = -- NoOutput -- ^ Drop them entirely.
-               OutputEvents    -- ^ Output via GHC's `traceEvent` runtime events.
-             | OutputTo Handle -- ^ Printed human-readable output to a handle.
-             | OutputInMemory  -- ^ Accumulate output in memory and flush when appropriate.
 
 -- | A single thread attempting to log a message.  It only unblocks when the attached
 -- MVar is filled.
@@ -151,7 +146,7 @@ newLogger :: (Int,Int) -- ^ What inclusive range of messages do we accept?  Defa
           -> [OutDest]
           -> WaitMode
           -> IO Logger
-newLogger (minLvl, maxLvl) outDests waitWorkers = do
+newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   logged      <- newIORef []  
   checkPoint  <- newSmplChan
   parent      <- myThreadId
@@ -175,7 +170,7 @@ newLogger (minLvl, maxLvl) outDests waitWorkers = do
         -- This needs to be atomic because other messages might be calling "flush"
         -- at the same time.
         atomicModifyIORef' logged $ \ ls -> (str:ls,())
-      printAll str = mapM_ (printOne str) outDests
+      printAll str = mapM_ (printOne str) loutDests
 
   shutdownFlag     <- newIORef False -- When true, time to shutdown.
   shutdownComplete <- newEmptyMVar
@@ -287,7 +282,7 @@ newLogger (minLvl, maxLvl) outDests waitWorkers = do
         atomicModifyIORef' shutdownFlag (\_ -> (True,()))
         readMVar shutdownComplete
         A.cancel coordinator -- Just to make sure its completely done.
-  return $! Logger { coordinator, checkPoint, closeIt, outDests,
+  return $! Logger { coordinator, checkPoint, closeIt, loutDests,
                      logged, flushLogs,
                      waitWorkers, minLvl, maxLvl }
 

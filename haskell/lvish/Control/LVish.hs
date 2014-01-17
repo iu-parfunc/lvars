@@ -65,33 +65,33 @@ module Control.LVish
     fork,
     yield, 
     runPar, runParIO,
---    runParIO_, runParLogged,
---    quiesceAll,    
-    
-    -- * Various loop constructs
-    asyncForEachHP,
-    parForL, parForSimple, parForTree, parForTiled, for_,
+    --    runParIO_, runParLogged,
+    --    quiesceAll,    
 
-    -- * Logical control flow operators
-    module Control.LVish.Logical,
-    -- asyncAnd, asyncOr, andMap, orMap,
-    
-    -- * Synchronizing with handler pools
-    L.HandlerPool(),    
-    newPool, 
-    withNewPool, withNewPool_, 
-    quiesce, 
-    
-    forkHP,
+     -- * Various loop constructs
+     asyncForEachHP,
+     parForL, parForSimple, parForTree, parForTiled, for_,
 
-    -- * Reexport IVar operations for a full, standard "Par Monad" API
-    module Data.LVar.IVar,
-    
-    -- * Debug facilities and internal bits
-    logDbgLn, runParLogged, runParDetailed,
-    OutDest(..),
-    LVar()
-  ) where
+     -- * Logical control flow operators
+     module Control.LVish.Logical,
+     -- asyncAnd, asyncOr, andMap, orMap,
+
+     -- * Synchronizing with handler pools
+     L.HandlerPool(),    
+     newPool, 
+     withNewPool, withNewPool_, 
+     quiesce, 
+
+     forkHP,
+
+     -- * Reexport IVar operations for a full, standard "Par Monad" API
+     module Data.LVar.IVar,
+
+     -- * Debug facilities and internal bits
+     logDbgLn, runParLogged, runParDetailed,
+     OutDest(..), DbgCfg (..),
+     LVar()
+   ) where
 
 -- NOTE : This is an aggregation module:
 import           Control.LVish.Types

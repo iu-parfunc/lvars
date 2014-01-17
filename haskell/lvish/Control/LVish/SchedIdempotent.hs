@@ -570,6 +570,7 @@ sched q = do
 instance NFData (LVar a d) where
   rnf _ = ()
 
+
 -- | A variant with full control over the relevant knobs.
 --   
 --   Returns a list of flushed debug messages at the end (if in-memory logging was
@@ -579,15 +580,11 @@ instance NFData (LVar a d) where
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
 --   
-runParDetailed :: (Maybe(Int,Int)) -- ^ What range (inclusive) of debug messages to accept
-                                   --   (filter on priority level), Nothing is default level.
-               -> [L.OutDest]      -- ^ Destinations for debug log messages.
-               -> Bool             -- ^ In additional to logging debug messages, control
-                                   --   thread interleaving at these points when this is True.
-               -> Int              -- ^ How many worker threads to use. 
-               -> Par a            -- ^ The computation to run.
+runParDetailed :: DbgCfg  -- ^ Debugging config
+               -> Int           -- ^ How many worker threads to use. 
+               -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
-runParDetailed bounds outDests debugScheduling numWrkrs comp = do
+runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   queues <- Sched.new numWrkrs noName
   
   -- We create a thread on each CPU with forkOn.  The CPU on which
@@ -605,14 +602,14 @@ runParDetailed bounds outDests debugScheduling numWrkrs comp = do
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
-          then Sched.initLogger queues ls (minLvl,maxLvl) outDests debugScheduling
+          then Sched.initLogger queues ls (minLvl,maxLvl) dbgDests dbgScheduling
           else do Conc.yield
                   setLogger
-      (minLvl, maxLvl) = case bounds of
+      (minLvl, maxLvl) = case dbgRange of
                            Just b  -> b
                            Nothing -> (0,dbgLvl)
--- Option 1: forkWithExceptions version:
-----------------------------------------------------------------------------------                           
+  -- Option 1: forkWithExceptions version:
+  ----------------------------------------------------------------------------------                           
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
@@ -689,7 +686,11 @@ runParDetailed bounds outDests debugScheduling numWrkrs comp = do
 
 defaultRun :: Par b -> IO b
 defaultRun = fmap (fromRight . snd) .
-             runParDetailed (Just (0,dbgLvl)) [L.OutputTo stderr, L.OutputEvents] False numCapabilities
+             runParDetailed cfg numCapabilities
+  where
+   cfg = DbgCfg { dbgRange = Just (0,dbgLvl)
+                , dbgDests = [L.OutputTo stderr, L.OutputEvents]
+                , dbgScheduling  = False }
 
 -- | Run a deterministic parallel computation as pure.
 runPar :: Par a -> a
@@ -704,7 +705,11 @@ runParIO = defaultRun
 -- final result.  This is like `runParDetailed` but uses the default settings.
 runParLogged :: Par a -> IO ([String],a)
 runParLogged comp = do 
-  (logs,ans) <- runParDetailed (Just (0,dbgLvl)) [L.OutputEvents, L.OutputInMemory] False numCapabilities comp
+  (logs,ans) <- runParDetailed 
+                   DbgCfg { dbgRange = (Just (0,dbgLvl))
+                          , dbgDests = [L.OutputEvents, L.OutputInMemory]
+                          , dbgScheduling = False }  
+                   numCapabilities comp
   return $! (logs,fromRight ans)
 
 -- | Convert from a Maybe back to an exception.

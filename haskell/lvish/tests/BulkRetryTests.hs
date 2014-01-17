@@ -40,7 +40,7 @@ runTests = defaultMainSeqTests [tests]
 --------------------------------------------------------------------------------
 
 case_br_v1 = do
-  (logs,Right res) <- runParDetailed Nothing [L.OutputTo stderr] False numCapabilities v1
+  (logs,Right res) <- runParDetailed (DbgCfg Nothing [L.OutputTo stderr] False) numCapabilities v1
   assertEqual "simple par for loop" [100,101,102,103,104] res
 
 -- | In the blocking version we should only execute each iteration once, and thus see
@@ -67,7 +67,7 @@ v1 = do
   return [a,b,c,d,e]
 
 case_br_v2 = do
-  (logs,res) <- runParDetailed Nothing [L.OutputTo stderr] False numCapabilities v2
+  (logs,res) <- runParDetailed (DbgCfg Nothing [L.OutputTo stderr] False) numCapabilities v2
   case res of
     Left e -> throw e
     Right x -> assertEqual "simple forSpeculative" [100,101,102,103,104] x

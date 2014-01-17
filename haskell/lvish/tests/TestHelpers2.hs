@@ -16,7 +16,7 @@ import Control.Concurrent (threadDelay)
 import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import Control.LVish (runParDetailed, Par, OutDest(..))
+import Control.LVish (runParDetailed, Par, OutDest(..), DbgCfg(..))
 import Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ stressTest :: Show a =>
            -> IO ()
 stressTest 0 _workers _comp _oracle = return ()
 stressTest reps workers comp oracle = do 
-  (logs,res) <- runParDetailed (Just(4,10)) [OutputInMemory, OutputEvents] True workers comp
+  (logs,res) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] True) workers comp
   let failit s = do threadDelay (500 * 1000)
                     hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
                     hPutStrLn stderr "-----------------------------------"

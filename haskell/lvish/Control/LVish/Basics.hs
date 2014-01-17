@@ -140,13 +140,11 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
 --   
-runParDetailed :: (Maybe(Int,Int))  -- ^ What range (inclusive) of debug messages to accept (filter on priority level).
-               -> [Lg.OutDest]      -- ^ Destinations for debug log messages.
-               -> Bool              -- ^ Debug scheduler interleavings.
-               -> Int               -- ^ How many worker threads to use. 
+runParDetailed :: DbgCfg        -- ^ Debugging configuration
+               -> Int           -- ^ How many worker threads to use. 
                -> (forall s . Par d s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)
-runParDetailed mb od ds nw (WrapPar p) = L.runParDetailed mb od ds nw p
+runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,
