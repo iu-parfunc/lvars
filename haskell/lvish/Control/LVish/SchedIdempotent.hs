@@ -600,8 +600,8 @@ runParDetailed bounds outDests debugScheduling numWrkrs comp = do
   -- Debugging: spin the main thread (not beginning work) until we can fully
   -- initialize the logging data structure.
   --
-  -- TODO: This would be easier to deal with if we used the current thread as the
-  -- main worker thread...
+  -- TODO: This would be easier to deal with if we used the current thread directly
+  -- as the main worker thread...
   let setLogger = do
         ls <- readIORef wrkrtids
         if length ls == numWrkrs
@@ -611,6 +611,8 @@ runParDetailed bounds outDests debugScheduling numWrkrs comp = do
       (minLvl, maxLvl) = case bounds of
                            Just b  -> b
                            Nothing -> (0,dbgLvl)
+-- Option 1: forkWithExceptions version:
+----------------------------------------------------------------------------------                           
 #if 1
   let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
@@ -651,8 +653,8 @@ runParDetailed bounds outDests debugScheduling numWrkrs comp = do
                            L.flushLogs lgr -- If in-memory logging is off, this will be empty.
   return $! (logs,ans)
 #else
-  -- This was an experiment to use Control.Concurrent.Async to deal with exceptions:
-  ----------------------------------------------------------------------------------
+-- Option 2: This was an experiment to use Control.Concurrent.Async to deal with exceptions:
+----------------------------------------------------------------------------------
   let runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
            then sched q
@@ -743,5 +745,24 @@ hpId_ (HandlerPool cnt bag) = do
   return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
            " transient cnt "++show c
 
+-- | For debugging purposes.  This can help us figure out (by an ugly
+--   process of elimination) which MVar reads are leading to a "Thread
+--   blocked indefinitely" exception.
+{-
+busyTakeMVar :: String -> MVar a -> IO a
+busyTakeMVar msg mv = try (10 * 1000 * 1000)
+ where
+ try 0 = do
+   when dbg $ do
+     tid <- myThreadId
+     -- After we've failed enough times, start complaining:
+     printf "%s not getting anywhere, msg: %s\n" (show tid) msg
+   try (100 * 1000)
+ try n = do
+   x <- tryTakeMVar mv
+   case x of
+     Just y  -> return y
+     Nothing -> do yield; try (n-1)
+-}
 
 
