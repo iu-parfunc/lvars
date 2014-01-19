@@ -31,6 +31,8 @@ data Determinism = Det | QuasiDet
 newtype Par :: EffectsSig -> * -> * -> * where
   WrapPar :: Double -> Par d s a
 instance Monad (Par efs s) where
+  (>>=) = undefined
+  return = undefined
 
 data IVar s a = IVar 
 data LVar s a = LVar 
@@ -55,8 +57,8 @@ data Bumping  = B | NB
 
 -- Experimental... these won't work:
 #if 0
-type ReadOnly  = (forall f b . Ef NP g f b )
-type DoesWrite = (forall f b . Ef P  g f b )
+type ReadOnly  = (forall f b . Ef NP p g f b )
+type DoesWrite = (forall f b . Ef P  p g f b )
 -- How do we do an OR:
 -- type Deterministic = (forall b . E NP F b )
 --                    | (forall b . E P NF b )
@@ -97,10 +99,12 @@ runTillDeadlock = undefined
 --    -> DeadlockT (Par e s1) b)
 --   -> Par e s (Maybe b)
 
+-- We can perform put or freeze operation to the world outside a `runTillDeadlock`,
+-- but we cannot do blocking reads.
 runTillDeadlockWithWrites :: 
   (forall s1 .
-   (DeadlockT (Par (Ef p g f b) s2) a -> DeadlockT (Par (Ef p f b) s1) a) -- ^ Lifter function.
-   -> DeadlockT (Par (Ef p f b) s1) res)
+   (DeadlockT (Par (Ef p NG f b) s2) a -> DeadlockT (Par (Ef p g f b) s1) a) -- ^ Lifter function.
+   -> DeadlockT (Par (Ef p g f b) s1) res)
   -> Par e s (Maybe res)
 
 runTillDeadlockWithWrites = undefined
@@ -139,18 +143,18 @@ test2 = do iv <- new
 -- Instances:
 
 class NoPut (e :: EffectsSig) where
-instance NoPut (Ef NP f b)
+instance NoPut (Ef NP g f b)
 
 class HasPut (e :: EffectsSig) where
-instance HasPut (Ef P f b)
+instance HasPut (Ef P g f b)
 
 class NoFreeze (e :: EffectsSig) where
 
 class NoGet (e :: EffectsSig) where
   
 class IsDet (e :: EffectsSig) where 
-instance IsDet (Ef p NF b) where 
-instance IsDet (Ef NP f b) where
+instance IsDet (Ef p g NF b) where 
+instance IsDet (Ef NP g f b) where
 
 
 {-
