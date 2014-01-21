@@ -10,7 +10,10 @@
 -- {-# LANGUAGE ImpredicativeTypes #-}
 
 import Control.Monad
-import Control.Applicative
+import Control.Applicative 
+-- import qualified Data.LVar.PureMap as M
+
+import Control.Monad.Trans.Class
 
 --------------------------------------------------------------------------------
 -- Approach 0:
@@ -38,6 +41,11 @@ data IVar s a = IVar
 data LVar s a = LVar 
 data CancelT   (p:: * -> *) a   = CancelT
 data DeadlockT (p:: * -> *) a = DeadlockT
+
+instance Monad m => Monad (CancelT m) where
+instance Monad m => Monad (DeadlockT m) where
+
+instance MonadTrans DeadlockT where
 
 -- type EffectsSig = (Putting, Freezing, Bumping)
 -- data EffectsSig (a::Putting) (b::Freezing) (c::Bumping) -- = EffectsSig -- a b c
@@ -102,16 +110,40 @@ runTillDeadlock = undefined
 -- We can perform put or freeze operation to the world outside a `runTillDeadlock`,
 -- but we cannot do blocking reads.
 runTillDeadlockWithWrites :: 
-  (forall s1 .
-   (DeadlockT (Par (Ef p NG f b) s2) a -> DeadlockT (Par (Ef p g f b) s1) a) -- ^ Lifter function.
-   -> DeadlockT (Par (Ef p g f b) s1) res)
-  -> Par e s (Maybe res)
+  (forall s2 .
+   (DeadlockT (Par (Ef p NG f b) s1) a -> 
+    DeadlockT (Par e1 s2) a) -- ^ Lifter function.
+   -> DeadlockT (Par e1 s2) res)
+  -> Par e1 s1 (Maybe res)
+  -- (forall s2 .
+  --  (DeadlockT (Par (Ef p NG f b) s1) a -> 
+  --   DeadlockT (Par (Ef p  g f b) s2) a) -- ^ Lifter function.
+  --  -> DeadlockT (Par (Ef p g f b) s2) res)
+  -- -> Par e s1 (Maybe res)
 
 runTillDeadlockWithWrites = undefined
 
-t :: NoGet e => Par e s1 (Maybe Int)
-t = runTillDeadlockWithWrites $ \ lifter -> 
-     (lifter undefined)
+data IMap k s v = IMap
+
+newEmptyMap :: Par e s (IMap k s v)
+newEmptyMap = undefined
+
+insert :: (Ord k, Eq v) =>
+          k -> v -> IMap k s v -> Par (Ef P g f b) s () 
+insert = undefined
+
+getKey :: Ord k => k -> IMap k s v -> Par (Ef p G f b) s v
+getKey = undefined
+
+-- t :: NoGet e => Par e s1 (Maybe Int)
+t :: Par e s1 (Maybe Int)
+t = do 
+  mp <- newEmptyMap
+  runTillDeadlockWithWrites $ \ lifter -> do
+     lifter $ do lift$ insert "hi" "there" mp
+                 lift$ getKey "hi" mp
+                 return ()
+     return 3
 
 --------------------
 -- Inferred type:
