@@ -11,21 +11,11 @@
 
 import Control.Monad
 import Control.Applicative 
--- import qualified Data.LVar.PureMap as M
-
 import Control.Monad.Trans.Class
 
---------------------------------------------------------------------------------
--- Approach 0:
-
--- Ugly cartesian product:
-
--- data EffectsSig = Put | Put_Freeze | Freeze
---              | Put_Bump | Freeze_Bump
---   deriving Show
+-- APPROACH: Attempt to hide type-level products 
 
 --------------------------------------------------------------------------------
--- Approach 1:
 
 data Determinism = Det | QuasiDet 
   deriving Show
