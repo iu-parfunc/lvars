@@ -1,4 +1,9 @@
--- Hash included into other file
+{-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
+    GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
+    ConstraintKinds, FlexibleContexts  #-}
+-- PolyKinds, ImpredicativeTypes
+module Common where
+import Control.Monad.Trans.Class
 
 --------------------------------------------------------------------------------
 -- Dummy definitions:

@@ -1,23 +1,15 @@
-{-# LANGUAGE DataKinds, CPP #-}  -- For Determinism
-{-# LANGUAGE KindSignatures #-}  -- For Determinism
-{-# LANGUAGE GADTs #-}  -- For Determinism
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
--- {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
--- {-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
+    GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
+    ConstraintKinds, FlexibleContexts  #-}
+
+-- APPROACH: Expose type level products explicitly in all methods.
+
+module Ver2_RawProds where
 
 import Control.Monad
 import Control.Applicative 
 import Control.Monad.Trans.Class
-
--- APPROACH: Expose type level products explicitly in all methods.
-
-#include "common.hs"
+import Common
 
 --------------------------------------------------------------------------------
 -- Core ops:

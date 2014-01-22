@@ -1,25 +1,18 @@
-{-# LANGUAGE DataKinds #-}  -- For Determinism
-{-# LANGUAGE KindSignatures #-}  -- For Determinism
-{-# LANGUAGE GADTs #-}  -- For Determinism
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
--- {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ConstraintKinds, FlexibleContexts #-}
--- {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
+    GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
+    ConstraintKinds, FlexibleContexts  #-}
+-- PolyKinds, ImpredicativeTypes
+
+module Ver1_wClasses where
 
 import Control.Monad
 import Control.Applicative 
 import Control.Monad.Trans.Class
+import Common
 
 -- APPROACH: Attempt to hide type-level products behind "Has" constraints.
 
 --------------------------------------------------------------------------------
-
-#include "common.hs"
 
 {-
 data Determinism = Det | QuasiDet 
