@@ -112,15 +112,11 @@ runTillDeadlock = undefined
 -- but we cannot do blocking reads.
 runTillDeadlockWithWrites :: 
   (forall s2 .
-   (DeadlockT (Par (Ef p NG f b) s1) a -> 
+   -- Question: does IO count as blocking?  Eh... yeah.
+   (DeadlockT (Par (Ef p NG f b NI) s1) a -> 
     DeadlockT (Par e1 s2) a) -- ^ Lifter function.
    -> DeadlockT (Par e1 s2) res)
   -> Par e1 s1 (Maybe res)
-  -- (forall s2 .
-  --  (DeadlockT (Par (Ef p NG f b) s1) a -> 
-  --   DeadlockT (Par (Ef p  g f b) s2) a) -- ^ Lifter function.
-  --  -> DeadlockT (Par (Ef p g f b) s2) res)
-  -- -> Par e s1 (Maybe res)
 
 runTillDeadlockWithWrites = undefined
 
@@ -130,10 +126,10 @@ newEmptyMap :: Par e s (IMap k s v)
 newEmptyMap = undefined
 
 insert :: (Ord k, Eq v) =>
-          k -> v -> IMap k s v -> Par (Ef P g f b) s () 
+          k -> v -> IMap k s v -> Par (Ef P g f b i) s () 
 insert = undefined
 
-getKey :: Ord k => k -> IMap k s v -> Par (Ef p G f b) s v
+getKey :: Ord k => k -> IMap k s v -> Par (Ef p G f b i) s v
 getKey = undefined
 
 -- t :: NoGet e => Par e s1 (Maybe Int)
@@ -160,7 +156,7 @@ t = do
     --   Actual type: Par ('Ef 'P f0 b0) s ()
 ----------------------------
 -- Correct signature:
-test :: IVar s String -> Par (Ef P G f b) s String
+test :: IVar s String -> Par (Ef P G f b i) s String
 -- test :: IVar s String -> Par DoesWrite s String
 test iv = do put iv "hi"
              get iv
@@ -172,16 +168,16 @@ test2 = do iv <- new
 
 test3 :: String
 -- test3 = runPar test2
-test3 = runPar (test2 :: Par (Ef P G NF NB) s String)
+test3 = runPar (test2 :: Par (Ef P G NF NB NI) s String)
 
 ------------------------------------------------------------
 -- Instances:
 
 class HasGet (e :: EffectsSig) where
-instance HasGet (Ef p G f b)
+instance HasGet (Ef p G f b i)
 
 class HasPut (e :: EffectsSig) where
-instance HasPut (Ef P g f b)
+instance HasPut (Ef P g f b i)
 
 type HasPutM m = (HasPut (GetEffects m))
 type HasGetM m = (HasGet (GetEffects m))
@@ -194,23 +190,23 @@ type ReadOnlyM m  = (NoPutM m, NoBumpM m, NoFreezeM m)
 type ReadOnly e  = (NoPut e, NoBump e, NoFreeze e)
 
 class NoPut (e :: EffectsSig) where
-instance NoPut (Ef NP g f b)
+instance NoPut (Ef NP g f b i)
 
 class NoFreeze (e :: EffectsSig) where
-instance NoFreeze (Ef p g NF b)
+instance NoFreeze (Ef p g NF b i)
 
-instance NoBump (Ef p g NF b)
+instance NoBump (Ef p g NF b i)
 
 class NoGet (e :: EffectsSig) where
-instance NoBump (Ef p NG f b)
+instance NoBump (Ef p NG f b i)
 
 class NoBump (e :: EffectsSig) where
-instance NoBump (Ef p g f NB)
+instance NoBump (Ef p g f NB i)
 
 -- | This is tricky because its an OR
 class IsDet (e :: EffectsSig) where 
-instance IsDet (Ef p g NF b) where 
-instance IsDet (Ef NP g f b) where
+instance IsDet (Ef p g NF b NI) where 
+instance IsDet (Ef NP g f b NI) where
 
 
 {-
@@ -291,5 +287,6 @@ instance DoesPut xs => DoesPut (hd ': xs) where
 #endif
 
 
+main :: IO ()
 main = putStrLn "hi"
 

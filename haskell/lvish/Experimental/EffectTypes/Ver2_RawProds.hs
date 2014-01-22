@@ -18,7 +18,7 @@ import Common
 put :: HasPut e => IVar s a -> a -> Par e s ()
 put = undefined
 
-get :: IVar s a -> Par (Ef p G f b) s a
+get :: IVar s a -> Par (Ef p G f b i) s a
 get = undefined
 
 freeze :: HasFreeze e => IVar s a -> Par e s (Maybe a)
@@ -47,7 +47,7 @@ cancel = undefined
 --------------------------------------------------------------------------------
 data Memo (e :: EffectsSig) s a b = Memo
 
-getMemo :: (Ord k, Eq v, e ~ Ef P G f b) =>
+getMemo :: (Ord k, Eq v, e ~ Ef P G f b i) =>
            Memo e s k v  -> a -> Par e s v
 getMemo = undefined
 
@@ -57,23 +57,23 @@ makeMemo :: (Ord a, Eq b) =>
 makeMemo = undefined
 
 getMemoRO :: (Ord a, Eq b) =>
-  Memo (Ef NP g NF NB) s a b -> a ->
-  Par  (Ef p  G f  b_) s b 
+  Memo (Ef NP g NF NB NI) s a b -> a ->
+  Par  (Ef p  G f  b_ i) s b 
 getMemoRO = undefined
 
 --------------------------------------------------------------------------------
 -- Async and and typechecking
 
-asyncAnd' :: (GetEffects m1 ~ Ef NP g NF NB,
-              m2 ~ SetEffects (Ef p G f b) m1,
+asyncAnd' :: (GetEffects m1 ~ Ef NP g NF NB NI,
+              m2 ~ SetEffects (Ef p G f b i) m1,
               LVarMonad m1, LVarMonad m2) =>
   CancelT m1 Bool -> CancelT m1 Bool -> CancelT m2 Bool
 asyncAnd' = undefined  
 
-type ROMemo g s a b = Memo (Ef NP g NF NB) s a b
+type ROMemo g s a b = Memo (Ef NP g NF NB NI) s a b
 
 subtype :: ROMemo g s (Type,Type) Bool -> Type -> Type -> 
-             CancelT (Par (Ef p G f b) s) Bool
+             CancelT (Par (Ef p G f b i) s) Bool
 subtype mem s t = 
   case (s,t) of
     (Pair s1 s2, Pair t1 t2) -> 
@@ -113,13 +113,13 @@ newEmptyMap :: Par e s (IMap k s v)
 newEmptyMap = undefined
 
 insert :: (Ord k , Eq v) =>
-          k -> v -> IMap k s v -> Par (Ef P g f b) s () 
+          k -> v -> IMap k s v -> Par (Ef P g f b i) s () 
 insert = undefined
 
-getKey :: Ord k => k -> IMap k s v -> Par (Ef p G f b) s v
+getKey :: Ord k => k -> IMap k s v -> Par (Ef p G f b i) s v
 getKey = undefined
 
-t :: Par (Ef P g f b) s1 (Maybe Int)
+t :: Par (Ef P g f b i) s1 (Maybe Int)
 t = do 
   mp <- newEmptyMap
   insert "hmm" "ok" mp -- Without this I get a perverse and strange error:
@@ -130,7 +130,7 @@ t = do
         return 3
 
 
-test :: IVar s String -> Par (Ef P G f b) s String
+test :: IVar s String -> Par (Ef P G f b i) s String
 test iv = do put iv "hi"
              get iv
 
@@ -139,7 +139,7 @@ test2 = do iv <- new
            put iv "hi"
            freeze iv
 
-test3 :: Par (Ef P G f b) s String
+test3 :: Par (Ef P G f b i) s String
 test3 = do iv <- new
            put iv "hi"
            get iv
@@ -162,6 +162,7 @@ type NoFreeze e = (NF ~ GetF e)
 
 --------------------------------------------------------------------------------
 
+main :: IO ()
 main = putStrLn "hi"
 
 

@@ -62,35 +62,42 @@ type family SetEffects (e::EffectsSig) (m :: (* -> *)) :: (* -> *)
 type instance SetEffects e2 (Par e1 s) = Par e2 s
 type instance SetEffects e (CancelT m)   = CancelT   (SetEffects e m)
 type instance SetEffects e (DeadlockT m) = DeadlockT (SetEffects e m)
-data EffectsSig  = Ef Putting Getting Freezing Bumping
+data EffectsSig  = Ef Putting Getting Freezing Bumping IOing
 data Putting  = P | NP
 data Getting  = G | NG
 data Freezing = F | NF
 data Bumping  = B | NB
+data IOing    = I | NI
 
 type family GetP (e :: EffectsSig) :: Putting
-type instance GetP (Ef p g f b) = p
+type instance GetP (Ef p g f b i) = p
 
 type family GetB (e :: EffectsSig) :: Bumping
-type instance GetB (Ef p g f b) = b
+type instance GetB (Ef p g f b i) = b
 
 type family GetF (e :: EffectsSig) :: Freezing
-type instance GetF (Ef p g f b) = f
+type instance GetF (Ef p g f b i) = f
 
 type family GetG (e :: EffectsSig) :: Getting
-type instance GetG (Ef p g f b) = g
+type instance GetG (Ef p g f b i) = g
+
+type family GetI (e :: EffectsSig) :: IOing
+type instance GetI (Ef p g f b i) = i
 
 type family SetP (p :: Putting) (e :: EffectsSig) :: EffectsSig
-type instance SetP p2 (Ef p1 g f b) = (Ef p2 g f b)
+type instance SetP p2 (Ef p1 g f b i) = (Ef p2 g f b i)
 
 type family SetG (p :: Getting) (e :: EffectsSig) :: EffectsSig
-type instance SetG g2 (Ef p g f b) = (Ef p g2 f b)
+type instance SetG g2 (Ef p g f b i) = (Ef p g2 f b i)
 
 type family SetF (p :: Freezing) (e :: EffectsSig) :: EffectsSig
-type instance SetF f2 (Ef p g f b) = (Ef p g f2 b)
+type instance SetF f2 (Ef p g f b i) = (Ef p g f2 b i)
 
 type family SetB (b :: Bumping) (e :: EffectsSig) :: EffectsSig
-type instance SetB b2 (Ef p g f b) = (Ef p g f b2)
+type instance SetB b2 (Ef p g f b i) = (Ef p g f b2 i)
+
+type family SetI (b :: IOing) (e :: EffectsSig) :: EffectsSig
+type instance SetI i2 (Ef p g f b i) = (Ef p g f b i2)
 
 ----------------------------------------
 -- Same thing but lifted to work over monads:
@@ -99,6 +106,14 @@ type instance SetB b2 (Ef p g f b) = (Ef p g f b2)
 type family SetMP (p :: Putting) (m :: * -> *) :: (* -> *)
 type instance SetMP p m = SetEffects (SetP p (GetEffects m)) m
 
-type family SetMG (p :: Getting) (m :: * -> *) :: (* -> *)
+type family SetMG (g :: Getting) (m :: * -> *) :: (* -> *)
 type instance SetMG g m = SetEffects (SetG g (GetEffects m)) m
 
+type family SetMF (f :: Freezing) (m :: * -> *) :: (* -> *)
+type instance SetMF f m = SetEffects (SetF f (GetEffects m)) m
+
+type family SetMB (b :: Bumping) (m :: * -> *) :: (* -> *)
+type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
+
+type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
+type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
