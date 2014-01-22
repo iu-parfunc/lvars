@@ -6,17 +6,22 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 -- {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds, FlexibleContexts #-}
 -- {-# LANGUAGE ImpredicativeTypes #-}
 
 import Control.Monad
 import Control.Applicative 
 import Control.Monad.Trans.Class
 
--- APPROACH: Attempt to hide type-level products 
+-- APPROACH: Attempt to hide type-level products behind "Has" constraints.
 
 --------------------------------------------------------------------------------
 
+#include "common.hs"
+
+{-
 data Determinism = Det | QuasiDet 
   deriving Show
 
@@ -37,8 +42,29 @@ instance Monad m => Monad (DeadlockT m) where
 
 instance MonadTrans DeadlockT where
 
--- type EffectsSig = (Putting, Freezing, Bumping)
--- data EffectsSig (a::Putting) (b::Freezing) (c::Bumping) -- = EffectsSig -- a b c
+--------------------------------------------------------------------------------
+-- Effect sigs and their extraction:
+--------------------------------------------------------------------------------
+
+type family GetEffects (m :: (* -> *)) :: EffectsSig
+type instance GetEffects (Par e s) = e
+type instance GetEffects (CancelT m) = GetEffects m
+type instance GetEffects (DeadlockT m) = GetEffects m
+
+type family GetSession (m :: (* -> *)) :: *
+type instance GetSession (Par e s) = s
+type instance GetSession (CancelT m)   = GetSession m
+type instance GetSession (DeadlockT m) = GetSession m
+
+type family SetSession (s :: *) (m :: (* -> *)) :: (* -> *)
+type instance SetSession s2 (Par e s) = Par e s2
+type instance SetSession e (CancelT m)   = CancelT   (SetSession e m)
+type instance SetSession e (DeadlockT m) = DeadlockT (SetSession e m)
+
+type family SetEffects (e::EffectsSig) (m :: (* -> *)) :: (* -> *)
+type instance SetEffects e2 (Par e1 s) = Par e2 s
+type instance SetEffects e (CancelT m)   = CancelT   (SetEffects e m)
+type instance SetEffects e (DeadlockT m) = DeadlockT (SetEffects e m)
 
 data EffectsSig  = Ef Putting Getting Freezing Bumping
 data Putting  = P | NP
@@ -47,44 +73,36 @@ data Freezing = F | NF
 data Bumping  = B | NB
 -- data IOing  = YesIO   | NoIO
 
--- x :: IsDet d => Par d s Int
--- x = undefined   
+-}
 
--- class IsDet (d :: Determinism) where
--- instance IsDet Det where
 
--- Experimental... these won't work:
-#if 0
-type ReadOnly  = (forall f b . Ef NP p g f b )
-type DoesWrite = (forall f b . Ef P  p g f b )
--- How do we do an OR:
--- type Deterministic = (forall b . E NP F b )
---                    | (forall b . E P NF b )
-#endif
 
--- put :: DoesPut d => IVar s a -> a -> Par d s ()
--- put :: IVar s a -> a -> Par (Ef P f b) s ()
 put :: HasPut e => IVar s a -> a -> Par e s ()
 put = undefined
 
-get :: IVar s a -> Par e s a
+get :: HasGet e => IVar s a -> Par e s a
 get = undefined
 
 new :: Par e s (IVar s a)
 new = undefined
 
--- runCancelT :: ParMonad m => CancelT m a -> m a
--- runCancelT :: CancelT (Par e s) a -> Par e s a
-runCancelT :: (NoPut e, NoFreeze e) => CancelT (Par e s) a -> Par e s a
+--------------------------------------------------------------------------------
+-- Cancelation
+--------------------------------------------------------------------------------
+
+-- runCancelT :: (NoPut e, NoFreeze e) => CancelT (Par e s) a -> Par e s a
+runCancelT :: (NoPutM m) => CancelT m a -> m a
 runCancelT = undefined
 
--- runParRO :: (forall s . Par ReadOnly s a) -> a
--- runParRO :: NoPut e => (forall s . Par e s a) -> a
--- runParRO :: (forall s . Par (Ef NP f b) s a) -> a
+forkCancelable :: (LVarMonad m, ReadOnlyM m) =>
+                   CancelT m () -> CancelT m TID
+forkCancelable = undefined
+
 runParRO :: NoPut e => (forall s . Par e s a) -> a
 runParRO = undefined
 
-runPar :: IsDet e => (forall s . Par e s a) -> a
+-- runPar :: IsDet e => (forall s . Par e s a) -> a
+runPar :: NoFreeze e => (forall s . Par e s a) -> a
 runPar = undefined
 
 runTillDeadlock :: (forall s . DeadlockT (Par e s) a) -> Par e s (Maybe a)
@@ -131,7 +149,7 @@ t = do
   mp <- newEmptyMap
   runTillDeadlockWithWrites $ \ lifter -> do
      lifter $ do lift$ insert "hi" "there" mp
-                 lift$ getKey "hi" mp
+                 -- lift$ getKey "hi" mp
                  return ()
      return 3
 
@@ -149,31 +167,54 @@ t = do
     --   Actual type: Par ('Ef 'P f0 b0) s ()
 ----------------------------
 -- Correct signature:
--- test :: IVar s String -> Par (Ef P f b) s String
+test :: IVar s String -> Par (Ef P G f b) s String
 -- test :: IVar s String -> Par DoesWrite s String
--- test :: HasPut e => IVar s String -> Par e s String
 test iv = do put iv "hi"
              get iv
 
-test2 :: HasPut e => Par e s String
+test2 :: (HasPut e, HasGet e) => Par e s String
 test2 = do iv <- new
            put iv "hi"
            get iv
 
+test3 :: String
+-- test3 = runPar test2
+test3 = runPar (test2 :: Par (Ef P G NF NB) s String)
 
 ------------------------------------------------------------
 -- Instances:
 
-class NoPut (e :: EffectsSig) where
-instance NoPut (Ef NP g f b)
+class HasGet (e :: EffectsSig) where
+instance HasGet (Ef p G f b)
 
 class HasPut (e :: EffectsSig) where
 instance HasPut (Ef P g f b)
 
+type HasPutM m = (HasPut (GetEffects m))
+type HasGetM m = (HasGet (GetEffects m))
+
+type NoPutM m    = (NoPut    (GetEffects m))
+type NoFreezeM m = (NoFreeze (GetEffects m))
+type NoBumpM m   = (NoBump   (GetEffects m))
+
+type ReadOnlyM m  = (NoPutM m, NoBumpM m, NoFreezeM m)
+type ReadOnly e  = (NoPut e, NoBump e, NoFreeze e)
+
+class NoPut (e :: EffectsSig) where
+instance NoPut (Ef NP g f b)
+
 class NoFreeze (e :: EffectsSig) where
+instance NoFreeze (Ef p g NF b)
+
+instance NoBump (Ef p g NF b)
 
 class NoGet (e :: EffectsSig) where
-  
+instance NoBump (Ef p NG f b)
+
+class NoBump (e :: EffectsSig) where
+instance NoBump (Ef p g f NB)
+
+-- | This is tricky because its an OR
 class IsDet (e :: EffectsSig) where 
 instance IsDet (Ef p g NF b) where 
 instance IsDet (Ef NP g f b) where
