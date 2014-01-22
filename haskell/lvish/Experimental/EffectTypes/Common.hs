@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
     GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
     ConstraintKinds, FlexibleContexts  #-}
+{-# LANGUAGE UndecidableInstances #-}    
+
 -- PolyKinds, ImpredicativeTypes
 module Common where
 import Control.Monad.Trans.Class
@@ -77,4 +79,26 @@ type instance GetF (Ef p g f b) = f
 
 type family GetG (e :: EffectsSig) :: Getting
 type instance GetG (Ef p g f b) = g
+
+type family SetP (p :: Putting) (e :: EffectsSig) :: EffectsSig
+type instance SetP p2 (Ef p1 g f b) = (Ef p2 g f b)
+
+type family SetG (p :: Getting) (e :: EffectsSig) :: EffectsSig
+type instance SetG g2 (Ef p g f b) = (Ef p g2 f b)
+
+type family SetF (p :: Freezing) (e :: EffectsSig) :: EffectsSig
+type instance SetF f2 (Ef p g f b) = (Ef p g f2 b)
+
+type family SetB (b :: Bumping) (e :: EffectsSig) :: EffectsSig
+type instance SetB b2 (Ef p g f b) = (Ef p g f b2)
+
+----------------------------------------
+-- Same thing but lifted to work over monads:
+
+-- Undecidable instances:
+type family SetMP (p :: Putting) (m :: * -> *) :: (* -> *)
+type instance SetMP p m = SetEffects (SetP p (GetEffects m)) m
+
+type family SetMG (p :: Getting) (m :: * -> *) :: (* -> *)
+type instance SetMG g m = SetEffects (SetG g (GetEffects m)) m
 

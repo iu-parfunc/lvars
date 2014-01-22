@@ -35,7 +35,7 @@ new = undefined
 runCancelT :: LVarMonad m => CancelT m a -> m a
 runCancelT = undefined
 
-forkCancelable :: (ParMonad m, ReadOnly3 m ) =>
+forkCancelable :: (LVarMonad m, ReadOnlyM m ) =>
                    CancelT m () -> CancelT m TID
 forkCancelable = undefined
 
@@ -98,14 +98,12 @@ runDeadlockT = undefined
 -- We can perform put or freeze operation to the world outside a `runTillDeadlock`,
 -- but we cannot do blocking reads.
 runTillDeadlockTWW :: forall mOut mNoGet m2 p g f b res . 
-   (GetEffects mOut ~ (Ef p g f b),         
-    mNoGet ~ (SetEffects (Ef p NG f b) mOut), 
-    LVarMonad mOut, LVarMonad mNoGet) => 
-   (forall s2 mFresh . (LVarMonad mFresh, mFresh ~ (SetSession s2 mOut)) =>
-          (forall a . mNoGet a -> DeadlockT mFresh a)
-          -> DeadlockT mFresh res) ->
-   -- TODO: could erase the gets on the way out, since none will escape:
-   mOut (Maybe res)
+   (mNoGet ~ SetMG NG mOut,
+   LVarMonad mOut, LVarMonad mNoGet) => 
+  (forall s2 mFresh . (LVarMonad mFresh, mFresh ~ (SetSession s2 mOut)) =>
+         (forall a . mNoGet a -> DeadlockT mFresh a)
+         -> DeadlockT mFresh res) ->
+  mOut (Maybe res)
 
 runTillDeadlockTWW = undefined
 
@@ -153,13 +151,10 @@ _ = runPar test3
 
 ------------------------------------------------------------
 
-type ReadOnly m g = (GetEffects m ~ Ef NP g NF NB)
-type ReadOnly2 m = (forall g . GetEffects m ~ Ef NP g NF NB) -- TESTING
-
-type ReadOnly3 m = (GetP (GetEffects m) ~ NP ,
+type ReadOnlyM m = (GetP (GetEffects m) ~ NP ,
                     GetB (GetEffects m) ~ NB ,
                     GetF (GetEffects m) ~ NF)
-                    
+
 type HasPut e = (GetP e ~ P)
 type HasFreeze e = (GetF e ~ F)
 
