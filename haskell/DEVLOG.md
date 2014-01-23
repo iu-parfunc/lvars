@@ -553,3 +553,21 @@ reps.  Also, I can get a detected blocked-indefinitely on v3:
 Ok, now if I can get log printing on failures, that would help us
 figure this one out.
 
+
+[2014.01.23] {A new problem when compiling cfa}
+-----------------------------------------------
+
+Haven't seen this one before, a compile failure on the cfa package:
+
+    Failed to install k-cfa-lvish-example-0.1.0.0
+    Last 10 lines of the build log ( /ffh/ryan/cloud_drive/working_copies/lvars/lvars/haskell/.cabal-sandbox/logs/k-cfa-lvish-example-0.1.0.0.log ):
+          _snYS_info in Main.o
+          _soay_info in Main.o
+          _soh6_info in Main.o
+          _sonF_info in Main.o
+          _Main_zdsinsertzuzdsgo1_srt in Main.o
+          _Main_zdsfilterGtzufilterzq_srt in Main.o
+          _Main_zdsfilterLtzufilterzq_srt in Main.o
+          ...
+    ld: symbol(s) not found for architecture x86_64
+
