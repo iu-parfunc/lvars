@@ -99,10 +99,6 @@ library
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     -------------------------------------------
-                    -- New / Experimental:
-                    Data.LVar.Memo                    
-                    Data.LVar.CycGraph
-                    -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
                     -------------------------------------------
@@ -125,6 +121,10 @@ library
                       Data.LVar.MaxCounter
                       Data.LVar.AddRemoveSet
                       Data.LVar.PNCounter
+                      -------------------------------------------
+                      -- New / Experimental:
+                      Data.LVar.Memo                    
+                      Data.LVar.CycGraph
 
   if flag(beta) && flag(newcontainers)
     exposed-modules: 
