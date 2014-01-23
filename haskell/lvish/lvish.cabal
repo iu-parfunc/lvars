@@ -106,8 +106,6 @@ library
                     -- These are only for developing new LVars:
                     Data.LVar.Internal.Pure
                     Data.LVar.Generic.Internal
-                    Data.LVar.PureMap.Unsafe
-                    Data.LVar.SLMap.Unsafe
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
@@ -124,6 +122,9 @@ library
                       -- New / Experimental:
                       Data.LVar.Memo                    
                       Data.LVar.CycGraph
+
+                      Data.LVar.PureMap.Unsafe
+                      Data.LVar.SLMap.Unsafe
 
   if flag(beta) && flag(newcontainers)
     exposed-modules: 
