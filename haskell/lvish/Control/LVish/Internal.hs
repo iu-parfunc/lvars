@@ -25,7 +25,10 @@ module Control.LVish.Internal
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
     unsafeConvert, unsafeDet,
-    state, liftIO
+    state, liftIO,
+
+    -- * Debugging information taken from the environment
+    L.dbgLvl
   )
   where
 
