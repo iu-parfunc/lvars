@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
     GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
-    ConstraintKinds, FlexibleContexts  #-}
+    ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
 
 -- APPROACH: Expose type level products explicitly in all methods.
 
@@ -10,6 +10,7 @@ import Control.Monad
 import Control.Applicative 
 import Control.Monad.Trans.Class
 import Common
+import GHC.Exts
 
 --------------------------------------------------------------------------------
 -- Core ops:
@@ -35,12 +36,23 @@ new = undefined
 runCancelT :: LVarMonad m => CancelT m a -> m a
 runCancelT = undefined
 
+-- Cancelable future
+data CFut a = CFut
+
 forkCancelable :: (LVarMonad m, ReadOnlyM m ) =>
-                   CancelT m () -> CancelT m TID
+                   CancelT m a -> CancelT m (CFut a)
 forkCancelable = undefined
 
-cancel :: ParMonad m => TID -> CancelT m ()
+-- Non-deterministic version
+forkCancelableND :: (LVarMonad m, HasIOM m) =>
+                     CancelT m a -> CancelT m (CFut a)
+forkCancelableND = undefined
+
+cancel :: LVarMonad m => (CFut a) -> CancelT m ()
 cancel = undefined
+
+wait :: LVarMonad m => CFut a -> CancelT m a 
+wait = undefined
 
 --------------------------------------------------------------------------------
 -- Memoization:
@@ -151,14 +163,22 @@ _ = runPar test3
 
 ------------------------------------------------------------
 
-type ReadOnlyM m = (GetP (GetEffects m) ~ NP ,
-                    GetB (GetEffects m) ~ NB ,
-                    GetF (GetEffects m) ~ NF)
+type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
 
-type HasPut e = (GetP e ~ P)
+-- type HasPut e    = (GetP e ~ P)
+
+type family HasPut (e :: EffectsSig) :: Constraint
+type instance (HasPut (Ef p g f b i)) = (p ~ P)
+
+
+type HasGet e    = (GetG e ~ G)
 type HasFreeze e = (GetF e ~ F)
+type HasIO  e    = (GetI e ~ I)
 
 type NoFreeze e = (NF ~ GetF e)
+
+type ReadOnlyM m = (ReadOnly (GetEffects m))
+type HasIOM m = HasIO (GetEffects m)
 
 --------------------------------------------------------------------------------
 

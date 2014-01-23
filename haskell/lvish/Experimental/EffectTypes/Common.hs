@@ -42,11 +42,17 @@ data TID = TID
 --------------------------------------------------------------------------------
 -- Effect sigs and their extraction:
 --------------------------------------------------------------------------------
+{-
+type family GetEffects m where
+  GetEffects (Par e s) = e
+  GetEffects (trans m) = GetEffects m
+-}
 
 type family GetEffects (m :: (* -> *)) :: EffectsSig
 type instance GetEffects (Par e s) = e
-type instance GetEffects (CancelT m) = GetEffects m
-type instance GetEffects (DeadlockT m) = GetEffects m
+type instance GetEffects (trans (m :: * -> *)) = GetEffects m
+-- type instance GetEffects (CancelT m) = GetEffects m
+-- type instance GetEffects (DeadlockT m) = GetEffects m
 
 type family GetSession (m :: (* -> *)) :: *
 type instance GetSession (Par e s) = s
