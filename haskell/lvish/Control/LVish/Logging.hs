@@ -181,9 +181,9 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
       --------------------------------------------------------------------------------
       -- Proceed in rounds, gather the set of actions that may happen in parallel, then
       -- pick one.  We log the series of decisions we make for reproducability.
-      let schedloop :: Int -> Int -> [Writer] -> Backoff -> IO ()
-          schedloop !iters !num -- ^ length of list `waiting`
-                    !waiting !bkoff = do
+      let schedloop :: Int -> Int -- ^ length of list `waiting`
+                    -> [Writer] -> Backoff -> IO ()
+          schedloop !iters !num !waiting !bkoff = do
             when (iters > 0 && iters `mod` 500 == 0) $
               putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show num++" are waiting."
             hFlush stdout

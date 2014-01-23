@@ -24,8 +24,11 @@ module Control.LVish.Basics
     newPool, withNewPool, withNewPool_, 
     quiesce, forkHP, logDbgLn,
 
-    parForL, parForSimple, parForTree, parForTiled, for_,
-    asyncForEachHP
+    parForL, parForSimple, parForTree, parForTiled, for_
+
+#ifdef GENERIC_PAR
+    , asyncForEachHP
+#endif
   )
   where
 
@@ -49,6 +52,9 @@ instance PU.ParMonad (Par d s) where
   fork = fork  
   internalLiftIO = I.liftIO  
 #endif
+
+{-# DEPRECATED parForL, parForSimple, parForTree, parForTiled
+    "These will be removed in a future release in favor of a more general approach to loops."  #-}
 
 --------------------------------------------------------------------------------
 
@@ -245,6 +251,7 @@ for_ (start, end) fn = loop start
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
 
+#ifdef GENERIC_PAR
 -- | Non-blocking version of pforEach.  
 asyncForEachHP :: (SC.Split c, PC.Generator c)
       => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
@@ -257,3 +264,4 @@ asyncForEachHP mh gen fn =
     ls -> forM_ ls $ \ gen_i -> 
             forkHP mh $
               PC.forM_ gen_i fn 
+#endif

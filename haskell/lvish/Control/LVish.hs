@@ -69,8 +69,12 @@ module Control.LVish
     --    quiesceAll,    
 
      -- * Various loop constructs
-     asyncForEachHP,
      parForL, parForSimple, parForTree, parForTiled, for_,
+
+-- This is not fully ready yet till LVish 2.0:
+#ifdef GENERIC_PAR
+     asyncForEachHP,
+#endif
 
      -- * Logical control flow operators
      module Control.LVish.Logical,
