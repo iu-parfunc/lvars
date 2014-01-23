@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.1.0
+version:             1.1.1.2
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -21,6 +21,8 @@ version:             1.1.1.0
 -- 1.1.0.2 -- add verifyFiniteJoin
 -- 1.1.0.3 -- expose BulkRetry prototype
 -- 1.1.1.0 -- expose logging routines
+-- 1.1.1.1 -- restrict exports for interm hackage release
+-- 1.1.1.2 -- hide modules more aggressively, not just by flag
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -110,8 +112,9 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
+  
   if flag(beta)
-    exposed-modules: 
+    other-modules:
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
                       Data.LVar.NatArray.Unsafe
@@ -127,7 +130,7 @@ library
                       Data.LVar.SLMap.Unsafe
 
   if flag(beta) && flag(newcontainers)
-    exposed-modules: 
+    other-modules: 
                       Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
