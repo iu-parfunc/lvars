@@ -72,11 +72,11 @@ flag getonce
 -- We won't really support this until LVish 2.0:
 flag generic
   description: Use (forthcoming) generic interfaces for Par monads.
-  default: True
+  default: False
 
 flag beta
   description: These features are in beta and not fully supported yet.
-  default: True
+  default: False
 
 --------------------------------------------------------------------------------
 library
