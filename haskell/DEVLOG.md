@@ -571,3 +571,28 @@ Haven't seen this one before, a compile failure on the cfa package:
           ...
     ld: symbol(s) not found for architecture x86_64
 
+
+[2014.01.24] {Failure after recent nonidem merge}
+-------------------------------------------------
+
+    Failed to install lvish-1.2.0.0
+    Last 10 lines of the build log ( /ffh/ryan/cloud_drive/working_copies/lvars/lvars/haskell/.cabal-sandbox/logs/lvish-1.2.0.0.log ):
+     Passed  5           64           69
+     Failed  0           1            1
+     Total   5           65           70
+     [*] test-framework exiting with: ExitFailure 1
+     [*] GC finished on main thread.
+     [*] Main thread exiting.
+    Test suite test-lvish: FAIL
+    Test suite logged to:
+    dist/dist-sandbox-38f74c87/test/lvish-1.2.0.0-test-lvish.log
+    0 of 1 test suites (0 of 1 test cases) passed.
+
+Specifically, the failure is:
+
+    ThreadKilled exception inside child thread, ThreadId 79270 (not propagating!): "worker thread"
+      v4: [Failed]
+    Bad test outcome--exception: PutAfterFreezeExn "Attempt to change a frozen LVar"
+
+It's proving a bit hard to reproduce, however.
+
