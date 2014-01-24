@@ -596,3 +596,12 @@ Specifically, the failure is:
 
 It's proving a bit hard to reproduce, however.
 
+Also... test after i9h is apparently deadlocking on -N4.  Hmm.. why
+are timeouts not working? 
+  (And I'm getting plenty of the blocked-indefinitely errors in
+  various papers... these are probably the same failure but sometimes
+  the GC turns it into an exception.  Not sure why timeouts aren't 
+  working consistently on this branch.  I see them sometimes.)
+
+Ah, ok, I can get failures on AddRemoveSetTests 
+
