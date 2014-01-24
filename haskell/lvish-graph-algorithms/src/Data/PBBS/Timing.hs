@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 
-module PBBS.Timing
+module Data.PBBS.Timing
        (runAndReport, calibrate, measureFreq, commaint,
         wait_clocks)
        where
@@ -92,6 +92,7 @@ calibrate = do
 
 ------------------------------------------------------------------------------------------
 
+{-# NOINLINE first_hit #-}
 #ifdef FIRSTHIT_RDTSC
 first_hit :: IORef Word64
 first_hit = unsafePerformIO$ newIORef maxBound

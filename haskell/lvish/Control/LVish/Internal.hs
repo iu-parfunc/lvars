@@ -25,7 +25,10 @@ module Control.LVish.Internal
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
     unsafeConvert, unsafeDet,
-    state, liftIO
+    state, liftIO,
+
+    -- * Debugging information taken from the environment
+    L.dbgLvl
   )
   where
 
@@ -92,7 +95,7 @@ unsafeConvert (WrapPar p) = (WrapPar p)
 -- | Unsafe coercion from quasi-deterministic to deterministic.  The user is
 -- promising that code is carefully constructed so that put/freeze races will not
 -- occur.
-unsafeDet :: Par QuasiDet s1 a -> Par d s2 a
+unsafeDet :: Par d1 s a -> Par d2 s a
 unsafeDet (WrapPar p) = (WrapPar p)
 
 instance MonadToss (Par d s) where

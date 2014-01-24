@@ -19,6 +19,7 @@ import qualified PureMapTests
 import qualified SLMapTests
 import qualified SetTests
 import qualified MaxCounterTests
+import qualified AddRemoveSetTests
 
 #ifdef GENERIC_PAR
 import qualified GenericTests
@@ -44,4 +45,5 @@ alltests =
        , GenericTests.tests -- Divergence... debugging [2013.12.07]
 #endif
 #endif
+       , AddRemoveSetTests.tests
        ]

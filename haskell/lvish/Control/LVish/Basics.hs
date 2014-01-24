@@ -15,24 +15,46 @@
 
 -- | An internal module simply reexported by Control.LVish.
 
-module Control.LVish.Basics where
+module Control.LVish.Basics
+  ( Par(), LVar(),
+    Determinism(..), liftQD,
+    LVishException(..), L.HandlerPool(), 
+    fork, yield,
+    runPar, runParIO, runParLogged, runParDetailed,
+    newPool, withNewPool, withNewPool_, 
+    quiesce, forkHP, logDbgLn,
 
+    parForL, parForSimple, parForTree, parForTiled, for_
+
+#ifdef GENERIC_PAR
+    , asyncForEachHP
+#endif
+  )
+  where
+
+import Control.Monad (forM_)
 import qualified Data.Foldable    as F
-import           Control.Exception (Exception)
+import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.Sched as L
+import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
 
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class.Unsafe as PU
+import qualified Control.Par.Class     as PC
+import qualified Data.Splittable.Class as SC
 
 instance PU.ParMonad (Par d s) where
   fork = fork  
   internalLiftIO = I.liftIO  
 #endif
+
+{-# DEPRECATED parForL, parForSimple, parForTree, parForTiled
+    "These will be removed in a future release in favor of a more general approach to loops."  #-}
 
 --------------------------------------------------------------------------------
 
@@ -113,7 +135,22 @@ runParIO_ (WrapPar p) = L.runParIO p >> return ()
 -- | Useful for debugging.  Returns debugging logs, in realtime order, in addition to
 -- the final result.
 runParLogged :: (forall s . Par d s a) -> IO ([String],a)
-runParLogged (WrapPar p) = L.runParLogged p 
+runParLogged (WrapPar p) = L.runParLogged p
+
+-- | A variant with full control over the relevant knobs.
+--   
+--   Returns a list of flushed debug messages at the end (if in-memory logging was
+--   enabled, otherwise the list is empty).
+--   
+--   This version of runPar catches ALL exceptions that occur within the runPar, and
+--   returns them via an Either.  The reason for this is that even if an error
+--   occurs, it is still useful to observe the log messages that lead to the failure.
+--   
+runParDetailed :: DbgCfg        -- ^ Debugging configuration
+               -> Int           -- ^ How many worker threads to use. 
+               -> (forall s . Par d s a) -- ^ The computation to run.
+               -> IO ([String], Either SomeException a)
+runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
 -- effect.  This function will create new worker threads and do the work in parallel,
@@ -132,24 +169,16 @@ runPar (WrapPar p) = L.runPar p
 -- debug level by setting the env var DEBUG, e.g. @DEBUG=5@.
 logDbgLn :: Int -> String -> Par d s ()
 #ifdef DEBUG_LVAR
-logDbgLn n = WrapPar . L.liftIO . L.logLnAt_ n 
+logDbgLn n = WrapPar . L.logStrLn n 
 #else 
 logDbgLn _ _  = return ()
 {-# INLINE logDbgLn #-}
 #endif
 
-
--- | Same as `logDbgLn` except in the @IO@ rather than @Par@ monad.
-logDbgLn_ :: Int -> String -> IO ()
-#ifdef DEBUG_LVAR
-logDbgLn_ = L.logLnAt_ 
-#else 
-logDbgLn_ _ _  = return ()
-{-# INLINE logDbgLn_ #-}
-#endif
-
-
-
+-- | IF compiled with debugging support, this will return the Logger used by the
+-- current Par session, otherwise it will simply throw an exception.
+getLogger :: Par d s Lg.Logger
+getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------
 -- Extras
@@ -198,8 +227,8 @@ parForTree (start,end) body = do
 
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
-parForTiled :: Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
-parForTiled otiles (start,end) body = do 
+parForTiled :: Maybe L.HandlerPool -> Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTiled hp otiles (start,end) body = do 
   loop 0 (end - start) otiles
  where
    loop offset remain tiles
@@ -208,7 +237,7 @@ parForTiled otiles (start,end) body = do
      | otherwise       = do
          let (half,rem)   = remain `quotRem` 2
              (halfT,remT) = tiles `quotRem` 2
-         fork$ loop offset half halfT
+         forkHP hp$ loop offset half halfT
          loop (offset+half) (half+rem) (halfT+remT)
 
 
@@ -222,3 +251,17 @@ for_ (start, end) fn = loop start
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
 
+#ifdef GENERIC_PAR
+-- | Non-blocking version of pforEach.  
+asyncForEachHP :: (SC.Split c, PC.Generator c)
+      => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
+      -> c                    -- ^ element generator to consume
+      -> (PC.ElemOf c -> Par d s ()) -- ^ compute one result
+      -> Par d s ()
+asyncForEachHP mh gen fn =
+  case SC.split gen of
+    [seqchunk] -> PC.forM_ seqchunk fn
+    ls -> forM_ ls $ \ gen_i -> 
+            forkHP mh $
+              PC.forM_ gen_i fn 
+#endif

@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
 
 -- | To make it easier to build (multithreaded) tests
 
@@ -11,15 +11,17 @@ module TestHelpers
    setTestThreads,
 
    -- * Test initialization, reading common configs
-   stdTestHarness,
+   stdTestHarness, 
+   
+   -- * A replacement for defaultMain that uses a 1-thread worker pool 
+   defaultMainSeqTests,
 
    -- * Misc utilities
-   nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit, 
+   nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit,
+   theEnv,
+   
    -- timeOutPure, 
-   exceptionOrTimeOut, allowSomeExceptions, assertException,
-
-   -- * A replacement for defaultMain that uses a 1-thread worker pool 
-   defaultMainSeqTests
+   exceptionOrTimeOut, allowSomeExceptions, assertException
  )
  where 
 
@@ -29,6 +31,7 @@ import Control.Exception
 --import Control.Concurrent.MVar
 import GHC.Conc
 import Data.IORef
+import Data.Word
 import Data.Time.Clock
 import Data.List (isInfixOf, intersperse, nub)
 import Text.Printf
@@ -36,8 +39,10 @@ import Control.Concurrent (forkOS, forkIO, ThreadId)
 -- import Control.Exception (catch, SomeException, fromException, bracket, AsyncException(ThreadKilled))
 import Control.Exception (bracket)
 import System.Environment (withArgs, getArgs, getEnvironment)
-import System.IO (hFlush, stdout)
+import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Mem (performGC)
+import System.Exit
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 
@@ -47,7 +52,6 @@ import Test.Framework.Runners.Options (RunnerOptions'(..))
 import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
--- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
@@ -169,6 +173,7 @@ stdTestHarness genTests = do
                           return all_tests
               _ -> return$ TestList [ setTestThreads n all_tests | n <- all_threads ]
     TF.defaultMain$ hUnitTestToTests tests
+
 
 ----------------------------------------------------------------------------------------------------
 -- DEBUGGING
@@ -357,12 +362,22 @@ timeit ioact = do
 --   threads to one by default, unless the user explicitly overrules it with "-j".
 defaultMainSeqTests :: [TF.Test] -> IO ()
 defaultMainSeqTests tests = do
+  putStrLn " [*] Default test harness..."
   args <- getArgs
   x <- interpretArgs args
-  case x of
-    Left err -> error$ "defaultMainSeqTests: "++err
-    Right (opts,_) -> defaultMainWithOpts tests
-                       ((mempty{ ropt_threads= Just 1
-                               , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
-                        `mappend` opts)
-  return ()
+  res <- try (case x of
+             Left err -> error$ "defaultMainSeqTests: "++err
+             Right (opts,_) -> do let opts' = ((mempty{ ropt_threads= Just 1
+                                                      , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                                               `mappend` opts)
+                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " worker threads for testing."
+                                  defaultMainWithOpts tests opts'
+                               )
+  case res of
+    Left (e::ExitCode) -> do
+       putStrLn$ " [*] test-framework exiting with: "++show e
+       performGC
+       putStrLn " [*] GC finished on main thread."
+       threadDelay (30 * 1000)
+       putStrLn " [*] Main thread exiting."
+       exitWith e

@@ -236,6 +236,13 @@ class (Monad m, ParSealed m) => LVarSched m  where
    -- | Drop the current continuation and return to the scheduler.
    returnToSched :: m a
 
+   -- -- | Log a line of debugging output, if supported by the scheduler.
+   -- -- The debug message is associated with a "chatter level".
+   -- -- 
+   -- -- The default implementation is for this to be a no-op.
+   -- logDbgLn :: Int -> String -> m ()
+   -- logDbgLn _ _ = return ()
+
    -- TODO: should we expose a MonadCont instance?
 
 -- | An LVar scheduler with the quasi-determinism capability.  This interface is
@@ -302,7 +309,9 @@ data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 --------------------------------------------------------------------------------
 
 
--- | We have a problem where some types (like Ranges) are splittable, but they are
+-- | Collections that can generate a sequence of elements of the same element type.
+-- 
+--   Reason: We have a problem where some types (like Ranges) are splittable, but they are
 --   not containers for arbitrary data.  Thus we introduce a more limited concept of
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).

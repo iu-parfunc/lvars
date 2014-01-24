@@ -147,7 +147,7 @@ bfs_async :: AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
-    logStrLn $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
+    logDbgLn 1 $" [bfs] expanding node "++show nd++" to nbrs " ++ show (nbrs gr nd)
     forVec (nbrs gr nd) (`S.insert` st)
   return st
 --    T.traverse_ (`S.insert` st) (nbrs gr nd)
@@ -159,11 +159,11 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       logStrLn $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
+       logDbgLn 1 $" [bfs] expanding node "++show (nd,bool)++" to nbrs " ++ show myNbrs
        -- TODO: possibly use a better for loop:
        forVec myNbrs (\nbr -> ISt.put_ arr (fromIntegral nbr) True)
   ISt.forEachHP Nothing arr callback
-  logStrLn $" [bfs] Seeding with start vertex... "
+  logDbgLn 1 $" [bfs] Seeding with start vertex... "
   ISt.put_ arr (fromIntegral start) True
   return arr
 
@@ -173,10 +173,10 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
        let myNbrs = nbrs gr (fromIntegral nd)        
-       -- logStrLn $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
+       -- logDbgLn 1 $" [bfs] expanding node "++show (nd,flg)++" to nbrs " ++ show myNbrs
        forVec myNbrs (\nbr -> NArr.put arr (fromIntegral nbr) 1)
   NArr.forEach arr callback
-  -- logStrLn $" [bfs] Seeding with start vertex... "
+  -- logDbgLn 1 $" [bfs] Seeding with start vertex... "
   NArr.put arr (fromIntegral start) 1
   return arr
 
@@ -208,7 +208,7 @@ maxDegreeI gr component = do
   ISt.forEachHP Nothing component $ \ nd flg -> do
     when (flg == 1) $ do
       let degree = U.length$ nbrs gr (fromIntegral nd)
-      -- logStrLn$ " [maxDegreeI] Processing: "++show(nd,flg)++" with degree "++show degree
+      -- logDbgLn 1$ " [maxDegreeI] Processing: "++show(nd,flg)++" with degree "++show degree
       C.put mc degree
 
   -- Better to just do this... wait for it to freeze and then loop.
@@ -298,7 +298,7 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
       loop !numNbrs !nbrs !selfInd !i 
         | i == numNbrs = thisNodeWins
         | otherwise = do
-          -- logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          -- logDbgLn 1$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
           let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
               selfInd' = fromIntegral selfInd
           -- If we got to the end of the neighbors below us, then we are NOT disqualified:
@@ -306,25 +306,25 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
             then thisNodeWins
             else do
               -- This should never block in a single-thread execution:
-              logStrLn (" [MIS] ! Getting on nbrInd "++show nbrInd)
+              logDbgLn 1 (" [MIS] ! Getting on nbrInd "++show nbrInd)
               nbrFlag <- NArr.get flagsArr (fromIntegral nbrInd)
-              logStrLn (" [MIS] ! Get completed on nbrInd "++show nbrInd)
+              logDbgLn 1 (" [MIS] ! Get completed on nbrInd "++show nbrInd)
               if nbrFlag == flag_CHOSEN
                 then NArr.put flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 1 (" [MIS] ! Node chosen: "++show selfInd) >> 
                          NArr.put flagsArr (fromIntegral selfInd) flag_CHOSEN
   parFor (0,numVerts) $ \ ndIx -> do 
       let nds = nbrs gr (fromIntegral ndIx)
-      -- logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      -- logDbgLn 1$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
   return flagsArr
 
 -- | DUPLICATE CODE: IStructure version.
 maximalIndependentSet2 :: ParFor d s -> AdjacencyGraph -> Par d s (IStructure s Word8) -- Operate on a whole graph.
 maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
-  logStrLn$ " [MIS] Beginning maximalIndependentSet / Istructures"
+  logDbgLn 1$ " [MIS] Beginning maximalIndependentSet / Istructures"
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
   flagsArr <- newIStructure numVerts
@@ -333,7 +333,7 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
       loop !numNbrs !nbrs !selfInd !i 
         | i == numNbrs = thisNodeWins
         | otherwise = do
-          -- logStrLn$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
+          -- logDbgLn 1$ " [MIS]   ... on nbr "++ show i++" of "++show numNbrs
           let nbrInd = fromIntegral$ nbrs U.! i -- Find our Nbr's NodeID
               selfInd' = fromIntegral selfInd
           -- If we got to the end of the neighbors below us, then we are NOT disqualified:
@@ -341,18 +341,18 @@ maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
             then thisNodeWins
             else do
               -- This should never block in a single-thread execution:
-              logStrLn (" [MIS] ! Getting on nbrInd "++show nbrInd)
+              logDbgLn 1 (" [MIS] ! Getting on nbrInd "++show nbrInd)
               nbrFlag <- ISt.get flagsArr (fromIntegral nbrInd)
-              logStrLn (" [MIS] ! Get completed on nbrInd "++show nbrInd)
+              logDbgLn 1 (" [MIS] ! Get completed on nbrInd "++show nbrInd)
               if nbrFlag == flag_CHOSEN
                 then ISt.put_ flagsArr selfInd' flag_NBRCHOSEN
                 else loop numNbrs nbrs selfInd (i+1)
         where
-          thisNodeWins = logStrLn (" [MIS] ! Node chosen: "++show selfInd) >> 
+          thisNodeWins = logDbgLn 1 (" [MIS] ! Node chosen: "++show selfInd) >> 
                          ISt.put_ flagsArr (fromIntegral selfInd) flag_CHOSEN
   parFor (0,numVerts) $ \ ndIx -> do 
       let nds = nbrs gr (fromIntegral ndIx)
-      -- logStrLn$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
+      -- logDbgLn 1$ " [MIS] processing node "++show ndIx++" nbrs "++show nds
       loop (U.length nds) nds ndIx  0
   return flagsArr
 

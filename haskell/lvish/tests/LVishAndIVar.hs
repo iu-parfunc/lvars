@@ -27,6 +27,7 @@ import qualified Data.Vector as V
 import qualified Data.Set as S
 import Data.IORef
 import Data.Time.Clock
+import Debug.Trace
 import System.Environment (getArgs)
 import System.IO
 import System.Exit
@@ -47,7 +48,7 @@ import qualified Control.LVish.Internal as I
 import           Control.LVish.Sched (liftIO, dbgLvl, forkWithExceptions)
 import qualified Control.LVish.Sched as L
 
-import           TestHelpers as T
+import           TestHelpers2 as T
 
 --------------------------------------------------------------------------------
 
@@ -60,6 +61,51 @@ tests :: Test
 tests = $(testGroupGenerator)
 
 --------------------------------------------------------------------------------
+
+-- | This stress test does nothing but run runPar again and again.
+case_runParStress :: HU.Assertion
+case_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
+
+-- TEMP: another version that uses the simplest possible method to run lots of runPars.
+-- Nothing else that could POSSIBLY get in the way.
+-- 
+-- [2014.01.16] Very odd!  I'm not able to get the crash here, but I am for the
+-- runParsStress test...  Actually, I'm having trouble getting the crash with less
+-- than 20 threads in the runtime for the old test too.  That is, the first of these
+-- crashes quickly, and the second one won't crash for me:
+--
+--     STRESSTESTS=15000 ./LVishAndIVar.exe -t runParStress +RTS -N20
+--     STRESSTESTS=15000 ./LVishAndIVar.exe -t runParStress +RTS -N15
+-- 
+-- Oddly, it seems to go from happening rarely at -N17 to often at -N18.
+-- I think the problem with the simple test that uses "runParIO" is that we 
+-- can't make the runtime use more capabilities than we fork par worker threads.
+-- This could be a GHC runtime bug relating to thread migration?
+case_lotsaRunPar :: Assertion
+case_lotsaRunPar = loop iters
+  where 
+  iters = 5000
+  loop 0 = putStrLn ""
+  loop i = do
+     -- We need to do runParIO to make sure the compiler does the runPar each time.
+     -- runParIO (return ()) -- Can't crash this one.
+     runParDetailed (DbgCfg Nothing [] True) 15 (return ()) 
+      -- This version can start going RIDICULOUSLY slowly with -N20.  It will use <20% CPU while it does it.
+      -- But it won't use much memory either... what is it doing?  With -N4 it goes light years faster, and with -N2
+      -- faster yet.  Extra capabilities result in a crazy slowdown here.
+      -- With the bad behavior on -N20, it will SOMETIMES complete 5000 iterations in ~3 seconds.  But sometimes
+      -- it will grind to a snails pace after a few hundred iterations.  
+      -- The missing time doesn't show up as system or CPU time...
+      -- At -N15, where the # workers matches the # capabilities, it keeps up an ok pace...
+      --   -qa doesn't seem to help the problem.
+      --   -qm seems to EXACERBATE the problem, making it happen from the start and consistently. 
+      --    (even then, it is fine with -N15, the mismatch is the problem)
+      --   Playing around with -C, -qb -qg -qi doesn't seem to do anything.
+     traceEventIO ("Finish iteration "++show (iters-i))
+     -- For debugging I put in this traceEvent and ran with +RTS -N18 -qm -la
+     putStr "."; hFlush stdout
+     loop (i-1)
+
 
 -- Disabling thread-variation due to below bug:
 
@@ -160,22 +206,22 @@ i3g = runParIO$ do
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
 lp01 = runParIO$ do
-  logDbgLn 1 " [lp01] Starting parForSimple loop..."
+  logDbgLn 2 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp01]  iter "++show ix
+    logDbgLn 2$ " [lp01]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
   IV.get x
 
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
 lp02 = runParIO$ do
-  logDbgLn 1 " [lp02] Starting parForL loop..."
+  logDbgLn 2 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp02]  iter "++show ix
+    logDbgLn 2$ " [lp02]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp02] after loop..."
+  logDbgLn 2$ " [lp02] after loop..."
   IV.get x
 
 -- [2013.08.05] RRN: I'm seeing this hang sometimes.  It live-locks
@@ -186,23 +232,23 @@ lp02 = runParIO$ do
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParIO$ do
-  logDbgLn 1 " [lp03] Starting parForTree loop..."
+  logDbgLn 2 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp03]  iter "++show ix
+    logDbgLn 2$ " [lp03]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp03] after loop..."
+  logDbgLn 2$ " [lp03] after loop..."
   IV.get x
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParIO$ do
-  logDbgLn 1 " [lp04] Starting parForTiled loop..."
+  logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
-  parForTiled 16 (0,10) $ \ ix -> do
-    logDbgLn 1$ " [lp04]  iter "++show ix
+  parForTiled Nothing 16 (0,10) $ \ ix -> do
+    logDbgLn 2$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
-  logDbgLn 1$ " [lp04] after loop..."
+  logDbgLn 2$ " [lp04] after loop..."
   IV.get x
 
 --------------------------------------------------------------------------------

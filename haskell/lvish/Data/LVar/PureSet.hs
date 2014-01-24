@@ -61,6 +61,9 @@ import qualified Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (insert)
 
+-- LK: Why is it ok to just write WrapPar and LVar instead of LI.WrapPar
+-- and LI.LVar?  Where are they being imported from?
+
 ------------------------------------------------------------------------------
 -- ISets and setmap implemented on top of LVars:
 ------------------------------------------------------------------------------
@@ -261,7 +264,7 @@ waitSize !sz (ISet lv) = WrapPar$
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.a
+    -- the threshold.
     deltaThresh _ = globalThresh (state lv) False
 
 --------------------------------------------------------------------------------

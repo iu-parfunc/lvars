@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.0.3
+version:             1.2.0.0
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -20,6 +20,7 @@ version:             1.1.0.3
 -- 1.0.0.6 -- tighten up dependencies; remove unused flags; very minor doc fixes.
 -- 1.1.0.2 -- add verifyFiniteJoin
 -- 1.1.0.3 -- expose BulkRetry prototype
+-- 1.1.1.0 -- expose logging routines
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -59,6 +60,10 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
 
+flag newcontainers
+  description: Use a pre-release version of containers to enable splitting.
+  default: False
+
 flag dedup
   description: Ensure that both handlers and continuations of get run at most once 
                (by using extra synchronization)
@@ -94,10 +99,6 @@ library
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     -------------------------------------------
-                    -- New / Experimental:
-                    Data.LVar.Memo                    
-                    Data.LVar.CycGraph
-                    -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
                     -------------------------------------------
@@ -106,8 +107,7 @@ library
                     Data.LVar.Internal.Pure
                     Data.LVar.Generic.Internal
                     Data.LVar.PureMap.Unsafe
-                    Data.LVar.SLMap.Unsafe                                        
-                    Control.LVish.Sched
+                    Data.LVar.SLMap.Unsafe
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
@@ -116,8 +116,18 @@ library
     exposed-modules: 
                       -- Not quite ready for prime-time yet:
                       Data.LVar.NatArray
+                      Data.LVar.NatArray.Unsafe
                       Data.LVar.MaxCounter
---                      Control.LVish.BulkRetry
+                      Data.LVar.AddRemoveSet
+                      Data.LVar.PNCounter
+                      -------------------------------------------
+                      -- New / Experimental:
+                      Data.LVar.Memo                    
+                      Data.LVar.CycGraph
+
+  if flag(beta) && flag(newcontainers)
+    exposed-modules: 
+                      Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
   other-modules:
@@ -129,24 +139,28 @@ library
                     Data.Concurrent.LinkedMap
                     Data.Concurrent.AlignedIORef
                     Control.Reagent
+                    Control.LVish.Sched
                     Control.LVish.SchedQueue
                     Control.LVish.MonadToss
                     Control.LVish.Types
                     Control.LVish.Basics
                     Control.LVish.Logical
+                    Control.LVish.Logging
 
   -- Other library packages from which modules are imported.
   build-depends: base    >= 4.6 && <= 4.8, 
                  deepseq >= 1.3, 
-                 containers >= 0.5, 
                  lattices   >= 1.2, 
                  vector >=0.10,
                  atomic-primops >= 0.4, 
                  random, 
                  transformers,
                  ghc-prim,
+                 async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
+  if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
+   else { build-depends: containers >= 0.5 }
   if flag(generic)
     cpp-options: -DGENERIC_PAR
     build-depends: par-classes     >= 1.0 && < 2.0,
@@ -196,6 +210,7 @@ test-suite test-lvish
                    random, 
                    transformers,
                    ghc-prim,
+                   async,
                    -- Used in NatArray:
                    bits-atomic, missing-foreign
     if flag(generic)

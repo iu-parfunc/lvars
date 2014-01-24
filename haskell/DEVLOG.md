@@ -364,3 +364,210 @@ v9f is interesting however...  It uses no callbacks or handler pools.
 It simply writes N ivars and then reads them.
 
 
+[2013.12.26] {Adding a schedule-control facility to the debug-logging one}
+
+The first draft is now running... but it's chewing up a bunch of user
+time.  A tiny 0.3 second test goes to 2 seconds, and then if I turn on
+more print messages (on every time around "schedloop"), I get this:
+
+      100.12 real        97.08 user         3.01 sys
+
+Ok, there is some busy-waiting in there.  One weird thing is that ONE
+test runs quickly.  Oh, I see.  The logger threads aren't getting
+killed so they continue to spin after things are shut down.
+
+I fixed that problem... but when printing out each schedloop
+invocation it still goes crazy slowly (21.8s user).  It should be able
+to spam messages to the terminal a heck of a lot faster than that.
+We're talking slow enough for me to read it as it scrolls by. 
+
+With that print disabled, it runs in the SAME time whether we use
+"yield" or "threadDelay" for 10ms...
+
+-----------
+
+Update: I just switched it to exponential backoff everywhere it
+spins/polls.  I'm still seeing the same times.
+
+Ah!  Interesting.  Now it runs much faster when running on multiple
+real threads!  Maybe there are insufficient yield points to enable it
+to run quickly (cooperatively) on one thread?  Or maybe the
+differences in the threaded RTS matter here... (the threaded RTS
+should be linked either way, but perhaps parts of it are inactive in
+-N1).
+
+Is there a path around schedloop that does NOT yield?  
+
+Deterministically exposing the task-graph 
+-----------------------------------------
+
+Test v1a is currently demonstrating a problem with nondeterminism,
+sometimes the infrastructure observes the parallelism, seeing these
+tasks together:
+
+    1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    2:  [dbg-lvish] putLV: about to mutate
+    
+And sometimes it doesn't:
+
+    -----
+      1:  [dbg-lvish] Initializing Logger...
+    -----
+      1:  [dbg-lvish] putLV: about to mutate
+    -----
+      1:  [dbg-lvish] getLV: blocking on LVar, registering listeners, returning to sched...
+    -----
+
+Actually on one thread it always fails to observe the
+parallelism... On -N2 or -N4 it sometimes does.  In fact, on one
+thread it doesn't observe the getLV in the logger at all!
+
+`
+
+[2013.12.30] {Debugging issue #57}
+-----------------------------------
+
+I'm dropping in more logging messages to try to find what the
+data-race is.  One thing I wasn't expecting is that there are TWO
+getLV threshold checks racing with eachother in parallel:
+
+    8| #3 of 4:  [dbg-lvish] putLV: setStatus 19 on worker 3
+    8| #2 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV: first readIORef 19 on worker 2
+    5| #3 of 4:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 3
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh 19 on worker 2
+    5| #1 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 1
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus 19 on worker 4
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting19 on worker 1
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar 19 on worker 4
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 1
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 3
+    10| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, 19 on worker 4
+    10| #3 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, 19 on worker 3
+    8| #3 of 3:  [dbg-lvish] putLV: UN-setStatus 19 on worker 4
+    ! Exception on Logger thread:  [Logger] Need in-parallel log messages to have an ordering, got two equal:
+      [dbg-lvish] getLV (active): callback: check thresh 19 on worker 2
+
+How can they both be on worker 2!  Oh, that uniq suf was grabbed too early.
+
+Still, it looks like LOTS of things are racing here.  The second
+globalThresh poll, plus MULTIPLE onUpdate checks.  
+
+----------------------------------------
+
+There it is!  A little bit more debugging prints and we got a very nice example of a bad-interleaving.
+
+    7| #1 of 4:  [dbg-lvish] getLV: first readIORef , lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 6
+    8| #3 of 3:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 5
+    8| #4 of 4:  [dbg-lvish] putLV: setStatus,, lv 19 on worker 1
+    7| #1 of 3:  [dbg-lvish] getLV (active): check globalThresh, lv 19 on worker 2
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 6
+    5| #3 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 5
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 6
+    5| #2 of 3:  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 1
+    4| #1 of 3:  [dbg-lvish] getLV: blocking on LVar, registering listeners, lv 19 on worker 2
+    8| #3 of 3:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 5
+    8| #1 of 3:  [dbg-lvish] getLV (active): second frozen check, lv 19 on worker 2
+    8| #2 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh check, lv 19 on worker 2
+    8| #1 of 3:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 5
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 6
+    7| #1 of 3:  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 19 on worker 2
+    7| #1 of 3:  [dbg-lvish] getLV (active): callback: check thresh, lv 19 on worker 6
+    9| #2 of 3:  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 5
+    8| #2 of 3:  [dbg-lvish] getLV (active): read execFlag for dedup, lv 19 on worker 6
+    5| #1 of 2:  [dbg-lvish] freezeLV: atomic modify status, lv 19 on worker 2
+    8| #2 of 2:  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 1
+    8| #2 of 2:  [dbg-lvish] getLV (active): CAS execFlag dedup, lv 19 on worker 6
+    8| #2 of 2:  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 1
+    7| #2 of 2:  [dbg-lvish] freezeLV: begin busy-wait for
+      Exception inside child thread "worker thread", ThreadId 8: PutAfterFreezeExn "Attempt to change a frozen LVar"    
+    putter status, lv 19 on worker 2
+
+It seems that the key problem is the putLV "read final status" bit
+happening long after the actual mutation, thus racing with the freeze.  
+
+Hmm, it seems like the intent was for the status to serve as a form of
+lock.  But in that case freezeLV seems wrong because it doesn't wait
+until those "locks" are released before mutating the status...
+
+Do we perhaps need a three-state protocol?  Active->Freezing->Frozen
+
+A put finishing while in Freezing state is ok, but a put beginning
+while in Freezing state is bad.  
+
+[2013.12.30] {A problem with the current logging framework}
+-----------------------------------------------------------
+
+Right now the protocol is that the "logger" field never gets set when
+dbgLvl < 1.  But that is a naughty, dirty thing, and right now it's
+leading to this problem:
+
+      i1: [Failed]
+    Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "LVarSpecificExn \"EXCEPTION in runPar(ThreadId 5): Internal error: Sched logger read before initialized.\""
+
+Hmm, where was that call?
+
+
+[2013.12.31] {Trying stressTest for the first time}
+---------------------------------------------------
+
+I'm getting "blocked indefinitely" errors.  But, I can never get them
+from running one test once.  I'm working on AddRemoveSetTests, and I
+can get these errors running v3 & v4 together in one process (but not
+individually).  OR I can get it with v3 alone but ONLY when I turn the
+#reps up to 8.  Eight seems to be the magic number.  I can run
+hundreds of times with 7 reps, and I never see the exception.
+
+Actually, this makes sense because it must relate to whether a GC is
+triggered that will catch the blocked-indefinitely business.
+
+Yep, that did it.  Performing GC after testing (which is tricky
+because test-framewrok tries to exit the process) will force the
+errors out.
+
+Hmm.. For thread hygiene ideally test-framework would enforce that
+tests don't leave stray threads running.  But checking that would
+require being able to enumarate the global set of threads....
+
+-----------
+
+Ok, I fixed some old dependencies on numCapabilities and things are
+working better now (idling dependended on it).
+
+Still, right now I can get an actual deadlock if I stress-test at 500
+reps.  Also, I can get a detected blocked-indefinitely on v3:
+
+      v3: [Failed]
+    ERROR: thread blocked indefinitely in an MVar operation
+    ....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................  v4: [Running]
+
+Ok, now if I can get log printing on failures, that would help us
+figure this one out.
+
+
+[2014.01.23] {A new problem when compiling cfa}
+-----------------------------------------------
+
+Haven't seen this one before, a compile failure on the cfa package:
+
+    Failed to install k-cfa-lvish-example-0.1.0.0
+    Last 10 lines of the build log ( /ffh/ryan/cloud_drive/working_copies/lvars/lvars/haskell/.cabal-sandbox/logs/k-cfa-lvish-example-0.1.0.0.log ):
+          _snYS_info in Main.o
+          _soay_info in Main.o
+          _soh6_info in Main.o
+          _sonF_info in Main.o
+          _Main_zdsinsertzuzdsgo1_srt in Main.o
+          _Main_zdsfilterGtzufilterzq_srt in Main.o
+          _Main_zdsfilterLtzufilterzq_srt in Main.o
+          ...
+    ld: symbol(s) not found for architecture x86_64
+

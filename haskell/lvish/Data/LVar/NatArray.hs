@@ -59,6 +59,9 @@ module Data.LVar.NatArray
 -- import qualified Data.Vector.Unboxed as U
 -- import qualified Data.Vector.Unboxed.Mutable as M
 
+
+import Data.LVar.NatArray.Unsafe
+
 import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as M
 import Foreign.Marshal.MissingAlloc (callocBytes)
@@ -86,6 +89,7 @@ import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import qualified Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+import           Data.LVar.NatArray.Unsafe (NatArray(..))
 
 ------------------------------------------------------------------------------
 -- Toggles
@@ -94,12 +98,6 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- A low-level optimization below.
 
 ------------------------------------------------------------------------------
-
--- | An array of bit-fields with a monotonic OR operation.  This can be used to model
---   a set of Ints by setting the vector entries to zero or one, but it can also
---   model other finite lattices for each index.
--- newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
-data NatArray s a = Storable a => NatArray !(LVar s (M.IOVector a) (Int,a))
 
 unNatArray (NatArray lv) = lv
 
@@ -124,8 +122,10 @@ newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 -- | /O(1)/ Freeze operation that directly returns a nice, usable, representation of
 -- the array data.
 freezeNatArray :: Storable a => NatArray s a -> LV.Par QuasiDet s (U.Vector a)
-freezeNatArray (NatArray lv) =
-  error "FINISHME"
+freezeNatArray (NatArray lv) = do
+--  freezeLV 
+--  U.unsafeFreeze (state lv))
+  error "FINISHME -- freezeNatArray "
   -- LI.liftIO $ U.unsafeFreeze (LI.state lv)
 
 --------------------------------------------------------------------------------

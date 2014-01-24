@@ -6,10 +6,11 @@
 #          $(shell find ../Control/ -name "*.hs")
 LIBSRC =
 
-ARGS = -DGENERIC_PAR -threaded -DDEBUG_LVAR $(GHC_ARGS)
+ARGS = -DGET_ONCE=1 -DGENERIC_PAR -rtsopts -threaded -DDEBUG_LVAR $(GHC_ARGS)
+ARGS += -O2 -eventlog
 # -fforce-recomp
 
-ALLEXES = ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe SNZITests.exe SetTests.exe SkipListTests.exe Main.exe Main_wfailing.exe 
+ALLEXES = AddRemoveSetTests.exe ArrayTests.exe GenericTests.exe LVishAndIVar.exe LogicalTests.exe PureMapTests.exe SLMapTests.exe MaxCounterTests.exe MemoTests.exe PNCounterTests.exe SNZITests.exe SetTests.exe SkipListTests.exe BulkRetryTests.exe Main.exe Main_wfailing.exe 
 
  .SUFFIXES: .hs .exe
 
@@ -29,9 +30,6 @@ Main.exe:
 
 Main_wfailing.exe:
 	ghc -DFAILING_TESTS $(ARGS) -i.. Main.hs -o Main_wfailing.exe
-
-AddRemoveSetTests.exe:
-	ghc -i.. AddRemoveSetTests.hs -o AddRemoveSetTests.exe
 
 clean: 
 	rm -f *.hi *.o $(ALLEXES) 

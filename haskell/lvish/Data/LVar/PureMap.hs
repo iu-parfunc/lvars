@@ -156,18 +156,18 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
   let ref = state lv      
   mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
-    Just lv2 -> do L.logStrLn$ " [Map.modify] key already present: "++show key++
-                               " adding to inner "++show(unsafeName lv2)
+    Just lv2 -> do L.logStrLn 3 $ " [Map.modify] key already present: "++show key++
+                                 " adding to inner "++show(unsafeName lv2)
                    unWrapPar$ fn lv2
     Nothing -> do 
       bot <- unWrapPar newBottom :: L.Par (f s a)
-      L.logStrLn$ " [Map.modify] allocated new inner "++show(unsafeName bot)
+      L.logStrLn 3$ " [Map.modify] allocated new inner "++show(unsafeName bot)
       let putter _ = L.liftIO$ atomicModifyIORef' ref $ \ mp2 ->
             case M.lookup key mp2 of
               Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
               Nothing  -> (M.insert key bot mp2,
                            (Just (key, bot), 
-                            do L.logStrLn$ " [Map.modify] key absent, adding the new one."
+                            do L.logStrLn 3$ " [Map.modify] key absent, adding the new one."
                                unWrapPar$ fn bot))
       act <- putLV_ (unWrapLVar lv) putter
       act

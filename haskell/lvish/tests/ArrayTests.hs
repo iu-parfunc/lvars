@@ -66,7 +66,10 @@ import qualified Data.Concurrent.SNZI as SNZI
 import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
+import Debug.Trace
 import TestHelpers as T
+
+--------------------------------------------------------------------------------
 
 runTests :: IO ()
 runTests = defaultMainSeqTests [tests]
@@ -175,30 +178,50 @@ i9i = runParIO$ do
 
 -- | Here's the same test  as v9e with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
-case_v9f_ivarArr :: Assertion
+case_v9f1_ivarArr :: Assertion
 -- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
 -- thread-blocked-indefinitely problem here.
 -- [2013.12.13] It can even happen at NUMELEMS=1000 (with debug messages slowing it)
 --              Could this possibly be a GHC bug?
 -- [2013.12.13] Runaway duplication of callbacks is ALSO possible on this test.
 --              Bafflingly that happens on DEBUG=2 but not 5.
-case_v9f_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
+case_v9f1_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
-  fork $
-    forM_ [0..size-1] $ \ix ->
-      IV.put_ (arr V.! ix) (fromIntegral ix + 1)
-  logDbgLn 1 "After fork."
+  fork (do logDbgLn 1 " [v9f] Beginning putter loop.."
+           forM_ [0..size-1] $ \ix ->
+             IV.put_ (arr V.! ix) (fromIntegral ix + 1))
+  logDbgLn 1 " [v9f] After fork."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
                                      when (ix `mod` 1000 == 0) $
-                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix
+--                                       trace ("   [v9f] get completed at: "++show ix) $ return ()
+                                       logDbgLn 2 $ "   [v9f] get completed at: "++show ix++" -> "++show v
                                      loop (acc+v) (ix+1)
   loop 0 0
 
+-- | A variation of the previous.  In this version
+case_v9f2 :: Assertion
+case_v9f2 = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParIO (do 
+  let size = in9e
+      news = V.replicate size IV.new
+  arr <- V.sequence news
+  let putters = do
+        logDbgLn 1 " [v9f2] Beginning putter loop.."
+        forM_ [0..size-1] $ \ix ->
+          IV.put_ (arr V.! ix) (fromIntegral ix + 1)
+  logDbgLn 1 " [v9f2] After fork."
+  let loop !acc ix | ix == size = return acc
+                   | otherwise  = do v <- IV.get (arr V.! ix)
+                                     when (ix `mod` 1000 == 0) $
+                                       logDbgLn 2 $ "   [v9f2] get completed at: "++show ix++" -> "++show v
+                                     loop (acc+v) (ix+1)
+  fut <- spawn (loop 0 0)
+  putters
+  IV.get fut)
 
 
 --------------------------------------------------------------------------------
