@@ -178,14 +178,14 @@ i9i = runParIO$ do
 
 -- | Here's the same test  as v9e with an actual array of IVars.
 --   This one is reliable, but takes about 0.20-0.30 seconds.
-case_v9f1_ivarArr :: Assertion
+case_v9f1_fillIvarArr :: Assertion
 -- [2013.08.05] RRN: Actually I'm seeing the same non-deterministic
 -- thread-blocked-indefinitely problem here.
 -- [2013.12.13] It can even happen at NUMELEMS=1000 (with debug messages slowing it)
 --              Could this possibly be a GHC bug?
 -- [2013.12.13] Runaway duplication of callbacks is ALSO possible on this test.
 --              Bafflingly that happens on DEBUG=2 but not 5.
-case_v9f1_ivarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
+case_v9f1_fillIvarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
   let size = in9e
@@ -203,9 +203,9 @@ v9f = runParIO$ do
                                      loop (acc+v) (ix+1)
   loop 0 0
 
--- | A variation of the previous.  In this version
-case_v9f2 :: Assertion
-case_v9f2 = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParIO (do 
+-- | A variation of the previous, change the order work is spawned to tickle the scheduler differently.
+case_v9f2_seq_fillIvarArray :: Assertion
+case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParIO (do 
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
@@ -213,15 +213,19 @@ case_v9f2 = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParI
         logDbgLn 1 " [v9f2] Beginning putter loop.."
         forM_ [0..size-1] $ \ix ->
           IV.put_ (arr V.! ix) (fromIntegral ix + 1)
-  logDbgLn 1 " [v9f2] After fork."
+  logDbgLn 1 " [v9f2] After puts are complete."
   let loop !acc ix | ix == size = return acc
                    | otherwise  = do v <- IV.get (arr V.! ix)
                                      when (ix `mod` 1000 == 0) $
                                        logDbgLn 2 $ "   [v9f2] get completed at: "++show ix++" -> "++show v
                                      loop (acc+v) (ix+1)
   fut <- spawn (loop 0 0)
-  putters
-  IV.get fut)
+  putters 
+  res <- IV.get fut -- Parallel
+  logDbgLn 1 " [v9f2] Test is DONE."
+  return res
+  -- putters; loop 0 0  -- Sequential
+  )
 
 
 --------------------------------------------------------------------------------

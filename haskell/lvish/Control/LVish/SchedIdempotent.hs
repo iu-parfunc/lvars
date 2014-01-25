@@ -209,7 +209,7 @@ logWith :: Sched.State a s -> Int -> String -> IO ()
 -- Only when the debug level is 1 or higher is the logger even initialized:
 logWith q lvl str = when (dbgLvl >= 1) $ do
   Just lgr <- readIORef (Sched.logger q)
-  L.logOn lgr (L.StrMsg lvl str)
+  L.logOn lgr (L.StrMsg lvl ("wrkr"++ show(Sched.no q)++" "++ str))
 #else
 logWith _ _ _ = return ()
 #endif
@@ -255,13 +255,16 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
           
 #if GET_ONCE
           execFlag <- newIORef False
-          let winnerCheck tru fal = do                
+          let winnerCheck q tru fal = do                
                   ticket <- readForCAS execFlag
-                  unless (peekTicket ticket) $ do
-                    (winner, _) <- casIORef execFlag ticket True
-                    logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
-                               ++": winner check? " ++show winner
-                    if winner then tru else fal
+                  if (peekTicket ticket) 
+                    then do logWith q 8 $ " [dbg-lvish] getLV winnerCheck failed.."
+                            fal
+                    else do
+                      (winner, _) <- casIORef execFlag ticket True
+                      logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+                                 ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
+                      if winner then tru else fal
               {-# INLINE winnerCheck #-}
 #endif
           let execFlag = ()
@@ -275,7 +278,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                 whenJust tripped $ \b -> do        
                   B.remove tok
 #if GET_ONCE
-                  winnerCheck (Sched.pushWork q (k b)) (return ())
+                  winnerCheck q (Sched.pushWork q (k b)) (return ())
 #else 
                   Sched.pushWork q (k b)                     
 #endif
@@ -296,7 +299,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
               logWith q 7$ " [dbg-lvish] getLV (active): second globalThresh tripped, remove tok"++uniqsuf
               B.remove tok  -- remove the listener we just added, and
 #if GET_ONCE
-              winnerCheck (exec (k b) q) (sched q)
+              winnerCheck q (exec (k b) q) (sched q)
 #else              
               exec (k b) q  -- execute the continuation. this work might be
                             -- redundant, but by idempotence that's OK

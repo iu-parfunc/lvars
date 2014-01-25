@@ -116,8 +116,8 @@ next state@State{ workpool } = do
 --   This function does NOT return until the complete runPar session is complete (all
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
-steal State{ idle, states, no=my_no, numWorkers } = do
-  chatter $ printf "!cpu %d stealing\n" my_no
+steal State{ idle, states, no=my_no, numWorkers, logger } = do
+  chatter logger $ "!cpu "++show my_no++" stealing" 
   go states
   where
     -- After a failed sweep, go idle:
@@ -125,18 +125,18 @@ steal State{ idle, states, no=my_no, numWorkers } = do
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
                if length r == numWorkers - 1
                   then do
-                     chatter$ printf "!cpu %d initiating shutdown\n" my_no
+                     chatter logger $ printf "!cpu %d initiating shutdown\n" my_no
                      mapM_ (\m -> putMVar m True) r
                      return Nothing
                   else do
-                    chatter $ printf "!cpu %d going idle...\n" my_no
+                    chatter logger $ printf "!cpu %d going idle...\n" my_no
                     done <- takeMVar m
                     if done
                        then do
-                         chatter $ printf "!cpu %d shutting down\n" my_no
+                         chatter logger $ printf "!cpu %d shutting down\n" my_no
                          return Nothing
                        else do
-                         chatter $ printf "!cpu %d woken up\n" my_no
+                         chatter logger $ printf "!cpu %d woken up\n" my_no
                          go states
     go (x:xs)
       | no x == my_no = go xs
@@ -144,7 +144,7 @@ steal State{ idle, states, no=my_no, numWorkers } = do
          r <- popOther (workpool x)
          case r of
            Just t  -> do
-              -- printf "cpu %d got work from cpu %d\n" my_no (no x)
+             chatter logger $ printf "cpu %d got work from cpu %d\n" my_no (no x)
              return r
            Nothing -> go xs
 
@@ -152,7 +152,8 @@ steal State{ idle, states, no=my_no, numWorkers } = do
 pushWork :: State a s -> a -> IO ()
 -- TODO: If we're really going to do wakeup on every push we could consider giving
 -- the formerly-idle worker the work item directly and thus avoid touching the deque.
-pushWork State { workpool, idle } t = do
+pushWork State { workpool, idle, logger, no } t = do
+  chatter logger $ "Starting pushWork on worker "++show no
   pushMine workpool t
   idles <- readIORef idle
   when (not (null idles)) $ do
@@ -248,6 +249,11 @@ currentCPU =
 #endif
 
 
-chatter :: String -> IO ()
+chatter :: IORef (Maybe L.Logger) -> String -> IO ()
 -- chatter s = putStrLn s
-chatter _ = return ()
+-- chatter s = printf "%s\n" s
+chatter ref s = do 
+  mlg <- readIORef ref
+  case mlg of 
+    Nothing -> return ()
+    Just lg -> L.logOn lg (L.StrMsg 7 s)
