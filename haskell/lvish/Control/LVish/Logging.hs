@@ -31,7 +31,9 @@ module Control.LVish.Logging
          WaitMode(..), LogMsg(..), OutDest(..),
 
          -- * General utilities
-         forkWithExceptions
+         forkWithExceptions,
+
+         Backoff(totalWait), newBackoff, backoff
        )
        where
 
@@ -321,24 +323,27 @@ dummyMVar = unsafePerformIO newEmptyMVar
 -- | The state for an exponential backoff.
 data Backoff = Backoff { current :: !Int
                        , cap :: !Int  -- ^ Maximum nanoseconds to wait.
+                       , totalWait :: !Int
                        }
   deriving Show
 
+-- | Create an object used for exponentential backoff; see `backoff`.
+newBackoff :: Int -- ^ Maximum delay, nanoseconds
+           -> IO Backoff
+newBackoff cap = return Backoff{cap,current=0,totalWait=0}
 
-newBackoff :: Int -> IO Backoff
-newBackoff cap = return Backoff{cap,current=0}
-
+-- | Perform the backoff, possibly delaying the thread.
 backoff :: Backoff -> IO Backoff
--- backoff b = do yield; return b
-backoff Backoff{current,cap} =                                   
-  case current of
-    -- Yield once before we start delaying:
-    0 -> do yield
-            return Backoff{cap,current=1}
-    n -> do let next = min cap (2*n)
-            threadDelay n
-            return Backoff{cap,current=next}
-  
+backoff Backoff{current,cap,totalWait} =                                   
+  if current < 1 then 
+    -- Yield before we start delaying:
+    do yield
+       return Backoff{cap,current=1,totalWait}
+   else
+    do let nxt = min cap (2*current)
+       threadDelay current
+       return Backoff{cap,current=nxt,totalWait=totalWait+current}
+
 ----------------------------------------------------------------------------------------------------
 -- Simple channels: we need non-blocking reads so we can't use
 -- Control.Concurrent.Chan.  We could use TChan, but I don't want to bring STM into

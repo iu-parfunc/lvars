@@ -7,7 +7,7 @@
 
 -- | Core tests for the LVish scheduler and basic futures/IVars.
 
-module LVishAndIVar(tests, runTests) where
+module LVishAndIVar(tests,runTests, runParStress, lotsaRunPar) where
 
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMain, testGroup)
@@ -64,7 +64,9 @@ tests = $(testGroupGenerator)
 
 -- | This stress test does nothing but run runPar again and again.
 ase_runParStress :: HU.Assertion
-ase_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
+ase_runParStress = runParStress
+runParStress :: HU.Assertion
+runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 
 -- TEMP: another version that uses the simplest possible method to run lots of runPars.
 -- Nothing else that could POSSIBLY get in the way.
@@ -82,7 +84,8 @@ ase_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 -- can't make the runtime use more capabilities than we fork par worker threads.
 -- This could be a GHC runtime bug relating to thread migration?
 case_lotsaRunPar :: Assertion
-case_lotsaRunPar = loop iters
+case_lotsaRunPar = lotsaRunPar
+lotsaRunPar = loop iters
   where 
   iters = 5000
   loop 0 = putStrLn ""
@@ -105,7 +108,6 @@ case_lotsaRunPar = loop iters
      -- For debugging I put in this traceEvent and ran with +RTS -N18 -qm -la
      putStr "."; hFlush stdout
      loop (i-1)
-
 
 -- Disabling thread-variation due to below bug:
 

@@ -368,7 +368,8 @@ defaultMainSeqTests tests = do
   res <- try (case x of
              Left err -> error$ "defaultMainSeqTests: "++err
              Right (opts,_) -> do let opts' = ((mempty{ ropt_threads= Just 1
-                                                      , ropt_test_options = Just (mempty{ topt_timeout=(Just$ Just$ 3*1000*1000)})})
+                                                      , ropt_test_options = Just (mempty{ 
+                                                          topt_timeout=(Just$ Just defaultTestTimeout)})})
                                                `mappend` opts)
                                   putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " worker threads for testing."
                                   defaultMainWithOpts tests opts'
@@ -381,3 +382,7 @@ defaultMainSeqTests tests = do
        threadDelay (30 * 1000)
        putStrLn " [*] Main thread exiting."
        exitWith e
+
+-- | In nanoseconds.
+defaultTestTimeout :: Int
+defaultTestTimeout = 3*1000*1000

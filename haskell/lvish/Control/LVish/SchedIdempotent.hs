@@ -69,13 +69,10 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
 import           System.Random (random)
-
-#ifdef DEBUG_LVAR               
 import           Text.Printf (printf)
-#endif
 
 -- import Control.Compose ((:.), unO)
-import           Data.Traversable 
+import           Data.Traversable  hiding (forM)
 
 import Control.LVish.Types
 import qualified Control.LVish.SchedIdempotentInternal as Sched
@@ -603,26 +600,19 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
   answerMV <- newEmptyMVar
-  wrkrtids <- newIORef []
-
-  -- Debugging: spin the main thread (not beginning work) until we can fully
-  -- initialize the logging data structure.
-  --
-  -- TODO: This would be easier to deal with if we used the current thread directly
-  -- as the main worker thread...
-  let setLogger = do
-        ls <- readIORef wrkrtids
-        if length ls == numWrkrs
-          then Sched.initLogger queues ls (minLvl,maxLvl) dbgDests dbgScheduling
-          else do Conc.yield
-                  setLogger
-      (minLvl, maxLvl) = case dbgRange of
+  let (minLvl, maxLvl) = case dbgRange of
                            Just b  -> b
                            Nothing -> (0,dbgLvl)
+  wrkrtids <- newEmptyMVar
+  let setLogger = do
+        -- TODO: This would be easier to deal with if we used the current thread directly
+        -- as the main worker thread...
+        ls <- readMVar wrkrtids
+        Sched.initLogger queues ls (minLvl,maxLvl) dbgDests dbgScheduling
   -- Option 1: forkWithExceptions version:
   ----------------------------------------------------------------------------------                           
 #if 1
-  let forkit = forM_ (zip [0..] queues) $ \(cpu, q) -> do 
+  let forkit = forM (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
                  if cpu == main_cpu 
                    then let k x = ClosedPar $ \q -> do 
@@ -640,18 +630,16 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                    -- forwarded asynchronously, can arrive much later at the main thread
                    -- (e.g. after it has exited, or set up a new handler, etc).
                    else sched q
-        atomicModifyIORef_ wrkrtids (tid:)
-  -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
-  -- ans <- E.catch (forkit >> fmap Right (busyTakeMVar wrkrtids "final answer" answerMV))
-  ans <- E.catch (forkit >> fmap Right (takeMVar answerMV))
+        return tid
+
+  ans <- E.catch (do tids <- forkit 
+                     putMVar wrkrtids tids
+                     fmap Right (dbgTakeMVar tids "runPar/final answer" answerMV))
     (\ (e :: E.SomeException) -> do 
-        tids <- readIORef wrkrtids
+        tids <- readMVar wrkrtids
         logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
         mapM_ killThread tids
-        -- if length tids < length queues then do -- TODO: we could try to chase these down in the idle list.
-        mytid <- myThreadId
-        -- when (maxLvl >= 1) printLog -- Unfortunately this races with the log printing thread.
-        -- E.throw$ LVarSpecificExn ("EXCEPTION in runPar("++show mytid++"): "++show e)
+        -- TODO: we could try to chase these down in the idle list.
         return $! Left e
     )
   logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
@@ -766,25 +754,30 @@ hpId_ (HandlerPool cnt bag) = do
 -- | For debugging purposes.  This can help us figure out (by an ugly
 --   process of elimination) which MVar reads are leading to a "Thread
 --   blocked indefinitely" exception.
-busyTakeMVar :: IORef [ThreadId] -> String -> MVar a -> IO a
-busyTakeMVar ref msg mv =  do
-    tids <- readIORef ref
-    try tids (1000)
+busyTakeMVar :: [ThreadId] -> String -> MVar a -> IO a
+busyTakeMVar tids msg mv = 
+  do b <- L.newBackoff maxWait
+     try b
  where
- try tids 0 = do
+ maxWait = 10000 -- nanoseconds
+ timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
+ try bkoff | totalWait bkoff >= timeOut = do
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
-     printf "%s not getting anywhere, msg: %s\n" (show tid) msg
+     printf "%s not unblocked yet, for: %s\n" (show tid) msg
      stats <- Prelude.mapM threadStatus tids 
      printf $ "Worker statuses: " ++ show (zip tids stats) ++"\n"
-     try tids (1000)
- try tids n = do
+     try =<< L.backoff bkoff 
+ try bkoff = do
    x <- tryTakeMVar mv
    case x of
      Just y  -> return y
-     Nothing -> do threadDelay 1000; try tids (n-1)
+     Nothing -> try =<< L.backoff bkoff 
 
-
-
+#ifdef DEBUG_LVAR
+dbgTakeMVar = busyTakeMVar
+#else
+dbgTakeMVar _ _ = takeMVar
+#endif
 
