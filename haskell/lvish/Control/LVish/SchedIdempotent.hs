@@ -61,6 +61,7 @@ import qualified Data.Atomics.Counter as C2
 import qualified Data.Concurrent.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
+import qualified GHC.Conc 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Environment(getEnvironment)
@@ -466,10 +467,6 @@ addHandler hp LVar {state, status} globalCB updateThresh =
       onUpdate d _ q = spawnWhen (updateThresh d) q
       onFreeze   _ _ = return ()
 
-      runWhen thresh q = do
-        tripped <- thresh
-        whenJust tripped $ \cb -> 
-          exec (close cb nullCont) q
   in mkPar $ \k q -> do
     curStatus <- readIORef status 
     case curStatus of
@@ -481,10 +478,7 @@ addHandler hp LVar {state, status} globalCB updateThresh =
     logWith q 4 " [dbg-lvish] addHandler: calling globalCB.."
     -- At registration time, traverse (globally) over the previously inserted items
     -- to launch any required callbacks.
-    exec (close (globalCB state) nullCont) q
-    exec (k ()) q 
-
-nullCont = (\() -> ClosedPar (\_ -> return ()))
+    exec (close (globalCB state) k) q
 
 -- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()
@@ -648,7 +642,7 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
   -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
-  ans <- E.catch (forkit >> fmap Right (takeMVar answerMV))
+  ans <- E.catch (forkit >> fmap Right (busyTakeMVar wrkrtids "final answer" answerMV))
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
         logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
@@ -666,6 +660,7 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
             Just lgr -> do L.closeIt lgr
                            L.flushLogs lgr -- If in-memory logging is off, this will be empty.
   return $! (logs,ans)
+
 #else
 -- Option 2: This was an experiment to use Control.Concurrent.Async to deal with exceptions:
 ----------------------------------------------------------------------------------
@@ -770,21 +765,25 @@ hpId_ (HandlerPool cnt bag) = do
 -- | For debugging purposes.  This can help us figure out (by an ugly
 --   process of elimination) which MVar reads are leading to a "Thread
 --   blocked indefinitely" exception.
-{-
-busyTakeMVar :: String -> MVar a -> IO a
-busyTakeMVar msg mv = try (10 * 1000 * 1000)
+busyTakeMVar :: IORef [ThreadId] -> String -> MVar a -> IO a
+busyTakeMVar ref msg mv =  do
+    tids <- readIORef ref
+    try tids (1000)
  where
- try 0 = do
-   when dbg $ do
+ try tids 0 = do
+   -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
      printf "%s not getting anywhere, msg: %s\n" (show tid) msg
-   try (100 * 1000)
- try n = do
+     stats <- Prelude.mapM threadStatus tids 
+     printf $ "Worker statuses: " ++ show (zip tids stats) ++"\n"
+     try tids (1000)
+ try tids n = do
    x <- tryTakeMVar mv
    case x of
      Just y  -> return y
-     Nothing -> do yield; try (n-1)
--}
+     Nothing -> do threadDelay 1000; try tids (n-1)
+
+
 
 

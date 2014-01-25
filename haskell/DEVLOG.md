@@ -593,3 +593,11 @@ Haven't seen this one before, a compile failure on the cfa package:
           _Main_zdsfilterLtzufilterzq_srt in Main.o
           ...
     ld: symbol(s) not found for architecture x86_64
+
+[2014.01.24] {More scheduler debugging}
+----------------------------------------
+
+Seeing failures right now on multiple threads on v9f1 v9f2 v9g and (i
+think) mc2.
+
+
