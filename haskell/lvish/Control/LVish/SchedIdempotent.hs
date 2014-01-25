@@ -49,6 +49,7 @@ import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
 import qualified Control.Concurrent as Conc
 import qualified Control.Exception as E
+import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
@@ -609,9 +610,18 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
         -- as the main worker thread...
         ls <- readMVar wrkrtids
         Sched.initLogger queues ls (minLvl,maxLvl) dbgDests dbgScheduling
+
+  let grabLogs = do
+        logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
+        mlgr <- readIORef (Sched.logger (Prelude.head queues))
+        case mlgr of 
+          Nothing -> return []
+          Just lgr -> do L.closeIt lgr
+                         L.flushLogs lgr -- If in-memory logging is off, this will be empty.
+
   -- Option 1: forkWithExceptions version:
   ----------------------------------------------------------------------------------                           
-#if 1
+
   let forkit = forM (zip [0..] queues) $ \(cpu, q) -> do 
         tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
                  if cpu == main_cpu 
@@ -632,6 +642,7 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                    else sched q
         return tid
 
+#if 0
   ans <- E.catch (do tids <- forkit 
                      putMVar wrkrtids tids
                      fmap Right (dbgTakeMVar tids "runPar/final answer" answerMV))
@@ -642,18 +653,14 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
         -- TODO: we could try to chase these down in the idle list.
         return $! Left e
     )
-  logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
-  mlgr <- readIORef (Sched.logger (Prelude.head queues))
-  logs <- case mlgr of 
-            Nothing -> return []
-            Just lgr -> do L.closeIt lgr
-                           L.flushLogs lgr -- If in-memory logging is off, this will be empty.
+  logs <- grabLogs
   return $! (logs,ans)
 
 #else
 -- Option 2: This was an experiment to use Control.Concurrent.Async to deal with exceptions:
 ----------------------------------------------------------------------------------
-  let runWorker (cpu, q) = do 
+  let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
+      runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
            then sched q
            else let k x = ClosedPar $ \q -> do 
@@ -662,27 +669,33 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                 in exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
-  let loop [] asyncs = mapM_ wait asyncs
+  let loop [] asyncs = waitloop asyncs
       loop ((cpu,q):tl) asyncs = 
 --         withAsync (runWorker state)
-        withAsyncOn cpu (runWorker (cpu,q))
-                    (\a -> loop tl (a:asyncs))
-
+        A.withAsyncOn cpu (runWorker (cpu,q))
+                      (\a -> loop tl (a:asyncs))
+      waitloop [] = fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
+      waitloop (hd:tl) = do me <- A.waitCatch hd
+                            case me of 
+                              Left e    -> return $! Left e
+                              Right ()  -> waitloop tl
 ----------------------------------------
 -- (1) There is a BUG in 'loop' presently:
 --    "thread blocked indefinitely in an STM transaction"
---  loop (zip [0..] queues) []
+  ans <- loop (zip [0..] queues) []
 ----------------------------------------
 -- (2) This has the same problem as 'loop':
 --  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
 --  mapM_ wait ls
 ----------------------------------------
 -- (3) Using this FOR NOW, but it does NOT pin to the right processors:
-  mapConcurrently runWorker (zip [0..] queues)
+--  A.mapConcurrently runWorker (zip [0..] queues)
 ----------------------------------------
-   -- Now that child threads are done, it's safe for the main thread
-   -- to call it quits.
-  takeMVar answerMV  
+  -- Now that child threads are done, it's safe for the main thread
+  -- to call it quits.
+  -- takeMVar answerMV  
+  logs <- grabLogs
+  return $! (logs,ans)
 #endif
 
 defaultRun :: Par b -> IO b
