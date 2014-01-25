@@ -254,7 +254,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
         Nothing -> do          -- /transiently/ not past the threshhold; block        
           
 #if GET_ONCE
-          execFlag <- newIORef False
+          execFlag <- newIORef False -- True means someone has already won.
           let winnerCheck q tru fal = do                
                   ticket <- readForCAS execFlag
                   if (peekTicket ticket) 

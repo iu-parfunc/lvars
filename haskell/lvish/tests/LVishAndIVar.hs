@@ -63,8 +63,8 @@ tests = $(testGroupGenerator)
 --------------------------------------------------------------------------------
 
 -- | This stress test does nothing but run runPar again and again.
-case_runParStress :: HU.Assertion
-case_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
+ase_runParStress :: HU.Assertion
+ase_runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 
 -- TEMP: another version that uses the simplest possible method to run lots of runPars.
 -- Nothing else that could POSSIBLY get in the way.
