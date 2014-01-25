@@ -642,7 +642,8 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                    else sched q
         atomicModifyIORef_ wrkrtids (tid:)
   -- logWith (Prelude.head queues) " [dbg-lvish] About to fork workers..."      
-  ans <- E.catch (forkit >> fmap Right (busyTakeMVar wrkrtids "final answer" answerMV))
+  -- ans <- E.catch (forkit >> fmap Right (busyTakeMVar wrkrtids "final answer" answerMV))
+  ans <- E.catch (forkit >> fmap Right (takeMVar answerMV))
     (\ (e :: E.SomeException) -> do 
         tids <- readIORef wrkrtids
         logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
