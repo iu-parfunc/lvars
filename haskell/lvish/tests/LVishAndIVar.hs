@@ -63,8 +63,8 @@ tests = $(testGroupGenerator)
 --------------------------------------------------------------------------------
 
 -- | This stress test does nothing but run runPar again and again.
-ase_runParStress :: HU.Assertion
-ase_runParStress = runParStress
+case_runParStress :: HU.Assertion
+case_runParStress = runParStress
 runParStress :: HU.Assertion
 runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 
@@ -88,11 +88,12 @@ case_lotsaRunPar = lotsaRunPar
 lotsaRunPar = loop iters
   where 
   iters = 5000
+  threads = 15 -- numCapabilities 
   loop 0 = putStrLn ""
   loop i = do
      -- We need to do runParIO to make sure the compiler does the runPar each time.
      -- runParIO (return ()) -- Can't crash this one.
-     runParDetailed (DbgCfg Nothing [] True) 15 (return ()) 
+     runParDetailed (DbgCfg Nothing [] True) threads (return ()) 
       -- This version can start going RIDICULOUSLY slowly with -N20.  It will use <20% CPU while it does it.
       -- But it won't use much memory either... what is it doing?  With -N4 it goes light years faster, and with -N2
       -- faster yet.  Extra capabilities result in a crazy slowdown here.
@@ -104,7 +105,7 @@ lotsaRunPar = loop iters
       --   -qm seems to EXACERBATE the problem, making it happen from the start and consistently. 
       --    (even then, it is fine with -N15, the mismatch is the problem)
       --   Playing around with -C, -qb -qg -qi doesn't seem to do anything.
-     traceEventIO ("Finish iteration "++show (iters-i))
+     -- traceEventIO ("Finish iteration "++show (iters-i))
      -- For debugging I put in this traceEvent and ran with +RTS -N18 -qm -la
      putStr "."; hFlush stdout
      loop (i-1)
