@@ -66,8 +66,8 @@ v2size =
     Just x -> x
     Nothing -> 10
 
-ase_v3 :: Assertion
-ase_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
+case_v3 :: Assertion
+case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 
 -- "freeze with 3 elements added, asynchronously"
 -- If we're doing a guaranteed-deterministic computation we can't
@@ -80,8 +80,8 @@ v3 =
 
 -- Getting occasional failures here with -N2, don't know what's
 -- wrong. :(
-ase_v4 :: Assertion
-ase_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int))
+case_v4 :: Assertion
+case_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int))
 
 -- "additions and removals"
 v4 :: Par QuasiDet s (S.Set Int)
