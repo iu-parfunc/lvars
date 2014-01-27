@@ -207,8 +207,11 @@ logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 -- Only when the debug level is 1 or higher is the logger even initialized:
 logWith q lvl str = when (dbgLvl >= 1) $ do
-  Just lgr <- readIORef (Sched.logger q)
-  L.logOn lgr (L.StrMsg lvl ("wrkr"++ show(Sched.no q)++" "++ str))
+  mlgr <- readIORef (Sched.logger q)
+  let str' = "wrkr"++ show(Sched.no q)++" "++ str
+  case mlgr of 
+    Just lgr -> L.logOn lgr (L.StrMsg lvl str')
+    Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++str)
 #else
 logWith _ _ _ = return ()
 #endif
@@ -631,8 +634,7 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                               -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
                         in do 
 #ifdef DEBUG_LVAR
-                              -- This is painful, we may need to spin and wait for everybody to be forked:
-                              when (maxLvl >= 1) setLogger
+                              when (maxLvl > 0) setLogger
 #endif
                               exec (close comp k) q
                    -- Note: The above is important: it is sketchy to leave any workers running after
@@ -664,12 +666,16 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
         if (cpu /= main_cpu)
            then sched q
            else let k x = ClosedPar $ \q -> do 
+#ifdef DEBUG_LVAR
+                      when (maxLvl > 0) setLogger
+#endif
                       sched q      -- ensure any remaining, enabled threads run to 
                       putMVar answerMV x  -- completion prior to returning the result
                 in exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
-  let loop [] asyncs = waitloop asyncs
+  let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)
+                          waitloop asyncs
       loop ((cpu,q):tl) asyncs = 
 --         withAsync (runWorker state)
         A.withAsyncOn cpu (runWorker (cpu,q))
