@@ -666,12 +666,13 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
         if (cpu /= main_cpu)
            then sched q
            else let k x = ClosedPar $ \q -> do 
+                      sched q      -- ensure any remaining, enabled threads run to 
+                      putMVar answerMV x  -- completion prior to returning the result
+                in do 
 #ifdef DEBUG_LVAR
                       when (maxLvl > 0) setLogger
 #endif
-                      sched q      -- ensure any remaining, enabled threads run to 
-                      putMVar answerMV x  -- completion prior to returning the result
-                in exec (close comp k) q
+                      exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)
