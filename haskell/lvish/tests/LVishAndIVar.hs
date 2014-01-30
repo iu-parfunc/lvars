@@ -93,7 +93,7 @@ lotsaRunPar = loop iters
   loop i = do
      -- We need to do runParIO to make sure the compiler does the runPar each time.
      -- runParIO (return ()) -- Can't crash this one.
-     runParDetailed (DbgCfg Nothing [] True) threads (return ()) 
+     runParDetailed (DbgCfg Nothing [] False) threads (return ())
       -- This version can start going RIDICULOUSLY slowly with -N20.  It will use <20% CPU while it does it.
       -- But it won't use much memory either... what is it doing?  With -N4 it goes light years faster, and with -N2
       -- faster yet.  Extra capabilities result in a crazy slowdown here.

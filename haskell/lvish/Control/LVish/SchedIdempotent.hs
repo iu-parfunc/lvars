@@ -617,11 +617,15 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
       runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
-           then sched q
-           else let k x = ClosedPar $ \q -> do 
+           then do logWith q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting."
+                   sched q
+                   logWith q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
+           else let k x = ClosedPar $ \q -> do                       
+                      logWith q 3 " [dbg-lvish] Final continuation of main worker invoked."
                       sched q      -- ensure any remaining, enabled threads run to 
                       putMVar answerMV x  -- completion prior to returning the result
-                in exec (close comp k) q
+                in do logWith q 3 " [dbg-lvish] Main worker thread starting."
+                      exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)

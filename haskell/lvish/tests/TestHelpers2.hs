@@ -32,18 +32,22 @@ stressTest :: Show a =>
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
 stressTest reps workers comp oracle = 
- do -- rawRun
+ do rawRun
     reploop reps
  where 
-  rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] True) workers comp
+  rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
               putStr "!"
               checkRes x
               
   reploop 0 = return ()
   reploop i = do 
-    x <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] True) workers comp
+    (logs,ans) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents, OutputTo stdout] True) workers comp
+-- This will cause problems because some of the messages from lvls 1-3 are sent before the workers are UP:
+--    (logs,ans) <- runParDetailed (DbgCfg (Just(0,10)) [OutputInMemory, OutputEvents] True) workers comp
     putStr "."
-    checkRes x
+--    putStrLn $ "logs:\n"
+--    mapM_ print logs
+    checkRes (logs,ans)
     reploop (i-1)
 
   checkRes (logs,res) = 
