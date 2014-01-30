@@ -152,36 +152,33 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   parent      <- myThreadId
   let flushLogs = atomicModifyIORef' logged $ \ ls -> ([],reverse ls)
 
-  let -- When all threads are quiescent, we can flush the remaining messagers from
-      -- the channel to get the whole set of waiting tasks.  Return in chronological order.
-      flushChan !acc = do
-        x <- tryReadSmplChan checkPoint
-        case x of
-          Just h  -> flushChan (h:acc)
-          Nothing -> return $ reverse acc
-  
-      -- This is the format we use for debugging messages
-      formatMessage extra Writer{msg} = "|"++show (lvl msg)++ "| "++extra++ toString msg
-      -- One of these message reports how many tasks are in parallel with it:
-      messageInContext pos len wr = formatMessage ("#"++show (1+pos)++" of "++show len ++": ") wr
-      printOne str (OutputTo h)   = hPrintf h "%s\n" str
-      printOne str OutputEvents = traceEventIO str
-      printOne str OutputInMemory =
-        -- This needs to be atomic because other messages might be calling "flush"
-        -- at the same time.
-        atomicModifyIORef' logged $ \ ls -> (str:ls,())
-      printAll str = mapM_ (printOne str) loutDests
-
   shutdownFlag     <- newIORef False -- When true, time to shutdown.
   shutdownComplete <- newEmptyMVar
   
   -- Here's the new thread that corresponds to this logger:
-  coordinator <- A.async $ E.handle (catchAll parent) $
-      -- BEGIN defs for the async task:
-      --------------------------------------------------------------------------------
-      -- Proceed in rounds, gather the set of actions that may happen in parallel, then
-      -- pick one.  We log the series of decisions we make for reproducability.
-      let schedloop :: Int -> Int -- ^ length of list `waiting`
+  coordinator <- A.async $ E.handle (catchAll parent) $ do
+                   runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests
+                   putMVar shutdownComplete ()
+  let closeIt = do
+        atomicModifyIORef' shutdownFlag (\_ -> (True,()))
+        readMVar shutdownComplete
+        A.cancel coordinator -- Just to make sure its completely done.
+  return $! Logger { coordinator, checkPoint, closeIt, loutDests,
+                     logged, flushLogs,
+                     waitWorkers, minLvl, maxLvl }
+
+--------------------------------------------------------------------------------
+
+-- | Run a logging coordinator thread until completion/shutdown.
+runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
+runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
+       case waitWorkers of
+         DontWait -> printLoop 
+         _ -> schedloop (0::Int) (0::Int) [] =<< newBackoff maxWait -- Kick things off.
+  where
+          -- Proceed in rounds, gather the set of actions that may happen in parallel, then
+          -- pick one.  We log the series of decisions we make for reproducability.
+          schedloop :: Int -> Int -- ^ length of list `waiting`
                     -> [Writer] -> Backoff -> IO ()
           schedloop !iters !num !waiting !bkoff = do
             when (iters > 0 && iters `mod` 500 == 0) $
@@ -248,34 +245,20 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
             printAll (messageInContext pos len wr)
             putMVar continue () -- Signal that the thread may continue.
 
-          -- Check whether the worker threads are all quiesced 
-          checkTids [] = return True
-          checkTids (tid:rst) = do 
-            st <- threadStatus tid
-            case st of
-              ThreadRunning   -> return False
-              ThreadFinished  -> checkTids rst
-              -- WARNING: this design is flawed because it is possible when compiled
-              -- with -threaded that IO will spuriously showed up as BlockedOnMVar:
-              ThreadBlocked BlockedOnMVar -> checkTids rst
-              ThreadBlocked _ -> return False
-              ThreadDied      -> checkTids rst -- Should this be an error condition!?
-      in -- Main body of async task:
-       do case waitWorkers of
-            DontWait -> printLoop 
-            _ -> schedloop (0::Int) (0::Int) [] =<< newBackoff maxWait -- Kick things off.
-          putMVar shutdownComplete ()
-          return () -- End: async thread
-      -- END async task.
-      --------------------------------------------------------------------------------
+          -- This is the format we use for debugging messages
+          formatMessage extra Writer{msg} = "|"++show (lvl msg)++ "| "++extra++ toString msg
+          -- One of these message reports how many tasks are in parallel with it:
+          messageInContext pos len wr = formatMessage ("#"++show (1+pos)++" of "++show len ++": ") wr
+          printOne str (OutputTo h)   = hPrintf h "%s\n" str
+          printOne str OutputEvents = traceEventIO str
+          printOne str OutputInMemory =
+            -- This needs to be atomic because other messages might be calling "flush"
+            -- at the same time.
+            atomicModifyIORef' logged $ \ ls -> (str:ls,())
+          printAll str = mapM_ (printOne str) loutDests
 
-  let closeIt = do
-        atomicModifyIORef' shutdownFlag (\_ -> (True,()))
-        readMVar shutdownComplete
-        A.cancel coordinator -- Just to make sure its completely done.
-  return $! Logger { coordinator, checkPoint, closeIt, loutDests,
-                     logged, flushLogs,
-                     waitWorkers, minLvl, maxLvl }
+
+
 
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
