@@ -606,12 +606,10 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   wrkrtids <- newEmptyMVar
 
   let grabLogs = do  
-        logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
+        logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed.  Optionally closing logger."
         case lgr of 
-          Nothing -> putStrLn "TEMP: LOGGER is NOTHING" >> 
-                     return []
+          Nothing -> return []
           Just lgr -> do L.closeIt lgr
-                         putStrLn "TEMP: closeIt done, now flushLogs" 
                          L.flushLogs lgr -- If in-memory logging is off, this will be empty.
 
   -- Use Control.Concurrent.Async to deal with exceptions:
@@ -625,19 +623,16 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       putMVar answerMV x  -- completion prior to returning the result
                 in exec (close comp k) q
 
-  putStrLn "TEMP: going to fork workers.."
-
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)
-                          putStrLn "TEMP: switching to waitloop"
                           waitloop asyncs
       loop ((cpu,q):tl) asyncs = 
         A.withAsyncOn cpu (runWorker (cpu,q))
                       (\a -> loop tl (a:asyncs))
-      waitloop [] = do putStrLn "TEMP: taking final answer mvar..."
---                       fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
-                       fmap Right (takeMVar answerMV)
-      waitloop (hd:tl) = do putStrLn "TEMP: Blocking on async..."
+      waitloop [] = do 
+                       fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
+--                       fmap Right (takeMVar answerMV)
+      waitloop (hd:tl) = do 
                             me <- A.waitCatch hd
                             case me of 
                               Left e    -> return $! Left e
@@ -646,7 +641,6 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- (1) There is a BUG in 'loop' presently:
   --    "thread blocked indefinitely in an STM transaction"
   ans <- loop (zip [0..] queues) []
-  putStrLn "TEMP: back from loop, got answer"
   ----------------------------------------
   -- (2) This has the same problem as 'loop':
   --  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
@@ -658,9 +652,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- Now that child threads are done, it's safe for the main thread
   -- to call it quits.
   -- takeMVar answerMV  
-  putStrLn "TEMP: GRABBING LOGS" 
   logs <- grabLogs
-  putStrLn "TEMP: DONE GRABBING LOGS" 
   return $! (logs,ans)
 
 
@@ -752,9 +744,8 @@ busyTakeMVar tids msg mv =
      try =<< L.backoff bkoff 
  try bkoff = do
    x <- tryTakeMVar mv
-   putStrLn $ "hMMBKOFF ... totalWAIT "++show (totalWait bkoff)
    case x of
-     Just y  -> putStrLn "SUCCESS" >> return y
+     Just y  -> return y
      Nothing -> try =<< L.backoff bkoff 
 
 #ifdef DEBUG_LVAR

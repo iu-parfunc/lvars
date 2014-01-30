@@ -114,6 +114,8 @@ instance Show (IO Int) where
 -- distinction is not that important, because only *thunks* should be logged; the
 -- thread printing the logs should deal with forcing those thunks.
 data LogMsg = StrMsg { lvl::Int, body::String }
+--          | OffTheRecord String -- ^ This sort of message is meaningless chatter and NOT meant 
+                                  --   to participate in the scheduler-testing framework.
 --          | ByteStrMsg { lvl::Int,  }
 
 toString x@(StrMsg{}) = body x
@@ -159,12 +161,7 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
                    runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests
   let closeIt = do
         atomicModifyIORef' shutdownFlag (\_ -> (True,())) -- Declare that it's time to shutdown:
-        tid <- myThreadId
-        putStrLn $ "TEMP: closeIt: (tid "++show tid++") about to block on shutdownComplete"
         A.wait coordinator -- Gently wait for it to be done.
-        -- readMVar shutdownComplete
-        -- putStrLn $ "TEMP: closeIt: shutdownComplete done, now cancel coordinator"
-        -- A.cancel coordinator -- Just to make sure its completely done.
   return $! Logger { coordinator, checkPoint, closeIt, loutDests,
                      logged, flushLogs,
                      waitWorkers, minLvl, maxLvl }
@@ -173,9 +170,7 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
 
 -- | Run a logging coordinator thread until completion/shutdown.
 runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
-runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = do 
-       tid <- myThreadId
-       putStrLn $"TEMP: coordinator thread starting "++show tid
+runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
        case waitWorkers of
          DontWait -> printLoop =<< newBackoff maxWait
          _ -> schedloop (0::Int) [] =<< newBackoff maxWait -- Kick things off.
@@ -186,7 +181,6 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = do
                     -> [Writer]   -- ^ Waiting threads, reverse chronological (newest first)
                     -> Backoff -> IO ()
           schedloop !iters !waiting !bkoff = do
-            putStrLn$ "TEMP: schedloop iter "++show iters
             when (iters > 0 && iters `mod` 500 == 0) $
               putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show (length waiting)++" are waiting."
             hFlush stdout
@@ -204,9 +198,10 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = do
                   waiting2 <- flushChan waiting
                   let numWait = length waiting2
                   n <- extra -- Atomically check how many extra workers are blocked.
-                  putStrLn $ "TEMP: schedloop/WaitNum: polled for waiting/extra workers: "++show (numWait,n)
                   if (numWait + n >= target)
-                    then pickAndProceed waiting2
+                    then if numWait > 0 
+                         then pickAndProceed waiting2
+                         else keepWaiting -- This sounds like a shutdown is happening, all are idle.
                     else keepWaiting -- We don't know if we're waiting for idles to arrive or blocked waiters.
 
           -- | Keep printing messages until there is (transiently) nothing left.
@@ -323,8 +318,6 @@ newBackoff cap = return Backoff{cap,current=0,totalWait=0}
 -- | Perform the backoff, possibly delaying the thread.
 backoff :: Backoff -> IO Backoff
 backoff Backoff{current,cap,totalWait} = do
-  tid <- myThreadId
-  putStrLn$ "DO BACKOFF ("++show tid++"), total "++show (current,cap,totalWait)
   if current < 1 then 
     -- Yield before we start delaying:
     do yield

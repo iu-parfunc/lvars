@@ -41,7 +41,7 @@ stressTest reps workers comp oracle =
               
   reploop 0 = return ()
   reploop i = do 
-    x <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] False) workers comp    
+    x <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] True) workers comp
     putStr "."
     checkRes x
     reploop (i-1)
