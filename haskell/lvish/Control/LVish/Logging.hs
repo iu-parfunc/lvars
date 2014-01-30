@@ -152,17 +152,19 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   parent      <- myThreadId
   let flushLogs = atomicModifyIORef' logged $ \ ls -> ([],reverse ls)
 
-  shutdownFlag     <- newIORef False -- When true, time to shutdown.
-  shutdownComplete <- newEmptyMVar
+  shutdownFlag     <- newIORef False -- When true, time to start shutdown.
   
   -- Here's the new thread that corresponds to this logger:
   coordinator <- A.async $ E.handle (catchAll parent) $ do
                    runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests
-                   putMVar shutdownComplete ()
   let closeIt = do
-        atomicModifyIORef' shutdownFlag (\_ -> (True,()))
-        readMVar shutdownComplete
-        A.cancel coordinator -- Just to make sure its completely done.
+        atomicModifyIORef' shutdownFlag (\_ -> (True,())) -- Declare that it's time to shutdown:
+        tid <- myThreadId
+        putStrLn $ "TEMP: closeIt: (tid "++show tid++") about to block on shutdownComplete"
+        A.wait coordinator -- Gently wait for it to be done.
+        -- readMVar shutdownComplete
+        -- putStrLn $ "TEMP: closeIt: shutdownComplete done, now cancel coordinator"
+        -- A.cancel coordinator -- Just to make sure its completely done.
   return $! Logger { coordinator, checkPoint, closeIt, loutDests,
                      logged, flushLogs,
                      waitWorkers, minLvl, maxLvl }
@@ -171,35 +173,41 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
 
 -- | Run a logging coordinator thread until completion/shutdown.
 runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
-runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
+runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = do 
+       tid <- myThreadId
+       putStrLn $"TEMP: coordinator thread starting "++show tid
        case waitWorkers of
-         DontWait -> printLoop 
-         _ -> schedloop (0::Int) (0::Int) [] =<< newBackoff maxWait -- Kick things off.
+         DontWait -> printLoop =<< newBackoff maxWait
+         _ -> schedloop (0::Int) [] =<< newBackoff maxWait -- Kick things off.
   where
           -- Proceed in rounds, gather the set of actions that may happen in parallel, then
           -- pick one.  We log the series of decisions we make for reproducability.
-          schedloop :: Int -> Int -- ^ length of list `waiting`
-                    -> [Writer] -> Backoff -> IO ()
-          schedloop !iters !num !waiting !bkoff = do
+          schedloop :: Int 
+                    -> [Writer]   -- ^ Waiting threads, reverse chronological (newest first)
+                    -> Backoff -> IO ()
+          schedloop !iters !waiting !bkoff = do
+            putStrLn$ "TEMP: schedloop iter "++show iters
             when (iters > 0 && iters `mod` 500 == 0) $
-              putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show num++" are waiting."
+              putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show (length waiting)++" are waiting."
             hFlush stdout
             fl <- readIORef shutdownFlag
             if fl then flushLoop
              else do 
               let keepWaiting = do b <- backoff bkoff
-                                   schedloop (iters+1) num waiting b
+                                   schedloop (iters+1) waiting b
                   waitMore    = do w <- readSmplChan checkPoint -- Blocking! (or spinning)
                                    b <- newBackoff maxWait -- We got something, reset this.
-                                   schedloop (iters+1) (num+1) (w:waiting) b
+                                   schedloop (iters+1) (w:waiting) b
               case waitWorkers of
                 DontWait -> error "newLogger: internal invariant broken."
                 WaitNum target extra -> do
+                  waiting2 <- flushChan waiting
+                  let numWait = length waiting2
                   n <- extra -- Atomically check how many extra workers are blocked.
-                  putStrLn $ "TEMP: schedloop/WaitNum: polled for extra/idle workers: "++show n
-                  if (num + n >= target)
-                    then pickAndProceed waiting
-                    else waitMore
+                  putStrLn $ "TEMP: schedloop/WaitNum: polled for waiting/extra workers: "++show (numWait,n)
+                  if (numWait + n >= target)
+                    then pickAndProceed waiting2
+                    else keepWaiting -- We don't know if we're waiting for idles to arrive or blocked waiters.
 
           -- | Keep printing messages until there is (transiently) nothing left.
           flushLoop = do 
@@ -209,13 +217,21 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
                               flushLoop
                 Nothing -> return ()
 
+          flushChan !acc = do
+            x <- tryReadSmplChan checkPoint
+            case x of
+              Just h  -> flushChan (h:acc)
+              Nothing -> return acc
+
           -- | A simpler alternative schedloop that only does printing (e.g. for DontWait mode).
-          printLoop = do
+          printLoop bk = do
             fl <- readIORef shutdownFlag
             if fl then flushLoop
-                  else do wr <- readSmplChan checkPoint
-                          printAll (formatMessage "" wr)
-                          printLoop
+                  else do mwr <- tryReadSmplChan checkPoint
+                          case mwr of 
+                            Nothing -> do printLoop =<< backoff bk 
+                            Just wr -> do printAll (formatMessage "" wr)
+                                          printLoop =<< newBackoff (cap bk)
 
           -- Take the set of logically-in-parallel tasks, choose one, execute it, and
           -- then return to the main scheduler loop.
@@ -239,7 +255,7 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
             yield -- If running on one thread, give it a chance to run.
             -- Return to the scheduler to wait for the next quiescent point:
             bnew <- newBackoff maxWait
-            schedloop 0 (length rst) rst bnew
+            schedloop 0 rst bnew
 
           unblockTask pos len wr@Writer{continue} = do
             printAll (messageInContext pos len wr)
@@ -307,7 +323,8 @@ newBackoff cap = return Backoff{cap,current=0,totalWait=0}
 -- | Perform the backoff, possibly delaying the thread.
 backoff :: Backoff -> IO Backoff
 backoff Backoff{current,cap,totalWait} = do
-  putStrLn$ "DO BACKOFF, total "++show (current,cap,totalWait)
+  tid <- myThreadId
+  putStrLn$ "DO BACKOFF ("++show tid++"), total "++show (current,cap,totalWait)
   if current < 1 then 
     -- Yield before we start delaying:
     do yield
