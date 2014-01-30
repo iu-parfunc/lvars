@@ -207,9 +207,8 @@ logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 -- Only when the debug level is 1 or higher is the logger even initialized:
 logWith q lvl str = when (dbgLvl >= 1) $ do
-  mlgr <- readIORef (Sched.logger q)
   let str' = "wrkr"++ show(Sched.no q)++" "++ str
-  case mlgr of 
+  case (Sched.logger q) of 
     Just lgr -> L.logOn lgr (L.StrMsg lvl str')
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++str)
 #else
@@ -546,8 +545,8 @@ liftIO io = mkPar $ \k q -> do
 -- | IF compiled with debugging support, this will return the Logger used by the
 -- current Par session, otherwise it will simply throw an exception.
 getLogger :: Par L.Logger
-getLogger = mkPar $ \k q -> do
-  Just lgr <- readIORef (Sched.logger q)
+getLogger = mkPar $ \k q -> 
+  let Just lgr = Sched.logger q in
   exec (k lgr) q
 
 -- | Return the worker that we happen to be running on.  (NONDETERMINISTIC.)
@@ -596,71 +595,27 @@ runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Int           -- ^ How many worker threads to use. 
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
-runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
-  queues <- Sched.new numWrkrs noName
-  
+runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
+  (lgr,queues) <- Sched.new cfg numWrkrs noName 
+    
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
   answerMV <- newEmptyMVar
-  let (minLvl, maxLvl) = case dbgRange of
-                           Just b  -> b
-                           Nothing -> (0,dbgLvl)
   wrkrtids <- newEmptyMVar
-  let setLogger = do
-        -- TODO: This would be easier to deal with if we used the current thread directly
-        -- as the main worker thread...
-        ls <- readMVar wrkrtids
-        Sched.initLogger queues ls (minLvl,maxLvl) dbgDests dbgScheduling
 
-  let grabLogs = do
+  let grabLogs = do  
         logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed"
-        mlgr <- readIORef (Sched.logger (Prelude.head queues))
-        case mlgr of 
-          Nothing -> return []
+        case lgr of 
+          Nothing -> putStrLn "TEMP: LOGGER is NOTHING" >> 
+                     return []
           Just lgr -> do L.closeIt lgr
+                         putStrLn "TEMP: closeIt done, now flushLogs" 
                          L.flushLogs lgr -- If in-memory logging is off, this will be empty.
 
-  -- Option 1: forkWithExceptions version:
-  ----------------------------------------------------------------------------------                           
-
-  let forkit = forM (zip [0..] queues) $ \(cpu, q) -> do 
-        tid <- L.forkWithExceptions (forkOn cpu) "worker thread" $ do
-                 if cpu == main_cpu 
-                   then let k x = ClosedPar $ \q -> do 
-                              sched q            -- ensure any remaining, enabled threads run to 
-                              putMVar answerMV x -- completion prior to returning the result
-                              -- [TODO: ^ perhaps better to use a binary notification tree to signal the workers to stop...]
-                        in do 
-#ifdef DEBUG_LVAR
-                              when (maxLvl > 0) setLogger
-#endif
-                              exec (close comp k) q
-                   -- Note: The above is important: it is sketchy to leave any workers running after
-                   -- the main thread exits.  Subsequent exceptions on child threads, even if
-                   -- forwarded asynchronously, can arrive much later at the main thread
-                   -- (e.g. after it has exited, or set up a new handler, etc).
-                   else sched q
-        return tid
-
-#if 0
-  ans <- E.catch (do tids <- forkit 
-                     putMVar wrkrtids tids
-                     fmap Right (dbgTakeMVar tids "runPar/final answer" answerMV))
-    (\ (e :: E.SomeException) -> do 
-        tids <- readMVar wrkrtids
-        logWith (Prelude.head queues) 1 $ " [dbg-lvish] Killing off workers due to exception: "++show tids
-        mapM_ killThread tids
-        -- TODO: we could try to chase these down in the idle list.
-        return $! Left e
-    )
-  logs <- grabLogs
-  return $! (logs,ans)
-
-#else
--- Option 2: This was an experiment to use Control.Concurrent.Async to deal with exceptions:
-----------------------------------------------------------------------------------
+  -- Use Control.Concurrent.Async to deal with exceptions:
+  ----------------------------------------------------------------------------------
   let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
       runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
@@ -668,42 +623,47 @@ runParDetailed DbgCfg {dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
            else let k x = ClosedPar $ \q -> do 
                       sched q      -- ensure any remaining, enabled threads run to 
                       putMVar answerMV x  -- completion prior to returning the result
-                in do 
-#ifdef DEBUG_LVAR
-                      when (maxLvl > 0) setLogger
-#endif
-                      exec (close comp k) q
+                in exec (close comp k) q
+
+  putStrLn "TEMP: going to fork workers.."
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)
+                          putStrLn "TEMP: switching to waitloop"
                           waitloop asyncs
       loop ((cpu,q):tl) asyncs = 
---         withAsync (runWorker state)
         A.withAsyncOn cpu (runWorker (cpu,q))
                       (\a -> loop tl (a:asyncs))
-      waitloop [] = fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
-      waitloop (hd:tl) = do me <- A.waitCatch hd
+      waitloop [] = do putStrLn "TEMP: taking final answer mvar..."
+--                       fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
+                       fmap Right (takeMVar answerMV)
+      waitloop (hd:tl) = do putStrLn "TEMP: Blocking on async..."
+                            me <- A.waitCatch hd
                             case me of 
                               Left e    -> return $! Left e
                               Right ()  -> waitloop tl
-----------------------------------------
--- (1) There is a BUG in 'loop' presently:
---    "thread blocked indefinitely in an STM transaction"
+  ----------------------------------------
+  -- (1) There is a BUG in 'loop' presently:
+  --    "thread blocked indefinitely in an STM transaction"
   ans <- loop (zip [0..] queues) []
-----------------------------------------
--- (2) This has the same problem as 'loop':
---  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
---  mapM_ wait ls
-----------------------------------------
--- (3) Using this FOR NOW, but it does NOT pin to the right processors:
---  A.mapConcurrently runWorker (zip [0..] queues)
-----------------------------------------
+  putStrLn "TEMP: back from loop, got answer"
+  ----------------------------------------
+  -- (2) This has the same problem as 'loop':
+  --  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
+  --  mapM_ wait ls
+  ----------------------------------------
+  -- (3) Using this FOR NOW, but it does NOT pin to the right processors:
+  --  A.mapConcurrently runWorker (zip [0..] queues)
+  ----------------------------------------
   -- Now that child threads are done, it's safe for the main thread
   -- to call it quits.
   -- takeMVar answerMV  
+  putStrLn "TEMP: GRABBING LOGS" 
   logs <- grabLogs
+  putStrLn "TEMP: DONE GRABBING LOGS" 
   return $! (logs,ans)
-#endif
+
+
 
 defaultRun :: Par b -> IO b
 defaultRun = fmap (fromRight . snd) .
@@ -782,6 +742,7 @@ busyTakeMVar tids msg mv =
  maxWait = 10000 -- nanoseconds
  timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
  try bkoff | totalWait bkoff >= timeOut = do
+     error "OVER WAIT"
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
@@ -791,8 +752,9 @@ busyTakeMVar tids msg mv =
      try =<< L.backoff bkoff 
  try bkoff = do
    x <- tryTakeMVar mv
+   putStrLn $ "hMMBKOFF ... totalWAIT "++show (totalWait bkoff)
    case x of
-     Just y  -> return y
+     Just y  -> putStrLn "SUCCESS" >> return y
      Nothing -> try =<< L.backoff bkoff 
 
 #ifdef DEBUG_LVAR

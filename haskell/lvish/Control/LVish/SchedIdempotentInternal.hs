@@ -4,7 +4,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(logger, no), initLogger,
+  State(logger, no), 
   new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
@@ -21,6 +21,7 @@ import System.IO (stdout)
 import Text.Printf
 
 import qualified Control.LVish.Logging as L
+import Control.LVish.Types (DbgCfg(..))
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
@@ -90,10 +91,8 @@ data State a s = State
       workpool :: Deque a,             -- ^ The thread-local work deque
       idle     :: IORef [MVar Bool],   -- ^ global list of idle workers
       states   :: [State a s],         -- ^ global list of all worker states.
-      logger   :: IORef (Maybe L.Logger)
-        -- ^ The Logger object used by the current Par session.  (This should not
-        -- change during runtime, it is mutable only to support deferred
-        -- initialization.)
+      logger   :: Maybe L.Logger
+        -- ^ The Logger object used by the current Par session, if debugging is activated.
     }
     
 -- | Process the next item on the work queue or, failing that, go into
@@ -167,44 +166,33 @@ yieldWork State { workpool } t =
   pushYield workpool t -- AJT: should this also wake an idle thread?
 
 -- | Create a new set of scheduler states.
-new :: Int -> s -> IO [State a s]
-new numWorkers s = do
-  idle   <- newIORef []
-  logger <- newIORef Nothing
+new :: DbgCfg -> Int -> s -> IO (Maybe L.Logger,[State a s])
+new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
+  idle   <- newIORef [] -- Shared by all workers.
+  let (minLvl, maxLvl) = case dbgRange of
+                           Just b  -> b
+                           Nothing -> (0,L.dbgLvl)
+  let mkLogger = do 
+         lgr <- L.newLogger (minLvl,maxLvl) dbgDests
+                   (if dbgScheduling 
+                    then L.WaitNum numWorkers countIdle 
+                    else L.DontWait)
+         L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initialized Logger... ")
+         return lgr
+      -- Atomically count how many workers are currently registered as idle:
+      countIdle = do ls <- readIORef idle
+                     return $! length ls
+  logger <- if L.dbgLvl > 0 
+            then fmap Just $ mkLogger
+            else return Nothing
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
         return State { no = i, workpool, idle, status, states, prng, logger, numWorkers }
   rec states <- forM [0..(numWorkers-1)] $ mkState states
-  return states
+  return (logger,states)
 
--- | Takes a full set of worker states and correspoding threadIds and initializes the
--- loggers.
-initLogger :: [State a s] -> [ThreadId] -> (Int,Int) -> [L.OutDest] -> Bool -> IO ()
-initLogger [] _ _ _ _ = error "initLogger: cannot take empty list of workers"
-initLogger queues@(hd:_) tids bounds outDests debugScheduling
-  | len1 /= len2 = error "initLogger: length of arguments did not match"
-  | otherwise = do
-    lgr <- L.newLogger bounds outDests
-              (if debugScheduling then waitAll else L.DontWait)
-    -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
-    L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
-    -- Setting one of them sets all of them -- this field is shared:
-    writeIORef (logger hd) (Just lgr)
-    -- TODO: ASSERT that they are all actually the same IORef?
-    return ()
- where
-   waitAll = (L.WaitTids tids (pollDeques queues))
-   
-   len1 = length queues
-   len2 = length tids
-   countIdle = do ls <- readIORef (idle hd)
-                  return $! length ls
-   pollDeques [] = return True
-   pollDeques (h:t) = do b <- nullQ (workpool h)
-                         if b then pollDeques t
-                              else return False
 
 number :: State a s -> Int
 number State { no } = no
@@ -218,8 +206,7 @@ await State { states, logger, no=no1 } p =
   let awaitOne state@(State { status, no=no2 }) = do
         cur <- readIORef status
         unless (p cur) $ do
-          mlgr <- readIORef logger
-          case mlgr of
+          case logger of
             Nothing -> return ()
             Just lgr -> L.logOn lgr (L.StrMsg 7 (" [dbg-lvish] busy-waiting on worker "++show no1++
                                                  ", for status to change on worker "++show no2))
@@ -249,11 +236,10 @@ currentCPU =
 #endif
 
 
-chatter :: IORef (Maybe L.Logger) -> String -> IO ()
+chatter :: Maybe L.Logger -> String -> IO ()
 -- chatter s = putStrLn s
 -- chatter s = printf "%s\n" s
-chatter ref s = do 
-  mlg <- readIORef ref
+chatter mlg s = do 
   case mlg of 
     Nothing -> return ()
     Just lg -> L.logOn lg (L.StrMsg 7 s)

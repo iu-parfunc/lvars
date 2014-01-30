@@ -31,7 +31,9 @@ stressTest :: Show a =>
            -> (forall s . Par d s a)   -- ^ Computation to run
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
-stressTest reps workers comp oracle = do rawRun; reploop reps
+stressTest reps workers comp oracle = 
+ do -- rawRun
+    reploop reps
  where 
   rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] True) workers comp
               putStr "!"
@@ -69,7 +71,6 @@ stressTestReps :: Word
 stressTestReps = case lookup "STRESSTESTS" theEnv of
        Nothing  -> defaultNST
        Just ""  -> defaultNST
-       Just "0" -> defaultNST
        Just s   ->
          case reads s of
            ((n,_):_) -> trace (" [!] responding to env Var: STRESSTESTS="++show n) n

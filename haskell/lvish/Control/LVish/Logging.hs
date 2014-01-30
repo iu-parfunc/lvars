@@ -99,6 +99,8 @@ data WaitMode = WaitTids [ThreadId] (IO Bool)
               | WaitNum {
                 numThreads  :: Int,   -- ^ How many threads total must check in?
                 downThreads :: IO Int -- ^ Poll how many threads won't participate this round.
+                                      --   After all productive threads have checked in 
+                                      --   this number must grow to eventually include all other threads.
                 } -- ^ A fixed set of threads must check-in each round before proceeding.
               | DontWait -- ^ In this mode, logging calls are non-blocking and return
                          -- immediately, rather than waiting on a central coordinator.
@@ -334,11 +336,12 @@ newBackoff cap = return Backoff{cap,current=0,totalWait=0}
 
 -- | Perform the backoff, possibly delaying the thread.
 backoff :: Backoff -> IO Backoff
-backoff Backoff{current,cap,totalWait} =                                   
+backoff Backoff{current,cap,totalWait} = do
+  putStrLn$ "DO BACKOFF, total "++show (current,cap,totalWait)
   if current < 1 then 
     -- Yield before we start delaying:
     do yield
-       return Backoff{cap,current=1,totalWait}
+       return Backoff{cap,current=current+1,totalWait}
    else
     do let nxt = min cap (2*current)
        threadDelay current
