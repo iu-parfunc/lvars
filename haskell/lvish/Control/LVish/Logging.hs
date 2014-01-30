@@ -117,6 +117,7 @@ data LogMsg = StrMsg { lvl::Int, body::String }
 --          | OffTheRecord String -- ^ This sort of message is meaningless chatter and NOT meant 
                                   --   to participate in the scheduler-testing framework.
 --          | ByteStrMsg { lvl::Int,  }
+  deriving (Show,Eq,Ord,Read)
 
 toString x@(StrMsg{}) = body x
 
@@ -187,8 +188,8 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
             fl <- readIORef shutdownFlag
             if fl then flushLoop
              else do 
-              let keepWaiting = do b <- backoff bkoff
-                                   schedloop (iters+1) waiting b
+              let keepWaiting w = do b <- backoff bkoff
+                                     schedloop (iters+1) w b
                   waitMore    = do w <- readSmplChan checkPoint -- Blocking! (or spinning)
                                    b <- newBackoff maxWait -- We got something, reset this.
                                    schedloop (iters+1) (w:waiting) b
@@ -201,8 +202,8 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
                   if (numWait + n >= target)
                     then if numWait > 0 
                          then pickAndProceed waiting2
-                         else keepWaiting -- This sounds like a shutdown is happening, all are idle.
-                    else keepWaiting -- We don't know if we're waiting for idles to arrive or blocked waiters.
+                         else keepWaiting waiting2 -- This sounds like a shutdown is happening, all are idle.
+                    else keepWaiting waiting2 -- We don't know if we're waiting for idles to arrive or blocked waiters.
 
           -- | Keep printing messages until there is (transiently) nothing left.
           flushLoop = do 
@@ -286,15 +287,15 @@ decrTasks = undefined
 -- message falls into the range accepted by the given `Logger`,
 -- otherwise, the message is ignored.
 logOn :: Logger -> LogMsg -> IO ()
-logOn Logger{checkPoint,minLvl,maxLvl,waitWorkers} msg
-  | (minLvl <= lvl msg) && (lvl msg <= maxLvl) = do 
+logOn Logger{checkPoint,minLvl,maxLvl,waitWorkers} msg = do   
+  if (minLvl <= lvl msg) && (lvl msg <= maxLvl) then do 
     case waitWorkers of
       -- In this mode we are non-blocking:
       DontWait -> writeSmplChan checkPoint Writer{who="",continue=dummyMVar,msg}
       _ -> do continue <- newEmptyMVar
               writeSmplChan checkPoint Writer{who="",continue,msg}
               takeMVar continue -- Block until we're given permission to proceed.
-  | otherwise = return ()
+  else return ()
 
 {-# NOINLINE dummyMVar #-}
 dummyMVar :: MVar ()

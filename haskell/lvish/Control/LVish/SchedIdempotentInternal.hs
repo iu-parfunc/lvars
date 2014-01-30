@@ -237,9 +237,9 @@ currentCPU =
 
 -- | Local chatter function for this module
 chatter :: Maybe L.Logger -> String -> IO ()
-chatter _ _ = return ()
 -- chatter s = putStrLn s
 -- chatter _ s = printf "%s\n" s
+chatter _ _ = return ()
 {-
 -- We should NOT do this if dbgScheduling is on.
 chatter mlg s = do 

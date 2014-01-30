@@ -600,3 +600,12 @@ Haven't seen this one before, a compile failure on the cfa package:
 Seeing failures right now on multiple threads on v9f1 v9f2 v9g and (i
 think) mc2.
 
+
+[2014.01.30] {Working on stressTest and the logging framework}
+--------------------------------------------------------------
+
+Right now I'm having trouble getting, e.g., AddRemoveSetTests' v3
+working.  It deadlocks with the new WaitNum method.
+
+
+
