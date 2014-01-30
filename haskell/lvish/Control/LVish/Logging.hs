@@ -89,11 +89,7 @@ data Writer = Writer { who :: String
 
 -- | Several different ways we know to wait for quiescence in the concurrent mutator
 -- before proceeding.
-data WaitMode = WaitTids [ThreadId] (IO Bool)
-                -- ^ Wait until a certain set of threads is blocked before proceeding.
-                --   If that conditional holds ALSO make sure the provided polling action
-                --   returns True as well.
-              | WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
+data WaitMode = WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
                             -- num workers starts at 1 and then is modified
                             -- with `incrTasks` and `decrTasks`.
               | WaitNum {
@@ -203,19 +199,10 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
                 DontWait -> error "newLogger: internal invariant broken."
                 WaitNum target extra -> do
                   n <- extra -- Atomically check how many extra workers are blocked.
+                  putStrLn $ "TEMP: schedloop/WaitNum: polled for extra/idle workers: "++show n
                   if (num + n >= target)
                     then pickAndProceed waiting
                     else waitMore
-                WaitTids tids poll -> do
-                  -- FIXME: This is not watertight... it will work with high probability but can't be trusted:
-                  andM [checkTids tids, poll, checkTids tids, poll]
-                       (do ls <- flushChan waiting
-                           case ls of
-                             [] -> do chatter " [Logger] Warning: No active tasks?"
-                                      bk2 <- backoff bkoff
-                                      schedloop (iters+1) 0 [] bk2
-                             _ -> pickAndProceed ls)
-                       keepWaiting
 
           -- | Keep printing messages until there is (transiently) nothing left.
           flushLoop = do 
