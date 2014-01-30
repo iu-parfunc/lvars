@@ -102,6 +102,7 @@ case_i1 = do
          (S.fromList [1..10] :: S.Set Int) x
   return ()
 
+-- Unblock too early, leaving a put-after-freeze possibility.
 i1 :: IO (S.Set Int)
 i1 = runParIO $
      do s <- ARS.newEmptySet

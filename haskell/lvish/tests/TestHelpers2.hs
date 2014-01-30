@@ -10,6 +10,7 @@ module TestHelpers2
 
 import TestHelpers
 
+import Control.Monad(forM_)
 import Data.Word
 import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import Control.Concurrent (threadDelay)
@@ -32,8 +33,8 @@ stressTest :: Show a =>
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
 stressTest reps workers comp oracle = 
- do -- rawRun
-    reploop reps
+ do forM_ [1..reps] (\_ -> rawRun)
+    -- reploop reps
  where 
   rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
               putStr "!"
@@ -41,10 +42,10 @@ stressTest reps workers comp oracle =
               
   reploop 0 = return ()
   reploop i = do 
-    (logs,ans) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] True) workers comp
+    (logs,ans) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents, OutputTo stdout] True) workers comp
 -- This will cause problems because some of the messages from lvls 1-3 are sent before the workers are UP:
 --    (logs,ans) <- runParDetailed (DbgCfg (Just(0,10)) [OutputInMemory, OutputEvents] True) workers comp
-    putStr "."
+    putStr $ (show$length logs) ++"."
 --    putStrLn $ "logs:\n"
 --    mapM_ print logs
     checkRes (logs,ans)

@@ -621,9 +621,12 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                    sched q
                    logWith q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
            else let k x = ClosedPar $ \q -> do                       
-                      logWith q 3 " [dbg-lvish] Final continuation of main worker invoked."
+                      logWith q 3 " [dbg-lvish] Final continuation of main worker: reenter sched to cleanup."
                       sched q      -- ensure any remaining, enabled threads run to 
-                      putMVar answerMV x  -- completion prior to returning the result
+                                   -- completion prior to returning the result
+                      -- FIXME: this continuation gets duplicated.
+                      logWith q 3 " [dbg-lvish] Main worker: past global barrier, putting answer."
+                      putMVar answerMV x  
                 in do logWith q 3 " [dbg-lvish] Main worker thread starting."
                       exec (close comp k) q
 

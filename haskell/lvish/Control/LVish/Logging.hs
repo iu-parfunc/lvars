@@ -199,6 +199,8 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
                   waiting2 <- flushChan waiting
                   let numWait = length waiting2
                   n <- extra -- Atomically check how many extra workers are blocked.
+                  -- putStrLn $ "TEMP: schedloop/WaitNum: polled for waiting/extra workers: "
+                  --            ++show (numWait,n)++" target "++show target
                   if (numWait + n >= target)
                     then if numWait > 0 
                          then pickAndProceed waiting2
@@ -247,6 +249,7 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
             let pick = sorted !! pos
                 (pref,suf) = splitAt pos sorted
                 rst = pref ++ tail suf
+            -- putStrLn$ "TEMP: pickAndProceed, unblocking "++show (pos,len,msg pick)
             unblockTask pos len pick -- The task will asynchronously run when it can.
             yield -- If running on one thread, give it a chance to run.
             -- Return to the scheduler to wait for the next quiescent point:
@@ -288,14 +291,16 @@ decrTasks = undefined
 -- otherwise, the message is ignored.
 logOn :: Logger -> LogMsg -> IO ()
 logOn Logger{checkPoint,minLvl,maxLvl,waitWorkers} msg = do   
-  if (minLvl <= lvl msg) && (lvl msg <= maxLvl) then do 
+  
+  if (minLvl <= lvl msg) && (lvl msg <= maxLvl) then do     
+    -- putStrLn$ "TEMP: "++show (minLvl,maxLvl)++" attempt to log msg: "++show msg
     case waitWorkers of
       -- In this mode we are non-blocking:
       DontWait -> writeSmplChan checkPoint Writer{who="",continue=dummyMVar,msg}
       _ -> do continue <- newEmptyMVar
               writeSmplChan checkPoint Writer{who="",continue,msg}
               takeMVar continue -- Block until we're given permission to proceed.
-  else return ()
+   else return ()
 
 {-# NOINLINE dummyMVar #-}
 dummyMVar :: MVar ()
