@@ -255,8 +255,9 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
 
 -- | Wait on the /size/ of the set, not its contents.
 waitSize :: Int -> ISet s a -> Par d s ()
-waitSize !sz (ISet lv) = WrapPar$
-    getLV (unWrapLVar lv) globalThresh deltaThresh
+waitSize !sz (ISet lv) = do
+    logDbgLn (-2) "PureSet.waitSize: about to (potentially) block:"
+    WrapPar$ getLV (unWrapLVar lv) globalThresh deltaThresh
   where
     globalThresh ref _frzn = do
       set <- readIORef ref

@@ -198,21 +198,26 @@ logStrLn  :: Int -> String -> Par ()
 logStrLn lvl str = when (dbgLvl >= 1) $ do
   lgr <- getLogger
   num <- getWorkerNum
-  liftIO$ L.logOn lgr (L.StrMsg lvl ("(wrkr"++show num ++") "++ str))
+  if lvl < 0
+   then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
+   else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
 #else
 logStrLn _ _  = return ()
 #endif
 
-logWith :: Sched.State a s -> Int -> String -> IO ()
-#ifdef DEBUG_LVAR
--- Only when the debug level is 1 or higher is the logger even initialized:
-logWith      q lvl str = logHelper q (L.StrMsg lvl str)
-logOffRecord q lvl str = logHelper q (L.OffTheRecord lvl str)
-logHelper q msg = when (dbgLvl >= 1) $ do
-  let msg' = L.mapMsg (("wrkr"++show(Sched.no q)++" ")++) msg
-  case (Sched.logger q) of 
+logHelper :: Maybe Logger -> Int -> LogMsg -> IO ()
+logHelper lgr num msg = when (dbgLvl >= 1) $ do
+  let msg' = L.mapMsg (("wrkr"++show num++" ")++) msg
+  case lgr of 
     Just lgr -> L.logOn lgr msg'
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
+
+logWith      :: Sched.State a s -> Int -> String -> IO ()
+logOffRecord :: Sched.State a s -> Int -> String -> IO ()
+#ifdef DEBUG_LVAR
+-- Only when the debug level is 1 or higher is the logger even initialized:
+logWith      q lvl str = logHelper (Sched.logger q) (Sched.no q) (L.StrMsg lvl str)
+logOffRecord q lvl str = logHelper (Sched.logger q) (Sched.no q) (L.OffTheRecord lvl str)
 #else
 logWith _ _ _ = return ()
 logOffRecord  _ _ _  = return ()
