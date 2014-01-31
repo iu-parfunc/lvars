@@ -262,24 +262,8 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                                -- continuation immediately        
 
         Nothing -> do          -- /transiently/ not past the threshhold; block        
-          
-#if GET_ONCE
-          execFlag <- newIORef False -- True means someone has already won.
-          let winnerCheck q tru fal = do                
-                  ticket <- readForCAS execFlag
-                  if (peekTicket ticket) 
-                    then do logWith q 8 $ " [dbg-lvish] getLV winnerCheck failed.."
-                            fal
-                    else do
-                      (winner, _) <- casIORef execFlag ticket True
-                      logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
-                                 ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
-                                 ++ ", ticks " ++ show (ticket, peekTicket ticket)
-                      if winner then tru else fal
-              {-# INLINE winnerCheck #-}
-#else
-          let execFlag = ()
-#endif
+
+          execFlag <- newDedupCheck
           let onUpdate d = unblockWhen $ deltaThresh d
               onFreeze   = unblockWhen $ globalThresh state True
               {-# INLINE unblockWhen #-}
@@ -289,11 +273,8 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
                   B.remove tok
-#if GET_ONCE
-                  winnerCheck q (Sched.pushWork q (k b)) (return ())
-#else 
-                  Sched.pushWork q (k b)                     
-#endif
+                  winnerCheck execFlag q (Sched.pushWork q (k b)) (return ())
+
           logWith q 8$ " [dbg-lvish] getLV "++show(unsafeName execFlag)++
                        ": blocking on LVar, registering listeners..."
           -- add listener, i.e., move the continuation to the waiting bag
@@ -310,12 +291,10 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
             Just b -> do
               logWith q 7$ " [dbg-lvish] getLV (active): second globalThresh tripped, remove tok"++uniqsuf
               B.remove tok  -- remove the listener we just added, and
-#if GET_ONCE
-              winnerCheck q (exec (k b) q) (sched q)
-#else              
-              exec (k b) q  -- execute the continuation. this work might be
-                            -- redundant, but by idempotence that's OK
-#endif
+
+              winnerCheck execFlag q (exec (k b) q) (sched q)
+                      -- execute the continuation. this work might be
+                      -- redundant, but in idempotence-mode that's OK
             Nothing -> sched q
 
     --------------------------------------------------------------------------------
@@ -330,6 +309,34 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
         Nothing -> sched q     -- We'll NEVER be above the threshold.
                                -- Shouldn't this be an ERROR? (blocked-indefinitely)
                                -- Depends on our semantics for runPar quiescence / errors states.
+
+
+{-# INLINE newDedupCheck #-}
+{-# INLINE winnerCheck #-}
+winnerCheck :: DedupCell -> Sched.State a s  -> IO () -> IO () -> IO ()
+newDedupCheck :: IO DedupCell
+
+#if GET_ONCE
+type DedupCell = IORef Bool
+newDedupCheck = newIORef False -- True means someone has already won.
+winnerCheck execFlag q tru fal = do                
+  ticket <- readForCAS execFlag
+  if (peekTicket ticket) 
+    then do logWith q 8 $ " [dbg-lvish] getLV winnerCheck failed.."
+            fal
+    else do
+      (winner, _) <- casIORef execFlag ticket True
+      logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+                 ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
+                 ++ ", ticks " ++ show (ticket, peekTicket ticket)
+      if winner then tru else fal
+#else
+type DedupCell = ()
+newDedupCheck = return ()
+winnerCheck _ _ tr _ = tr
+#endif
+
+
 
 
 
