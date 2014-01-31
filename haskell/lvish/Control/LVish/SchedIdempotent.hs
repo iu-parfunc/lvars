@@ -609,7 +609,6 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- other CPUs will host worker threads.
   main_cpu <- Sched.currentCPU
   answerMV <- newEmptyMVar
-  wrkrtids <- newEmptyMVar
 
   let grabLogs = do  
         logOffRecord (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed.  Optionally closing logger."
@@ -644,8 +643,12 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
-  let loop [] asyncs = do putMVar wrkrtids (map A.asyncThreadId asyncs)
-                          waitloop asyncs
+  let loop [] asyncs = do mlog " [dbg-lvish] Wait on at least one async to complete..."
+                          (_,x) <- A.waitAnyCatch asyncs
+                          -- We could do a binary tree of waitBoth here, but this should work for now:
+                          case x of
+                            Left e -> return $! Left e
+                            Right () -> waitloop asyncs -- If one finishes, all are trying to.
       loop ((cpu,q):tl) asyncs = 
         A.withAsyncOn cpu (runWorker (cpu,q))
                       (\a -> loop tl (a:asyncs))
@@ -659,7 +662,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                               Left e    -> return $! Left e
                               Right ()  -> waitloop tl
   ----------------------------------------
-  -- (1) There is a BUG in 'loop' presently:
+  -- (1) There was a BUG in 'loop' at some point:
   --    "thread blocked indefinitely in an STM transaction"
   ans <- loop (zip [0..] queues) []
   ----------------------------------------
@@ -670,9 +673,6 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- (3) Using this FOR NOW, but it does NOT pin to the right processors:
   --  A.mapConcurrently runWorker (zip [0..] queues)
   ----------------------------------------
-  -- Now that child threads are done, it's safe for the main thread
-  -- to call it quits.
-  -- takeMVar answerMV  
   logs <- grabLogs
   return $! (logs,ans)
 
