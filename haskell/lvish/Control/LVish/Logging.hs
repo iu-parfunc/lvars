@@ -28,7 +28,7 @@ module Control.LVish.Logging
 
          -- * New logger interface
          newLogger, logOn, Logger(closeIt, flushLogs),
-         WaitMode(..), LogMsg(..), OutDest(..),
+         WaitMode(..), LogMsg(..), mapMsg, OutDest(..),
 
          -- * General utilities
          forkWithExceptions,
@@ -119,6 +119,10 @@ data LogMsg = StrMsg { lvl::Int, body::String }
                 --   to participate in the scheduler-testing framework.
 --          | ByteStrMsg { lvl::Int,  }
   deriving (Show,Eq,Ord,Read)
+
+mapMsg :: (String -> String) -> LogMsg -> LogMsg
+mapMsg f (StrMsg l s)       = StrMsg       l (f s)
+mapMsg f (OffTheRecord l s) = OffTheRecord l (f s)
 
 toString :: LogMsg -> String
 toString x = case x of 

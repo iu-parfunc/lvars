@@ -125,7 +125,7 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
                if length r == numWorkers - 1
                   then do
                      chatter logger $ printf "!cpu %d initiating shutdown\n" my_no
-                     mapM_ (\m -> putMVar m True) r
+                     mapM_ (\m -> putMVar m True) r -- Signal to all but us.
                      return Nothing
                   else do
                     chatter logger $ printf "!cpu %d going idle...\n" my_no

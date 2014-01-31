@@ -209,10 +209,10 @@ logWith :: Sched.State a s -> Int -> String -> IO ()
 logWith      q lvl str = logHelper q (L.StrMsg lvl str)
 logOffRecord q lvl str = logHelper q (L.OffTheRecord lvl str)
 logHelper q msg = when (dbgLvl >= 1) $ do
-  let str' = "wrkr"++ show(Sched.no q)++" "++ str
+  let msg' = L.mapMsg (("wrkr"++show(Sched.no q)++" ")++) msg
   case (Sched.logger q) of 
-    Just lgr -> L.logOn lgr (L.StrMsg lvl str')
-    Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++str)
+    Just lgr -> L.logOn lgr msg'
+    Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
 #else
 logWith _ _ _ = return ()
 logOffRecord  _ _ _  = return ()
@@ -617,6 +617,9 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
           Nothing -> return []
           Just lgr -> do L.closeIt lgr
                          L.flushLogs lgr -- If in-memory logging is off, this will be empty.
+      mlog s = case lgr of 
+                 Nothing -> return ()
+                 Just l  -> L.logOn l (L.OffTheRecord 4 s)
 
   -- Use Control.Concurrent.Async to deal with exceptions:
   ----------------------------------------------------------------------------------
@@ -647,9 +650,10 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
         A.withAsyncOn cpu (runWorker (cpu,q))
                       (\a -> loop tl (a:asyncs))
       waitloop [] = do 
+                       mlog " [dbg-lvish] All asyncs complete, read final answer MVar."
                        fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
 --                       fmap Right (takeMVar answerMV)
-      waitloop (hd:tl) = do 
+      waitloop (hd:tl) = do mlog " [dbg-lvish] Waiting for one async.."
                             me <- A.waitCatch hd
                             case me of 
                               Left e    -> return $! Left e
