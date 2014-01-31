@@ -239,11 +239,10 @@ currentCPU =
 chatter :: Maybe L.Logger -> String -> IO ()
 -- chatter s = putStrLn s
 -- chatter _ s = printf "%s\n" s
-chatter _ _ = return ()
-{-
+-- chatter _ _ = return ()
+
 -- We should NOT do this if dbgScheduling is on.
 chatter mlg s = do 
   case mlg of 
     Nothing -> return ()
-    Just lg -> L.logOn lg (L.StrMsg 7 s)
- -}
+    Just lg -> L.logOn lg (L.OffTheRecord 7 s)

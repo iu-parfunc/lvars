@@ -114,12 +114,16 @@ instance Show (IO Int) where
 -- distinction is not that important, because only *thunks* should be logged; the
 -- thread printing the logs should deal with forcing those thunks.
 data LogMsg = StrMsg { lvl::Int, body::String }
---          | OffTheRecord String -- ^ This sort of message is meaningless chatter and NOT meant 
-                                  --   to participate in the scheduler-testing framework.
+            | OffTheRecord { lvl :: Int, obod :: String }
+                -- ^ This sort of message is chatter and NOT meant 
+                --   to participate in the scheduler-testing framework.
 --          | ByteStrMsg { lvl::Int,  }
   deriving (Show,Eq,Ord,Read)
 
-toString x@(StrMsg{}) = body x
+toString :: LogMsg -> String
+toString x = case x of 
+               StrMsg {body} -> body
+               OffTheRecord _ s -> s
 
 maxWait :: Int
 maxWait = 10*1000 -- 10ms
@@ -190,9 +194,6 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
              else do 
               let keepWaiting w = do b <- backoff bkoff
                                      schedloop (iters+1) w b
-                  waitMore    = do w <- readSmplChan checkPoint -- Blocking! (or spinning)
-                                   b <- newBackoff maxWait -- We got something, reset this.
-                                   schedloop (iters+1) (w:waiting) b
               case waitWorkers of
                 DontWait -> error "newLogger: internal invariant broken."
                 WaitNum target extra -> do
@@ -218,7 +219,10 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
           flushChan !acc = do
             x <- tryReadSmplChan checkPoint
             case x of
-              Just h  -> flushChan (h:acc)
+              Just h  -> case msg h of 
+                          StrMsg {}       -> flushChan (h:acc)
+                          OffTheRecord {} -> do printAll (formatMessage "" h) 
+                                                flushChan acc
               Nothing -> return acc
 
           -- | A simpler alternative schedloop that only does printing (e.g. for DontWait mode).

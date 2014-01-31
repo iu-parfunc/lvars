@@ -70,7 +70,7 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
 import           System.Random (random)
-import           Text.Printf (printf)
+import           Text.Printf (printf, hPrintf)
 
 -- import Control.Compose ((:.), unO)
 import           Data.Traversable  hiding (forM)
@@ -206,13 +206,16 @@ logStrLn _ _  = return ()
 logWith :: Sched.State a s -> Int -> String -> IO ()
 #ifdef DEBUG_LVAR
 -- Only when the debug level is 1 or higher is the logger even initialized:
-logWith q lvl str = when (dbgLvl >= 1) $ do
+logWith      q lvl str = logHelper q (L.StrMsg lvl str)
+logOffRecord q lvl str = logHelper q (L.OffTheRecord lvl str)
+logHelper q msg = when (dbgLvl >= 1) $ do
   let str' = "wrkr"++ show(Sched.no q)++" "++ str
   case (Sched.logger q) of 
     Just lgr -> L.logOn lgr (L.StrMsg lvl str')
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++str)
 #else
 logWith _ _ _ = return ()
+logOffRecord  _ _ _  = return ()
 #endif
 
 ------------------------------------------------------------------------------
@@ -221,7 +224,8 @@ logWith _ _ _ = return ()
     
 -- | Create an LVar.
 newLV :: IO a -> Par (LVar a d)
-newLV init = mkPar $ \k q -> do
+newLV init = mkPar $ \k q -> do  
+  logOffRecord q 7$ " [dbg-lvish] newLV: allocating... "
   state     <- init
   listeners <- B.new
   status    <- newIORef $ Active listeners
@@ -487,20 +491,22 @@ quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag (k ())
+  hpMsg q " [dbg-lvish] quiesce: poll count" hp
   quiescent <- C.poll cnt
   if quiescent then do
+    hpMsg q " [dbg-lvish] already quiesced, remove token from bag" hp
     B.remove tok
-    hpMsg q " [dbg-lvish] -> Quiescent already!" hp
     exec (k ()) q 
   else do 
-    hpMsg q " [dbg-lvish] -> Not quiescent yet, back to sched" hp
+    logOffRecord q 4 " [dbg-lvish] -> Not quiescent yet, back to sched"
     sched q
 
 -- | A global barrier.
 quiesceAll :: Par ()
 quiesceAll = mkPar $ \k q -> do
+  logWith q 1 " [dbg-lvish] quiesceAll: initiating global barrier."
   sched q
-  logWith q 1 " [dbg-lvish] Return from global barrier."
+  logWith q 1 " [dbg-lvish] quiesceAll: Past global barrier."
   exec (k ()) q
 
 -- | Freeze an LVar after a given handler quiesces.
@@ -606,7 +612,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   wrkrtids <- newEmptyMVar
 
   let grabLogs = do  
-        logWith (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed.  Optionally closing logger."
+        logOffRecord (Prelude.head queues) 1 " [dbg-lvish] parent thread escaped unscathed.  Optionally closing logger."
         case lgr of 
           Nothing -> return []
           Just lgr -> do L.closeIt lgr
@@ -617,21 +623,21 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
       runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
-           then do logWith q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting."
+           then do logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting."
                    sched q
-                   logWith q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
+                   logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
            else let k x = ClosedPar $ \q -> do                       
-                      logWith q 3 " [dbg-lvish] Final continuation of main worker: reenter sched to cleanup."
+                      logOffRecord q 3 " [dbg-lvish] Final continuation of main worker: reenter sched to cleanup."
                       sched q      -- ensure any remaining, enabled threads run to 
                                    -- completion prior to returning the result
                       -- FIXME: this continuation gets duplicated.
-                      logWith q 3 " [dbg-lvish] Main worker: past global barrier, putting answer."
+                      logOffRecord q 3 " [dbg-lvish] Main worker: past global barrier, putting answer."
                       b <- tryPutMVar answerMV x
 #ifdef GET_ONCE
                       unless b $ error "Final continuation of Par computation was duplicated, in spite of GET_ONCE!"
 #endif
                       return ()
-                in do logWith q 3 " [dbg-lvish] Main worker thread starting."
+                in do logOffRecord q 3 " [dbg-lvish] Main worker thread starting."
                       exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
@@ -749,9 +755,9 @@ busyTakeMVar tids msg mv =
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
-     printf "%s not unblocked yet, for: %s\n" (show tid) msg
+     hPrintf stderr "%s not unblocked yet, for: %s\n" (show tid) msg
      stats <- Prelude.mapM threadStatus tids 
-     printf $ "Worker statuses: " ++ show (zip tids stats) ++"\n"
+     hPrintf stderr $ "Worker statuses: " ++ show (zip tids stats) ++"\n"
      try =<< L.backoff bkoff 
  try bkoff = do
    x <- tryTakeMVar mv
