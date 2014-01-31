@@ -626,7 +626,11 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                                    -- completion prior to returning the result
                       -- FIXME: this continuation gets duplicated.
                       logWith q 3 " [dbg-lvish] Main worker: past global barrier, putting answer."
-                      putMVar answerMV x  
+                      b <- tryPutMVar answerMV x
+#ifdef GET_ONCE
+                      unless b $ error "Final continuation of Par computation was duplicated, in spite of GET_ONCE!"
+#endif
+                      return ()
                 in do logWith q 3 " [dbg-lvish] Main worker thread starting."
                       exec (close comp k) q
 
