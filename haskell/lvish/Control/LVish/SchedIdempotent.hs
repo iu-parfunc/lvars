@@ -274,10 +274,12 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
                       (winner, _) <- casIORef execFlag ticket True
                       logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
                                  ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
+                                 ++ ", ticks " ++ show (ticket, peekTicket ticket)
                       if winner then tru else fal
               {-# INLINE winnerCheck #-}
-#endif
+#else
           let execFlag = ()
+#endif
           let onUpdate d = unblockWhen $ deltaThresh d
               onFreeze   = unblockWhen $ globalThresh state True
               {-# INLINE unblockWhen #-}
@@ -648,7 +650,8 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       exec (close comp k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
-  let loop [] asyncs = do mlog " [dbg-lvish] Wait on at least one async to complete..."
+  let loop [] asyncs = do tid <- myThreadId
+                          mlog $ " [dbg-lvish] (tid "++show tid++") Wait on at least one async to complete.."
                           (_,x) <- A.waitAnyCatch asyncs
                           -- We could do a binary tree of waitBoth here, but this should work for now:
                           case x of

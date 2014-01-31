@@ -608,4 +608,34 @@ Right now I'm having trouble getting, e.g., AddRemoveSetTests' v3
 working.  It deadlocks with the new WaitNum method.
 
 
+[2014.01.31] {Still some spurious duplication, issue #70}
+---------------------------------------------------------
+
+Here's an example:
+
+    |2| wrkr0 waitRemovedSize: about to block.
+    |2| wrkr0 PureSet.waitSize: about to (potentially) block:
+    |7| wrkr0  [dbg-lvish] getLV: first readIORef , lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): check globalThresh, lv 19 on worker 0
+    |8| wrkr2  [dbg-lvish] putLV: initial lvar status read, lv 19 on worker 2
+    |8| wrkr2  [dbg-lvish] putLV: setStatus,, lv 19 on worker 2
+    |5| wrkr2  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 2
+    |8| wrkr2  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 2
+    |8| wrkr0  [dbg-lvish] getLV 20: blocking on LVar, registering listeners...
+    |8| wrkr2  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 2
+    |9| wrkr2  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 2
+    |7| wrkr2  [dbg-lvish] getLV (active): callback: check thresh, lv 19 on worker 2
+    |8| wrkr0  [dbg-lvish] getLV (active): second frozen check, lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): second globalThresh check, lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 19 on worker 0
+    |8| wrkr2  [dbg-lvish] getLV 20 on worker 2: winner check? True
+    |8| wrkr0  [dbg-lvish] getLV 20 on worker 0: winner check? True
+    |7| Starting pushWork on worker 2
+    |2| wrkr0 waitRemovedSize: unblocked, returning.
+    |2| wrkr2 waitRemovedSize: unblocked, returning.
+    |5| wrkr0  [dbg-lvish] freezeLV: atomic modify status to Freezing, lv 20 on worker 0
+    |5| wrkr2  [dbg-lvish] freezeLV: atomic modify status to Freezing, lv 20 on worker 2
+    |7| !cpu 1 woken up
+
+Rather than debug this, it may be better to test whether the non-idem branch does better.
 
