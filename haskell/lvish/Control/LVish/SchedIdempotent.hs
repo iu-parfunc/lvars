@@ -317,6 +317,8 @@ winnerCheck :: DedupCell -> Sched.State a s  -> IO () -> IO () -> IO ()
 newDedupCheck :: IO DedupCell
 
 #if GET_ONCE
+
+#  if 0
 type DedupCell = IORef Bool
 newDedupCheck = newIORef False -- True means someone has already won.
 winnerCheck execFlag q tru fal = do                
@@ -330,6 +332,18 @@ winnerCheck execFlag q tru fal = do
                  ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
                  ++ ", ticks " ++ show (ticket, peekTicket ticket)
       if winner then tru else fal
+#  else
+
+type DedupCell = C2.AtomicCounter
+newDedupCheck = C2.newCounter 0 
+winnerCheck execFlag q tru fal = do
+  cnt <- C2.incrCounter 1 execFlag
+  logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+             ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show (cnt==1)
+             ++ ", counter val " ++ show cnt
+  if cnt==1 then tru else fal
+
+#  endif
 #else
 type DedupCell = ()
 newDedupCheck = return ()
