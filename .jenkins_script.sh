@@ -17,7 +17,7 @@ else
 fi  
 #   --reinstall  --force-reinstalls
 
-cabal install $CFG $CABAL_FLAGS --only-dependencies
+cabal install $CFG $CABAL_FLAGS --only-dependencies --enable-tests
 cabal configure $CFG $CABAL_FLAGS --with-ghc=ghc-$JENKINS_GHC
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
