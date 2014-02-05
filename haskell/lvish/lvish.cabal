@@ -198,8 +198,7 @@ test-suite test-lvish
                     MaxCounterTests,
                     AddRemoveSetTests
                     
---    ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
-    ghc-options: -O2 -rtsopts
+    ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 
     -- DUPLICATED: from above
     build-depends: base    >= 4.6 && <= 4.8, 
