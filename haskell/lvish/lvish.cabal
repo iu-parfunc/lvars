@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.2.0.0
+version:             1.1.1.4
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -195,7 +195,8 @@ test-suite test-lvish
                     PureMapTests,
                     SLMapTests,
                     SetTests,
-                    MaxCounterTests
+                    MaxCounterTests,
+                    AddRemoveSetTests
                     
 --    ghc-options:     -O2 -threaded -rtsopts -with-rtsopts=-N4
     ghc-options: -O2 -rtsopts
