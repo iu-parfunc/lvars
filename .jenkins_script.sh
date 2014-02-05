@@ -10,8 +10,11 @@ cd haskell/lvish
 cabal sandbox init
 cabal sandbox hc-pkg list
 
-# CFG="--enable-library-profiling --enable-executable-profiling"
-CFG="--disable-library-profiling --disable-executable-profiling"
+if [ "$PROF" == "" || "$PROF" == "0" ]; then 
+  CFG="--disable-library-profiling --disable-executable-profiling"
+else
+  CFG="--enable-library-profiling --enable-executable-profiling"
+fi  
 #   --reinstall  --force-reinstalls
 
 cabal configure $CFG $CABAL_FLAGS --with-ghc=ghc-$JENKINS_GHC
