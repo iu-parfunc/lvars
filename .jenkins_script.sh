@@ -19,4 +19,4 @@ if [ `uname` == "Linux" ]; then
   $CMDROOT $MODE2 
 else
   $CMDROOT $MODE2 --enable-tests
-if
+fi
