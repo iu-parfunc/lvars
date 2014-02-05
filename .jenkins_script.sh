@@ -10,13 +10,15 @@ cd haskell/lvish
 cabal sandbox init
 cabal sandbox hc-pkg list
 
-MODE1="--enable-library-profiling --enable-executable-profiling"
-MODE2="--disable-library-profiling --disable-executable-profiling"
-CMDROOT="cabal install $CABAL_FLAGS --reinstall --with-ghc=ghc-$JENKINS_GHC --force-reinstalls"
+# CFG="--enable-library-profiling --enable-executable-profiling"
+CFG="--disable-library-profiling --disable-executable-profiling"
+#   --reinstall  --force-reinstalls
+
+cabal configure $CFG $CABAL_FLAGS --with-ghc=ghc-$JENKINS_GHC
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
 if [ `uname` == "Linux" ]; then
-  $CMDROOT $MODE2 
+  cabal install
 else
-  $CMDROOT $MODE2 --enable-tests
+  cabal test --show-details=always
 fi
