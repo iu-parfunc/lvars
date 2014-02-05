@@ -14,8 +14,9 @@ MODE1="--enable-library-profiling --enable-executable-profiling"
 MODE2="--disable-library-profiling --disable-executable-profiling"
 CMDROOT="cabal install $CABAL_FLAGS --reinstall --with-ghc=ghc-$JENKINS_GHC --force-reinstalls"
 
-# TEMP: Disable unit tests for now.
-# There are some serious problems with the testing setup.  
-# Including the atomic-primops related bug on linux, as well as other problems.
-
-$CMDROOT $MODE2 --enable-tests
+# Avoding the atomic-primops related bug on linux / GHC 7.6:
+if [ `uname` == "Linux" ]; then
+  $CMDROOT $MODE2 
+else
+  $CMDROOT $MODE2 --enable-tests
+if
