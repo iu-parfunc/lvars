@@ -10,6 +10,7 @@ module TestHelpers2
 
 import TestHelpers
 
+import Control.Monad(forM_)
 import Data.Word
 import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import Control.Concurrent (threadDelay)
@@ -31,22 +32,41 @@ stressTest :: Show a =>
            -> (forall s . Par d s a)   -- ^ Computation to run
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
-stressTest 0 _workers _comp _oracle = return ()
-stressTest reps workers comp oracle = do 
-  (logs,res) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents] True) workers comp
-  let failit s = do threadDelay (500 * 1000)
-                    hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
-                    hPutStrLn stderr "-----------------------------------"
-                    mapM_ (hPutStrLn stderr) logs
-                    hPutStrLn stderr "-----------------------------------"
-                    writeFile "failing_sched.log" (unlines logs)
-                    hPutStrLn stderr "Wrote to file: failing_sched.log"
-                    HU.assertFailure s
-  case res of
-    Left exn                 -> failit ("Bad test outcome--exception: "++show exn)
-    Right x | not (oracle x) -> failit ("Bad test result: "++show x)
-            | otherwise -> do putStr "."
-                              stressTest (reps-1) workers comp oracle
+stressTest reps workers comp oracle = 
+ do forM_ [1..reps] (\_ -> rawRun)
+    -- reploop reps
+ where 
+  rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
+              putStr "!"
+              checkRes x
+              
+  reploop 0 = return ()
+  reploop i = do 
+    (logs,ans) <- runParDetailed (DbgCfg (Just(4,10)) [OutputInMemory, OutputEvents, OutputTo stdout] True) workers comp
+-- This will cause problems because some of the messages from lvls 1-3 are sent before the workers are UP:
+--    (logs,ans) <- runParDetailed (DbgCfg (Just(0,10)) [OutputInMemory, OutputEvents] True) workers comp
+    putStr $ (show$length logs) ++"."
+--    putStrLn $ "logs:\n"
+--    mapM_ print logs
+    checkRes (logs,ans)
+    reploop (i-1)
+
+  checkRes (logs,res) = 
+    case res of
+      Left exn                 -> failit logs ("Bad test outcome--exception: "++show exn)
+      Right x | not (oracle x) -> failit logs ("Bad test result: "++show x)
+              | otherwise      -> return ()
+
+  failit logs s = do 
+      threadDelay (500 * 1000)
+      hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
+      hPutStrLn stderr "-----------------------------------"
+      mapM_ (hPutStrLn stderr) logs
+      hPutStrLn stderr "-----------------------------------"
+      writeFile "failing_sched.log" (unlines logs)
+      hPutStrLn stderr "Wrote to file: failing_sched.log"
+      HU.assertFailure s
+
 
 defaultNST :: Word
 defaultNST = 100
@@ -56,7 +76,6 @@ stressTestReps :: Word
 stressTestReps = case lookup "STRESSTESTS" theEnv of
        Nothing  -> defaultNST
        Just ""  -> defaultNST
-       Just "0" -> defaultNST
        Just s   ->
          case reads s of
            ((n,_):_) -> trace (" [!] responding to env Var: STRESSTESTS="++show n) n

@@ -3,8 +3,9 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RecursiveDo #-}
 
+
 module Control.LVish.SchedQueue (
-  State(logger, no), initLogger,
+  State(logger, no),
   new, number, idemp, next, pushWork, yieldWork, currentCPU, setStatus, await, prng
   ) where
 
@@ -21,6 +22,7 @@ import System.IO (stdout)
 import Text.Printf
 
 import qualified Control.LVish.Logging as L
+import Control.LVish.Types (DbgCfg(..))
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
@@ -91,10 +93,8 @@ data State a s = State
       workpool :: Deque a,             -- ^ The thread-local work deque
       idle     :: IORef [MVar Bool],   -- ^ global list of idle workers
       states   :: [State a s],         -- ^ global list of all worker states.
-      logger   :: IORef (Maybe L.Logger)      
-        -- ^ The Logger object used by the current Par session.  (This should not
-        -- change during runtime, it is mutable only to support deferred
-        -- initialization.)
+      logger   :: Maybe L.Logger
+        -- ^ The Logger object used by the current Par session, if debugging is activated.
     }
     
 -- | Process the next item on the work queue or, failing that, go into
@@ -117,8 +117,8 @@ next state@State{ workpool } = do
 --   This function does NOT return until the complete runPar session is complete (all
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
-steal State{ idle, states, no=my_no, numWorkers } = do
-  chatter $ printf "!cpu %d stealing\n" my_no
+steal State{ idle, states, no=my_no, numWorkers, logger } = do
+  chatter logger $ "!cpu "++show my_no++" stealing" 
   go states
   where
     -- After a failed sweep, go idle:
@@ -126,18 +126,18 @@ steal State{ idle, states, no=my_no, numWorkers } = do
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
                if length r == numWorkers - 1
                   then do
-                     chatter$ printf "!cpu %d initiating shutdown\n" my_no
-                     mapM_ (\m -> putMVar m True) r
+                     chatter logger $ printf "!cpu %d initiating shutdown\n" my_no
+                     mapM_ (\m -> putMVar m True) r -- Signal to all but us.
                      return Nothing
                   else do
-                    chatter $ printf "!cpu %d going idle...\n" my_no
+                    chatter logger $ printf "!cpu %d going idle...\n" my_no
                     done <- takeMVar m
                     if done
                        then do
-                         chatter $ printf "!cpu %d shutting down\n" my_no
+                         chatter logger $ printf "!cpu %d shutting down\n" my_no
                          return Nothing
                        else do
-                         chatter $ printf "!cpu %d woken up\n" my_no
+                         chatter logger $ printf "!cpu %d woken up\n" my_no
                          go states
     go (x:xs)
       | no x == my_no = go xs
@@ -145,7 +145,7 @@ steal State{ idle, states, no=my_no, numWorkers } = do
          r <- popOther (workpool x)
          case r of
            Just t  -> do
-              -- printf "cpu %d got work from cpu %d\n" my_no (no x)
+             chatter logger $ printf "cpu %d got work from cpu %d\n" my_no (no x)
              return r
            Nothing -> go xs
 
@@ -153,7 +153,8 @@ steal State{ idle, states, no=my_no, numWorkers } = do
 pushWork :: State a s -> a -> IO ()
 -- TODO: If we're really going to do wakeup on every push we could consider giving
 -- the formerly-idle worker the work item directly and thus avoid touching the deque.
-pushWork State { workpool, idle } t = do
+pushWork State { workpool, idle, logger, no } t = do
+  chatter logger $ "Starting pushWork on worker "++show no
   pushMine workpool t
   idles <- readIORef idle
   when (not (null idles)) $ do
@@ -167,10 +168,25 @@ yieldWork State { workpool } t =
   pushYield workpool t -- AJT: should this also wake an idle thread?
 
 -- | Create a new set of scheduler states.
-new :: Int -> s -> IO [State a s]
-new numWorkers s = do
-  idle   <- newIORef []
-  logger <- newIORef Nothing
+new :: DbgCfg -> Int -> s -> IO (Maybe L.Logger,[State a s])
+new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
+  idle   <- newIORef [] -- Shared by all workers.
+  let (minLvl, maxLvl) = case dbgRange of
+                           Just b  -> b
+                           Nothing -> (0,L.dbgLvl)
+  let mkLogger = do 
+         lgr <- L.newLogger (minLvl,maxLvl) dbgDests
+                   (if dbgScheduling 
+                    then L.WaitNum numWorkers countIdle 
+                    else L.DontWait)
+         -- L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initialized Logger... ")
+         return lgr
+      -- Atomically count how many workers are currently registered as idle:
+      countIdle = do ls <- readIORef idle
+                     return $! length ls
+  logger <- if L.dbgLvl > 0 
+            then fmap Just $ mkLogger
+            else return Nothing
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
@@ -183,34 +199,8 @@ new numWorkers s = do
 #endif
                        workpool, idle, status, states, prng, logger, numWorkers }
   rec states <- forM [0..(numWorkers-1)] $ mkState states
-  return states
+  return (logger,states)
 
--- | Takes a full set of worker states and correspoding threadIds and initializes the
--- loggers.
-initLogger :: [State a s] -> [ThreadId] -> (Int,Int) -> [L.OutDest] -> Bool -> IO ()
-initLogger [] _ _ _ _ = error "initLogger: cannot take empty list of workers"
-initLogger queues@(hd:_) tids bounds outDests debugScheduling
-  | len1 /= len2 = error "initLogger: length of arguments did not match"
-  | otherwise = do
-    lgr <- L.newLogger bounds outDests
-              (if debugScheduling then waitAll else L.DontWait)
-    -- lgr <- L.newLogger Nothing (L.WaitNum len1 countIdle)
-    L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initializing Logger... ")
-    -- Setting one of them sets all of them -- this field is shared:
-    writeIORef (logger hd) (Just lgr)
-    -- TODO: ASSERT that they are all actually the same IORef?
-    return ()
- where
-   waitAll = (L.WaitTids tids (pollDeques queues))
-   
-   len1 = length queues
-   len2 = length tids
-   countIdle = do ls <- readIORef (idle hd)
-                  return $! length ls
-   pollDeques [] = return True
-   pollDeques (h:t) = do b <- nullQ (workpool h)
-                         if b then pollDeques t
-                              else return False
 
 number :: State a s -> Int
 number State { no } = no
@@ -224,8 +214,7 @@ await State { states, logger, no=no1 } p =
   let awaitOne state@(State { status, no=no2 }) = do
         cur <- readIORef status
         unless (p cur) $ do
-          mlgr <- readIORef logger
-          case mlgr of
+          case logger of
             Nothing -> return ()
             Just lgr -> L.logOn lgr (L.StrMsg 7 (" [dbg-lvish] busy-waiting on worker "++show no1++
                                                  ", for status to change on worker "++show no2))
@@ -254,7 +243,14 @@ currentCPU =
   return 0
 #endif
 
-
-chatter :: String -> IO ()
+-- | Local chatter function for this module
+chatter :: Maybe L.Logger -> String -> IO ()
 -- chatter s = putStrLn s
-chatter _ = return ()
+-- chatter _ s = printf "%s\n" s
+-- chatter _ _ = return ()
+
+-- We should NOT do this if dbgScheduling is on.
+chatter mlg s = do 
+  case mlg of 
+    Nothing -> return ()
+    Just lg -> L.logOn lg (L.OffTheRecord 7 s)

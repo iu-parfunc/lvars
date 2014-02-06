@@ -364,6 +364,29 @@ v9f is interesting however...  It uses no callbacks or handler pools.
 It simply writes N ivars and then reads them.
 
 
+[2013.12.16] {Working on fixing a scheduler bug}
+--------------------------------------------------------------------------------
+
+The bug is that the final global poll check on getLV doesn't obey the
+GET_ONCE stricture.
+
+This is in the context of the v9f test.  Alas... the fix that I tried
+(simply doing the execFlag check), is leading to deadlock or
+blocked-indefinitely-on-mvar exceptions.
+
+It takes about NUMELEMS=3000 to trigger the the deadlock in a
+reasonable number of iterations.
+
+Interestingly not MANY of these iterations are blocking at all.  The
+writing thread is getting enough ahead that usually no gets block at
+all.
+
+Actually... now, with my "fix", I'm seing duplication AND deadlock
+with GET_ONCE.  Hmm.
+
+
+
+
 [2013.12.26] {Adding a schedule-control facility to the debug-logging one}
 
 The first draft is now running... but it's chewing up a bunch of user
@@ -604,4 +627,52 @@ are timeouts not working?
   working consistently on this branch.  I see them sometimes.)
 
 Ah, ok, I can get failures on AddRemoveSetTests 
+
+
+
+[2014.01.24] {More scheduler debugging}
+----------------------------------------
+
+Seeing failures right now on multiple threads on v9f1 v9f2 v9g and (i
+think) mc2.
+
+
+[2014.01.30] {Working on stressTest and the logging framework}
+--------------------------------------------------------------
+
+Right now I'm having trouble getting, e.g., AddRemoveSetTests' v3
+working.  It deadlocks with the new WaitNum method.
+
+
+[2014.01.31] {Still some spurious duplication, issue #70}
+---------------------------------------------------------
+
+Here's an example:
+
+    |2| wrkr0 waitRemovedSize: about to block.
+    |2| wrkr0 PureSet.waitSize: about to (potentially) block:
+    |7| wrkr0  [dbg-lvish] getLV: first readIORef , lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): check globalThresh, lv 19 on worker 0
+    |8| wrkr2  [dbg-lvish] putLV: initial lvar status read, lv 19 on worker 2
+    |8| wrkr2  [dbg-lvish] putLV: setStatus,, lv 19 on worker 2
+    |5| wrkr2  [dbg-lvish] putLV: about to mutate lvar, lv 19 on worker 2
+    |8| wrkr2  [dbg-lvish] putLV: read final status before unsetting, lv 19 on worker 2
+    |8| wrkr0  [dbg-lvish] getLV 20: blocking on LVar, registering listeners...
+    |8| wrkr2  [dbg-lvish] putLV: UN-setStatus, lv 19 on worker 2
+    |9| wrkr2  [dbg-lvish] putLV: calling each listener's onUpdate, lv 19 on worker 2
+    |7| wrkr2  [dbg-lvish] getLV (active): callback: check thresh, lv 19 on worker 2
+    |8| wrkr0  [dbg-lvish] getLV (active): second frozen check, lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): second globalThresh check, lv 19 on worker 0
+    |7| wrkr0  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 19 on worker 0
+    |8| wrkr2  [dbg-lvish] getLV 20 on worker 2: winner check? True
+    |8| wrkr0  [dbg-lvish] getLV 20 on worker 0: winner check? True
+    |7| Starting pushWork on worker 2
+    |2| wrkr0 waitRemovedSize: unblocked, returning.
+    |2| wrkr2 waitRemovedSize: unblocked, returning.
+    |5| wrkr0  [dbg-lvish] freezeLV: atomic modify status to Freezing, lv 20 on worker 0
+    |5| wrkr2  [dbg-lvish] freezeLV: atomic modify status to Freezing, lv 20 on worker 2
+    |7| !cpu 1 woken up
+
+Rather than debug this, it may be better to test whether the non-idem branch does better.
+
 

@@ -7,7 +7,7 @@ import Test.Framework (Test, testGroup)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
-import TestHelpers as T
+import TestHelpers2 as T
 import Control.Concurrent (threadDelay)
 import Control.Monad (forM_, forM)
 import Data.Traversable (traverse)
@@ -130,11 +130,14 @@ v8c = fmap (L.sort . F.toList) $
 
 
 case_v8d :: Assertion
-case_v8d = assertEqual "union on maps"
-           [40,50,101,102] =<< v8d
-v8d :: IO [Int]
-v8d = fmap (L.sort . F.toList) $
-      runParIO $ do
+case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParIO v8d
+           -- fmap (L.sort . F.toList)  (runParIO v8d)
+           -- stressTest 0 30 v8d (== [40,50,101,102])
+
+-- fmap (L.sort . F.toList) $
+-- v8d :: Par QuasiDet s (IM.IMap Int Frzn Int)
+v8d :: Par QuasiDet s [Int]
+v8d = do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."  
   m1 <- IM.newFromList [(1,1),(2,2)]
@@ -150,7 +153,8 @@ v8d = fmap (L.sort . F.toList) $
   quiesce hp
 --  quiesceAll  
   logDbgLn 1 " [v8d] quiesce finished, next freeze::"
-  IM.freezeMap m4
+  m <- IM.freezeMap m4
+  return (L.sort $ F.toList m)
 -- [2013.12.13] I've observed this dying at several different points.
 -- After the four "got element" messages, or before any of them.
 

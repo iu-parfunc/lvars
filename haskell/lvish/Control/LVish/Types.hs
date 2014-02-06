@@ -33,6 +33,7 @@ data DbgCfg =
                 -- ^ Inclusive range of debug messages to accept
                 --   (i.e. filter on priority level).  If Nothing, use the default level,
                 --   which is (0,N) where N is controlled by the DEBUG environment variable.
+                --   The convention is to use Just (0,0) to disable logging.
             , dbgDests :: [OutDest] -- ^ Destinations for debug log messages.
             , dbgScheduling :: Bool
                 -- ^ In additional to logging debug messages, control

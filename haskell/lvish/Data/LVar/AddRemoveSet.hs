@@ -78,7 +78,10 @@ waitRemovedElem !elm (AddRemoveSet added removed) = PS.waitElem elm removed
 
 -- | Wait on the size of the set of removed elements.
 waitRemovedSize :: Int -> AddRemoveSet s a -> Par d s ()
-waitRemovedSize !sz (AddRemoveSet added removed) = PS.waitSize sz removed
+waitRemovedSize !sz (AddRemoveSet added removed) = do 
+   logDbgLn 2 "waitRemovedSize: about to block."
+   PS.waitSize sz removed
+   logDbgLn 2 "waitRemovedSize: unblocked, returning."
 
 -- | Get the exact contents of the set.  As with any
 -- quasi-deterministic operation, using `freezeSet` may cause your

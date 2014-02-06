@@ -163,7 +163,12 @@ _ = runPar test3
 
 ------------------------------------------------------------
 
-type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+-- type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+
+type family ReadOnly (e :: EffectsSig) :: Constraint
+-- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
+type instance (ReadOnly (Ef NP g NF NB NI)) = ()
+-- (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
 
 -- type HasPut e    = (GetP e ~ P)
 
@@ -178,6 +183,8 @@ type HasIO  e    = (GetI e ~ I)
 type NoFreeze e = (NF ~ GetF e)
 
 type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+
 type HasIOM m = HasIO (GetEffects m)
 
 --------------------------------------------------------------------------------

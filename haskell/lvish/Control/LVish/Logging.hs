@@ -28,10 +28,12 @@ module Control.LVish.Logging
 
          -- * New logger interface
          newLogger, logOn, Logger(closeIt, flushLogs),
-         WaitMode(..), LogMsg(..), OutDest(..),
+         WaitMode(..), LogMsg(..), mapMsg, OutDest(..),
 
          -- * General utilities
-         forkWithExceptions
+         forkWithExceptions,
+
+         Backoff(totalWait), newBackoff, backoff
        )
        where
 
@@ -87,16 +89,14 @@ data Writer = Writer { who :: String
 
 -- | Several different ways we know to wait for quiescence in the concurrent mutator
 -- before proceeding.
-data WaitMode = WaitTids [ThreadId] (IO Bool)
-                -- ^ Wait until a certain set of threads is blocked before proceeding.
-                --   If that conditional holds ALSO make sure the provided polling action
-                --   returns True as well.
-              | WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
+data WaitMode = WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  The
                             -- num workers starts at 1 and then is modified
                             -- with `incrTasks` and `decrTasks`.
               | WaitNum {
                 numThreads  :: Int,   -- ^ How many threads total must check in?
                 downThreads :: IO Int -- ^ Poll how many threads won't participate this round.
+                                      --   After all productive threads have checked in 
+                                      --   this number must grow to eventually include all other threads.
                 } -- ^ A fixed set of threads must check-in each round before proceeding.
               | DontWait -- ^ In this mode, logging calls are non-blocking and return
                          -- immediately, rather than waiting on a central coordinator.
@@ -114,9 +114,20 @@ instance Show (IO Int) where
 -- distinction is not that important, because only *thunks* should be logged; the
 -- thread printing the logs should deal with forcing those thunks.
 data LogMsg = StrMsg { lvl::Int, body::String }
+            | OffTheRecord { lvl :: Int, obod :: String }
+                -- ^ This sort of message is chatter and NOT meant 
+                --   to participate in the scheduler-testing framework.
 --          | ByteStrMsg { lvl::Int,  }
+  deriving (Show,Eq,Ord,Read)
 
-toString x@(StrMsg{}) = body x
+mapMsg :: (String -> String) -> LogMsg -> LogMsg
+mapMsg f (StrMsg l s)       = StrMsg       l (f s)
+mapMsg f (OffTheRecord l s) = OffTheRecord l (f s)
+
+toString :: LogMsg -> String
+toString x = case x of 
+               StrMsg {body} -> body
+               OffTheRecord _ s -> s
 
 maxWait :: Int
 maxWait = 10*1000 -- 10ms
@@ -152,66 +163,54 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   parent      <- myThreadId
   let flushLogs = atomicModifyIORef' logged $ \ ls -> ([],reverse ls)
 
-  let -- When all threads are quiescent, we can flush the remaining messagers from
-      -- the channel to get the whole set of waiting tasks.  Return in chronological order.
-      flushChan !acc = do
-        x <- tryReadSmplChan checkPoint
-        case x of
-          Just h  -> flushChan (h:acc)
-          Nothing -> return $ reverse acc
-  
-      -- This is the format we use for debugging messages
-      formatMessage extra Writer{msg} = "|"++show (lvl msg)++ "| "++extra++ toString msg
-      -- One of these message reports how many tasks are in parallel with it:
-      messageInContext pos len wr = formatMessage ("#"++show (1+pos)++" of "++show len ++": ") wr
-      printOne str (OutputTo h)   = hPrintf h "%s\n" str
-      printOne str OutputEvents = traceEventIO str
-      printOne str OutputInMemory =
-        -- This needs to be atomic because other messages might be calling "flush"
-        -- at the same time.
-        atomicModifyIORef' logged $ \ ls -> (str:ls,())
-      printAll str = mapM_ (printOne str) loutDests
-
-  shutdownFlag     <- newIORef False -- When true, time to shutdown.
-  shutdownComplete <- newEmptyMVar
+  shutdownFlag     <- newIORef False -- When true, time to start shutdown.
   
   -- Here's the new thread that corresponds to this logger:
-  coordinator <- A.async $ E.handle (catchAll parent) $
-      -- BEGIN defs for the async task:
-      --------------------------------------------------------------------------------
-      -- Proceed in rounds, gather the set of actions that may happen in parallel, then
-      -- pick one.  We log the series of decisions we make for reproducability.
-      let schedloop :: Int -> Int -- ^ length of list `waiting`
-                    -> [Writer] -> Backoff -> IO ()
-          schedloop !iters !num !waiting !bkoff = do
+  coordinator <- A.async $ E.handle (catchAll parent) $ do
+                   runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests
+  let closeIt = do
+        atomicModifyIORef' shutdownFlag (\_ -> (True,())) -- Declare that it's time to shutdown:
+        A.wait coordinator -- Gently wait for it to be done.
+  return $! Logger { coordinator, checkPoint, closeIt, loutDests,
+                     logged, flushLogs,
+                     waitWorkers, minLvl, maxLvl }
+
+--------------------------------------------------------------------------------
+
+-- | Run a logging coordinator thread until completion/shutdown.
+runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
+runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
+       case waitWorkers of
+         DontWait -> printLoop =<< newBackoff maxWait
+         _ -> schedloop (0::Int) [] =<< newBackoff maxWait -- Kick things off.
+  where
+          -- Proceed in rounds, gather the set of actions that may happen in parallel, then
+          -- pick one.  We log the series of decisions we make for reproducability.
+          schedloop :: Int 
+                    -> [Writer]   -- ^ Waiting threads, reverse chronological (newest first)
+                    -> Backoff -> IO ()
+          schedloop !iters !waiting !bkoff = do
             when (iters > 0 && iters `mod` 500 == 0) $
-              putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show num++" are waiting."
+              putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show (length waiting)++" are waiting."
             hFlush stdout
             fl <- readIORef shutdownFlag
             if fl then flushLoop
              else do 
-              let keepWaiting = do b <- backoff bkoff
-                                   schedloop (iters+1) num waiting b
-                  waitMore    = do w <- readSmplChan checkPoint -- Blocking! (or spinning)
-                                   b <- newBackoff maxWait -- We got something, reset this.
-                                   schedloop (iters+1) (num+1) (w:waiting) b
+              let keepWaiting w = do b <- backoff bkoff
+                                     schedloop (iters+1) w b
               case waitWorkers of
                 DontWait -> error "newLogger: internal invariant broken."
                 WaitNum target extra -> do
+                  waiting2 <- flushChan waiting
+                  let numWait = length waiting2
                   n <- extra -- Atomically check how many extra workers are blocked.
-                  if (num + n >= target)
-                    then pickAndProceed waiting
-                    else waitMore
-                WaitTids tids poll -> do
-                  -- FIXME: This is not watertight... it will work with high probability but can't be trusted:
-                  andM [checkTids tids, poll, checkTids tids, poll]
-                       (do ls <- flushChan waiting
-                           case ls of
-                             [] -> do chatter " [Logger] Warning: No active tasks?"
-                                      bk2 <- backoff bkoff
-                                      schedloop (iters+1) 0 [] bk2
-                             _ -> pickAndProceed ls)
-                       keepWaiting
+                  -- putStrLn $ "TEMP: schedloop/WaitNum: polled for waiting/extra workers: "
+                  --            ++show (numWait,n)++" target "++show target
+                  if (numWait + n >= target)
+                    then if numWait > 0 
+                         then pickAndProceed waiting2
+                         else keepWaiting waiting2 -- This sounds like a shutdown is happening, all are idle.
+                    else keepWaiting waiting2 -- We don't know if we're waiting for idles to arrive or blocked waiters.
 
           -- | Keep printing messages until there is (transiently) nothing left.
           flushLoop = do 
@@ -221,13 +220,24 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
                               flushLoop
                 Nothing -> return ()
 
+          flushChan !acc = do
+            x <- tryReadSmplChan checkPoint
+            case x of
+              Just h  -> case msg h of 
+                          StrMsg {}       -> flushChan (h:acc)
+                          OffTheRecord {} -> do printAll (formatMessage "" h) 
+                                                flushChan acc
+              Nothing -> return acc
+
           -- | A simpler alternative schedloop that only does printing (e.g. for DontWait mode).
-          printLoop = do
+          printLoop bk = do
             fl <- readIORef shutdownFlag
             if fl then flushLoop
-                  else do wr <- readSmplChan checkPoint
-                          printAll (formatMessage "" wr)
-                          printLoop
+                  else do mwr <- tryReadSmplChan checkPoint
+                          case mwr of 
+                            Nothing -> do printLoop =<< backoff bk 
+                            Just wr -> do printAll (formatMessage "" wr)
+                                          printLoop =<< newBackoff (cap bk)
 
           -- Take the set of logically-in-parallel tasks, choose one, execute it, and
           -- then return to the main scheduler loop.
@@ -247,44 +257,31 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
             let pick = sorted !! pos
                 (pref,suf) = splitAt pos sorted
                 rst = pref ++ tail suf
+            -- putStrLn$ "TEMP: pickAndProceed, unblocking "++show (pos,len,msg pick)
             unblockTask pos len pick -- The task will asynchronously run when it can.
             yield -- If running on one thread, give it a chance to run.
             -- Return to the scheduler to wait for the next quiescent point:
             bnew <- newBackoff maxWait
-            schedloop 0 (length rst) rst bnew
+            schedloop 0 rst bnew
 
           unblockTask pos len wr@Writer{continue} = do
             printAll (messageInContext pos len wr)
             putMVar continue () -- Signal that the thread may continue.
 
-          -- Check whether the worker threads are all quiesced 
-          checkTids [] = return True
-          checkTids (tid:rst) = do 
-            st <- threadStatus tid
-            case st of
-              ThreadRunning   -> return False
-              ThreadFinished  -> checkTids rst
-              -- WARNING: this design is flawed because it is possible when compiled
-              -- with -threaded that IO will spuriously showed up as BlockedOnMVar:
-              ThreadBlocked BlockedOnMVar -> checkTids rst
-              ThreadBlocked _ -> return False
-              ThreadDied      -> checkTids rst -- Should this be an error condition!?
-      in -- Main body of async task:
-       do case waitWorkers of
-            DontWait -> printLoop 
-            _ -> schedloop (0::Int) (0::Int) [] =<< newBackoff maxWait -- Kick things off.
-          putMVar shutdownComplete ()
-          return () -- End: async thread
-      -- END async task.
-      --------------------------------------------------------------------------------
+          -- This is the format we use for debugging messages
+          formatMessage extra Writer{msg} = "|"++show (lvl msg)++ "| "++extra++ toString msg
+          -- One of these message reports how many tasks are in parallel with it:
+          messageInContext pos len wr = formatMessage ("#"++show (1+pos)++" of "++show len ++": ") wr
+          printOne str (OutputTo h)   = hPrintf h "%s\n" str
+          printOne str OutputEvents = traceEventIO str
+          printOne str OutputInMemory =
+            -- This needs to be atomic because other messages might be calling "flush"
+            -- at the same time.
+            atomicModifyIORef' logged $ \ ls -> (str:ls,())
+          printAll str = mapM_ (printOne str) loutDests
 
-  let closeIt = do
-        atomicModifyIORef' shutdownFlag (\_ -> (True,()))
-        readMVar shutdownComplete
-        A.cancel coordinator -- Just to make sure its completely done.
-  return $! Logger { coordinator, checkPoint, closeIt, loutDests,
-                     logged, flushLogs,
-                     waitWorkers, minLvl, maxLvl }
+
+
 
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
@@ -301,15 +298,17 @@ decrTasks = undefined
 -- message falls into the range accepted by the given `Logger`,
 -- otherwise, the message is ignored.
 logOn :: Logger -> LogMsg -> IO ()
-logOn Logger{checkPoint,minLvl,maxLvl,waitWorkers} msg
-  | (minLvl <= lvl msg) && (lvl msg <= maxLvl) = do 
+logOn Logger{checkPoint,minLvl,maxLvl,waitWorkers} msg = do   
+  
+  if (minLvl <= lvl msg) && (lvl msg <= maxLvl) then do     
+    -- putStrLn$ "TEMP: "++show (minLvl,maxLvl)++" attempt to log msg: "++show msg
     case waitWorkers of
       -- In this mode we are non-blocking:
       DontWait -> writeSmplChan checkPoint Writer{who="",continue=dummyMVar,msg}
       _ -> do continue <- newEmptyMVar
               writeSmplChan checkPoint Writer{who="",continue,msg}
               takeMVar continue -- Block until we're given permission to proceed.
-  | otherwise = return ()
+   else return ()
 
 {-# NOINLINE dummyMVar #-}
 dummyMVar :: MVar ()
@@ -321,24 +320,27 @@ dummyMVar = unsafePerformIO newEmptyMVar
 -- | The state for an exponential backoff.
 data Backoff = Backoff { current :: !Int
                        , cap :: !Int  -- ^ Maximum nanoseconds to wait.
+                       , totalWait :: !Int
                        }
   deriving Show
 
+-- | Create an object used for exponentential backoff; see `backoff`.
+newBackoff :: Int -- ^ Maximum delay, nanoseconds
+           -> IO Backoff
+newBackoff cap = return Backoff{cap,current=0,totalWait=0}
 
-newBackoff :: Int -> IO Backoff
-newBackoff cap = return Backoff{cap,current=0}
-
+-- | Perform the backoff, possibly delaying the thread.
 backoff :: Backoff -> IO Backoff
--- backoff b = do yield; return b
-backoff Backoff{current,cap} =                                   
-  case current of
-    -- Yield once before we start delaying:
-    0 -> do yield
-            return Backoff{cap,current=1}
-    n -> do let next = min cap (2*n)
-            threadDelay n
-            return Backoff{cap,current=next}
-  
+backoff Backoff{current,cap,totalWait} = do
+  if current < 1 then 
+    -- Yield before we start delaying:
+    do yield
+       return Backoff{cap,current=current+1,totalWait}
+   else
+    do let nxt = min cap (2*current)
+       threadDelay current
+       return Backoff{cap,current=nxt,totalWait=totalWait+current}
+
 ----------------------------------------------------------------------------------------------------
 -- Simple channels: we need non-blocking reads so we can't use
 -- Control.Concurrent.Chan.  We could use TChan, but I don't want to bring STM into
