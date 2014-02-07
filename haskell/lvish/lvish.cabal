@@ -112,6 +112,7 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
+                    Control.LVish.EffectSigs
   if flag(beta)
     exposed-modules: 
                       -- Not quite ready for prime-time yet:
