@@ -180,8 +180,8 @@ newFromList_ ls n = do
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasFreeze e, Eq b) =>
+                           IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap lv) callback action = do
   hp  <- newPool 
   res <- IV.new 
@@ -298,7 +298,7 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 --
 -- This is an /O(1)/ operation that doesn't copy the in-memory representation of the
 -- IMap.
-freezeMap :: Ord k => IMap k s v -> QPar s (IMap k Frzn v)
+freezeMap :: (HasFreeze e, Ord k) => IMap k s v -> Par e s (IMap k Frzn v)
 -- freezeMap (IMap (WrapLVar lv)) = return (IMap (WrapLVar lv))
 -- OR we can just do this:
 

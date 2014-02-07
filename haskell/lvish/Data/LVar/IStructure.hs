@@ -43,6 +43,7 @@ import           Data.List (intersperse)
 import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
+import           Control.LVish.EffectSigs
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import           Data.LVar.Generic as G
@@ -142,7 +143,7 @@ newIStructureWithCallback len fn =
 
 -- | /O(N)/ complexity, unfortunately. This implementation of `IStructure`s requires
 -- freezing each of the individual IVars stored in the array.
-freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
+freezeIStructure :: HasFreeze e => IStructure s a -> LV.Par e s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 
 {-# INLINE forEachHP #-}

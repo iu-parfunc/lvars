@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 {-|
 
@@ -52,7 +53,8 @@ import GHC.Prim (unsafeCoerce#)
 
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), NonFrzn, Frzn, Trvrsbl)
-import Control.LVish.Internal (Determinism(..), Par(WrapPar))
+import Control.LVish.Internal (Par(WrapPar))
+import Control.LVish.EffectSigs
 import Control.LVish.SchedIdempotent (runPar, runParIO)
 --------------------------------------------------------------------------------
 
@@ -75,7 +77,7 @@ import Control.LVish.SchedIdempotent (runPar, runParIO)
 -- Significantly, the freeze at the end of `runParThenFreeze` has /no/ runtime cost, in
 -- spite of the fact that it enables a /deep/ (recursive) freeze of the value returned
 -- by the `Par` computation.
-runParThenFreeze :: DeepFrz a => Par Det NonFrzn a -> FrzType a
+runParThenFreeze :: Deterministic e => DeepFrz a => Par e NonFrzn a -> FrzType a
 runParThenFreeze (WrapPar p) = frz $ runPar p
 
 -- | This version works for nondeterministic computations as well.

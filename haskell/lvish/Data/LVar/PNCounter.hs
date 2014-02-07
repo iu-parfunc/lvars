@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies  #-}
 
 {-|
 
@@ -68,6 +69,6 @@ waitForDecrements = undefined
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeCounter :: PNCounter s -> QPar s Int
+freezeCounter :: HasFreeze e => PNCounter s -> Par e s Int
 -- Freezing takes the difference of increments and decrements.
 freezeCounter = undefined

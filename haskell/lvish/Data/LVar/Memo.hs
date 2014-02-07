@@ -35,14 +35,14 @@ import Data.LVar.IVar as IV
 --------------------------------------------------------------------------------
 
 -- | A Memo-table that stores cached results of executing a `Par` computation.
-data Memo (d::Determinism) s a b =
+data Memo (e::EffectSig) s a b =
      Memo !(IS.ISet s a)
           !(IM.IMap a s b)
 
 -- | A result from a lookup in a Memo-table, unforced.
 --   The two-stage `getLazy`/`force` lookup is useful to separate
 --   spawning the work from demanding its result.
-newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
+newtype MemoFuture (e :: EffectSig) s b = MemoFuture (Par e s b)
 
 --------------------------------------------------------------------------------
 

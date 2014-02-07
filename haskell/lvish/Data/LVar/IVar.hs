@@ -149,7 +149,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
         update Nothing  = (Just x, Just x)
 
 -- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
-freezeIVar :: QuasiDeterministic e => IVar s a -> I.Par e s (Maybe a)
+freezeIVar :: HasFreeze e => IVar s a -> I.Par e s (Maybe a)
 freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
       getLV lv globalThresh deltaThresh

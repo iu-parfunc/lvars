@@ -147,13 +147,13 @@ newFromList ls = newSet (S.fromList ls)
 -- the context of the handlers.
 -- 
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: ISet s a -> (a -> QPar s ()) -> QPar s ()
+freezeSetAfter :: HasFreeze e => ISet s a -> (a -> Par e s ()) -> Par e s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: Eq b => ISet s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: (HasFreeze e, Eq b) => ISet s a -> (a -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     do
        hp  <- newPool 
@@ -186,7 +186,7 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of sets that "Data.Set"
 -- uses.)
-freezeSet :: ISet s a -> QPar s (S.Set a)
+freezeSet :: HasFreeze e => ISet s a -> Par e s (S.Set a)
 freezeSet (ISet (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
       getLV lv globalThresh deltaThresh

@@ -171,7 +171,7 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
 
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
-freezePureLVar :: PureLVar s t -> Par QuasiDet s t
+freezePureLVar :: HasFreeze e => PureLVar s t -> Par e s t
 freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$ 
   do LI.freezeLV lv
      LI.getLV lv globalThresh deltaThresh

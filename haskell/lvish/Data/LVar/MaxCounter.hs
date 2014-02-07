@@ -53,7 +53,7 @@ waitThresh :: MaxCounter s -> Int -> Par d s ()
 waitThresh lv n = waitPureLVar lv (MC n)
 
 -- | Observe what the final value of the counter was.
-freezeMaxCounter :: MaxCounter s -> Par QuasiDet s Int
+freezeMaxCounter :: HasFreeze e => MaxCounter s -> Par e s Int
 freezeMaxCounter lv = do
   MC n <- freezePureLVar lv
   return n

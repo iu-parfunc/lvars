@@ -170,19 +170,25 @@ type HasGet e    = (GetG e ~ G)
 type HasFreeze e = (GetF e ~ F)
 type HasIO  e    = (GetI e ~ I)
 
+type NoPut    e = (NP ~ GetP e)
+type NoGet    e = (NG ~ GetG e)
+type NoBump   e = (NB ~ GetB e)
 type NoFreeze e = (NF ~ GetF e)
 type NoIO     e = (NI ~ GetI e)
+
+type QuasiDeterministic e = (NoIO e)
+type Deterministic e = (NoFreeze e, NoIO e)
+
+type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
+
 #else
 -- APPROACH (2): [Total] type families.
 
 type family HasPut (e :: EffectSig) :: Constraint
 type instance (HasPut (Ef p g f b i)) = (p ~ P)
 
-#endif
-
-
-----------------------------------------------------------------
 -- Derived constraints, i.e. shorthands for common combinations:
+----------------------------------------
 
 type family ReadOnly (e :: EffectSig) :: Constraint
 -- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
@@ -195,6 +201,11 @@ type instance (ReadOnly (Ef p g NF b NI)) = ()
 
 type family QuasiDeterministic (e :: EffectSig) :: Constraint
 type instance (ReadOnly (Ef p g nf b NI)) = ()
+
+#endif
+
+
+----------------------------------------------------------------
 
 
 ----------------------------------------

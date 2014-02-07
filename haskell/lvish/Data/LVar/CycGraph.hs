@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns, ParallelListComp  #-}
 {-# LANGUAGE BangPatterns, CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 -- {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -O2 #-}
 
@@ -93,7 +94,7 @@ unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
 -- 
 --   This, enhanced, version of the Memo-table also is required to track all the keys
 --   that are reachable from each key (for cycle-detection).
-data Memo (d::Determinism) s k v =
+data Memo (e::EffectSig) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
 --       !(IM.IMap k s (SetAcc k, IVar s v))
@@ -221,14 +222,14 @@ data NodeValue k v = FinalValue !v | Defer k
 -- monotonic data structure to track the full set of other nodes that can reach it in
 -- the graph.
 #ifdef DEBUG_MEMO
-exploreGraph :: forall s k v . (Ord k, Eq v, ShortShow k, Show v) =>
+exploreGraph :: forall s k v e . (Ord k, Eq v, ShortShow k, Show v, HasFreeze e) =>
 #else
-exploreGraph :: forall s k v . (Ord k, Eq v, Show k, Show v) =>
+exploreGraph :: forall s k v e . (Ord k, Eq v, Show k, Show v, HasFreeze e) =>
 #endif
-                      (k -> Par QuasiDet s [k])  -- ^ Sketch the graph: map a key onto its children.
-                   -> NodeAction QuasiDet s k v  -- ^ The computation to run at each graph node.
+                      (k -> Par e s [k])  -- ^ Sketch the graph: map a key onto its children.
+                   -> NodeAction e s k v  -- ^ The computation to run at each graph node.
                    -> k                          -- ^ The initial node (key) from which to explore.
-                   -> Par QuasiDet s v
+                   -> Par e s v
 exploreGraph keyNbrs nodeHndlr initKey = do
 
   -- First: propogate key requests.

@@ -31,9 +31,12 @@
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-} -- For Deterministic e superclass constraint.
+
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- This module reexports the default LVish scheduler, adding some type-level
@@ -118,7 +121,8 @@ import Data.IORef
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
 
-instance PC.ParQuasi (Par d s) (Par QuasiDet s) where
+instance (Deterministic e1, e2 ~ SetF F e1) => 
+         PC.ParQuasi (Par e1 s) (Par e2 s) where
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
   toQPar act = unsafeConvert act
   
@@ -137,7 +141,9 @@ instance PC.LVarSched (Par d s) where
 
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
-instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
+
+instance (Deterministic e1, e2 ~ SetF F e1) => 
+         PC.LVarSchedQ (Par e1 s) (Par e2 s)  where
 --  freezeLV = WrapPar . L.freezeLV  -- FINISHME
 
 instance PU.ParThreadSafe (Par d s) where

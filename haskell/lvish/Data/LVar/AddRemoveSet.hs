@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-|
 
@@ -88,7 +89,7 @@ waitRemovedSize !sz (AddRemoveSet added removed) = do
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeSet :: Ord a => AddRemoveSet s a -> QPar s (S.Set a)
+freezeSet :: (Ord a, HasFreeze e) => AddRemoveSet s a -> Par e s (S.Set a)
 -- Freezing takes the set difference of added and removed elements.
 freezeSet (AddRemoveSet added removed) =
   liftA2 S.difference (PS.freezeSet added) (PS.freezeSet removed)

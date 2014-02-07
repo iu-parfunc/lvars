@@ -92,8 +92,8 @@ newFromList = newMap . M.fromList
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasFreeze e, Eq b) =>
+                           IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
     do hp  <- newPool 
        res <- IV.new 
@@ -241,7 +241,7 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of maps that "Data.Map"
 -- uses.)
-freezeMap :: IMap k s v -> QPar s (M.Map k v)
+freezeMap :: HasFreeze e => IMap k s v -> Par e s (M.Map k v)
 freezeMap (IMap (WrapLVar lv)) = WrapPar $
    do freezeLV lv
       getLV lv globalThresh deltaThresh
