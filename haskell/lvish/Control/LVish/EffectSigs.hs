@@ -12,6 +12,13 @@ module Control.LVish.EffectSigs
         -- * Simple boolean flags, each with a disttinct kind to prevent mixups
         Putting(..), Getting(..), Freezing(..), Bumping(..), IOing(..), 
 
+        -- * User-visible Constraints 
+        HasGet, HasFreeze, HasIO, 
+        NoFreeze, NoIO,
+
+        -- * Derived constraints, i.e. shorthands for common combinations:
+        ReadOnly, Deterministic, QuasiDeterministic,
+
         -- * Manipulating the phantom types of a Par monad 
         GetEffects, SetEffects,
         GetSession, SetSession,
@@ -20,10 +27,13 @@ module Control.LVish.EffectSigs
         GetP, GetG, GetF, GetB, GetI,
         SetP, SetG, SetF, SetB, SetI,
 
-        -- * Convenience functions that operato over whole monad types
-        SetMP, SetMG, SetMF, SetMB, SetMI
+        -- * Lifted constraints and type functions directly on monads
+        -- HasGetM 
+        SetMP, SetMG, SetMF, SetMB, SetMI        
+
        )
        where
+import GHC.Exts (Constraint)
 import Control.Monad.Trans.Class
 
 import Control.LVish.Types
@@ -147,3 +157,49 @@ type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
 -- | Shorthand for setting the IO effeect of a Par monad.
 type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
 type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
+
+--------------------------------------------------------------------------------
+-- Now for constraints:
+
+#if 1
+-- APPROACH (1): Type aliases.
+-- These have the problem that when you ask the type in GHC (:t),
+-- it inlines the aliases, revealing ugly types.
+type HasPut e    = (GetP e ~ P)
+type HasGet e    = (GetG e ~ G)
+type HasFreeze e = (GetF e ~ F)
+type HasIO  e    = (GetI e ~ I)
+
+type NoFreeze e = (NF ~ GetF e)
+type NoIO     e = (NI ~ GetI e)
+#else
+-- APPROACH (2): [Total] type families.
+
+type family HasPut (e :: EffectSig) :: Constraint
+type instance (HasPut (Ef p g f b i)) = (p ~ P)
+
+#endif
+
+
+----------------------------------------------------------------
+-- Derived constraints, i.e. shorthands for common combinations:
+
+type family ReadOnly (e :: EffectSig) :: Constraint
+-- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
+type instance (ReadOnly (Ef NP g NF NB NI)) = ()
+-- type instance (ReadOnly e) = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+-- type instance (ReadOnly e) = (NoPut e, ..)
+
+type family Deterministic (e :: EffectSig) :: Constraint
+type instance (ReadOnly (Ef p g NF b NI)) = ()
+
+type family QuasiDeterministic (e :: EffectSig) :: Constraint
+type instance (ReadOnly (Ef p g nf b NI)) = ()
+
+
+----------------------------------------
+-- And then at the level of monads:
+
+type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+type HasIOM m = HasIO (GetEffects m)

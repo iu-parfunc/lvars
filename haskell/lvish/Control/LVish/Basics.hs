@@ -1,4 +1,4 @@
- {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -13,11 +13,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
+{-# LANGUAGE ConstraintKinds #-}
+
 -- | An internal module simply reexported by Control.LVish.
 
 module Control.LVish.Basics
   ( Par(), LVar(),
-    Determinism(..), liftQD,
+    liftQD,
     LVishException(..), L.HandlerPool(), 
     fork, yield,
     runPar, runParIO, runParLogged, runParDetailed,
@@ -40,6 +42,7 @@ import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
 import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
+import           Control.LVish.EffectSigs
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
 
@@ -72,7 +75,7 @@ instance PU.ParMonad (Par d s) where
 
 -- | It is always safe to lift a deterministic computation to a
 -- quasi-deterministic one.
-liftQD :: Par Det s a -> Par QuasiDet s a
+-- liftQD :: Par Det s a -> Par QuasiDet s a
 liftQD (WrapPar p) = (WrapPar p)
 
 -- | Cooperatively schedule other threads.
@@ -158,7 +161,7 @@ runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
 --
 -- (For now there is no sharing of workers with repeated invocations; so
 -- keep in mind that @runPar@ is an expensive operation. [2013.09.27])
-runPar :: (forall s . Par Det s a) -> a
+runPar :: Deterministic e => (forall s . Par e s a) -> a
 runPar (WrapPar p) = L.runPar p 
 
 -- | Log a line of debugging output.  This is only used when *compiled* in debugging
