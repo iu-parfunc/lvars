@@ -14,7 +14,7 @@ import           TestHelpers as T
 
 import Control.Concurrent (killThread, myThreadId)
 
-import Data.LVar.MaxCounter
+import Data.LVar.MaxPosInt
 import           Control.LVish hiding (put)
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
@@ -33,13 +33,13 @@ case_mc1 :: Assertion
 -- Spuriously failing currently:
 -- case_mc1 = assertEqual "mc1" (Just ()) $ timeOutPure 0.3 $ runPar $ do
 case_mc1 = assertEqual "mc1" () $ runPar $ do
-  num <- newMaxCounter 0
+  num <- newMaxPosInt 0
   fork $ put num 3
   fork $ put num 4
   waitThresh num 4
 
 case_mc2 :: Assertion
 case_mc2 = assertEqual "mc2" () $ runPar $ do
-  num <- newMaxCounter 0
+  num <- newMaxPosInt 0
   fork $ put num 3
   fork $ put num 4
