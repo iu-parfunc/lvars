@@ -18,7 +18,7 @@ import qualified SkipListTests
 import qualified PureMapTests
 import qualified SLMapTests
 import qualified SetTests
-import qualified MaxCounterTests
+import qualified MaxPosIntTests
 import qualified AddRemoveSetTests
 
 #ifdef GENERIC_PAR
@@ -34,7 +34,7 @@ alltests =
        , ArrayTests.tests
        , MemoTests.tests
        , LogicalTests.tests
-       , MaxCounterTests.tests
+       , MaxPosIntTests.tests
        , SetTests.tests
        , PureMapTests.tests 
 #ifdef FAILING_TESTS

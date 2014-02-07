@@ -25,7 +25,7 @@ import GHC.Conc
 
 import Data.Word
 import Data.Maybe
-import Data.LVar.MaxCounter as C
+import Data.LVar.MaxPosInt as C
 import Data.Time.Clock
 import qualified Data.Traversable as T
 import qualified Data.Vector as V
@@ -247,7 +247,7 @@ main = do
       ----------------------------------------
       "bfsN_misI_deg" -> do 
               putStrLn " ! Version 12: BFS, MIS, and maxDegree"
-              let par :: Par d0 s0 (MaxCounter s0)
+              let par :: Par d0 s0 (MaxPosInt s0)
                   par = do natarr <- bfs_async_arr2 gr 0
                            narr2 <- maximalIndependentSet4 gr natarr
                            maxDegreeI gr narr2
@@ -314,7 +314,7 @@ main = do
       ----------------------------------------
       "?" -> do
               putStrLn " ! Version 1: work in progress testing combinations of graph ops..."
-              let par1 :: Par d0 s0 (MaxCounter s0, ISet s0 NodeID)
+              let par1 :: Par d0 s0 (MaxPosInt s0, ISet s0 NodeID)
                   par1 = do component <- bfs_async gr 0
                             liftIO$ putStrLn "Got component..."
                             mc <- maxDegreeS gr component    

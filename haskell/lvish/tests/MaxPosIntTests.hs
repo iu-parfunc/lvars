@@ -1,9 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 
--- | Tests for the Data.LVar.MaxCounter module.
+-- | Tests for the Data.LVar.MaxPosInt module.
 
-module MaxCounterTests(tests, runTests) where
+module MaxPosIntTests(tests, runTests) where
 
 import Test.Framework.Providers.HUnit 
 import Test.Framework (Test, defaultMain, testGroup)
