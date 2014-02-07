@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-} 
@@ -51,10 +52,11 @@ import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 import qualified Data.Foldable    as F
 import           Control.Exception (throw)
 import qualified Control.LVish.Types as LV 
+import           Control.LVish.EffectSigs
 import qualified Control.LVish.Basics as LV 
 import           Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal as I
-import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), Determinism(QuasiDet))
+import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar))
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.SchedIdempotent as LI 
 import           Data.LVar.Generic
@@ -83,7 +85,7 @@ instance Eq (IVar s a) where
 -- contain at most one value!  Note, however, that the polymorphic operations are
 -- less useful than the monomorphic ones exposed by this module.
 instance LVarData1 IVar where  
-  freeze :: IVar s a -> Par QuasiDet s (IVar Frzn a)
+  freeze :: QuasiDeterministic e => IVar s a -> Par e s (IVar Frzn a)
   freeze orig@(IVar (WrapLVar lv)) = WrapPar $ do
     freezeLV lv
     return (unsafeCoerceLVar orig)
@@ -147,7 +149,7 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
         update Nothing  = (Just x, Just x)
 
 -- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
-freezeIVar :: IVar s a -> I.Par QuasiDet s (Maybe a)
+freezeIVar :: QuasiDeterministic e => IVar s a -> I.Par e s (Maybe a)
 freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
       getLV lv globalThresh deltaThresh

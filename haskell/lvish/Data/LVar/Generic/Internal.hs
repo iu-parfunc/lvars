@@ -22,8 +22,9 @@ module Data.LVar.Generic.Internal
        where
 
 import           Control.LVish.Types
+import           Control.LVish.EffectSigs
 import           Control.LVish.Basics
-import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.Internal (Par)
 import           Control.LVish.SchedIdempotent (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
@@ -59,7 +60,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   --
   -- However, note that `Frzn` LVars cannot be folded, because they may have
   -- nondeterministic ordering after being frozen.  See `sortFreeze`.
-  freeze :: f s a -> Par QuasiDet s (f Frzn a)
+  freeze :: QuasiDeterministic e => f s a -> Par e s (f Frzn a)
 
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.

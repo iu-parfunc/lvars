@@ -58,8 +58,11 @@ module Control.LVish
 
     -- * Par computations and their parameters
     Par(), 
-    Determinism(..), liftQD,
+    liftQD,
     LVishException(..),
+
+    -- * Effect signature manipulation
+    module Control.LVish.EffectSigs,
     
     -- * Basic control flow
     fork,
@@ -104,7 +107,7 @@ import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
-
+import           Control.LVish.EffectSigs
 import           Control.LVish.Logging (OutDest(..))
 import           Data.LVar.IVar 
 

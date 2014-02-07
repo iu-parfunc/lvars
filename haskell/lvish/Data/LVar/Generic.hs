@@ -1,6 +1,8 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
 -- | A generic interface providing operations that work on /all/ LVars.
@@ -18,8 +20,9 @@ module Data.LVar.Generic
        where
 
 import           Control.LVish.Types
+import           Control.LVish.EffectSigs
 import           Control.LVish.Basics
-import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.Internal (Par)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort)
@@ -37,7 +40,7 @@ import           Data.LVar.Generic.Internal
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
   -- completely available and `Foldable`.  Guaranteed /O(1)/.
-  snapFreeze :: f s a -> Par QuasiDet s (f Trvrsbl a)
+  snapFreeze :: f s a -> QuasiDeterministic e => Par e s (f Trvrsbl a)
 
 {- 
 -- | Just like LVarData1 but for type constructors of kind `*`.
