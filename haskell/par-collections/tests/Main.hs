@@ -18,7 +18,7 @@ import Control.Exception (evaluate)
 import Control.Par.Class as PC (Generator(..))
 import Data.Par.Range
 import Data.IORef
-import qualified Control.Monad.Par as P
+import qualified Control.Monad.Par as P -- This expects monad-par >= 0.3.4.6 with -fnewgeneric
 import qualified Data.Atomics.Counter as C
 
 -- import Data.List

@@ -509,18 +509,21 @@ theEnv = unsafePerformIO getEnvironment
 defaultDbg :: Int
 defaultDbg = 0
 
-debugVizMemoGraph :: forall s t t1 t2 . (Ord t1, ShortShow t1, Show t2, F.Foldable t) =>
+debugVizMemoGraph :: forall s t t1 t2 e . 
+                     (Ord t1, ShortShow t1, Show t2, F.Foldable t, 
+                      HasGet e, HasFreeze e) =>
                      Bool                       -- ^ Use shorter `showID` for keys.
                      -> t1                      -- ^ The inital key.
                      -> t (NodeRecord s t1 t2)  -- ^ A frozen map of graph nodes.
 --                     Par d s (Gr (Bool,String) ())
-                     -> Par QuasiDet s (GV.DotGraph G.Node)
+                     -> Par e s (GV.DotGraph G.Node)
 debugVizMemoGraph idOnly initKey frmap = do
   let showKey = if idOnly then showID
                 else shortShow 40
-  let gcons :: NodeRecord s t1 t2
+  let gcons :: (HasFreeze e) => 
+               NodeRecord s t1 t2
             ->                (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
-            -> Par QuasiDet s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
+            -> Par e s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
       gcons NodeRecord{mykey, in_cycle,result}
             (labmap, gracc) = do
         dbgPr (" .. About to wait for node result, key "++show mykey)

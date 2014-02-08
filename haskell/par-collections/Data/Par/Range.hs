@@ -203,7 +203,7 @@ pmapReduce_ = mkMapReduce spawn_
 
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
-mkMapReduce :: ParFuture m => (m t -> m (Future m t)) ->
+mkMapReduce :: (ParFuture m, FutContents m t) => (m t -> m (Future m t)) ->
                Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
 mkMapReduce spawner irng fn binop init = loop irng
  where
