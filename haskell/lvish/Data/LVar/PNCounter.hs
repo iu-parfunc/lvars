@@ -1,6 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies  #-}
 
+-- LK: N.B. Once Data.LVar.Counter is done, we should just be able to
+-- glue two of those together for this, just as AddRemoveSet does with
+-- sets.
+
 {-|
 
 This module provides a /PN-Counter/, a counter that allows both
