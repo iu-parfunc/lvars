@@ -6,14 +6,8 @@
 set -x
 set -e
 
-# cabal install -fnewgeneric -fgeneric ./monad-par/monad-par/ ./par-collections/ ./par-classes/ ./par-transformers/ ./lvish/ --enable-tests --force-reinstalls
-
-cabal install -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
+cabal install -f-beta -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
    ./par-collections/ ./par-classes/ ./lvish/ \
    --force-reinstalls  $*
 # ./par-transformers/ ./\
 #   ./lvish-apps/pbbs ./lvish-graph-algorithms/ \
-
-
-# TODO, add:
-#   lvish-apps/cfa
