@@ -332,7 +332,7 @@ debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
 debugShow (Slice (SLMap index lmbot) mstart mend) =
   do lns <- loop index
      let len = length lns
-     return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0..len-1] ]
+     return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0::Int ..len-1] ]
   where
     startCheck = case mstart of
                   Just start -> \ k -> k >= start
@@ -353,7 +353,7 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
                          ] ]
     loop (Index indm slm) = do
       ls <- LM.toList indm
-      strs <- forM [ (i,tup) | i <- [0..] | tup@(k,_) <- ls ] $ -- , startCheck k
+      strs <- forM [ (i,tup) | i <- [0::Int ..] | tup@(k,_) <- ls ] $ -- , startCheck k
               \ (ix, (key, (shortcut::t, val))) -> do
         -- Peek at the next layer down:
 {-        
