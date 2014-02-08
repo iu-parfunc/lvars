@@ -41,7 +41,7 @@ import           Data.LVar.Generic.Internal
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
   -- completely available and `Foldable`.  Guaranteed /O(1)/.
-  snapFreeze :: f s a -> QuasiDeterministic e => Par e s (f Trvrsbl a)
+  snapFreeze :: HasFreeze e => f s a -> Par e s (f Trvrsbl a)
 
 {- 
 -- | Just like LVarData1 but for type constructors of kind `*`.
@@ -50,8 +50,8 @@ class LVarData0 (t :: *) where
   -- e.g. a whole set instead of one element, or the full/empty information for an
   -- IVar, instead of just the payload.
   type Snapshot0 t
-  freeze0 :: t -> Par QuasiDet s (Snapshot0 t)
-  newBottom0 :: Par d s t
+  freeze0 :: HasFreeze e => t -> Par e s (Snapshot0 t)
+  newBottom0 :: Par e s t
 -}
 
 

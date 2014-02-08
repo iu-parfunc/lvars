@@ -85,7 +85,7 @@ instance Eq (IVar s a) where
 -- contain at most one value!  Note, however, that the polymorphic operations are
 -- less useful than the monomorphic ones exposed by this module.
 instance LVarData1 IVar where  
-  freeze :: QuasiDeterministic e => IVar s a -> Par e s (IVar Frzn a)
+  freeze :: HasFreeze e => IVar s a -> Par e s (IVar Frzn a)
   freeze orig@(IVar (WrapLVar lv)) = WrapPar $ do
     freezeLV lv
     return (unsafeCoerceLVar orig)

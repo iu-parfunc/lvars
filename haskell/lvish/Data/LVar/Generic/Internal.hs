@@ -60,7 +60,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   --
   -- However, note that `Frzn` LVars cannot be folded, because they may have
   -- nondeterministic ordering after being frozen.  See `sortFreeze`.
-  freeze :: QuasiDeterministic e => f s a -> Par e s (f Frzn a)
+  freeze :: HasFreeze e => f s a -> Par e s (f Frzn a)
 
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.
@@ -80,7 +80,7 @@ class LVarWBottom (f :: * -> * -> *) where
   -- | Requirements for contents types of this LVar.
   type LVContents f a :: Constraint
   
-  newBottom :: (LVContents f a) => Par d s (f s a)
+  newBottom :: (LVContents f a) => Par e s (f s a)
 
   -- singletonLV :: (LVContents f a) => a -> Par d s (f s a)
 
