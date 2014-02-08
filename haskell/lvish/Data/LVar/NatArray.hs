@@ -107,8 +107,8 @@ unNatArray (NatArray lv) = lv
 
 -- | Create a new, empty, monotonically growing 'NatArray' of a given size.
 --   All entries start off as zero, which must be BOTTOM.
-newNatArray :: forall elt d s . (Storable elt, Num elt) =>
-                     Int -> Par d s (NatArray s elt)
+newNatArray :: forall elt e s . (Storable elt, Num elt) =>
+                     Int -> Par e s (NatArray s elt)
 newNatArray len = WrapPar $ fmap (NatArray . WrapLVar) $ newLV $ do
 #ifdef USE_CALLOC
   let bytes = sizeOf (undefined::elt) * len
@@ -157,8 +157,8 @@ fromNatArray (NatArray lv) = unsafeDupablePerformIO (readIORef (state lv))
 forEachHP :: (Storable a, Eq a, Num a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> NatArray s a                -- ^ array to listen to
-          -> (Int -> a -> Par d s ())    -- ^ callback
-          -> Par d s ()
+          -> (Int -> a -> Par e s ())    -- ^ callback
+          -> Par e s ()
 forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB deltaCB
     return ()
@@ -176,7 +176,7 @@ forEachHP hp (NatArray (WrapLVar lv)) callb = WrapPar $ do
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
-          M.IOVector a -> (Int -> a -> Par d s ()) -> Par d s ()
+          M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0 
   where
     len = M.length vec
@@ -189,15 +189,15 @@ forVec vec fn = loop 0
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
 forEach :: (Num a, Storable a, Eq a) =>
-           NatArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
+           NatArray s a -> (Int -> a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 
 
 {-# INLINE put #-}
 -- | Put a single element in the array.  That slot must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
-put :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt) =>
-       NatArray s elt -> Int -> elt -> Par d s ()
+put :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, Show elt, HasPut e) =>
+       NatArray s elt -> Int -> elt -> Par e s ()
 put _ !ix 0 = throw (LVarSpecificExn$ "NatArray: violation!  Attempt to put zero to index: "++show ix)
 put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
   where putter ix vec@(M.MVector _len fptr) =
@@ -217,8 +217,8 @@ put (NatArray (WrapLVar lv)) !ix !elm = WrapPar$ putLV lv (putter ix)
 -- 
 -- Warning: this is inefficient if it needs to block, because the deltaThresh must
 -- monitor EVERY new addition.
-get :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
-       NatArray s elt -> Int -> Par d s elt
+get :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt, HasGet e) =>
+       NatArray s elt -> Int -> Par e s elt
 get (NatArray (WrapLVar lv)) !ix  = WrapPar $
     getLV lv globalThresh deltaThresh
   where
@@ -238,8 +238,8 @@ get (NatArray (WrapLVar lv)) !ix  = WrapPar $
 -- loop.  Parallelism will be introduced minimally, only as neccessary to avoid
 -- blocking.
 seqLoopNonblocking :: Int -> Int ->
-                     ((NatArray s elt -> Int -> Par d s elt) -> Int -> Par d s ()) ->
-                     Par d s ()
+                     ((NatArray s elt -> Int -> Par e s elt) -> Int -> Par e s ()) ->
+                     Par e s ()
 seqLoopNonblocking start end fn = do
   error "TODO - FINISHME: seqLoopNonblocking optimization"
   where

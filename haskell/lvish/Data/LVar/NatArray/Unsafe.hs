@@ -18,7 +18,7 @@ import           Control.LVish.Internal as LI
 -- newtype NatArray s a = NatArray (LVar s (M.IOVector a) (Int,a))
 data NatArray s a = Storable a => NatArray !(LVar s (M.IOVector a) (Int,a))
 
-unsafePeek :: (Num a, Eq a) => NatArray s a -> Int -> Par d s (Maybe a)
+unsafePeek :: (Num a, Eq a) => NatArray s a -> Int -> Par e s (Maybe a)
 unsafePeek (NatArray lv) ix = do
   peek <- LI.liftIO $ M.read (LI.state lv) ix
   case peek of
