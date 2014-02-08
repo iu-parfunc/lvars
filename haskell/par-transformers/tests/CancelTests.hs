@@ -24,12 +24,12 @@ io :: ParMonad m => IO a -> m a
 io = internalLiftIO
 
 -- FIXME: Need to replace this with something that will work when NOT in debug mode.
-dbg :: String -> CancelT (Par d s) ()
+dbg :: String -> CancelT (Par e s) ()
 dbg = lift . logDbgLn (-1)
 
 -- case_cancel01 =
 
--- type MyM a = CancelT (Par d s)
+-- type MyM a = CancelT (Par e s)
 
 -- | This deadlocks, because the last computation was canceled!
 cancel01 :: IO ([String],())
@@ -118,14 +118,14 @@ case_andTreeT :: Assertion
 case_andTreeT = assertEqual "" True $ runPar $ runCancelT $ andTreeT 16
 
 -- | Takes a depth N and does 2^N operations in a binary tree
-andTreeF :: Int -> CancelT (Par d s) Bool
+andTreeF :: Int -> CancelT (Par e s) Bool
 andTreeF 0 = return False
 andTreeF depth = do
   v <- PC.new
   CT.asyncAnd (andTreeF (depth-1)) (andTreeF (depth-1)) (PC.put v)
   PC.get v
 
-andTreeT :: Int -> CancelT (Par d s) Bool
+andTreeT :: Int -> CancelT (Par e s) Bool
 andTreeT 0 = return True
 andTreeT depth = do
   v <- PC.new
