@@ -54,7 +54,7 @@ import GHC.Prim (unsafeCoerce#)
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), NonFrzn, Frzn, Trvrsbl)
 import Control.LVish.Internal (Par(WrapPar))
-import Control.LVish.EffectSigs
+import Control.Par.EffectSigs
 import Control.LVish.SchedIdempotent (runPar, runParIO)
 --------------------------------------------------------------------------------
 

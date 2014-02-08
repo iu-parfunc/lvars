@@ -7,7 +7,7 @@ set -x
 set -e
 
 cabal install -fbeta -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
-   ./par-collections/ ./par-classes/ ./lvish/ ./par-transformers/ \
+    ./par-classes/ ./par-collections/ ./lvish/  \
    --force-reinstalls  $*
-#  ./\
+#   ../par-transformers/
 #   ./lvish-apps/pbbs ./lvish-graph-algorithms/ \

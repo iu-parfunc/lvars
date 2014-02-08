@@ -22,7 +22,7 @@ module Data.LVar.Generic.Internal
        where
 
 import           Control.LVish.Types
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import           Control.LVish.Basics
 import           Control.LVish.Internal (Par)
 import           Control.LVish.SchedIdempotent (HandlerPool)

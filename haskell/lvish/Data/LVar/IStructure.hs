@@ -43,7 +43,7 @@ import           Data.List (intersperse)
 import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import           Data.LVar.Generic as G
@@ -164,7 +164,7 @@ forEachHP hp (IStructure vec) callb =
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
-          M.IOVector a -> (Int -> a -> Par d s ()) -> Par d s ()
+          M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0 
   where
     len = M.length vec
@@ -177,7 +177,7 @@ forVec vec fn = loop 0
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
 forEach :: (Num a, Storable a, Eq a) =>
-           NatArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
+           NatArray s a -> (Int -> a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 -}
 

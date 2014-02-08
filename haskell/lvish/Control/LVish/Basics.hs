@@ -20,13 +20,8 @@
 module Control.LVish.Basics
   ( Par(), LVar(),
 
-    -- * Running various Par computations
     runPar, runParQuasiDet, runParNonDet,
-
-    -- * More polymorphic variants of same
     runParPoly, runParPolyIO, 
-
-    -- * Debugging versions with more knobs
     runParLogged, runParDetailed,
 
     liftQD,
@@ -52,7 +47,7 @@ import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Control.LVish.SchedIdempotent as L
 import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
 

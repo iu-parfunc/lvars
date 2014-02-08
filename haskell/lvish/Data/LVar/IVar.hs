@@ -52,7 +52,7 @@ import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
 import qualified Data.Foldable    as F
 import           Control.Exception (throw)
 import qualified Control.LVish.Types as LV 
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import qualified Control.LVish.Basics as LV 
 import           Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal as I

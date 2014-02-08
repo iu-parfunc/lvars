@@ -69,7 +69,7 @@ module Control.LVish
     runParPoly, runParPolyIO, 
 
     -- * Effect signature manipulation and conversion
-    module Control.LVish.EffectSigs,
+    module Control.Par.EffectSigs,
     liftQD,
 
     -- * Combinators for manually constraining the type of a given Par computation
@@ -116,7 +116,7 @@ import           Control.LVish.Basics as B
 import           Control.LVish.Logical
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import           Control.LVish.Logging (OutDest(..))
 import           Data.LVar.IVar 
 

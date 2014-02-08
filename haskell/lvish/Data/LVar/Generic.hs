@@ -21,7 +21,7 @@ module Data.LVar.Generic
        where
 
 import           Control.LVish.Types
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 import           Control.LVish.Basics
 import           Control.LVish.Internal (Par)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)

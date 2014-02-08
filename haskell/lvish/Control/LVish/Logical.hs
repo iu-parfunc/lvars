@@ -4,7 +4,7 @@
 -- | Not exported directly.  Reexported by "Control.LVish".
 module Control.LVish.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
-import Control.LVish.EffectSigs
+import Control.Par.EffectSigs
 import Control.LVish.Basics
 import Control.LVish.Internal (Par(WrapPar), unsafeDet)
 import Control.LVish.SchedIdempotent (liftIO, HandlerPool)
