@@ -400,7 +400,7 @@ showMapContents2 (IM.IMap lv) = do
 
 -- | Variant of `union` that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
-copyTo :: Ord a => HandlerPool -> IS.ISet s a -> IS.ISet s a -> Par d s ()
+copyTo :: (HasPut e, Ord a) => HandlerPool -> IS.ISet s a -> IS.ISet s a -> Par e s ()
 copyTo hp sfrom sto = do
   IS.forEachHP (Just hp) sfrom (`insert` sto)
 
