@@ -37,11 +37,11 @@ import qualified Control.Par.Class as PC
 -- conversions in the middle.
 mkSimpleIdentityProp ::
   (Ord v, Ord k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
-  (IM.IMap k NonFrzn v -> Par 'Det NonFrzn a) -> [(k, v)] -> Bool
+  (IM.IMap k NonFrzn v -> Par (Ef P G NF B NI) NonFrzn a) -> [(k, v)] -> Bool
 mkSimpleIdentityProp trans prs =
   (L.sort$ L.nub$ map snd prs) == 
   (L.sort$ L.nub $ F.toList $
-   runParThenFreeze $ do
+   runParThenFreeze $ isDet $ do
      mp0 <- IM.newFromList prs
      trans mp0)
 
@@ -89,7 +89,7 @@ case_v7a = assertEqual "basic imap test"
 
 v7a :: IO [Float]
 v7a = fmap (L.sort . F.toList) $
-  runParIO $ IM.freezeMap =<<
+  runParNonDet $ IM.freezeMap =<<
   do mp <- IM.newEmptyMap
      fork $ do IM.waitSize 3 mp
                IM.insert 100 100.1 mp
@@ -116,7 +116,7 @@ case_v8c = assertEqual "forEachHP on maps" [101,102] =<< v8c
 -- | Similar test with Maps instead of Sets.
 v8c :: IO [Int]
 v8c = fmap (L.sort . F.toList) $
-      runParIO $ do
+      runParNonDet $ do
   hp <- newPool
   m1 <- IM.newFromList [(1,1),(2,2)]
   m2 <- IM.newEmptyMap
@@ -130,13 +130,14 @@ v8c = fmap (L.sort . F.toList) $
 
 
 case_v8d :: Assertion
-case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParIO v8d
-           -- fmap (L.sort . F.toList)  (runParIO v8d)
+case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParQuasiDet v8d
+           -- fmap (L.sort . F.toList)  (runParNonDet v8d)
            -- stressTest 0 30 v8d (== [40,50,101,102])
 
 -- fmap (L.sort . F.toList) $
 -- v8d :: Par QuasiDet s (IM.IMap Int Frzn Int)
-v8d :: Par QuasiDet s [Int]
+-- v8d :: QuasiDeterministic e => Par e s [Int]
+v8d :: HasFreeze e => Par e s [Int]
 v8d = do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."  
@@ -163,7 +164,7 @@ v8d = do
 case_v9a :: Assertion
 case_v9a = assertEqual "make sure there's sufficient parallelism" () =<< 
   (assertNoTimeOut 1.0 $ 
-   runParIO $ do
+   runParNonDet $ do
      mp <- IM.newEmptyMap
      IM.forEach mp $ \ c v -> do
        case c of
@@ -186,7 +187,7 @@ case_v9a = assertEqual "make sure there's sufficient parallelism" () =<<
 
 -- Issue #27, spurious duplication.
 case_handlrDup :: Assertion
-case_handlrDup = runParIO $ do
+case_handlrDup = runParNonDet $ do
   logDbgLn 1 $ "[case_handlrDup] Step 1"
   ctr <- I.liftIO$ newIORef 0
   mp  <- IM.newEmptyMap

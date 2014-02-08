@@ -80,7 +80,7 @@ runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 --     STRESSTESTS=15000 ./LVishAndIVar.exe -t runParStress +RTS -N15
 -- 
 -- Oddly, it seems to go from happening rarely at -N17 to often at -N18.
--- I think the problem with the simple test that uses "runParIO" is that we 
+-- I think the problem with the simple test that uses "runParNonDet" is that we 
 -- can't make the runtime use more capabilities than we fork par worker threads.
 -- This could be a GHC runtime bug relating to thread migration?
 case_lotsaRunPar :: Assertion
@@ -91,8 +91,8 @@ lotsaRunPar = loop iters
   threads = 15 -- numCapabilities 
   loop 0 = putStrLn ""
   loop i = do
-     -- We need to do runParIO to make sure the compiler does the runPar each time.
-     -- runParIO (return ()) -- Can't crash this one.
+     -- We need to do runParNonDet to make sure the compiler does the runPar each time.
+     -- runParNonDet (return ()) -- Can't crash this one.
      runParDetailed (DbgCfg Nothing [] False) threads (return ())
       -- This version can start going RIDICULOUSLY slowly with -N20.  It will use <20% CPU while it does it.
       -- But it won't use much memory either... what is it doing?  With -N4 it goes light years faster, and with -N2
@@ -122,13 +122,13 @@ lotsaRunPar = loop iters
 case_v0 :: HU.Assertion
 case_v0 = do res <- v0
              HU.assertEqual "useless fork" (4::Int) res
-v0 = runParIO $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
+v0 = runParNonDet $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
 
 case_v1a :: Assertion
 case_v1a = assertEqual "fork put" (4::Int) =<< v1a
 v1a :: IO Int
-v1a = runParIO $ do i<-IV.new; fork (IV.put i 4); IV.get i
+v1a = runParNonDet $ do i<-IV.new; fork (IV.put i 4); IV.get i
 
 case_v1b :: Assertion
 case_v1b = do ls <- v1b
@@ -176,7 +176,7 @@ case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
 i3f :: IO ()
 #ifdef NO_DANGLING_THREADS
 -- | A test to make sure that we get an error when we block on an unavailable ivar.
-i3f = runParIO$ do
+i3f = runParQuasiDet$ do
   iv <- IV.new
   fork $ do IV.get iv
             logDbgLn 1 "Unblocked!  Shouldn't see this."
@@ -190,7 +190,7 @@ case_i3g :: Assertion
 case_i3g = exceptionOrTimeOut 0.3 [] i3g
 -- | A still-running worker thread should NOT be allowed, because it may do a put that causes an exception.
 i3g :: IO Word8
-i3g = runParIO$ do
+i3g = runParQuasiDet$ do
   iv <- IV.new
   fork $ do let loop !ls = loop [1 .. length ls]
             loop [1..10]
@@ -208,7 +208,7 @@ i3g = runParIO$ do
 
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
-lp01 = runParIO$ do
+lp01 = runParQuasiDet$ do
   logDbgLn 2 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
@@ -218,7 +218,7 @@ lp01 = runParIO$ do
 
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
-lp02 = runParIO$ do
+lp02 = runParQuasiDet$ do
   logDbgLn 2 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
@@ -234,7 +234,7 @@ lp02 = runParIO$ do
 -- just 'v' tests and even just 'v9' tests.
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
-lp03 = runParIO$ do
+lp03 = runParQuasiDet$ do
   logDbgLn 2 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
@@ -245,7 +245,7 @@ lp03 = runParIO$ do
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
-lp04 = runParIO$ do
+lp04 = runParQuasiDet$ do
   logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
   parForTiled Nothing 16 (0,10) $ \ ix -> do
@@ -264,7 +264,7 @@ lp04 = runParIO$ do
 -- case_v4 = v4 >>= assertEqual "simple-pair" (3, "hi") 
 
 -- v4 :: IO (Int,String)
--- v4 = runParIO $
+-- v4 = runParNonDet $
 --      do p <- newPair
 --         putFst p 3
 --         putSnd p "hi"        
@@ -277,7 +277,7 @@ lp04 = runParIO$ do
 -- case_i5a = assertException ["Multiple puts to an IVar!"] i5a
 
 -- i5a :: IO Int
--- i5a = runParIO (
+-- i5a = runParNonDet (
 --      do p <- newPair
 --         putFst p 3
 --         putSnd p "hi"
@@ -290,7 +290,7 @@ lp04 = runParIO$ do
 -- case_i5b = assertException ["Multiple puts to an IVar!"] i5b
 
 -- i5b = 
---   runParIO $
+--   runParNonDet $
 --      do p <- newPair
 --         putFst p 3
 --         putSnd p "hi"
@@ -304,7 +304,7 @@ lp04 = runParIO$ do
 -- case_i5c :: Assertion
 -- case_i5c = assertException ["Multiple puts to an IVar!"] i5c
 
--- i5c = runParIO $
+-- i5c = runParNonDet $
 --      do p <- newPair
 --         putSnd p "hi"
 
@@ -321,7 +321,7 @@ lp04 = runParIO$ do
 -- -- program would return "a" or "b".
 -- case_i6a :: Assertion
 -- case_i6a = assertException ["Multiple puts to an IVar!"] i6a
--- i6a = runParIO (
+-- i6a = runParNonDet (
 --      do p <- newPair
 --         putFst p 3
 
@@ -351,7 +351,7 @@ lp04 = runParIO$ do
 -- -- More pairs
 -- case_v6 :: Assertion
 -- case_v6 = assertEqual "fancy pairs"
---           33 =<< runParIO (
+--           33 =<< runParNonDet (
 --      do p1 <- newPair
 --         p2 <- newPair
 --         fork $ do x <- getFst p1
@@ -369,7 +369,7 @@ lp04 = runParIO$ do
 case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
 
 dftest0 :: IO String
-dftest0 = runParIO $ do
+dftest0 = runParNonDet $ do
   iv1 <- IV.new
   iv2 <- IV.new
   IV.put_ iv1 iv2
@@ -382,7 +382,7 @@ case_dftest1 = assertEqual "deefreeze double ivar" (Just "hello") =<< dftest1
 
 -- | Should return (Just (Just "hello"))
 dftest1 :: IO (Maybe String)
-dftest1 = runParIO $ do
+dftest1 = runParNonDet $ do
   iv1 <- IV.new
   iv2 <- IV.new
   IV.put_ iv1 iv2
@@ -392,7 +392,7 @@ dftest1 = runParIO $ do
 
 case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
 dftest3 :: IO (Maybe Int)
-dftest3 = runParIO $ do
+dftest3 = runParNonDet $ do
   iv1 <- IV.new
   IV.put_ iv1 (3::Int)
   IV.freezeIVar iv1 
@@ -413,7 +413,7 @@ dftest3 = runParIO $ do
 
 -- case_dftest4a = assertEqual "freeze polymorphic 1" (Just 3) =<< dftest4a
 -- dftest4a :: IO (Maybe Int)
--- dftest4a = runParIO dftest4_
+-- dftest4a = runParNonDet dftest4_
 
 ------------------------------------------------------------------------------------------
 -- Show instances

@@ -40,7 +40,7 @@ case_v2a = v2a >>= assertEqual "put 10 in & wait"
 
 -- [2013.06.27] getting thread-blocked-indefinitely errors:
 v2a :: IO (S.Set Int)
-v2a = runParIO $
+v2a = runParNonDet $
      do s <- IS.newEmptySet
         mapM_ (\n -> fork $ IS.insert n s) [1..10]
         IS.waitSize 10 s 
@@ -52,7 +52,7 @@ case_v2b = v2b >>= assertEqual "t2 with spawn instead of fork"
            (S.fromList [1..10] :: S.Set Int)
            
 v2b :: IO (S.Set Int)
-v2b = runParIO $
+v2b = runParNonDet $
      do s   <- IS.newEmptySet
         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10]
         mapM_ IV.get ivs -- Join point.
@@ -78,7 +78,7 @@ v2c = -- IS.fromISet $
 
 -- [2013.06.27] This is failing just occasionally with a multiple-put:
 v3a :: IO (S.Set Int)          
-v3a = runParIO $
+v3a = runParNonDet $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
@@ -96,7 +96,7 @@ case_v3b = v3b >>= assertEqual "simple callback test"
           (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
           
 v3b :: IO (S.Set Int)          
-v3b = runParIO $
+v3b = runParNonDet $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
@@ -122,7 +122,7 @@ case_i3c = do
   return ()
     
 i3c :: IO (S.Set Int)
-i3c = runParIO $
+i3c = runParNonDet $
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
@@ -154,7 +154,7 @@ case_v3d = assertEqual "test of parallelism in freezeSetAfter"
 -- | This test has interdependencies between callbacks (that are launched on
 -- already-present data), which forces these to be handled in parallel.
 v3d :: IO (S.Set Int)
-v3d = runParIO $ 
+v3d = runParNonDet $ 
      do s1 <- IS.newFromList [1..5]
         s2 <- IS.newEmptySet
         IS.freezeSetAfter s1 $ \ elm -> do
@@ -179,7 +179,7 @@ case_v3e = assertEqual "test of parallelism in forEachHP"
 
 -- | Same as v3d but for forEachHP
 v3e :: IO (S.Set Int)
-v3e = runParIO $ IS.freezeSet =<<
+v3e = runParNonDet $ IS.freezeSet =<<
      do s1 <- IS.newFromList [1..5]
         s2 <- IS.newEmptySet
         hp <- newPool
@@ -214,7 +214,7 @@ case_v8a = assertEqual "simple cartesian product test"
 
 -- v8a :: IO (S.Set (Integer, Char))
 v8a :: IO (S.Set (Integer, Char))
-v8a = runParIO $ do
+v8a = runParNonDet $ do
   s1 <- IS.newFromList [1,2,3]
   s2 <- IS.newFromList ['a','b']
   logDbgLn 1 " [v8a] now to construct cartesian product..."
@@ -237,7 +237,7 @@ case_v8b = assertEqual "3-way cartesian product"
            =<< v8b
 
 v8b :: IO (S.Set [Int])
-v8b = runParIO $ do
+v8b = runParNonDet $ do
   hp <- newPool
   s1 <- IS.newFromList [1,2]
   s2 <- IS.newFromList [40,50]

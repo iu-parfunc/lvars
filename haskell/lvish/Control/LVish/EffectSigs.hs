@@ -13,8 +13,8 @@ module Control.LVish.EffectSigs
         Putting(..), Getting(..), Freezing(..), Bumping(..), IOing(..), 
 
         -- * User-visible Constraints 
-        HasGet, HasFreeze, HasIO, 
-        NoFreeze, NoIO,
+        HasPut, HasGet, HasFreeze, HasBump, HasIO, 
+        NoPut, NoGet, NoFreeze, NoBump, NoIO,
 
         -- * Derived constraints, i.e. shorthands for common combinations:
         ReadOnly, Deterministic, QuasiDeterministic,
@@ -168,6 +168,7 @@ type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
 type HasPut e    = (GetP e ~ P)
 type HasGet e    = (GetG e ~ G)
 type HasFreeze e = (GetF e ~ F)
+type HasBump   e = (GetB e ~ B)
 type HasIO  e    = (GetI e ~ I)
 
 type NoPut    e = (NP ~ GetP e)

@@ -71,6 +71,10 @@ module Control.LVish
     -- * Effect signature manipulation and conversion
     module Control.LVish.EffectSigs,
     liftQD,
+
+    -- * Combinators for manually constraining the type of a given Par computation
+    isDet, isQD, isND, 
+    hasPut, hasFreeze, hasBump, hasGet, hasIO,
     
     -- * Basic control flow
     fork, yield, 
@@ -119,6 +123,7 @@ import           Data.LVar.IVar
 import Data.IORef
 --------------------------------------------------------------------------------
 
+
 #ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
@@ -158,3 +163,30 @@ mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
 mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
 type SchedState = State L.ClosedPar LVarID
 type LVarID = IORef ()
+
+------------------------------------------------------------
+
+hasPut :: HasPut e => Par e s a -> Par e s a
+hasPut x = x
+
+hasFreeze :: HasFreeze e => Par e s a -> Par e s a
+hasFreeze x = x
+
+hasBump :: HasBump e => Par e s a -> Par e s a
+hasBump x = x
+
+hasIO :: HasIO e => Par e s a -> Par e s a
+hasIO x = x
+
+hasGet :: HasGet e => Par e s a -> Par e s a
+hasGet x = x
+
+isDet :: (e ~ (Ef P G NF B NI)) => Par e s a -> Par e s a
+isDet x = x
+
+isQD :: (e ~ (Ef P G F B NI)) => Par e s a -> Par e s a
+isQD x = x
+
+isND :: (e ~ (Ef P G F B I)) => Par e s a -> Par e s a
+isND x = x
+
