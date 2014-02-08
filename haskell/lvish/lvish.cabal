@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.1.5
+version:             2.0
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -22,6 +22,9 @@ version:             1.1.1.5
 -- 1.1.0.3 -- expose BulkRetry prototype
 -- 1.1.1.0 -- expose logging routines
 -- 1.1.1.5 -- various bugfixes
+
+-- 2.0     -- Major changes to all types to track effect signatures
+
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -129,7 +132,7 @@ library
 
   if flag(beta) && flag(newcontainers)
     exposed-modules: 
-                      Control.LVish.BulkRetry
+--                      Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
   other-modules:

@@ -32,7 +32,7 @@ case_toQPar :: Assertion
 case_toQPar = t1 >>= assertEqual "" "hi" 
 
 t1 :: IO String
-t1 = runParQuasiDet par
+t1 = runParQuasiDet $ isQD par
  where
   par :: QuasiDeterministic e => Par e s String
   par = do
