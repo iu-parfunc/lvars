@@ -92,7 +92,7 @@ newFromList = newMap . M.fromList
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s e . (HasFreeze e, Eq b) =>
+withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
                            IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
     do hp  <- newPool 

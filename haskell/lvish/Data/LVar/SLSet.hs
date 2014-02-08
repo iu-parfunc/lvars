@@ -187,13 +187,14 @@ newFromList_ ls n = do
 -- the context of the handlers.
 --
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: HasFreeze e => ISet s a -> (a -> Par e s ()) -> Par e s ()
+freezeSetAfter :: (HasPut e, HasGet e, HasFreeze e) => 
+                  ISet s a -> (a -> Par e s ()) -> Par e s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
   
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: (HasFreeze e, Eq b) => ISet s a -> (a -> Par e s ()) -> Par e s b -> Par e s b
+withCallbacksThenFreeze :: (HasPut e, HasGet e, HasFreeze e, Eq b) => ISet s a -> (a -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (ISet lv) callback action = do
   hp  <- newPool 
   res <- IV.new -- TODO, specialize to skip this when the init action returns ()

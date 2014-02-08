@@ -222,9 +222,9 @@ data NodeValue k v = FinalValue !v | Defer k
 -- monotonic data structure to track the full set of other nodes that can reach it in
 -- the graph.
 #ifdef DEBUG_MEMO
-exploreGraph :: forall s k v e . (Ord k, Eq v, ShortShow k, Show v, HasFreeze e) =>
+exploreGraph :: forall s k v e . (Ord k, Eq v, ShortShow k, Show v, HasPut e, HasGet e, HasFreeze e) =>
 #else
-exploreGraph :: forall s k v e . (Ord k, Eq v, Show k, Show v, HasFreeze e) =>
+exploreGraph :: forall s k v e . (Ord k, Eq v, Show k, Show v, HasPut e, HasGet e, HasFreeze e) =>
 #endif
                       (k -> Par e s [k])  -- ^ Sketch the graph: map a key onto its children.
                    -> NodeAction e s k v  -- ^ The computation to run at each graph node.
