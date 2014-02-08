@@ -32,12 +32,12 @@ import           System.IO.Unsafe (unsafePerformIO)
 newtype Counter s = Counter (LVar s AC.AtomicCounter Word)
 
 -- | Create a new `Counter` with the given initial value.
-newCounter :: Word -> Par d s (Counter s)
+newCounter :: Word -> Par e s (Counter s)
 newCounter n = WrapPar $ fmap (Counter . WrapLVar) $
                LI.newLV $ AC.newCounter (fromIntegral n)
 
 -- | Increment the counter by a given amount.
-increment :: Counter s -> Word -> Par d s ()
+increment :: HasBump e => Counter s -> Word -> Par e s ()
 increment (Counter (WrapLVar lv)) n =
   WrapPar $ LI.putLV lv putter where
     putter :: AC.AtomicCounter -> IO (Maybe Word)
@@ -46,11 +46,11 @@ increment (Counter (WrapLVar lv)) n =
       return $ Just (fromIntegral n')
 
 -- | Wait until the maximum observed value reaches some threshold, then return.
-waitThresh :: Counter s -> Word -> Par d s ()
+waitThresh :: HasGet e => Counter s -> Word -> Par e s ()
 waitThresh = undefined
 
 -- | Observe what the final value of the `Counter` was.
-freezeCounter :: Counter s -> Par QuasiDet s Word
+freezeCounter :: HasFreeze e => Counter s -> Par e s Word
 freezeCounter = undefined
 
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted
