@@ -49,7 +49,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
 
   -- | Add a handler function which is called whenever an element is
   -- added to the LVar.
-  addHandler :: Maybe HandlerPool -> f s elt -> (elt -> Par d s ()) -> Par d s ()
+  addHandler :: Maybe HandlerPool -> f s elt -> (elt -> Par e s ()) -> Par e s ()
 
   -- | An /O(1)/ operation that atomically switches the LVar into a
   -- frozen state.  Any threads waiting on the freeze are woken.
@@ -82,7 +82,7 @@ class LVarWBottom (f :: * -> * -> *) where
   
   newBottom :: (LVContents f a) => Par e s (f s a)
 
-  -- singletonLV :: (LVContents f a) => a -> Par d s (f s a)
+  -- singletonLV :: (LVContents f a) => a -> Par e s (f s a)
 
 -- | Carries a `Foldable` type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have
