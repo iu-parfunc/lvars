@@ -17,7 +17,7 @@ module Control.LVish.DeepFrz.Internal
 -- by the user, however.  Rather, it is the final step in a
 -- `runParThenFreeze` invocation.
 
--- An instance of DeepFrz is a valid return valud for `runParThenFreeze`
+-- An instance of DeepFrz is a valid return value for `runParThenFreeze`
 class DeepFrz a where
   -- | This type function is public.  It maps pre-frozen types to
   -- frozen ones.  It should be idempotent.

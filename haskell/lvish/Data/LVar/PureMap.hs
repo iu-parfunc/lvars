@@ -227,7 +227,7 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.a
+    -- the threshold.
     deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map.  As with any
