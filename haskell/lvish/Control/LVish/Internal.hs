@@ -46,7 +46,7 @@ import           Data.List (sort)
 {-# INLINE unWrapPar #-}
 --------------------------------------------------------------------------------
 
--- | The type of parallel computations.  A computation @Par d s a@ may or may not be
+-- | The type of parallel computations.  A computation @Par e s a@ may or may not be
 -- deterministic based on the setting of the `d` parameter (of kind `Determinism`).
 -- The `s` parameter is for preventing the escape of @LVar@s from @Par@ computations
 -- (just like the @ST@ monad).  
@@ -82,12 +82,12 @@ newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 
 -- | Unsafe: drops type information to go from the safe `Par` monad to
 -- the internal, dangerous one.
-unWrapPar :: Par d s a -> L.Par a
+unWrapPar :: Par e s a -> L.Par a
 unWrapPar (WrapPar p) = p 
 
 -- | This is cheating!  It pays no attention to session sealing (@s@) or to the
 -- determinism level (@d@).
-unsafeRunPar :: Par d s a -> a
+unsafeRunPar :: Par e s a -> a
 unsafeRunPar p = L.runPar (unWrapPar p)
 
 -- | Extract the state of an LVar.  This should only be used by implementations of
@@ -96,18 +96,18 @@ state :: LVar s a d -> a
 state = L.state . unWrapLVar
 
 -- | Ignore the extra type annotations regarding both determinism and session-sealing.
-unsafeConvert :: Par d1 s1 a -> Par d2 s2 a
+unsafeConvert :: Par e1 s1 a -> Par e2 s2 a
 unsafeConvert (WrapPar p) = (WrapPar p)
 
 -- | Unsafe coercion from quasi-deterministic to deterministic.  The user is
 -- promising that code is carefully constructed so that put/freeze races will not
 -- occur.
-unsafeDet :: Par d1 s a -> Par d2 s a
+unsafeDet :: Par e1 s a -> Par e2 s a
 unsafeDet (WrapPar p) = (WrapPar p)
 
-instance MonadToss (Par d s) where
+instance MonadToss (Par e s) where
   toss = WrapPar L.toss
 
 -- | Unsafe internal operation to lift IO into the Par monad.
-liftIO :: IO a -> Par d s a
+liftIO :: IO a -> Par e s a
 liftIO = WrapPar . L.liftIO   
