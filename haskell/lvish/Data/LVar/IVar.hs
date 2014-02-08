@@ -120,7 +120,7 @@ instance Show a => Show (IVar Trvrsbl a) where
 
 {-# INLINE new #-}
 -- | A new IVar that starts out empty. 
-new :: Par d s (IVar s a)
+new :: Par e s (IVar s a)
 new = WrapPar$ fmap (IVar . WrapLVar) $
       newLV $ newIORef Nothing
 
@@ -128,7 +128,7 @@ new = WrapPar$ fmap (IVar . WrapLVar) $
 -- | Read the value in a IVar.  The 'get' can only return when the
 -- value has been written by a prior or concurrent @put@ to the same
 -- IVar.
-get :: IVar s a -> Par d s a
+get :: HasGet e => IVar s a -> Par e s a
 get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
   where globalThresh ref _ = readIORef ref    -- past threshold iff Just _
         deltaThresh  x     = return $ Just x  -- always past threshold
@@ -138,7 +138,7 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 -- are not allowed, and result in a runtime error, unless the values put happen to be @(==)@.
 --         
 -- This function is always at least strict up to WHNF in the element put.
-put_ :: Eq a => IVar s a -> a -> Par d s ()
+put_ :: (HasPut e, Eq a) => IVar s a -> a -> Par e s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef ref update
         update (Just y) | x == y = (Just y, Nothing)
@@ -166,7 +166,10 @@ fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (I.state lv)
 {-# INLINE whenFull #-}
 -- | Register a handler that fires when the IVar is filled, which, of course, only
 --   happens once.
-whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
+--
+--   Note that like `fork`, adding handlers doesn't introduce specifically tracked
+--   effects in the `e` signature.
+whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par e s ()) -> Par e s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
@@ -180,34 +183,48 @@ whenFull mh (IVar (WrapLVar lv)) fn =
   
 --------------------------------------------------------------------------------
 
+-- TODO: introduce a distinct future type which we can wait on WITHOUT incurring a
+-- HasGet constraint...
+
 {-# INLINE spawn #-}
 -- | A simple future represented as an IVar.  The result is fully evaluated before
 -- the child computation returns.
-spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
+spawn :: (HasPut e, Eq a, NFData a) => Par e s a -> Par e s (IVar s a)
 spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
+
+-- FIXME: Not true yet, but should be:
+
+-- Note that while the implementation of spawn does an IVar `put`, internally,
+-- `HasPut` need not appear in the signature, because no puts can possible happen to
+-- memory locations visible outside of 
+
 
 {-# INLINE spawn_ #-}
 -- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
-spawn_ :: Eq a => Par d s a -> Par d s (IVar s a)
+spawn_ :: (HasPut e, Eq a) => Par e s a -> Par e s (IVar s a)
 spawn_ p = do r <- new;  LV.fork (p >>= put_ r);  return r
 
 {-# INLINE spawnP #-}
-spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
+spawnP :: (HasPut e, Eq a, NFData a) => a -> Par e s (IVar s a)
 spawnP a = spawn (return a)
 
 {-# INLINE put #-}
 -- | Fill an `IVar`.
-put :: (Eq a, NFData a) => IVar s a -> a -> Par d s ()
+put :: (HasPut e, Eq a, NFData a) => IVar s a -> a -> Par e s ()
 put v a = deepseq a (put_ v a)
 
 #ifdef GENERIC_PAR
-instance PC.ParFuture (Par d s) where
-  type Future (Par d s) = IVar s
-  type FutContents (Par d s) a = (Eq a)
-  spawn_ = spawn_
-  get = get
+-- instance PC.ParFuture (Par (Ef P G f b i) s) where
+--   type Future (Par (Ef P G f b i) s) = IVar s
+--   type FutContents (Par (Ef P G f b i) s) a = (Eq a)
 
-instance PC.ParIVar (Par d s) where
+instance PC.ParFuture (Par e s) where
+  type Future (Par e s) = IVar s
+  type FutContents (Par e s) a = (Eq a, HasPut e, HasGet e)
+  spawn_ f = spawn_ f
+  get iv = get iv
+
+instance PC.ParIVar (Par e s) where
   put_ = put_
   new = new
 

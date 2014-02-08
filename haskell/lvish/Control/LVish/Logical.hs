@@ -1,8 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds, TypeFamilies #-}
 
 -- | Not exported directly.  Reexported by "Control.LVish".
 module Control.LVish.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
+import Control.LVish.EffectSigs
 import Control.LVish.Basics
 import Control.LVish.Internal (Par(WrapPar), unsafeDet)
 import Control.LVish.SchedIdempotent (liftIO, HandlerPool)
@@ -70,16 +72,17 @@ asyncOr hp leftM rightM kont = do
 --------------------------------------------------------------------------------
 
 {-# INLINE andMap #-}
-andMap :: Maybe HandlerPool -> (a -> Par d s Bool) -> [a] -> Par d s Bool       
+andMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
 andMap = makeMapper asyncAnd
 
 {-# INLINE orMap #-}
-orMap :: Maybe HandlerPool -> (a -> Par d s Bool) -> [a] -> Par d s Bool       
+orMap :: (HasGet e, HasPut e) => Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
 orMap = makeMapper asyncOr
 
 {-# INLINE makeMapper #-}
-makeMapper :: (Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> (Bool -> Par d s ()) -> Par d s ()) ->
-              Maybe HandlerPool -> (a -> Par d s Bool) -> [a] -> Par d s Bool       
+makeMapper :: (HasGet e, HasPut e) => 
+              (Maybe HandlerPool -> (Par e s Bool) -> (Par e s Bool) -> (Bool -> Par e s ()) -> Par e s ()) ->
+              Maybe HandlerPool -> (a -> Par e s Bool) -> [a] -> Par e s Bool       
 makeMapper asyncOp hp fn ls = aloop ls 
   where
    aloop []  = return True

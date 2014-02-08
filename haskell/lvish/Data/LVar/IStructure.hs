@@ -118,7 +118,7 @@ instance Show a => Show (IStructure Trvrsbl a) where
 ------------------------------------------------------------------------------
 
 -- | Retrieve the number of slots in the `IStructure`.
-getLength :: IStructure s a -> Par d s Int
+getLength :: IStructure s a -> Par e s Int
 getLength (IStructure vec) = return $! V.length vec
 
 -- Physical identity, just as with IORefs.
@@ -127,13 +127,13 @@ getLength (IStructure vec) = return $! V.length vec
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be \"bottom\".
-newIStructure :: Int -> Par d s (IStructure s elt)
+newIStructure :: Int -> Par e s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
 
 -- | Register handlers on each internal IVar as it is created.
 --   This operation should be more efficient than `newIStructure` followed by `forEachHP`.
-newIStructureWithCallback :: Int -> (Int -> elt -> Par d s ()) -> Par d s (IStructure s elt)
+newIStructureWithCallback :: Int -> (Int -> elt -> Par e s ()) -> Par e s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
    V.generateM len $ \ix -> do 
@@ -152,8 +152,8 @@ freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 forEachHP :: -- (Eq a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> IStructure s a              -- ^ `IStructure` to listen to
-          -> (Int -> a -> Par d s ())    -- ^ callback
-          -> Par d s ()
+          -> (Int -> a -> Par e s ())    -- ^ callback
+          -> Par e s ()
 forEachHP hp (IStructure vec) callb =
   -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
   for_ (0, V.length vec) $ \ ix ->
@@ -188,14 +188,14 @@ forEach = forEachHP Nothing
 
 -- | Put a single element in the `IStructure` at a given index.  That index must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
-put_ :: Eq elt => IStructure s elt -> Int -> elt -> Par d s ()
+put_ :: (Eq elt, HasPut e) => IStructure s elt -> Int -> elt -> Par e s ()
 put_ (IStructure vec) !ix !elm = IV.put_ (vec ! ix) elm
 
 -- | Put a single element in the `IStructure` at a given index.  This variant is deeply strict (`NFData`).
-put :: (NFData elt, Eq elt) => IStructure s elt -> Int -> elt -> Par d s ()
+put :: (NFData elt, Eq elt, HasPut e) => IStructure s elt -> Int -> elt -> Par e s ()
 put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 
 {-# INLINE get #-}
 -- | Wait for the indexed entry to contain a value, and return that value.
-get :: Eq elt => IStructure s elt -> Int -> Par d s elt
+get :: (Eq elt, HasGet e) => IStructure s elt -> Int -> Par e s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)

@@ -109,7 +109,7 @@ class ParMonad m => ParFuture m where
   spawn_ :: FutContents m a => m a -> m (Future m a)
               
   -- | Wait for the result of a future, and then return it.
-  get    :: Future m a -> m a
+  get    :: FutContents m a => Future m a -> m a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
@@ -136,7 +136,7 @@ class ParFuture m  => ParIVar m  where
   
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
+  new  :: forall a . FutContents m a => m (Future m a) 
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
