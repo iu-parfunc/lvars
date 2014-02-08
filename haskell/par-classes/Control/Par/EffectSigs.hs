@@ -17,7 +17,7 @@ module Control.Par.EffectSigs
         NoPut, NoGet, NoFreeze, NoBump, NoIO,
 
         -- * Derived constraints, i.e. shorthands for common combinations:
-        ReadOnly, Deterministic, QuasiDeterministic,
+        ReadOnly, Deterministic, QuasiDeterministic, Idempotent,
 
         -- * Manipulating the phantom types of a Par monad 
         GetEffects, SetEffects,
@@ -31,7 +31,7 @@ module Control.Par.EffectSigs
         -- HasGetM 
         SetMP, SetMG, SetMF, SetMB, SetMI,
         HasIOM,  
-        ReadOnlyM
+        ReadOnlyM, IdempotentM
        )
        where
 import GHC.Exts (Constraint)
@@ -180,6 +180,7 @@ type NoIO     e = (NI ~ GetI e)
 
 type QuasiDeterministic e = (NoIO e)
 type Deterministic e = (NoFreeze e, NoIO e)
+type Idempotent    e = (NoBump e,   NoIO e)
 
 type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
 
@@ -214,5 +215,7 @@ type instance (ReadOnly (Ef p g nf b NI)) = ()
 -- And then at the level of monads:
 
 type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+type IdempotentM m = (Idempotent (GetEffects m))
 
 type HasIOM m = HasIO (GetEffects m)
