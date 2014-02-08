@@ -67,6 +67,8 @@ import           Data.Text.Lazy     (pack)
 -- Simple atomic Set accumulators
 --------------------------------------------------------------------------------
 
+#if 0
+
 -- | Could use a more scalable structure here... but we need union as well as
 -- elementwise insertion.
 type SetAcc a = IORef (S.Set a)
@@ -75,17 +77,18 @@ type SetAcc a = IORef (S.Set a)
 -- inserts that they do.
 -- newtype SetAcc a = SetAcc (IORef (S.Set a, [SetAcc a]))
 
-newSetAcc :: Par d s (SetAcc a)
+newSetAcc :: Par e s (SetAcc a)
 newSetAcc = LV.WrapPar $ LI.liftIO $ newIORef S.empty
-readSetAcc :: (SetAcc a) -> Par d s (S.Set a)
+readSetAcc :: (SetAcc a) -> Par e s (S.Set a)
 readSetAcc r = LV.WrapPar $ LI.liftIO $ readIORef r
-insertSetAcc :: Ord a => a -> SetAcc a -> Par d s (S.Set a)
+insertSetAcc :: Ord a => a -> SetAcc a -> Par e s (S.Set a)
 insertSetAcc x ref = LV.WrapPar $ LI.liftIO $
                      atomicModifyIORef' ref (\ s -> let ss = S.insert x s in (ss,ss))
-unionSetAcc :: Ord a => Set a -> SetAcc a -> Par d s (S.Set a)
+unionSetAcc :: Ord a => Set a -> SetAcc a -> Par e s (S.Set a)
 unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
                     atomicModifyIORef' ref (\ s -> let ss = S.union x s in (ss,ss))
 
+#endif
 --------------------------------------------------------------------------------
 -- Types
 --------------------------------------------------------------------------------
@@ -144,21 +147,21 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 -- from the starting key.  When a cycle is detected at any leaf of this tree, an
 -- alternate cycle handler is called instead of running the normal computation for
 -- that key.
-exploreGraph_seq :: forall d s k v . (Ord k, Eq v, Show k, Show v) =>
-                          (k -> Par d s (Response (Par d s) k v)) -- ^ The computation to perform for new requests
-                       -> (k -> Par d s v)  -- ^ Handler for a cycle on @k@.  The
+exploreGraph_seq :: forall e s k v . (Ord k, Eq v, Show k, Show v) =>
+                          (k -> Par e s (Response (Par e s) k v)) -- ^ The computation to perform for new requests
+                       -> (k -> Par e s v)  -- ^ Handler for a cycle on @k@.  The
                                             -- value it returns is in lieu of running
                                             -- the main computation at this
                                             -- particular node in the graph.
                           -> k              -- ^ Key to lookup.
-                       -> Par d s v
+                       -> Par e s v
 exploreGraph_seq initCont cycHndlr initKey = do
   -- Start things off:
   resp <- initCont initKey
   v <- loop initKey (S.singleton initKey) resp return
   return v
  where
-   loop :: k -> S.Set k -> (Response (Par d s) k v) -> (v -> Par d s v) -> Par d s v
+   loop :: k -> S.Set k -> (Response (Par e s) k v) -> (v -> Par e s v) -> Par e s v
    loop current hist resp kont = do
     dbgPr (" [MemoFixedPoint] going around loop, key "++showID current++", hist size "++show (S.size hist))
     case resp of
@@ -201,9 +204,9 @@ type IsCycle = Bool
 --
 --   Finally, this handler is expected to produce a value which becomes associated
 --   with the key.
-type NodeAction d s k v =
---     Bool -> k  -> [(Bool,Par d s v)] -> Par d s v
-     IsCycle -> k  -> [(k,IsCycle,IV.IVar s v)] -> Par d s (NodeValue k v)
+type NodeAction e s k v =
+--     Bool -> k  -> [(Bool,Par e s v)] -> Par e s v
+     IsCycle -> k  -> [(k,IsCycle,IV.IVar s v)] -> Par e s (NodeValue k v)
   -- One thing that's missing here is WHICH child node(s) puts us in a cycle.
 
 -- | At the end of the handler execution, the value of a node is either ready, or it
@@ -343,7 +346,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
 -- cycles by providing a handler.  The handler is called on the key which formed the
 -- cycle.  That is, computing the invocation spawned by that key results in a demand
 -- for that key.  
-makeMemoCyclic :: (MemoTable d s a b -> a -> Par d s b) -> (a -> Par d s b) -> Par d s (MemoTable d s a b)
+makeMemoCyclic :: (MemoTable d s a b -> a -> Par e s b) -> (a -> Par e s b) -> Par e s (MemoTable d s a b)
 makeMemoCyclic normalFn ifCycle  = undefined
 -- FIXME: Are there races where more than one cycle can be hit?  Can we guarantee
 -- that all are hit?  
@@ -515,7 +518,7 @@ debugVizMemoGraph :: forall s t t1 t2 e .
                      Bool                       -- ^ Use shorter `showID` for keys.
                      -> t1                      -- ^ The inital key.
                      -> t (NodeRecord s t1 t2)  -- ^ A frozen map of graph nodes.
---                     Par d s (Gr (Bool,String) ())
+--                     Par e s (Gr (Bool,String) ())
                      -> Par e s (GV.DotGraph G.Node)
 debugVizMemoGraph idOnly initKey frmap = do
   let showKey = if idOnly then showID
@@ -538,7 +541,7 @@ debugVizMemoGraph idOnly initKey frmap = do
         
       gedges :: NodeRecord s t1 t2
             ->         (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
-            -> Par d s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
+            -> Par e s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
       gedges NodeRecord{mykey, chldrn }
             (labmap, gracc) = do 
         let chldnodes = map (labmap #) chldrn
