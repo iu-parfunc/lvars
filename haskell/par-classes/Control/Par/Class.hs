@@ -261,7 +261,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 class (Functor m, Monad m) => ParIMap m  where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
-  type IMap m k :: * -> *
+  type IMap m :: * -> * -> *
 
   -- | Different implementations may place different constraints on
   -- what is allowable inside a Future.  For example, some
