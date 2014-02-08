@@ -14,12 +14,19 @@
 
 module Control.LVish.CancelT
        (
-         -- * The transformer that adds thecancellation capability
+         -- * The transformer that adds the cancellation capability
          CancelT(), ThreadId,
          
          -- * Operations specific to CancelT
          runCancelT,
-         forkCancelable, createTid, forkCancelableWithTid,
+
+         -- * Forking computations that may be canceled
+         forkCancelable, forkCancelableND,
+
+         -- * More detailed interface, separating forking and TID creation
+         createTid, forkCancelableWithTid, forkCancelableNDWithTid,
+
+         -- * Performing cancellation
          cancel,         
          pollForCancel,
          cancelMe,
@@ -112,7 +119,7 @@ forkCancelableND :: (PC.ParMonad m, LVarSched m, HasIOM m) =>
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
     tid <- createTid
-    forkCancelableWithTid tid act
+    forkCancelableNDWithTid tid act
     return tid
 
 
@@ -125,12 +132,27 @@ createTid = CancelT$ do
     newSt <- lift$ internalLiftIO$ newIORef (CPair True [])
     return (CState newSt)
 
--- | Fork a thread whil emaking it cancelable with the provided threadId argument.
+-- | Add a new computation to an existing cancelable thread.
+-- 
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParMonad m, LVarSched m) => ThreadId -> CancelT m () -> CancelT m ()
+forkCancelableWithTid :: (PC.ParMonad m, LVarSched m, ReadOnlyM m) => 
+                         ThreadId -> CancelT m () -> CancelT m ()
 {-# INLINE forkCancelableWithTid #-}
-forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
+forkCancelableWithTid tid act = forkInternal tid act
+
+-- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
+forkCancelableNDWithTid :: (PC.ParMonad m, LVarSched m, HasIOM m) => 
+                         ThreadId -> CancelT m () -> CancelT m ()
+{-# INLINE forkCancelableNDWithTid #-}
+forkCancelableNDWithTid tid act = forkInternal tid act
+
+
+-- Internal version -- no rules!
+forkInternal :: (PC.ParMonad m, LVarSched m) => 
+                ThreadId -> CancelT m () -> CancelT m ()
+{-# INLINE forkInternal #-} 
+forkInternal (CState childRef) (CancelT act) = CancelT$ do
     CState parentRef <- S.get
     -- Create new child state:  
     live <- lift$ internalLiftIO $ 
@@ -244,7 +266,7 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 --
 -- FIXME: This is unsafe until there is a way to guarantee that read-only
 -- computations are performed!
-asyncAnd :: forall p . (PC.ParMonad p, LVarSched p)
+asyncAnd :: forall p . (PC.ParMonad p, LVarSched p, ReadOnlyM p)
             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
 asyncAnd leftM rightM kont = do
