@@ -262,7 +262,7 @@ parFor (InclusiveRange start end) body =
 -- When using this kind of loop, it is safe for iterations to do depend on eachother
 -- and communicate via blocking reads.  As long as there are no cycles, the runtime
 -- will figure out what order to execute the tasks to satisify their data dependency.
-parForEach :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForEach :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForEach range fn = for_ range $ \i -> fork (fn i) 
 
 -}
@@ -275,7 +275,7 @@ parForEach range fn = for_ range $ \i -> fork (fn i)
 -- this hews closer to the sequential iteration order than an unbiased parallel loop.
 --
 -- Takes a range as inclusive-start, exclusive-end.
-parForL :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForL :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForL (start,end) _ | start > end = error$"parForL: start is greater than end: "++show (start,end)
 parForL (start,end) body = do
   -- logStrLn$ " initial iters: "++show (end-start)
@@ -293,7 +293,7 @@ parForL (start,end) body = do
 
 -- | Divide the iteration space recursively, but ultimately run every iteration in
 -- parallel.  That is, the loop body is permitted to block on other iterations.
-parForTree :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTree :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForTree (start,end) _
   | start > end = error$"parForTree: start is greater than end: "++show (start,end)
 parForTree (start,end) body = do
@@ -308,7 +308,7 @@ parForTree (start,end) body = do
 
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
-parForTiled :: Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTiled :: Int -> (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForTiled otiles (start,end) body = do 
   loop 0 (end - start) otiles
  where
