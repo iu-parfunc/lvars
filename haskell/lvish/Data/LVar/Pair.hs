@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Just for demonstration purposes.  It's probably simpler to use a pair of IVars.
 
