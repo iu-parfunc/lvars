@@ -1,9 +1,10 @@
 Name:                par-collections
-Version:             1.0
+Version:             1.1
 Synopsis:            Generic parallel combinators for data and iteration spaces.
 
 -- Version history:
 --  1.0      : This library introduced to replace the deprecated monad-par-extras.
+--  1.1      : Add LVish-2.0 style effect signatures
 
 Description:
   These modules provide means to traverse and consume
@@ -49,7 +50,7 @@ Library
                , random       >= 1.0
                , mtl          >= 2.0
                , transformers >= 0.2
-               , par-classes  >= 1.0
+               , par-classes  >= 1.1
 
                -- These are so we can provide instances for existing collections:
                , primitive    >= 0.5  && < 0.6
@@ -75,9 +76,9 @@ Test-suite test-par-collections
   -- (2) Dependencies common to test files and the library:
   Build-depends: base >= 4 && < 5
                , time >= 1.4 
-               , par-classes >= 1.0 && < 2.0
+               , par-classes >= 1.1 && < 2.0
                , monad-par >= 0.3.4.6
-               , atomic-primops >= 0.4
+               , atomic-primops >= 0.6
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9
