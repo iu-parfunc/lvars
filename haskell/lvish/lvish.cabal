@@ -73,11 +73,6 @@ flag getonce
                (by using extra synchronization)
   default: False
 
--- We won't really support this until LVish 2.0:
-flag generic
-  description: Use (forthcoming) generic interfaces for Par monads.
-  default: True
-
 flag beta
   description: These features are in beta and not fully supported yet.
   default: True
@@ -166,11 +161,10 @@ library
                  bits-atomic, missing-foreign
   if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
    else { build-depends: containers >= 0.5 }
-  if flag(generic)
-    cpp-options: -DGENERIC_PAR
-    build-depends: par-classes     >= 1.1 && < 2.0,
-                   par-collections >= 1.1 && < 2.0
---                   par-transformers <= 2.0
+  cpp-options: -DGENERIC_PAR
+
+  build-depends: par-classes     >= 1.1 && < 2.0,
+                 par-collections >= 1.1 && < 2.0
 
   ghc-options: -O2 -rtsopts
 
@@ -218,13 +212,12 @@ test-suite test-lvish
                    async,
                    -- Used in NatArray:
                    bits-atomic, missing-foreign
-    if flag(generic)
-      cpp-options: -DGENERIC_PAR
-      build-depends: par-classes     >= 1.1 && < 2.0,
-                     par-collections >= 1.1 && < 2.0
+
+    cpp-options: -DGENERIC_PAR
+    build-depends: par-classes     >= 1.1 && < 2.0,
+                   par-collections >= 1.1 && < 2.0
     -- END DUPLICATED
-    if flag(generic)
-      other-modules:  GenericTests
+    other-modules:  GenericTests
 
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2, QuickCheck,

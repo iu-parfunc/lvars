@@ -31,6 +31,8 @@ import Data.Par.Splittable (pforEach)
 case_toQPar :: Assertion  
 case_toQPar = t1 >>= assertEqual "" "hi" 
 
+tahe = thue
+
 t1 :: IO String
 t1 = runParQuasiDet $ isQD par
  where
