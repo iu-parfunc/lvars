@@ -29,8 +29,9 @@ module Control.Par.EffectSigs
 
         -- * Lifted constraints and type functions directly on monads
         -- HasGetM 
-        SetMP, SetMG, SetMF, SetMB, SetMI        
-
+        SetMP, SetMG, SetMF, SetMB, SetMI,
+        HasIOM,  
+        ReadOnlyM
        )
        where
 import GHC.Exts (Constraint)

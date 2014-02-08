@@ -1,6 +1,7 @@
 {-# LANGUAGE Unsafe #-}
 
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -32,6 +33,7 @@ import Control.Monad.State as S
 import Data.IORef
 
 import Control.Par.Class as PC
+import Control.Par.EffectSigs as E
 import Control.Par.Class.Unsafe (ParMonad(..))
 
 import qualified Data.Atomics.Counter as C
@@ -60,10 +62,12 @@ data CPair = CPair !Bool ![CState]
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it is
 -- possible to cancel subtrees of computations.
-runCancelT :: PC.ParMonad m => CancelT m a -> m a
+runCancelT :: (PC.ParMonad m) => CancelT m a -> m a
 runCancelT (CancelT st) = do
   ref <- internalLiftIO $ newIORef (CPair True []) 
   evalStateT st (CState ref) 
+
+
 
 -- Check for cancellation of our thread.
 poll :: (PC.ParMonad m, LVarSched m) => CancelT m Bool
@@ -88,13 +92,29 @@ type ThreadId = CState
 
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
 -- (and all its descendents).  This is equivalent to `createTid` followed by `forkCancelableWithTid`.
-forkCancelable :: (PC.ParMonad m, LVarSched m) => CancelT m () -> CancelT m ThreadId
+-- 
+-- This version is expected to retain /determinism/.  Therefore, the canceled
+-- computations must be read only.
+forkCancelable :: (PC.ParMonad m, LVarSched m, ReadOnlyM m) => 
+                  CancelT m () -> CancelT m ThreadId
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     tid <- createTid
     forkCancelableWithTid tid act
     return tid
+
+-- | This is a version of `forkCancelable` which allows side-effecting computation to
+--   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
+--   introduces nondeterminism and must register the "IO".
+forkCancelableND :: (PC.ParMonad m, LVarSched m, HasIOM m) => 
+                  CancelT m () -> CancelT m ThreadId
+-- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
+forkCancelableND act = do
+    tid <- createTid
+    forkCancelableWithTid tid act
+    return tid
+
 
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
 -- computations in question.  For that purpose, we provide a two-phase interface:
@@ -145,7 +165,7 @@ cancelMe' :: LVarSched m => StateT CState m ()
 cancelMe' = unCancelT cancelMe
   
 instance (PC.ParSealed m) => PC.ParSealed (CancelT m) where
-  type GetSession (CancelT m) = GetSession m
+  type GetSession (CancelT m) = PC.GetSession m
   
 instance (PC.ParMonad m, PC.ParIVar m, PC.LVarSched m) =>
          PC.LVarSched (CancelT m) where
