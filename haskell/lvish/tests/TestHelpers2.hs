@@ -19,7 +19,7 @@ import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Control.LVish (runParDetailed, Par, OutDest(..), DbgCfg(..))
-import Control.LVish.EffectSigs 
+import Control.Par.EffectSigs 
 import Debug.Trace
 
 --------------------------------------------------------------------------------

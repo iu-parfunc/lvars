@@ -36,7 +36,7 @@ import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Control.LVish.SchedIdempotent as L
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
-import           Control.LVish.EffectSigs
+import           Control.Par.EffectSigs
 
 import qualified Data.Foldable    as F
 import           Data.List (sort)

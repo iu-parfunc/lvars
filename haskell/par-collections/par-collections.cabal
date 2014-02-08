@@ -40,7 +40,7 @@ Library
      Data.Par.Range
      Data.Par.List
      Data.Par.Map
-     Data.Par.Set     
+     Data.Par.Set
      
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:

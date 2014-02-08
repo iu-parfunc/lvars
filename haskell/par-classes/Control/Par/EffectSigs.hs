@@ -5,7 +5,7 @@
 -- | Type-level effect signatures that characterize the side-effects of a given `Par`
 -- computation.
 
-module Control.LVish.EffectSigs 
+module Control.Par.EffectSigs 
        (
         -- * A type-level record of effects
         EffectSig(..), 
@@ -34,9 +34,9 @@ module Control.LVish.EffectSigs
        )
        where
 import GHC.Exts (Constraint)
-import Control.Monad.Trans.Class
+-- import Control.Monad.Trans.Class
 
-import Control.LVish.Types
+-- import Control.LVish.Types
 
 --------------------------------------------------------------------------------
 
