@@ -6,7 +6,7 @@
 set -x
 set -e
 
-cabal install -f-beta -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
+cabal install -fbeta -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
    ./par-collections/ ./par-classes/ ./lvish/ ./par-transformers/ \
    --force-reinstalls  $*
 #  ./\
