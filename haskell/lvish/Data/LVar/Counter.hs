@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | An integer LVar that exposes a non-idempotent `increment`
 -- operation.  It differs from `Data.LVar.MaxPosInt` in that it allows
@@ -31,14 +32,14 @@ import           System.IO.Unsafe (unsafePerformIO)
 type Counter s = LVar s AC.AtomicCounter Int
 
 -- | Create a new `Counter` with the given initial value.
-newCounter :: Int -> Par d s (Counter s)
+newCounter :: Int -> Par e s (Counter s)
 -- LK: I don't understand why this doesn't work! :(
 -- newCounter n = WrapPar $ fmap (Counter . WrapLVar) $
 --                LI.newLV $ newCounter n
 newCounter = undefined
 
 -- | Increment the counter by a given amount.
-increment :: Counter s -> Int -> Par d s ()
+increment :: HasBump e => Counter s -> Int -> Par e s ()
 -- LK: Uhhh, this is the only way I can think of to increment the
 -- counter while in Par.
 increment = undefined
@@ -47,11 +48,11 @@ increment = undefined
 --   return $ unsafePerformIO $ AC.incrCounter_ n ctr
 
 -- | Wait until the maximum observed value reaches some threshold, then return.
-waitThresh :: Counter s -> Int -> Par d s ()
+waitThresh :: HasGet e => Counter s -> Int -> Par e s ()
 waitThresh = undefined
 
 -- | Observe what the final value of the `Counter` was.
-freezeCounter :: Counter s -> Par QuasiDet s Int
+freezeCounter :: HasFreeze e => Counter s -> Par e s Int
 freezeCounter = undefined
 
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted

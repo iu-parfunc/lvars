@@ -39,20 +39,20 @@ instance BoundedJoinSemiLattice MC where
   bottom = MC minBound
 
 -- | Create a new `MaxPosInt` with the given initial value.
-newMaxPosInt :: Int -> Par d s (MaxPosInt s)
+newMaxPosInt :: Int -> Par e s (MaxPosInt s)
 newMaxPosInt n = newPureLVar (MC n)
 
 -- | Incorporate a new value in the max-fold.  If the previous maximum is less than
 -- the new value, increase it.
-put :: MaxPosInt s -> Int -> Par d s ()
+put :: HasPut e => MaxPosInt s -> Int -> Par e s ()
 put lv n = putPureLVar lv (MC n)
 
 -- | Wait until the maximum observed value reaches some threshold, then return.
-waitThresh :: MaxPosInt s -> Int -> Par d s ()
+waitThresh :: HasGet e => MaxPosInt s -> Int -> Par e s ()
 waitThresh lv n = waitPureLVar lv (MC n)
 
 -- | Observe what the final value of the `MaxPosInt` was.
-freezeMaxPosInt :: MaxPosInt s -> Par QuasiDet s Int
+freezeMaxPosInt :: HasFreeze e => MaxPosInt s -> Par e s Int
 freezeMaxPosInt lv = do
   MC n <- freezePureLVar lv
   return n
