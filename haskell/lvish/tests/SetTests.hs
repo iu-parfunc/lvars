@@ -67,9 +67,9 @@ case_v2c = assertEqual "t2 with spawn instead of fork"
 -- v2c :: S.Set Int
 v2c :: IS.ISet Frzn Int
 v2c = -- IS.fromISet $
-      runParThenFreeze par
+      runParThenFreeze $ isDet par
   where
-    par :: Deterministic e => Par e s (IS.ISet s Int)
+    par :: (HasPut e, HasGet e) => Par e s (IS.ISet s Int)
     par = 
      do s   <- IS.newEmptySet 
         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]

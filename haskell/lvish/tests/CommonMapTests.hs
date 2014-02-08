@@ -215,7 +215,7 @@ incr ref = atomicModifyIORef' ref (\x -> (x+1,()))
 --------------------------------------------------------------------------------
 
 -- -- | Perform a fork-join computation and populate a SkipListMap in parallel.
-fillOne :: [(Int, Int)] -> Par d s (IM.IMap Int s Int)
+fillOne :: (HasPut e, HasGet e) => [(Int, Int)] -> Par e s (IM.IMap Int s Int)
 -- fillOne :: PC.ParMonad p => [(Int, Int)] -> p (IM.IMap Int Int)
 fillOne chunks = do
   mp <- IM.newEmptyMap 
