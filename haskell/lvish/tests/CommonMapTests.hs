@@ -137,7 +137,7 @@ case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParQuasiDet v8d
 -- fmap (L.sort . F.toList) $
 -- v8d :: Par QuasiDet s (IM.IMap Int Frzn Int)
 -- v8d :: QuasiDeterministic e => Par e s [Int]
-v8d :: HasFreeze e => Par e s [Int]
+v8d :: (HasFreeze e, HasPut e) => Par e s [Int]
 v8d = do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."  
