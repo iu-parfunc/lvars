@@ -133,11 +133,11 @@ instance (Deterministic e1, e2 ~ SetF F e1) =>
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
   toQPar act = unsafeConvert act
   
-instance PC.ParSealed (Par d s) where
-  type GetSession (Par d s) = s
+instance PC.ParSealed (Par e s) where
+  type GetSession (Par e s) = s
   
-instance PC.LVarSched (Par d s) where
-  type LVar (Par d s) = L.LVar 
+instance PC.LVarSched (Par e s) where
+  type LVar (Par e s) = L.LVar 
 
   forkLV = fork
   newLV  = WrapPar . L.newLV
@@ -153,7 +153,7 @@ instance (Deterministic e1, e2 ~ SetF F e1) =>
          PC.LVarSchedQ (Par e1 s) (Par e2 s)  where
 --  freezeLV = WrapPar . L.freezeLV  -- FINISHME
 
-instance PU.ParThreadSafe (Par d s) where
+instance PU.ParThreadSafe (Par e s) where
   unsafeParIO = I.liftIO
 
 #endif

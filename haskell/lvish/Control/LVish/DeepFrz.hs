@@ -88,7 +88,7 @@ runParThenFreeze (WrapPar p) = frz $ runPar p
 -- `freeze` at the end of a `runParIO`: there is an implicit barrier
 -- before the final freeze.  Further, `DeepFrz` has no runtime
 -- overhead, whereas regular freezing has a cost.
-runParThenFreezeIO :: DeepFrz a => Par d NonFrzn a -> IO (FrzType a)
+runParThenFreezeIO :: DeepFrz a => Par e NonFrzn a -> IO (FrzType a)
 runParThenFreezeIO (WrapPar p) = do
   x <- runParIO p
   return $ frz x

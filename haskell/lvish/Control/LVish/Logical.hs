@@ -15,7 +15,7 @@ import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
 -- | A parallel @And@ operation that can return early---whenever a False appears on either branch.
-asyncAnd :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> (Bool -> Par d s ()) -> Par d s ()
+asyncAnd :: Maybe HandlerPool -> (Par e s Bool) -> (Par e s Bool) -> (Bool -> Par e s ()) -> Par e s ()
 asyncAnd hp leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- io$ C.newCounter 0 -- TODO we could share this for 3+-way and.
@@ -37,7 +37,7 @@ asyncAnd hp leftM rightM kont = do
   return ()
 
 -- OR this could expose:
--- asyncAnd :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> Par d s Bool
+-- asyncAnd :: Maybe HandlerPool -> (Par e s Bool) -> (Par e s Bool) -> Par e s Bool
 
 
 -- <DUPLICATED CODE>
@@ -45,7 +45,7 @@ asyncAnd hp leftM rightM kont = do
 -- complicated than permitting a code clone.
 
 -- | Analagous operation for @Or@.
-asyncOr :: Maybe HandlerPool -> (Par d s Bool) -> (Par d s Bool) -> (Bool -> Par d s ()) -> Par d s ()
+asyncOr :: Maybe HandlerPool -> (Par e s Bool) -> (Par e s Bool) -> (Bool -> Par e s ()) -> Par e s ()
 asyncOr hp leftM rightM kont = do
   -- Atomic counter, if we`re the second True we write the result:
   cnt <- io$ C.newCounter 0 -- TODO we could share this for 3+-way and.
@@ -110,6 +110,6 @@ fastChop ls = loop [] ls ls
                     loop (hd:acc) rst1' rst2'
 
 
-io :: IO a -> Par d s a
+io :: IO a -> Par e s a
 io = WrapPar . liftIO
 

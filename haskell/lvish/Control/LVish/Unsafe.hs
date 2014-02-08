@@ -9,5 +9,5 @@ import Control.LVish.Internal
 import Control.Monad.IO.Class
 import qualified Control.LVish.SchedIdempotent as L
 
-instance MonadIO (Par d s) where
+instance MonadIO (Par e s) where
   liftIO = WrapPar . L.liftIO   

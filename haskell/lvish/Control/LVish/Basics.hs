@@ -56,7 +56,7 @@ import qualified Control.Par.Class.Unsafe as PU
 import qualified Control.Par.Class     as PC
 import qualified Data.Splittable.Class as SC
 
-instance PU.ParMonad (Par d s) where
+instance PU.ParMonad (Par e s) where
   fork = fork  
   internalLiftIO = I.liftIO  
 #endif
@@ -91,42 +91,42 @@ instance PU.ParMonad (Par d s) where
 liftQD (WrapPar p) = (WrapPar p)
 
 -- | Cooperatively schedule other threads.
-yield :: Par d s ()
+yield :: Par e s ()
 yield = WrapPar L.yield
 
 -- | Block until a handler pool is quiescent, i.e., until all
 -- associated parallel computations have completed.
-quiesce :: L.HandlerPool -> Par d s ()
+quiesce :: L.HandlerPool -> Par e s ()
 quiesce = WrapPar . L.quiesce
 
 -- | A global barrier.  Wait for all unblocked, active threads of work in the system
 -- to complete, and then proceed after that point.
-quiesceAll :: Par d s ()
+quiesceAll :: Par e s ()
 quiesceAll = WrapPar L.quiesceAll
 
 -- | Execute a computation in parallel.
-fork :: Par d s () -> Par d s ()
+fork :: Par e s () -> Par e s ()
 fork (WrapPar f) = WrapPar$ L.fork f
 
 -- | A version of `fork` that also allows the forked computation to be tracked in a
 -- `HandlerPool`, that enables the programmer to synchronize on the completion of the
 -- child computation.  But be careful; this does not automatically wait for
 -- all downstream forked computations (transitively).
-forkHP :: Maybe L.HandlerPool -> Par d s () -> Par d s ()
+forkHP :: Maybe L.HandlerPool -> Par e s () -> Par e s ()
 forkHP mh (WrapPar f) = WrapPar$ L.forkHP mh f
 
 -- | Create a new pool that can be used to synchronize on the completion of all
 -- parallel computations associated with the pool.
-newPool :: Par d s L.HandlerPool
+newPool :: Par e s L.HandlerPool
 newPool = WrapPar L.newPool
 
 -- | Execute a Par computation in the context of a fresh handler pool.
-withNewPool :: (L.HandlerPool -> Par d s a) -> Par d s (a, L.HandlerPool)
+withNewPool :: (L.HandlerPool -> Par e s a) -> Par e s (a, L.HandlerPool)
 withNewPool f = WrapPar $ L.withNewPool $ unWrapPar . f
 
 -- | Execute a Par computation in the context of a fresh handler pool, while
 -- ignoring the result of the computation.
-withNewPool_ :: (L.HandlerPool -> Par d s ()) -> Par d s L.HandlerPool
+withNewPool_ :: (L.HandlerPool -> Par e s ()) -> Par e s L.HandlerPool
 withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
 
@@ -200,7 +200,7 @@ runParPolyIO (WrapPar p) = L.runParIO p
 -- The provided `Int`, is the "debug level" associated with the message, 1-5.  One is
 -- the least verbose, and five is the most.  When debugging, the user can control the
 -- debug level by setting the env var DEBUG, e.g. @DEBUG=5@.
-logDbgLn :: Int -> String -> Par d s ()
+logDbgLn :: Int -> String -> Par e s ()
 #ifdef DEBUG_LVAR
 logDbgLn n = WrapPar . L.logStrLn n 
 #else 
@@ -210,7 +210,7 @@ logDbgLn _ _  = return ()
 
 -- | IF compiled with debugging support, this will return the Logger used by the
 -- current Par session, otherwise it will simply throw an exception.
-getLogger :: Par d s Lg.Logger
+getLogger :: Par e s Lg.Logger
 getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------
@@ -222,7 +222,7 @@ getLogger = WrapPar $ L.getLogger
 -- this hews closer to the sequential iteration order than an unbiased parallel loop.
 --
 -- Takes a range as inclusive-start, exclusive-end.
-parForL :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForL :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForL (start,end) _ | start > end = error$"parForL: start is greater than end: "++show (start,end)
 parForL (start,end) body = do
   -- logStrLn$ " initial iters: "++show (end-start)
@@ -239,13 +239,13 @@ parForL (start,end) body = do
 
 {-# INLINE parForSimple #-}
 -- | The least-sophisticated form of parallel loop.  Fork iterations one at a time.
-parForSimple :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForSimple :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForSimple range fn = do
   for_ range $ \i -> fork (fn i) 
 
 -- | Divide the iteration space recursively, but ultimately run every iteration in
 -- parallel.  That is, the loop body is permitted to block on other iterations.
-parForTree :: (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTree :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForTree (start,end) _
   | start > end = error$"parForTree: start is greater than end: "++show (start,end)
 parForTree (start,end) body = do
@@ -260,7 +260,7 @@ parForTree (start,end) body = do
 
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
-parForTiled :: Maybe L.HandlerPool -> Int -> (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+parForTiled :: Maybe L.HandlerPool -> Int -> (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForTiled hp otiles (start,end) body = do 
   loop 0 (end - start) otiles
  where
@@ -289,8 +289,8 @@ for_ (start, end) fn = loop start
 asyncForEachHP :: (SC.Split c, PC.Generator c)
       => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
       -> c                    -- ^ element generator to consume
-      -> (PC.ElemOf c -> Par d s ()) -- ^ compute one result
-      -> Par d s ()
+      -> (PC.ElemOf c -> Par e s ()) -- ^ compute one result
+      -> Par e s ()
 asyncForEachHP mh gen fn =
   case SC.split gen of
     [seqchunk] -> PC.forM_ seqchunk fn
