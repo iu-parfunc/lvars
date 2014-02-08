@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Tests for the Data.LVar.PureSet and Data.LVar.SLSet modules.
 
@@ -67,7 +69,7 @@ v2c :: IS.ISet Frzn Int
 v2c = -- IS.fromISet $
       runParThenFreeze par
   where
-    par :: Par Det s (IS.ISet s Int)
+    par :: Deterministic e => Par e s (IS.ISet s Int)
     par = 
      do s   <- IS.newEmptySet 
         ivs <- mapM (\n -> IV.spawn_ $ IS.insert n s) [1..10::Int]

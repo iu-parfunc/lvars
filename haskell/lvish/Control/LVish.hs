@@ -61,17 +61,19 @@ module Control.LVish
 
     -- * Par computations and their parameters
     Par(), 
-    liftQD,
     LVishException(..),
 
-    -- * Effect signature manipulation
+    -- * Running various Par computations
+    runPar, runParQuasiDet, runParNonDet,
+    -- * More polymorphic variants of same
+    runParPoly, runParPolyIO, 
+
+    -- * Effect signature manipulation and conversion
     module Control.LVish.EffectSigs,
+    liftQD,
     
     -- * Basic control flow
-    fork,
-    yield, 
-    runPar, runParIO,
-    --    runParIO_, runParLogged,
+    fork, yield, 
     --    quiesceAll,    
 
      -- * Various loop constructs
