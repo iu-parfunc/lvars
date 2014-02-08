@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Core tests for the LVish scheduler and basic futures/IVars.
 
@@ -140,7 +141,7 @@ case_v1b = do ls <- v1b
 -- | In this sequential case there should be no data-race, and thus no duplication of the callback.
 v1b :: IO [String]
 v1b = do let tag = "callback on ivar "
-         (logs,_) <- runParLogged $ do
+         (logs,_) <- runParLogged $ isDet $ do
                        i <- IV.new
                        IV.put i (3::Int)                       
                        IV.whenFull Nothing i (\x -> logDbgLn 1$ tag++show x)
@@ -154,7 +155,7 @@ escape01 :: IV.IVar Frzn Int
 escape01 = runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
 
 -- | This is VERY BAD:
-escape01B :: Par d Frzn String
+escape01B :: HasPut e => Par e Frzn String
 escape01B = 
             do IV.put escape01 (4::Int)
                return "uh oh"
