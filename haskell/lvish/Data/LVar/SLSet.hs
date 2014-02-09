@@ -92,6 +92,9 @@ instance LVarData1 ISet where
   -- | We can do better than the default here; this is /O(1)/:  
   sortFrzn (is :: ISet Frzn a) = AFoldable is
 
+instance LVarWBottom ISet where
+  type LVContents ISet a = (Ord a)
+  newBottom = newEmptySet
 
 -- | The `ISet`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
