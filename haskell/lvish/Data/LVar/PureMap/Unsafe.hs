@@ -17,7 +17,7 @@ module Data.LVar.PureMap.Unsafe
        where
 
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish
+import           Control.LVish hiding (parIO)
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (freezeLV)
 import qualified Control.LVish.SchedIdempotent as L

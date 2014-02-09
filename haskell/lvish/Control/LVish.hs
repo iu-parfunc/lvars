@@ -86,6 +86,8 @@ module Control.LVish
     fork, yield, 
     --    quiesceAll,    
 
+    -- * Lifting IO, sacrifices determinism
+    parIO,
      -- * Various loop constructs
      parForL, parForSimple, parForTree, parForTiled, for_,
 
@@ -161,6 +163,11 @@ instance (Deterministic e1, e2 ~ SetF F e1) =>
 
 instance PU.ParThreadSafe (Par e s) where
   unsafeParIO = I.liftIO
+
+-- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
+-- signature.
+parIO :: HasIO e => IO a -> Par e s a
+parIO = I.liftIO
 
 #endif
 

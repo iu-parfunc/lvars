@@ -10,8 +10,10 @@ set -e
 
 cabal install -fdebug -fnewgeneric -fgeneric monad-par-0.3.4.6 \
    ./par-collections/ ./par-classes/ ./par-transformers/ ./lvish/ \
-   ./lvish-apps/pbbs ./lvish-graph-algorithms/ \
    --force-reinstalls  $*
+
+# Temporarily disabled while porting over to LVish 2.0:
+#   ./lvish-apps/pbbs ./lvish-graph-algorithms/ \
 
 # TODO, add:
 #   lvish-apps/cfa

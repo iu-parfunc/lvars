@@ -11,6 +11,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 {-|
 
@@ -32,7 +33,10 @@ module Data.LVar.SLMap
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitSize, waitValue,
-         modify,
+         modify, 
+
+         -- * Generic routines and convenient aliases
+         gmodify, getOrInit,
 
          -- * Quasi-deterministic operations
          freezeMap,
@@ -61,7 +65,7 @@ import qualified Data.Foldable    as F
 import           Data.IORef (readIORef)
 import           Data.UtilInternal (traverseWithKey_)
 import           Data.List (intersperse)
-import           Data.LVar.Generic
+import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -252,6 +256,26 @@ modify (IMap (WrapLVar lv)) key newBottom fn = do
           case putRes of
             Added v -> return (Just (key,v), fn v)
             Found v -> return (Nothing,      fn v)          
+
+{-# INLINE gmodify #-}
+-- | A generic version of `modify` that does not require a `newBottom` argument,
+-- rather, it uses the generic version of that function.
+gmodify :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+          IMap key s (f s a)
+          -> key                  -- ^ The key to lookup.
+          -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
+          -> Par e s b
+gmodify map key fn = modify map key G.newBottom fn
+
+
+{-# INLINE getOrInit #-}
+-- | Return the preexisting value for a key if it exists, and otherwise return
+-- 
+--   This is a convenience routine that can easily be defined in terms of `gmodify`
+getOrInit :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+          key -> IMap key s (f s a) -> Par e s (f s a)
+getOrInit key mp = gmodify mp key return
+
             
 -- | Wait for the map to contain a specified key, and return the associated value.
 getKey :: (HasGet e, Ord k) => k -> IMap k s v -> Par e s v
