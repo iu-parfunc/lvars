@@ -11,7 +11,7 @@ Executable run_benchmark
     Main-is: run_benchmark.hs
     Build-depends: base >= 4.6, containers >= 0.5,
                    GenericPretty >= 1.2.1,
-                   hsbencher >= 1.4.1.6 && < 1.5 
+                   hsbencher >= 1.4.1.6
 
     -- HACK: Downstream dependencies that are needed for mergesort itself.
     build-depends:  base == 4.*, deepseq >= 1.3, vector >= 0.10, vector-algorithms,
