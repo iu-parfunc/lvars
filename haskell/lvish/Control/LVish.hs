@@ -73,8 +73,14 @@ module Control.LVish
     liftQD,
 
     -- * Combinators for manually constraining the type of a given Par computation
-    isDet, isQD, isND, 
+    isDet, isQD, isND, isIdemD, isIdemQD,
     hasPut, hasFreeze, hasBump, hasGet, hasIO,
+    noPut, noFreeze, noBump, noGet, noIO,
+
+    -- * Subtyping, add more effects to the signature
+    -- | These effects are a conservative approximation, therefore it is always ok,
+    --   for example, to turn "no put" (`NP`) into "put" (`P`).
+    addP, addG, addF, addB, addI,
     
     -- * Basic control flow
     fork, yield, 
@@ -181,6 +187,24 @@ hasIO x = x
 hasGet :: HasGet e => Par e s a -> Par e s a
 hasGet x = x
 
+
+noPut :: NoPut e => Par e s a -> Par e s a
+noPut x = x
+
+noFreeze :: NoFreeze e => Par e s a -> Par e s a
+noFreeze x = x
+
+noBump :: NoBump e => Par e s a -> Par e s a
+noBump x = x
+
+noIO :: NoIO e => Par e s a -> Par e s a
+noIO x = x
+
+noGet :: NoGet e => Par e s a -> Par e s a
+noGet x = x
+
+
+
 isDet :: (e ~ (Ef P G NF B NI)) => Par e s a -> Par e s a
 isDet x = x
 
@@ -189,4 +213,26 @@ isQD x = x
 
 isND :: (e ~ (Ef P G F B I)) => Par e s a -> Par e s a
 isND x = x
+
+isIdemD :: (e ~ (Ef P G NF NB NI)) => Par e s a -> Par e s a
+isIdemD x = x
+
+isIdemQD :: (e ~ (Ef P G F NB NI)) => Par e s a -> Par e s a
+isIdemQD x = x
+
+
+addP :: Par (Ef NP g f b i) s a -> Par (Ef p g f b i) s a
+addP (WrapPar p) = WrapPar p
+
+addG :: Par (Ef p NG f b i) s a -> Par (Ef p g f b i) s a
+addG (WrapPar p) = WrapPar p
+
+addF :: Par (Ef p g NF b i) s a -> Par (Ef p g f b i) s a
+addF (WrapPar p) = WrapPar p
+
+addB :: Par (Ef p g f NB i) s a -> Par (Ef p g f b i) s a
+addB (WrapPar p) = WrapPar p
+
+addI :: Par (Ef p g f b NI) s a -> Par (Ef p g f b i) s a
+addI (WrapPar p) = WrapPar p
 
