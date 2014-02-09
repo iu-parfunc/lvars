@@ -231,7 +231,7 @@ fillOne chunks = do
 #ifdef GENERIC_PAR
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
-  mp <- timeit$ runParThenFreezeIO $ fillOne chunks
+  mp <- timeit$ runParThenFreezeIO $ isND $ fillOne chunks
   let matches = PC.fold (\b (k,v) -> b && k == v) True mp
 --  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
 --  return (matches, summed)

@@ -74,7 +74,7 @@ case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 -- "freeze with 3 elements added, asynchronously"
 -- If we're doing a guaranteed-deterministic computation we can't
 -- actually read out the contents of the set.
-v3 :: Par e s ()
+v3 :: (HasPut e, HasGet e) => Par e s ()
 v3 = 
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..10]
@@ -86,7 +86,7 @@ case_v4 :: Assertion
 case_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int))
 
 -- "additions and removals"
-v4 :: HasFreeze e => Par e s (S.Set Int)
+v4 :: (HasPut e, HasGet e, HasFreeze e) => Par e s (S.Set Int)
 v4 = 
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..15]
