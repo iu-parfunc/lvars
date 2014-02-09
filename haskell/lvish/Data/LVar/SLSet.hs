@@ -34,8 +34,9 @@ module Data.LVar.SLSet
          -- * Iteration and callbacks
          forEach, forEachHP,
 
-         -- * Quasi-deterministic operations
+         -- * Freezing and quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, 
+         fromISet,
 
          -- * Higher-level derived operations
          copy, traverseSet, traverseSet_, union, intersection,
@@ -217,6 +218,12 @@ withCallbacksThenFreeze (ISet lv) callback action = do
   quiesce hp
   IV.get res
 
+
+-- | /O(N)/: Convert from an `ISet` to a plain `Data.Set`.
+--   This is only permitted when the `ISet` has already been frozen.
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`. 
+fromISet :: Ord a => ISet Frzn a -> S.Set a 
+fromISet set = F.foldr S.insert S.empty set
 
 --------------------------------------------------------------------------------
 
