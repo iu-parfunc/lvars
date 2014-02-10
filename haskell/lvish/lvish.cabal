@@ -36,12 +36,16 @@ description:
   .
     * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
   . 
+    * PLDI 2014: /Taming the Parallel Effect Zoo: Extensible Deterministic Parallelism with LVish/ (<http://www.cs.indiana.edu/~rrnewton/papers/effectzoo-draft.pdf>).
+  . 
   If the haddocks are not building, here is a mirror:
   <http://www.cs.indiana.edu/~rrnewton/haddock/lvish/>
   .
   Change Log: 
   .
   * 1.0.0.6 - tighten up dependencies; remove unused flags; very minor doc fixes.
+  . 
+  * 1.1.2  - many bugfixes, plus a new logging infrastructure, and verification of finite lattices
 
 license:             BSD3
 license-file:        LICENSE
@@ -199,7 +203,7 @@ test-suite test-lvish
                     PureMapTests,
                     SLMapTests,
                     SetTests,
-                    MaxCounterTests,
+                    MaxPosIntTests,
                     AddRemoveSetTests
                     
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
