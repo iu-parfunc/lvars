@@ -38,6 +38,7 @@ module Control.LVish.CancelT
 
 import Control.Monad.State as S
 import Data.IORef
+-- import Data.LVar.IVar
 
 import Control.Par.Class as PC
 import Control.Par.EffectSigs as E
@@ -64,6 +65,9 @@ instance MonadTrans CancelT where
   lift m = CancelT (lift m)
 
 data CPair = CPair !Bool ![CState]
+
+-- | Futures that may be canceled before the result is available.
+-- newtype CFut a = CFut (IVar (Maybe a))
 
 --------------------------------------------------------------------------------
 
@@ -102,6 +106,8 @@ type ThreadId = CState
 -- 
 -- This version is expected to retain /determinism/.  Therefore, the canceled
 -- computations must be read only.
+--
+-- Finally, note that the return value 
 forkCancelable :: (PC.ParMonad m, LVarSched m, ReadOnlyM m) => 
                   CancelT m () -> CancelT m ThreadId
 forkCancelable act = do

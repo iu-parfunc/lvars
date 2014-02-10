@@ -73,14 +73,14 @@ module Control.LVish
     liftQD,
 
     -- * Combinators for manually constraining the type of a given Par computation
-    isDet, isQD, isND, isIdemD, isIdemQD,
+    isDet, isQD, isND, isIdemD, isIdemQD, isReadOnly,
     hasPut, hasFreeze, hasBump, hasGet, hasIO,
     noPut, noFreeze, noBump, noGet, noIO,
 
     -- * Subtyping, add more effects to the signature
     -- | These effects are a conservative approximation, therefore it is always ok,
     --   for example, to turn "no put" (`NP`) into "put" (`P`).
-    addP, addG, addF, addB, addI,
+    addP, addG, addF, addB, addI, liftReadOnly,
     
     -- * Basic control flow
     fork, yield, 
@@ -226,6 +226,14 @@ isIdemD x = x
 
 isIdemQD :: (e ~ (Ef P G F NB NI)) => Par e s a -> Par e s a
 isIdemQD x = x
+
+isReadOnly :: (e ~ (Ef NP G NF NB NI)) => Par e s a -> Par e s a
+isReadOnly x = x
+
+-- | Lift a read-only computation to participate in a parent computation with more
+-- effects.
+liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
+liftReadOnly (WrapPar p) = WrapPar p
 
 
 addP :: Par (Ef NP g f b i) s a -> Par (Ef p g f b i) s a
