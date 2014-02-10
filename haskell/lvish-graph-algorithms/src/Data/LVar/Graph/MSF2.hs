@@ -19,7 +19,7 @@ import           Data.Graph.Adjacency as Adj
 -- import           Data.LVar.PureSet as PS
 import           Data.LVar.SLSet as PS
 
-import qualified Data.LVar.MaxCounter as MC
+import qualified Data.LVar.MaxPosInt as MC
 
 import Data.Par.Range (range)
 import Data.Par.Splittable (pforEach, pmapReduce_)
@@ -32,7 +32,7 @@ data EdgeGraph = EdgeGraph
 
 data MsfState s = MsfState { lastSets :: !(V.Vector NodeID)
                            , thisSets :: !(IS.IStructure s NodeID)
-                           , reserves :: !(V.Vector (MC.MaxCounter s))
+                           , reserves :: !(V.Vector (MC.MaxPosInt s))
                            }
 
 main :: IO ()
@@ -63,7 +63,7 @@ msf3 EdgeGraph{edges,numVerts} = do
   return output
   where
     numEdges = U.length edges
-    newCounters = V.generateM numEdges (\_ -> MC.newMaxCounter 0)
+    newCounters = V.generateM numEdges (\_ -> MC.newMaxPosInt 0)
     
     reserve eid MsfState{lastSets,reserves} = do
        let (a,b) = edges ! eid
@@ -81,7 +81,7 @@ msf3 EdgeGraph{edges,numVerts} = do
            uset  = lastSets V.! u
            vset  = lastSets V.! v
        -- Freeze is ok here, because we're after the barrier between reserve/commit.
-       winner <- MC.freezeMaxCounter (reserves V.! uset)
+       winner <- MC.freezeMaxPosInt (reserves V.! uset)
        logDbgLn 3 $ " [msf] Winner for "++show uset++" was "++show winner
        when (winner == eid) $ do
          logDbgLn 3 $ " [msf] WE are the winner, linking: "++show(uset,vset)         
