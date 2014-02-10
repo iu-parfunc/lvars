@@ -77,10 +77,6 @@ flag getonce
                (by using extra synchronization)
   default: False
 
-flag beta
-  description: These features are in beta and not fully supported yet.
-  default: True
-
 --------------------------------------------------------------------------------
 library
   Source-repository head
@@ -101,6 +97,8 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
+                    Data.LVar.Counter
+                    Data.LVar.MaxPosInt
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
@@ -115,25 +113,24 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
-  if flag(beta)
-    exposed-modules: 
-                      -- Not quite ready for prime-time yet:
-                      Data.LVar.NatArray
-                      Data.LVar.NatArray.Unsafe
-                      Data.LVar.MaxPosInt
-                      Data.LVar.Counter
-                      Data.LVar.AddRemoveSet
-                      Data.LVar.PNCounter
-                      -------------------------------------------
-                      -- New / Experimental:
-                      Data.LVar.Memo                    
-                      Data.LVar.CycGraph
 
-  if flag(beta) && flag(newcontainers)
-    exposed-modules: 
---                      Control.LVish.BulkRetry
+  -- These are in "beta" and aren't exposed yet:
+  other-modules
+                    -- Not quite ready for prime-time yet:
+                    Data.LVar.NatArray
+                    Data.LVar.NatArray.Unsafe
+                    Data.LVar.AddRemoveSet
+                    Data.LVar.PNCounter
+                    -------------------------------------------
+                    -- New / Experimental:
+                    Data.LVar.Memo                    
+                    Data.LVar.CycGraph
 
-  -- Modules included in this library but not exported.
+  if flag(newcontainers)
+    exposed-modules: 
+--                  Control.LVish.BulkRetry
+
+  -- Internal modules included in this library but not exported:
   other-modules:
                     Data.UtilInternal
                     Data.LVar.Pair 
