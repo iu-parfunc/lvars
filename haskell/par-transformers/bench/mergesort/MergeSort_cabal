@@ -2,16 +2,16 @@
 
 name:                MergeSort
 version:             1.0
-build-type:          Simple
--- build-type:          Custom
+-- build-type:          Simple
+build-type:          Custom
 cabal-version:       >=1.8
 
 flag newgeneric
-  default:           True
+  default:           False
   description: Use new generic interfaces rather than old.
 
 flag lvish-st
-  default:           True
+  default:           False
   description: LVish scheduler with ParST transformer on top.  
 
 flag direct-st
@@ -65,6 +65,6 @@ executable test-mergesort-parST
   extensions: CPP DoAndIfThenElse
 
   -- My own custom field to change the C compiler:
---  x-cc-name: gcc
---  cc-options: -O3 
+  x-cc-name: icc
+  cc-options: -O3 
 
