@@ -29,7 +29,7 @@ description:
   .
   A programming model based on monotonically-growing concurrent data structures.
   .
-  As a starting point, look at "Control.LVish", as well as one of these papers:
+  As a starting point, look at the main module, "Control.LVish", as well as one of these papers:
   .
     * FHPC 2013: /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
