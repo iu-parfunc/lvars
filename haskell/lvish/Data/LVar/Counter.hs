@@ -26,34 +26,7 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 newtype Counter s = Counter (LVar s AC.AtomicCounter Word)
 
 -- | Create a new `Counter` with the given initial value.
-<<<<<<< HEAD
-<<<<<<< HEAD
-newCounter :: Int -> Par e s (Counter s)
--- LK: I don't understand why this doesn't work! :(
--- newCounter n = WrapPar $ fmap (Counter . WrapLVar) $
---                LI.newLV $ newCounter n
-newCounter = undefined
-
--- | Increment the counter by a given amount.
-increment :: HasBump e => Counter s -> Int -> Par e s ()
--- LK: Uhhh, this is the only way I can think of to increment the
--- counter while in Par.
-increment = undefined
-
--- increment (LVar s ctr delt) n = do
---   return $ unsafePerformIO $ AC.incrCounter_ n ctr
-
--- | Wait until the maximum observed value reaches some threshold, then return.
-waitThresh :: HasGet e => Counter s -> Int -> Par e s ()
-waitThresh = undefined
-
--- | Observe what the final value of the `Counter` was.
-freezeCounter :: HasFreeze e => Counter s -> Par e s Int
-=======
-newCounter :: Word -> Par d s (Counter s)
-=======
 newCounter :: Word -> Par e s (Counter s)
->>>>>>> da536eb... More Counter work.
 newCounter n = WrapPar $ fmap (Counter . WrapLVar) $
                LI.newLV $ AC.newCounter (fromIntegral n)
 
@@ -77,11 +50,6 @@ waitThresh (Counter (WrapLVar lv)) thrsh =
                       | otherwise    = do return Nothing 
 
 -- | Observe what the final value of the `Counter` was.
-<<<<<<< HEAD
-freezeCounter :: Counter s -> Par QuasiDet s Word
->>>>>>> 5818e50... Some progress on Data.LVar.Counter.
-freezeCounter = undefined
-=======
 freezeCounter :: HasFreeze e => Counter s -> Par e s Word
 freezeCounter (Counter (WrapLVar lv)) =
   WrapPar $ do
@@ -92,7 +60,6 @@ freezeCounter (Counter (WrapLVar lv)) =
     globalThresh ctr True = fmap Just $ AC.readCounter ctr
     globalThresh _  False = return Nothing
     deltaThresh  _        = return Nothing
->>>>>>> da536eb... More Counter work.
 
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted
 -- directly into a `Word`.
