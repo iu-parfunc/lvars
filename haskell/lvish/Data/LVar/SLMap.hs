@@ -39,7 +39,7 @@ module Data.LVar.SLMap
          gmodify, getOrInit,
 
          -- * Quasi-deterministic operations
-         freezeMap,
+         freezeMap, fromIMap,
          traverseFrzn_,         
 
          -- * Iteration and callbacks
@@ -332,6 +332,16 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   -- the freezeLV part....  
   return (unsafeCoerce# x)
 
+
+-- | /O(N)/: Convert from an `IMap` to a plain `Data.Map`.  This is only permitted
+--   when the `IMap` has already been frozen.  This is useful for processing the
+--   result of `Control.LVish.DeepFrz.runParThenFreeze`, using standard library
+--   functions.
+fromIMap :: IMap k Frzn a -> M.Map k a 
+fromIMap (IMap (WrapLVar lv)) = unsafeDupablePerformIO $
+  SLM.foldlWithKey id
+                   (\ acc k v -> return $! M.insert k v acc)
+                   M.empty (L.state lv)
 
 -- | Traverse a frozen map for side effect.  This is useful (in comparison with more
 -- generic operations) because the function passed in may see the key as well as the
