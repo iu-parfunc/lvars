@@ -1,7 +1,7 @@
 
 -- A portable way to build the benchmark executable itself.
 
-name:                run-benchmark
+name:                run-benchmark-mergesort
 version:             0.0.1
 build-type:          Simple
 -- We force a recent version to make sure we have sandboxes:
