@@ -13,9 +13,9 @@
 --   would have performed a visible side effect.
 
 module Control.LVish.CancelT
-       {-(
+       (
          -- * The transformer that adds the cancellation capability
-         CancelT(), ThreadId,
+         CancelT(), ThreadId, CFut, CFutFate,
          
          -- * Operations specific to CancelT
          runCancelT,
@@ -26,14 +26,15 @@ module Control.LVish.CancelT
          -- * More detailed interface, separating forking and TID creation
          createTid, forkCancelableWithTid, forkCancelableNDWithTid,
 
-         -- * Performing cancellation
+         -- * Performing cancellation, or waiting for results
+         readCFut,
          cancel,         
          pollForCancel,
          cancelMe,
 
          -- * Boolean operations with cancellation
          asyncAnd
-       )-}
+       )
        where
 
 import Control.Monad.State as S
@@ -71,7 +72,7 @@ data CFut m a = CFut (Future m CFutFate) (Future m a)
 -- Nothing signifies that it was canceled, whereas Just that it completed.
 
 -- | In a deterministic scenario, a `CFut` can only be canceled or read, not both.
-data CFutFate = Canceled | Read 
+data CFutFate = Canceled | Completed
   deriving (Show,Read,Eq)
 
 --------------------------------------------------------------------------------
@@ -197,6 +198,15 @@ forkInternal (CState childRef) (CancelT act) = CancelT$ do
     return $! CFut fate result
 
 
+-- | Do a blocking read on the result of a cancelable-future.  This is an ERROR if
+--   the future has been cancelled.  (And for determinism, the reverse is also true.
+--   A cancellation after this read is an error.)
+readCFut :: (PC.ParIVar m, HasPut (GetEffects m), FutContents m CFutFate, FutContents m a)
+         => CFut m a -> m a
+readCFut (CFut fate res) = do 
+  PC.put_ fate Completed -- Possible throw a multiple-put error.
+  PC.get res
+
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
@@ -212,6 +222,9 @@ internal_cancel (CState ref) = do
     if flg 
      then (CPair False [], ls)
      else (orig, [])
+
+  -- FIXME: write the fates of all associated futures -- lift $ PC.put_ fate 
+
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
