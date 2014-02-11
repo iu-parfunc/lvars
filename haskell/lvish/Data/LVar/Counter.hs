@@ -11,7 +11,7 @@ module Data.LVar.Counter
          Counter(..),
          newCounter, increment, waitThresh, freezeCounter, fromCounter,
          -- * Non-monotonic sum accumulators
-         Sum(), newSum, addSum, freezeSum
+         Sum(), newSum, incrSum, freezeSum
          -- TODO: support other reductions than (+).
        ) where
 
@@ -88,6 +88,7 @@ newSum :: Int -> Par e s (Sum s)
 newSum n = do x <- liftIO$ AC.newCounter n
               return (Sum x)
 
+{-
 -- | Increment the counter by a given amount.
 addSum :: HasBump e => Sum s -> Int -> Par e s ()
 addSum (Sum ctr) n = liftIO $ do 
@@ -96,13 +97,25 @@ addSum (Sum ctr) n = liftIO $ do
   if (n' == minBound) 
    then error "addSum: Sum LVar was previously frozen and then bumped, or it overflowed."
    else return ()
+-}
+
+-- | Increment the sum by one.
+incrSum :: HasBump e => Sum s -> Par e s ()
+incrSum (Sum ctr) = liftIO $ do 
+  n' <- AC.incrCounter 1 ctr  
+  if (n' == minBound)
+   then error "addSum: Sum LVar was previously frozen and then bumped, or it overflowed."
+   else return ()
+
 
 -- | Observe what the final sum was.
 freezeSum :: HasFreeze e => Sum s -> Par e s Int
 freezeSum (Sum ctr) = liftIO $ do
 -- FINISHME / TEMP: this strategy is not safe!!
+ -- It will only work wit incrSum, not full addSum.
+ -- Also... multiple racing freezes are not idempotent.
      tck <- AC.readCounterForCAS ctr
-     (b,t) <- AC.casCounter ctr tck maxBound
+     (b,_t) <- AC.casCounter ctr tck maxBound
      if b then return $! AC.peekCTicket tck
           else error "freezeSum: collided with something else"
       
