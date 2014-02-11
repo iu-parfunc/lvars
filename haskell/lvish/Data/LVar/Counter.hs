@@ -18,7 +18,7 @@ import Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.SchedIdempotent as LI 
 import qualified Data.Atomics.Counter.Reference as AC
 import           Data.Word
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------
 
@@ -55,7 +55,9 @@ freezeCounter = undefined
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted
 -- directly into a `Word`.
 fromCounter :: Counter Frzn -> Word
-fromCounter = undefined
+fromCounter (Counter lv) = unsafeDupablePerformIO $ do 
+   n <- AC.readCounter (state lv)
+   return $! fromIntegral n
 
 -- LK: Don't understand what I'm supposed to do here, if anything
 -- instance DeepFrz (Counter s) where
