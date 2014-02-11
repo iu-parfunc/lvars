@@ -177,8 +177,11 @@ forkInternal (CState childRef) (CancelT act) = CancelT$ do
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
-cancel (CState ref) = do
+cancel :: (PC.ParMonad m, Monad m, HasPut (GetEffects m)) => ThreadId -> CancelT m ()
+cancel = internal_cancel
+
+internal_cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
+internal_cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
   -- be added to that node.
@@ -187,7 +190,7 @@ cancel (CState ref) = do
      then (CPair False [], ls)
      else (orig, [])
   -- We could do this traversal in parallel if we liked...
-  S.forM_ chldrn cancel
+  S.forM_ chldrn internal_cancel
 
 cancelMe' :: LVarSched m => StateT CState m ()
 cancelMe' = unCancelT cancelMe
@@ -297,7 +300,7 @@ asyncAnd leftM rightM kont = do
                                  -- but since we have the counter anyway let us dedup:
                                  do n <- internalLiftIO$ C.incrCounter 100 cnt                                    
                                     case n of
-                                      100 -> do cancel theirs; kont False
+                                      100 -> do internal_cancel theirs; kont False
                                       101 -> kont False
                                       200 -> return ()
   tid1 <- createTid
