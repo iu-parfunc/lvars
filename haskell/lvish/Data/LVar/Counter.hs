@@ -7,12 +7,16 @@
 -- does _not_ allow least-upper-bound updates.
 
 module Data.LVar.Counter
-       ( Counter(..),
-         newCounter, increment, waitThresh, freezeCounter, fromCounter
+       ( -- * Monotonically increasing counters
+         Counter(..),
+         newCounter, increment, waitThresh, freezeCounter, fromCounter,
+         -- * Non-monotonic sum accumulators
+         Sum(), newSum, addSum, freezeSum
+         -- TODO: support other reductions than (+).
        ) where
 
 import Control.LVish hiding (freeze, put)
-import Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), state)
+import Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), state, liftIO)
 import Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.SchedIdempotent as LI 
 import qualified Data.Atomics.Counter.Reference as AC
@@ -21,7 +25,9 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------
 
--- | A @Counter@ is a wrapper around the `AtomicCounter` exposed by
+-- | A monotonically increasing integral variable.
+--
+--  Note: Currently a @Counter@ is a wrapper around the `AtomicCounter` exposed by
 -- `Data.Atomics.Counter`.
 newtype Counter s = Counter (LVar s AC.AtomicCounter Word)
 
@@ -67,3 +73,37 @@ fromCounter :: Counter Frzn -> Word
 fromCounter (Counter lv) = unsafeDupablePerformIO $ do 
    n <- AC.readCounter (state lv)
    return $! fromIntegral n
+
+
+--------------------------------------------------------------------------------
+
+-- | An integral variable representing a sum of a series of `Int`s.  Unlike
+-- `Counter`, this can go both up and down (positive and negative increments),
+-- however it loses the ability to do threshold waiting (`waitThresh`).  The final
+-- sum can only be extracted by freezing the variable.
+data Sum s = Sum AC.AtomicCounter
+
+-- | Create a new Sum initialized with the given integer.
+newSum :: Int -> Par e s (Sum s)
+newSum n = do x <- liftIO$ AC.newCounter n
+              return (Sum x)
+
+-- | Increment the counter by a given amount.
+addSum :: HasBump e => Sum s -> Int -> Par e s ()
+addSum (Sum ctr) n = liftIO $ do 
+  n' <- AC.incrCounter n ctr  
+  -- When 
+  if (n' == minBound) 
+   then error "addSum: Sum LVar was previously frozen and then bumped, or it overflowed."
+   else return ()
+
+-- | Observe what the final sum was.
+freezeSum :: HasFreeze e => Sum s -> Par e s Int
+freezeSum (Sum ctr) = liftIO $ do
+-- FINISHME / TEMP: this strategy is not safe!!
+     tck <- AC.readCounterForCAS ctr
+     (b,t) <- AC.casCounter ctr tck maxBound
+     if b then return $! AC.peekCTicket tck
+          else error "freezeSum: collided with something else"
+      
+  
