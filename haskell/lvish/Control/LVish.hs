@@ -235,6 +235,9 @@ isReadOnly x = x
 liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
 liftReadOnly (WrapPar p) = WrapPar p
 
+instance EffectSubtype (Par (Ef NP g NF NB NI) s) where
+  gliftRO = liftReadOnly 
+
 
 addP :: Par (Ef NP g f b i) s a -> Par (Ef p g f b i) s a
 addP (WrapPar p) = WrapPar p

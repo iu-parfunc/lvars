@@ -1,7 +1,8 @@
 {-# LANGUAGE Unsafe #-}
-
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -47,6 +48,30 @@ import Control.Par.Class.Unsafe (ParMonad(..))
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
+#if 0
+import Control.LVish (Par, liftReadOnly)
+-- class (ParMonad m1) => EffectSubtype m1 where
+--   gliftRO :: (ParMonad m2, 
+--               GetEffects m1 ~ Ef NP g NF NB NI, 
+--               m2 ~ SetEffects (Ef p g f b i) m1)
+--           => m1 a -> m2 a 
+
+foo :: Par (Ef NP G NF NB NI) s Int
+foo = return 3
+
+bar :: Par (Ef p G f b i) s Int
+bar = liftReadOnly foo
+
+baz :: Par (Ef p G f b i) s Int
+baz = gliftRO foo
+
+foo2 :: CancelT (Par (Ef NP G NF NB NI) s) Int
+foo2 = return 3
+
+baz2 :: CancelT (Par (Ef p G f b i) s) Int
+baz2 = gliftRO foo2
+#endif
+
 -- | A Par-monad scheduler transformer that adds the cancellation capability.  To do
 -- this, it must track, and periodically poll, extra mutable state for each
 -- cancellable computation in the fork-tree.
@@ -63,6 +88,58 @@ newtype CState = CState (IORef CPair)
 
 instance MonadTrans CancelT where
   lift m = CancelT (lift m)
+
+instance EffectSubtype m => EffectSubtype (CancelT m) where
+
+  -- Why doesn't THIS work?
+  -- gliftRO :: forall a (m2 :: * -> *)
+  --                     (g :: Getting)
+  --                     (p :: Putting)
+  --                     (f :: Freezing)
+  --                     (b :: Bumping)
+  --                     (i :: IOing).
+  --              (GetEffects (CancelT m) ~ 'Ef 'NP g 'NF 'NB 'NI,
+  --               m2 ~ SetEffects ('Ef p g f b i) m) =>
+  --              CancelT m a -> CancelT m2 a
+
+  -- Works:
+  -- gliftRO :: forall a (m2 :: * -> *) 
+  --                     (g :: Getting)
+  --                     (p :: Putting)
+  --                     (f :: Freezing)
+  --                     (b :: Bumping)
+  --                     (i :: IOing).
+  --              (GetEffects (CancelT m) ~ 'Ef 'NP g 'NF 'NB 'NI,
+  --               m2 ~ SetEffects ('Ef p g f b i) (CancelT m)) =>
+  --              CancelT m a -> m2 a
+  gliftRO (CancelT (S.StateT{runStateT}) :: CancelT m a) =
+    -- WARNING: This should just be a type coercion.  Any runtime overhead here is WASTED:
+    CancelT $ S.StateT $ \ st0 -> 
+
+    let rs :: CState -> m (a, CState)
+        rs = runStateT
+
+        c0 :: m (a,CState)
+        c0 = runStateT st0
+
+        -- c1 :: (SetEffects (Ef p (GetG (GetEffects m)) f b i) m) (a,CState)
+        -- c1 = gliftRO c0
+
+        x :: (Monad m2, 
+              GetEffects (CancelT m) ~ 'Ef 'NP g 'NF 'NB 'NI,
+              m2 ~ SetEffects ('Ef p g f b i) m) =>
+              CancelT m2 Int
+        x = return 3
+        -- y :: m3 Int
+        -- y = x
+    in
+--    CancelT $ S.StateT $ gliftRO . runStateT
+    -- liftReadOnly 
+    undefined -- (undefined :: CancelT (SetEffects )
+
+
+
+
 
 data CPair = CPair !Bool ![CState]
 

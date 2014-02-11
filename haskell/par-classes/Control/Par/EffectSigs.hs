@@ -31,11 +31,14 @@ module Control.Par.EffectSigs
         -- HasGetM 
         SetMP, SetMG, SetMF, SetMB, SetMI,
         HasIOM,  
-        ReadOnlyM, IdempotentM
+        ReadOnlyM, IdempotentM,
+
+        EffectSubtype(..)
        )
        where
 import GHC.Exts (Constraint)
 -- import Control.Monad.Trans.Class
+import Control.Par.Class (ParMonad)
 
 -- import Control.LVish.Types
 
@@ -210,6 +213,12 @@ type instance (ReadOnly (Ef p g nf b NI)) = ()
 
 ----------------------------------------------------------------
 
+-- class (ParMonad m1, ParMonad m2) => EffectSubtype m1 m2 where
+class (ParMonad m1) => EffectSubtype m1 where
+  gliftRO :: (ParMonad m2, 
+              GetEffects m1 ~ Ef NP g NF NB NI, 
+              m2 ~ SetEffects (Ef p g f b i) m1)
+          => m1 a -> m2 a 
 
 ----------------------------------------
 -- And then at the level of monads:

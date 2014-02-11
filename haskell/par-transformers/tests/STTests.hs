@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TypeFamilies #-}
 
 module STTests (tests, runTests) where
 
@@ -50,7 +50,7 @@ case_v_t0 = assertEqual "basic forkSTSplit usage"
 t0 :: String            
 t0 = LV.runPar $ V.runParVecT 10 p0
 
-p0 :: V.ParVecT s1 Int (LV.Par e s0) String
+p0 :: HasGet e => V.ParVecT s1 Int (LV.Par e s0) String
 p0 = do
   
   V.set 0
