@@ -1,6 +1,5 @@
 {-# LANGUAGE Unsafe #-}
 
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -68,8 +67,7 @@ instance MonadTrans CancelT where
 data CPair = CPair !Bool ![CState]
 
 -- | Futures that may be canceled before the result is available.
--- newtype CFut a = CFut (IVar (Maybe a))
-data CFut a = forall m . ParIVar m => CFut (Future m CFutFate) (Future m a)
+data CFut m a = CFut (Future m CFutFate) (Future m a)
 -- Nothing signifies that it was canceled, whereas Just that it completed.
 
 -- | In a deterministic scenario, a `CFut` can only be canceled or read, not both.
@@ -118,7 +116,7 @@ type ThreadId = CState
 --
 -- Finally, note that the return value 
 forkCancelable :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, FutContents m CFutFate, FutContents m a) => 
-                  CancelT m a -> CancelT m (ThreadId, CFut a)
+                  CancelT m a -> CancelT m (ThreadId, CFut m a)
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
@@ -130,7 +128,7 @@ forkCancelable act = do
 --   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
 --   introduces nondeterminism and must register the "IO".
 forkCancelableND :: (PC.ParIVar m, LVarSched m, HasIOM m, FutContents m CFutFate, FutContents m a) => 
-                  CancelT m a -> CancelT m (ThreadId, CFut a)
+                  CancelT m a -> CancelT m (ThreadId, CFut m a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
     tid <- createTid
@@ -151,13 +149,13 @@ createTid = CancelT$ do
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
 forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, FutContents m CFutFate, FutContents m a) => 
-                         ThreadId -> CancelT m a -> CancelT m (CFut a)
+                         ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act = forkInternal tid act
 
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
 forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m, FutContents m CFutFate, FutContents m a) => 
-                         ThreadId -> CancelT m a -> CancelT m (CFut a)
+                         ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
 
@@ -165,7 +163,7 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 -- Internal version -- no rules!
 forkInternal :: forall m a . 
                  (PC.ParIVar m, LVarSched m, FutContents m CFutFate, FutContents m a) => 
-                 ThreadId -> CancelT m a -> CancelT m (CFut a)
+                 ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkInternal #-} 
 forkInternal (CState childRef) (CancelT act) = CancelT$ do
     -- The following line gives me this GHC panic:
@@ -196,8 +194,7 @@ forkInternal (CState childRef) (CancelT act) = CancelT$ do
     if live then
        lift $ forkLV (evalStateT act' (CState childRef))
       else cancelMe'
---    return $! CFut fate result
-    error "FINISHME "
+    return $! CFut fate result
 
 
 -- | Issue a cancellation request for a given sub-computation.  It will not be
