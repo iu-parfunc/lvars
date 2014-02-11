@@ -20,6 +20,8 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
+Extra-source-files: Control/Par/ST/Vec2Common.hs 
+
 Library
   Source-repository head
     type:     git

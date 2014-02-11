@@ -49,5 +49,6 @@ import Prelude hiding (read, length, drop, take)
 
 --------------------------------------------------------------------------------
 
-#include "Vec2Common.hs"
+-- #include "./Control/Par/ST/Vec2Common.hs"
+#include "./Vec2Common.hs"
 

@@ -105,7 +105,7 @@ class ParMonad m => ParFuture m where
   --
   spawn  :: (NFData a, FutContents m a) => m a -> m (Future m a)
 
--- | Like 'spawn', but the result is only head-strict, not fully-strict.
+  -- | Like 'spawn', but the result is only head-strict, not fully-strict.
   spawn_ :: FutContents m a => m a -> m (Future m a)
               
   -- | Wait for the result of a future, and then return it.
