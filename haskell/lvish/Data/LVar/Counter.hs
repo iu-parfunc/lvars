@@ -64,6 +64,6 @@ freezeCounter (Counter (WrapLVar lv)) =
 -- | Once frozen, for example by `runParThenFreeze`, a `Counter` can be converted
 -- directly into a `Word`.
 fromCounter :: Counter Frzn -> Word
-fromCounter (Counter (WrapLVar lv)) =
-  undefined
-  --unsafeDupablePerformIO $ AC.readCounter (state lv)
+fromCounter (Counter lv) = unsafeDupablePerformIO $ do 
+   n <- AC.readCounter (state lv)
+   return $! fromIntegral n
