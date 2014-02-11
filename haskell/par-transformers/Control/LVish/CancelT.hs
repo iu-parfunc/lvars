@@ -1,5 +1,6 @@
 {-# LANGUAGE Unsafe #-}
 
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,7 +14,7 @@
 --   would have performed a visible side effect.
 
 module Control.LVish.CancelT
-       (
+       {-(
          -- * The transformer that adds the cancellation capability
          CancelT(), ThreadId,
          
@@ -33,7 +34,7 @@ module Control.LVish.CancelT
 
          -- * Boolean operations with cancellation
          asyncAnd
-       )
+       )-}
        where
 
 import Control.Monad.State as S
@@ -68,6 +69,13 @@ data CPair = CPair !Bool ![CState]
 
 -- | Futures that may be canceled before the result is available.
 -- newtype CFut a = CFut (IVar (Maybe a))
+data CFut a = forall m . ParIVar m => CFut (Future m CFutFate) (Future m a)
+-- Nothing signifies that it was canceled, whereas Just that it completed.
+
+-- | In a deterministic scenario, a `CFut` can only be canceled or read, not both.
+data CFutFate = Canceled | Read 
+  deriving (Show,Read,Eq)
+
 
 --------------------------------------------------------------------------------
 
@@ -94,7 +102,9 @@ pollForCancel = do
   b <- poll
   unless b $ cancelMe
 
--- | Self cancellation.  Equivalent to the parent calling `cancel`.
+-- | Self cancellation.  Not the same as the parent calling `cancel`, because
+-- cancelMe only cancels the current leaf of the computation tree, not its siblings
+-- (not the entire subtree under a forkCancelable, that is).
 cancelMe :: (LVarSched m) => CancelT m ()
 cancelMe = lift $ returnToSched
 
@@ -108,25 +118,25 @@ type ThreadId = CState
 -- computations must be read only.
 --
 -- Finally, note that the return value 
-forkCancelable :: (PC.ParMonad m, LVarSched m, ReadOnlyM m) => 
-                  CancelT m () -> CancelT m ThreadId
+forkCancelable :: (PC.ParIVar m, LVarSched m, ReadOnlyM m) => 
+                  CancelT m a -> CancelT m (ThreadId, CFut a)
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     tid <- createTid
-    forkCancelableWithTid tid act
-    return tid
+    fut <- forkCancelableWithTid tid act
+    return $! (tid,fut)
 
 -- | This is a version of `forkCancelable` which allows side-effecting computation to
 --   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
 --   introduces nondeterminism and must register the "IO".
-forkCancelableND :: (PC.ParMonad m, LVarSched m, HasIOM m) => 
-                  CancelT m () -> CancelT m ThreadId
+forkCancelableND :: (PC.ParIVar m, LVarSched m, HasIOM m) => 
+                  CancelT m a -> CancelT m (ThreadId, CFut a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
     tid <- createTid
-    forkCancelableNDWithTid tid act
-    return tid
+    fut <- forkCancelableNDWithTid tid act
+    return $! (tid, fut)
 
 
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
@@ -142,23 +152,27 @@ createTid = CancelT$ do
 -- 
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParMonad m, LVarSched m, ReadOnlyM m) => 
-                         ThreadId -> CancelT m () -> CancelT m ()
+forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, ReadOnlyM m) => 
+                         ThreadId -> CancelT m a -> CancelT m (CFut a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act = forkInternal tid act
 
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
-forkCancelableNDWithTid :: (PC.ParMonad m, LVarSched m, HasIOM m) => 
-                         ThreadId -> CancelT m () -> CancelT m ()
+forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m) => 
+                         ThreadId -> CancelT m a -> CancelT m (CFut a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
 
 
 -- Internal version -- no rules!
-forkInternal :: (PC.ParMonad m, LVarSched m) => 
-                ThreadId -> CancelT m () -> CancelT m ()
+forkInternal :: forall m a . 
+                 (PC.ParIVar m, LVarSched m) => 
+                 ThreadId -> CancelT m a -> CancelT m (CFut a)
 {-# INLINE forkInternal #-} 
 forkInternal (CState childRef) (CancelT act) = CancelT$ do
+    fate   <- lift (PC.new :: m CFutFate)
+    result <- lift (PC.new :: m a)
+
     CState parentRef <- S.get
     -- Create new child state:  
     live <- lift$ internalLiftIO $ 
@@ -168,10 +182,14 @@ forkInternal (CState childRef) (CancelT act) = CancelT$ do
           (CPair True (CState childRef : ls), True)
         else -- The current thread has already been canceled: DONT fork:
           (orig, False)
+    let act' = do x <- act 
+                  lift $ PC.put_ result x
+                  return ()
     if live then
-       lift $ forkLV (evalStateT act (CState childRef))
+       lift $ forkLV (evalStateT act' (CState childRef))
       else cancelMe'
-    return ()
+    return $! CFut fate result
+
 
 
 -- | Issue a cancellation request for a given sub-computation.  It will not be
@@ -275,7 +293,7 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 --
 -- FIXME: This is unsafe until there is a way to guarantee that read-only
 -- computations are performed!
-asyncAnd :: forall p . (PC.ParMonad p, LVarSched p, ReadOnlyM p)
+asyncAnd :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p)
             => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
 asyncAnd leftM rightM kont = do
