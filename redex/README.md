@@ -3,6 +3,10 @@ PLT Redex models of LVar calculi
 
 Subdirectories include:
 
+  * [lambdaLVish]: the new, improved LVish Redex model, now with
+    `bump`
+    ([see README](https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVish#readme)).
+
   * [LVish]: a PLT Redex model of the LVish family of languages ([see
     README](https://github.com/iu-parfunc/lvars/tree/master/redex/LVish#readme)).
 
@@ -10,6 +14,8 @@ Subdirectories include:
     languages ([see
     README](https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar#readme)).
 
+[lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVish
 [LVish]: https://github.com/iu-parfunc/lvars/tree/master/redex/LVish
 [lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar
+
 
