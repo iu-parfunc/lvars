@@ -10,6 +10,7 @@
   (define-lambdaLVish-language lambdaLVish-natpair-ivars
     downset-op
     my-lub
+    inflationary-op
     (natural natural)
     (natural Bot)
     (Bot natural))
@@ -64,7 +65,12 @@
           [`(Top ,_) 'Top]
           [`(,_ Top) 'Top]
           [`(Bot Bot) 'Bot]
-          [_ p])))))
+          [_ p]))))
+
+  ;; There's no special bump function for this lattice, so the
+  ;; identity function is a safe default.
+  (define inflationary-op
+    (lambda (p) p)))
 
 (module test-suite racket
   (require redex/reduction-semantics)

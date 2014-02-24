@@ -5,7 +5,7 @@
   (require srfi/1)
   (provide lambdaLVish-nat)
   
-  (define-lambdaLVish-language lambdaLVish-nat downset-op max natural)
+  (define-lambdaLVish-language lambdaLVish-nat downset-op max inflationary-op natural)
 
   ;; To figure out at some point: maybe we could actually write
   ;; downset-op with Redex patterns?
@@ -14,7 +14,16 @@
     (lambda (d)
       (if (number? d)
           (append '(Bot) (iota d) `(,d))
-          '(Bot)))))
+          '(Bot))))
+
+  ;; TODO: where do we test *these*?
+
+  ;; The "bump" function.  Bumping Bot gives you 1, right?
+  (define inflationary-op
+    (lambda (d)
+      (match d
+        ['Bot 1]
+        [number (add1 d)]))))
 
 (module test-suite racket
   (require redex/reduction-semantics)

@@ -15,6 +15,9 @@
 ;;   * a lub operation, a Racket-level procedure that takes two
 ;;     lattice elements and returns a lattice element.
 ;;
+;;   * an inflationary operation, a Racket-level procedure that takes
+;;     a lattice element and returns a lattice element.
+;;
 ;;   * some number of lattice elements represented as Redex patterns,
 ;;     not including top and bottom elements, since we add those
 ;;     automatically.  (Therefore, if we wanted a lattice consisting
@@ -25,6 +28,7 @@
                       name
                       downset-op
                       lub-op
+                      inflationary-op
                       lattice-elements ...)
   (begin
     (require redex/reduction-semantics)
