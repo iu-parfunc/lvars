@@ -14,7 +14,7 @@ Subdirectories include:
     languages ([see
     README](https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar#readme)).
 
-[lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVish
+[lambdaLVish]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVish
 [LVish]: https://github.com/iu-parfunc/lvars/tree/master/redex/LVish
 [lambdaLVar]: https://github.com/iu-parfunc/lvars/tree/master/redex/lambdaLVar
 
