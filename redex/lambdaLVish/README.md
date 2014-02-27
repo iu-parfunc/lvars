@@ -20,8 +20,10 @@ languages and run their test suites.
 
 ### Automated testing
 
-The lambdaLVish tests run regularly on
-[a Jenkins continuous integration server][jenkins].
+Soon!
+
+<!-- The lambdaLVish tests run regularly on -->
+<!-- [a Jenkins continuous integration server][jenkins]. -->
 
 [jenkins]:
 http://tester-lin.soic.indiana.edu:8080/job/lambdaLVish-redex/
