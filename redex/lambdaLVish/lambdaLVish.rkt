@@ -1,6 +1,8 @@
 #lang racket
 ;; A Redex model of the lambdaLVish language.
 
+;; WIP: adding support for "bump".
+
 (provide define-lambdaLVish-language)
 
 ;; define-lambdaLVish-language takes the following arguments:
@@ -61,7 +63,7 @@
       ;; lambdaLVish syntax
 
       ;; Configurations on which the reduction relation operates.
-      (Config (S e)
+      (Config (SJ SB e)
               Error)
       
       ;; Expressions.
@@ -73,6 +75,7 @@
          new
          (freeze e)
          (freeze e after e with e)
+         (bump e)
 
          ;; An intermediate language form -- this doesn't show up in
          ;; user programs.
@@ -124,11 +127,13 @@
       (H (d (... ...)))
 
       ;; Stores.  A store is either a finite set of LVars (that is, a
-      ;; finite partial mapping from locations l to pairs of StoreVals
-      ;; and status flags) or a distinguished value TopS.
+      ;; finite partial mapping from locations l to tuples of
+      ;; StoreVals, status flags, and type flags) or a distinguished
+      ;; value TopS.
       (S (LVar (... ...)) TopS)
-      (LVar (l (StoreVal status)))
+      (LVar (l (StoreVal status type)))
       (status #t #f)
+      (type Bumpable Puttable)
       (l variable-not-otherwise-mentioned)
 
       ;; Threshold sets.  A threshold set is the set we pass to a
@@ -152,7 +157,7 @@
       (Q (d d (... ...)))
 
       ;; States.
-      (p (StoreVal status) Top-p)
+      (p (StoreVal status type) Top-p)
 
       ;; Like P, but potentially empty.  Used in the type of the
       ;; exists-p metafunction.
@@ -194,10 +199,15 @@
             "E-Beta")
 
        ;; Allocation of new LVars.
-       (--> (S (in-hole E new))
-            ((update-state S l (Bot #f)) (in-hole E l))
+       (--> (S (in-hole E newPuttable))
+            ((update-state S l (Bot #f Puttable)) (in-hole E l))
             (where l (variable-not-in-store S))
-            "E-New")
+            "E-New-Puttable")
+       
+       (--> (S (in-hole E newBumpable))
+            ((update-state S l (Bot #f Bumpable)) (in-hole E l))
+            (where l (variable-not-in-store S))
+            "E-New-Bumpable")
 
        ;; Least-upper-bound writes to LVars.
 
@@ -208,6 +218,7 @@
             (where p_1 (lookup-state S l))
             (where p_2 (lub-p p_1 (d_2 #f)))
             (where (StoreVal status) p_2)
+            (where Puttable (lookup-type S l))
             "E-Put")
 
        ;; ...but putting a value that is greater than the current
@@ -218,6 +229,19 @@
             (where p_1 (lookup-state S l))
             (where Top-p (lub-p p_1 (d_2 #f)))
             "E-Put-Err")
+       
+       ;; An LVar can only be bumped if it's unfrozen and Bumpable.
+       (--> (S (in-hole E (bump l)))
+            ((update-state S l p_2) (in-hole E ()))
+            (where p_1 (lookup-state S l))
+            (where p_2 (bump-p p_1))
+            (where (StoreVal status) p_2)
+            (where Bumpable (lookup-type S l))
+            "E-Bump")
+
+       ;; Programs can get stuck at runtime if they try to put to a
+       ;; non-Puttable LVar, or if they try to bump a non-Bumpable
+       ;; LVar.
 
        ;; Threshold reads from LVars.
        (--> (S (in-hole E (get l P)))
