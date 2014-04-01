@@ -60,6 +60,7 @@ Library
                , atomic-primops >= 0.6 
   ghc-options: -O2
 
+--  Include-Dirs: cbits/
 
 -- Note: This is actually broken with ghc 7.6 on linux, due to a bug
 -- with how ghci interacts with the atomic primops package. This

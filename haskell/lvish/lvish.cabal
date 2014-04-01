@@ -101,6 +101,7 @@ library
                     Data.LVar.MaxPosInt
                     Data.LVar.NatArray
                     Data.LVar.NatArray.Unsafe
+                    Data.LVar.Memo                    
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
@@ -123,7 +124,6 @@ library
                     Data.LVar.PNCounter
                     -------------------------------------------
                     -- New / Experimental:
-                    Data.LVar.Memo                    
                     Data.LVar.CycGraph
 
   if flag(newcontainers)
