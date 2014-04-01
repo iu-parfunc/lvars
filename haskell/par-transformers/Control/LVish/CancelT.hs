@@ -71,7 +71,7 @@ data CPair = CPair !Bool ![CState]
 data CFut m a = CFut (Future m CFutFate) (Future m a)
 -- Nothing signifies that it was canceled, whereas Just that it completed.
 
--- | In a deterministic scenario, a `CFut` can only be canceled or read, not both.
+-- | (Internal datatype).  In a deterministic scenario, a `CFut` can only be canceled or read, not both.
 data CFutFate = Canceled | Completed
   deriving (Show,Read,Eq)
 
@@ -115,8 +115,12 @@ type ThreadId = CState
 -- This version is expected to retain /determinism/.  Therefore, the canceled
 -- computations must be read only.
 --
--- Finally, note that the return value 
-forkCancelable :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, FutContents m CFutFate, FutContents m a) => 
+-- Finally, note that this currently returns a value in the same monad as the child
+-- computation.  That is merely a convenience, and to make typing less of a headache.
+-- It is expected, in particular, that the user will lift the read-only computation
+-- into a non-read-only parent computation at some point.
+forkCancelable :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, 
+                   FutContents m CFutFate, FutContents m a) => 
                   CancelT m a -> CancelT m (ThreadId, CFut m a)
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
@@ -127,8 +131,9 @@ forkCancelable act = do
 
 -- | This is a version of `forkCancelable` which allows side-effecting computation to
 --   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
---   introduces nondeterminism and must register the "IO".
-forkCancelableND :: (PC.ParIVar m, LVarSched m, HasIOM m, FutContents m CFutFate, FutContents m a) => 
+--   introduces nondeterminism and must register the "IO effect".
+forkCancelableND :: (PC.ParIVar m, LVarSched m, HasIOM m, 
+                     FutContents m CFutFate, FutContents m a) => 
                   CancelT m a -> CancelT m (ThreadId, CFut m a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
@@ -149,13 +154,15 @@ createTid = CancelT$ do
 -- 
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, FutContents m CFutFate, FutContents m a) => 
+forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, 
+                          FutContents m CFutFate, FutContents m a) => 
                          ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act = forkInternal tid act
 
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
-forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m, FutContents m CFutFate, FutContents m a) => 
+forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m, 
+                            FutContents m CFutFate, FutContents m a) => 
                          ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
@@ -163,7 +170,8 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 
 -- Internal version -- no rules!
 forkInternal :: forall m a . 
-                 (PC.ParIVar m, LVarSched m, FutContents m CFutFate, FutContents m a) => 
+                 (PC.ParIVar m, LVarSched m, 
+                  FutContents m CFutFate, FutContents m a) => 
                  ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkInternal #-} 
 forkInternal (CState childRef) (CancelT act) = CancelT$ do
@@ -201,7 +209,8 @@ forkInternal (CState childRef) (CancelT act) = CancelT$ do
 -- | Do a blocking read on the result of a cancelable-future.  This is an ERROR if
 --   the future has been cancelled.  (And for determinism, the reverse is also true.
 --   A cancellation after this read is an error.)
-readCFut :: (PC.ParIVar m, HasPut (GetEffects m), FutContents m CFutFate, FutContents m a)
+readCFut :: (PC.ParIVar m, HasPut (GetEffects m), 
+             FutContents m CFutFate, FutContents m a)
          => CFut m a -> m a
 readCFut (CFut fate res) = do 
   PC.put_ fate Completed -- Possible throw a multiple-put error.

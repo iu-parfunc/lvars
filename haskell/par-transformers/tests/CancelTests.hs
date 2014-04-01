@@ -1,11 +1,11 @@
-{-# LANGUAGE TemplateHaskell, DataKinds #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
 module CancelTests -- (tests, runTests)
        where
 
 import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, Par,
-                      isDet, isQD, isND, isReadOnly)
+                      isDet, isQD, isND, isReadOnly, liftReadOnly)
 import Control.LVish.CancelT as CT
 import qualified Control.Par.Class as PC
 import Control.Par.EffectSigs
@@ -55,29 +55,55 @@ cancel01 = runParLogged$ isDet $ runCancelT $ do
 -- case_cancel01 :: IO ()
 -- case_cancel01 = assertEqual "" ["Begin test 01"] =<< fmap fst cancel01 
 
-
-{-
-
 -- | This should always cancel the child before printing "!!".
-cancel02 :: IO ([String],())
-cancel02 = runParLogged$ runCancelT $ do
+cancel02 :: forall m1 m2 s . 
+            IO ([String],())
+cancel02 = runParLogged$ isDet $ runCancelT $ do
   dbg$ "[parent] Begin test 02"
   iv  <- lift new
-  let p :: forall s . CancelT (Par (Ef NP G NF NB NI) s) ()
-      p = do
-           dbg$ "[child] Running on child thread... block so parent can run"
-           -- lift $ Control.LVish.yield -- Not working!
---           lift$ get iv -- This forces the parent to get scheduled.
-           dbg$ "[child] Woke up, now wait so we will be cancelled..."
-           io$ appreciableDelay
-           pollForCancel
-           dbg$ "!! [child] thread got past delay!"
-  tid <- liftReadOnly $ forkCancelable p
+  let 
+--      p :: forall s . CancelT (Par (Ef NP G NF NB NI) s) ()
+      p :: (m1 ~ Par (Ef NP G NF NB NI) s,
+            PC.ParIVar m1, PC.LVarSched m1, ReadOnlyM m1,  -- Sanity check.
+            -- PC.FutContents m1 CFutFate,  -- ERROR HERE.  Why?
+            -- PC.FutContents m1 (), -- ERROR HERE.  Why?
+            m2 ~ CancelT m1)
+        => m2 ()
+      p = do dbg$ "[child] Running on child thread... block so parent can run"
+             -- lift $ Control.LVish.yield -- Not working!
+  --           lift$ get iv -- This forces the parent to get scheduled.
+             dbg$ "[child] Woke up, now wait so we will be cancelled..."
+             io$ appreciableDelay
+             pollForCancel
+             dbg$ "!! [child] thread got past delay!"
+
+      -- p2 :: (m1 ~ Par (Ef NP G NF NB NI) s,
+      --        m2 ~ CancelT m1)
+      --    => m2 (CT.ThreadId, CFut m1 ())
+
+      p2 :: (PC.ParIVar m, PC.LVarSched m, ReadOnlyM m, 
+             PC.FutContents m CFutFate, PC.FutContents m a) => 
+            CancelT m (CT.ThreadId, CFut m a)
+      p2 = forkCancelable undefined
+
+-- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
+--       p2 :: m2 (CT.ThreadId, CFut m1 ())
+--       p2 = undefined -- forkCancelable p
+
+--      p2 = forkCancelable p
+--  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
+  let tid = undefined
   lift$ put iv ()
   cancel tid
   dbg$ "[parent] Issued cancel, now exiting."
   return ()
 
+-- | A variant of liftReadOnly which works on a particular transformer
+-- stack... creating the GENERAL version of this has proven difficult.
+liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a -> CancelT (Par (Ef p g f b i) s) a
+liftReadOnly2 = error "FINISHME"
+
+{-
 
 case_cancel02 :: IO ()
 case_cancel02 = do (lines,_) <- cancel02
