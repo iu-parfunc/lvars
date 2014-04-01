@@ -784,7 +784,7 @@ busyTakeMVar tids msg mv =
  maxWait = 10000 -- nanoseconds
  timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
  try bkoff | totalWait bkoff >= timeOut = do
-     error "OVER WAIT"
+     error "SchedIdempotent: [debugging] busyTakeMVar exceeded wait.  Deadlocked?"
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
