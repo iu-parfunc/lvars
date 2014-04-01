@@ -15,7 +15,7 @@
 module Control.LVish.CancelT
        (
          -- * The transformer that adds the cancellation capability
-         CancelT(), ThreadId, CFut, CFutFate,
+         CancelT(), ThreadId, CFut, CFutFate(..),
          
          -- * Operations specific to CancelT
          runCancelT,
@@ -33,7 +33,7 @@ module Control.LVish.CancelT
          cancelMe,
 
          -- * Boolean operations with cancellation
-         asyncAnd
+         asyncAnd, asyncAndCPS
        )
        where
 
@@ -306,15 +306,30 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 
 --------------------------------------------------------------------------------
 
--- | A parallel and operation that not only signals its output early when it receives
+-- | A parallel AND operation that not only signals its output early when it receives
 -- a False input, but also attempts to cancel the other, unneeded computation.
 --
--- FIXME: This is unsafe until there is a way to guarantee that read-only
--- computations are performed!
-asyncAnd :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, FutContents p CFutFate, FutContents p ())
-            => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
+asyncAnd :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
+                        FutContents p CFutFate, FutContents p (), FutContents p Bool)
+            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            -> CancelT p Bool
+asyncAnd lef rig = do
+  res <- PC.new 
+  asyncAndCPS lef rig (PC.put res)
+  PC.get res
+
+-- | A continuation-passing-sytle version of `asyncAnd`.  This version is
+-- non-blocking, simply registering a call-back that receives the result of the AND
+-- computation.
+-- 
+-- This version may be more efficient because it saves the allocation of an
+-- additional data structure to synchronize on when waiting on the result.
+asyncAndCPS :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
+                        FutContents p CFutFate, FutContents p ())
+            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
-asyncAnd leftM rightM kont = do
+asyncAndCPS leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch mine theirs m =
