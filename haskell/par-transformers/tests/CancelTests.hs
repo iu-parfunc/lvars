@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds, ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, CPP #-}
 
 module CancelTests -- (tests, runTests)
        where
 
-import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, Par,
+import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, runParPoly, runParPolyIO, Par,
                       isDet, isQD, isND, isReadOnly, liftReadOnly)
 import Control.LVish.CancelT as CT
 import qualified Control.Par.Class as PC
@@ -118,17 +118,63 @@ cancel02 =
 liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a -> CancelT (Par (Ef p g f b i) s) a
 liftReadOnly2 = error "FINISHME"
 
-{-
+
 
 case_cancel02 :: IO ()
 case_cancel02 = do (lines,_) <- cancel02
 --                   assertEqual "" 4 (length lines)
                    assertEqual "" False (or$ map (isInfixOf "!!") lines)
 
+isDet2 :: (e ~ (Ef P G NF B NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
+isDet2 x = x
+
+
+isRO :: (e ~ (Ef NP G NF NB NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
+isRO x = x
+
+#if 1
+cancel02B :: IO ()
+cancel02B = runParPolyIO$ runCancelT $ do
+  dbg$ "Begin test 02B"
+--  _ <- isRO$ forkTemp $ isRO$ do
+  _ <- isRO$ id $ isRO$ do
+      dbg$ "(1) Running on child thread..."
+      cancelMe
+      dbg$ "(2) Running on child thread..."
+  dbg$ "Waiting on main thread..."
+  io$ appreciableDelay
+  dbg$ "Now exiting on main thread."
+  return ()
+#endif
+
+-- | DEBUGGING -- this really should look like an identity function:
+forkTemp :: ( PC.ParIVar m, PC.LVarSched m
+             -- ReadOnlyM m,
+             -- e ~ GetEffects m, 
+             -- NoPut e, 
+            -- , PC.FutContents m CFutFate
+            , PC.FutContents m a -- This line alone screws it up:
+                                 --   Couldn't match type 'NP with 'P
+            ) => 
+            (CancelT m a -> CancelT m a)
+forkTemp = error "FINISHME"
+
+ro1 :: CancelT (Par (Ef NP G NF NB NI) s) ()
+ro1 = undefined
+
+ro2 :: CancelT (Par (Ef NP G NF NB NI) s) ()
+-- ro2 = id ro1
+ro2 = forkTemp ro1
+
+
+main = cancel02B
+
+------------------------------------------------------------
+
 cancel03 :: IO ()
 cancel03 = runParNonDet$ runCancelT $ do
   dbg$ "Begin test 03"
-  tid <- forkCancelable $ do
+  tid <- forkCancelableND $ do
       dbg$ "(1) Running on child thread..."
       cancelMe
       dbg$ "(2) Running on child thread..."
@@ -137,6 +183,9 @@ cancel03 = runParNonDet$ runCancelT $ do
   io$ appreciableDelay
   dbg$ "Now exiting on main thread."
   return ()
+{-
+-}
+{-
 
 --------------------------------------------------------------------------------
 -- -- BOOLEAN TESTS:

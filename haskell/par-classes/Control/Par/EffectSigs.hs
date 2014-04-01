@@ -182,6 +182,7 @@ type QuasiDeterministic e = (NoIO e)
 type Deterministic e = (NoFreeze e, NoIO e)
 type Idempotent    e = (NoBump e,   NoIO e)
 
+-- | A shorthand for several negative constraints.
 type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
 
 #else

@@ -119,7 +119,9 @@ type ThreadId = CState
 -- computation.  That is merely a convenience, and to make typing less of a headache.
 -- It is expected, in particular, that the user will lift the read-only computation
 -- into a non-read-only parent computation at some point.
-forkCancelable :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, 
+forkCancelable :: (PC.ParIVar m, LVarSched m, 
+--                   ReadOnlyM m,
+                   e ~ GetEffects m, NoPut e,
                    FutContents m CFutFate, FutContents m a) => 
                   CancelT m a -> CancelT m (ThreadId, CFut m a)
 forkCancelable act = do
@@ -154,7 +156,7 @@ createTid = CancelT$ do
 -- 
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, ReadOnlyM m, 
+forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, -- ReadOnlyM m, 
                           FutContents m CFutFate, FutContents m a) => 
                          ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
