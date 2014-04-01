@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds, ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 
 module CancelTests -- (tests, runTests)
@@ -56,47 +56,62 @@ cancel01 = runParLogged$ isDet $ runCancelT $ do
 -- case_cancel01 = assertEqual "" ["Begin test 01"] =<< fmap fst cancel01 
 
 -- | This should always cancel the child before printing "!!".
-cancel02 :: forall m1 m2 s . 
-            IO ([String],())
-cancel02 = runParLogged$ isDet $ runCancelT $ do
-  dbg$ "[parent] Begin test 02"
-  iv  <- lift new
-  let 
---      p :: forall s . CancelT (Par (Ef NP G NF NB NI) s) ()
-      p :: (m1 ~ Par (Ef NP G NF NB NI) s,
-            PC.ParIVar m1, PC.LVarSched m1, ReadOnlyM m1,  -- Sanity check.
-            -- PC.FutContents m1 CFutFate,  -- ERROR HERE.  Why?
-            -- PC.FutContents m1 (), -- ERROR HERE.  Why?
-            m2 ~ CancelT m1)
-        => m2 ()
-      p = do dbg$ "[child] Running on child thread... block so parent can run"
-             -- lift $ Control.LVish.yield -- Not working!
-  --           lift$ get iv -- This forces the parent to get scheduled.
-             dbg$ "[child] Woke up, now wait so we will be cancelled..."
-             io$ appreciableDelay
-             pollForCancel
-             dbg$ "!! [child] thread got past delay!"
+cancel02 :: IO ([String],())
+cancel02 = 
+  -- runParLogged$ isDet $ runCancelT comp
+  undefined
+ where 
+  comp :: forall m1 m2 m3 m4 s . 
+          ( m1 ~ Par (Ef NP G NF NB NI) s
+          , PC.ParIVar m1, PC.LVarSched m1, ReadOnlyM m1  -- Sanity check.
+          -- , PC.FutContents m1 CFutFate  -- ERROR HERE.  Why?
+          -- , PC.FutContents m1 () -- ERROR HERE.  Why?
+                                    -- Couldn't match type 'NP with 'P
+                                    -- Inaccessible code in
+                                    --   the type signature for
+          , m2 ~ CancelT m1
+          , m3 ~ Par (Ef P G NF NB NI) s
+          , m4 ~ CancelT m3
+          )
+       => m4 ()
+  comp = do 
+     dbg$ "[parent] Begin test 02"
+     iv  <- lift new
+     let 
+         p1 :: m2 ()
+         p1 = do dbg$ "[child] Running on child thread... block so parent can run"
+                -- lift $ Control.LVish.yield -- Not working!
+     --           lift$ get iv -- This forces the parent to get scheduled.
+                 dbg$ "[child] Woke up, now wait so we will be cancelled..."
+                 io$ appreciableDelay
+                 pollForCancel
+                 dbg$ "!! [child] thread got past delay!"
 
-      -- p2 :: (m1 ~ Par (Ef NP G NF NB NI) s,
-      --        m2 ~ CancelT m1)
-      --    => m2 (CT.ThreadId, CFut m1 ())
+         p2 :: (PC.ParIVar m, PC.LVarSched m, ReadOnlyM m, 
+                PC.FutContents m CFutFate, PC.FutContents m a) => 
+               CancelT m (CT.ThreadId, CFut m a)
+         p2 = forkCancelable undefined
 
-      p2 :: (PC.ParIVar m, PC.LVarSched m, ReadOnlyM m, 
-             PC.FutContents m CFutFate, PC.FutContents m a) => 
-            CancelT m (CT.ThreadId, CFut m a)
-      p2 = forkCancelable undefined
+         p3 :: CancelT m1 (CT.ThreadId, CFut m1 ())
+         p3 = undefined -- This is ok.
+         -- Then here we fail, with a strange "Couldn't match type 'NP with 'P":
+--         p3 = forkCancelable undefined
+--         p3 = forkCancelable p1 -- This gets the same error as the line above.
 
--- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
---       p2 :: m2 (CT.ThreadId, CFut m1 ())
---       p2 = undefined -- forkCancelable p
+{-
+   -- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
+   --       p2 :: m2 (CT.ThreadId, CFut m1 ())
+   --       p2 = undefined -- forkCancelable p
 
---      p2 = forkCancelable p
---  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
-  let tid = undefined
-  lift$ put iv ()
-  cancel tid
-  dbg$ "[parent] Issued cancel, now exiting."
-  return ()
+
+   --      p2 = forkCancelable p
+   --  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
+     let tid = undefined
+     lift$ put iv ()
+     cancel tid
+     dbg$ "[parent] Issued cancel, now exiting."
+-}
+     return ()
 
 -- | A variant of liftReadOnly which works on a particular transformer
 -- stack... creating the GENERAL version of this has proven difficult.
