@@ -236,6 +236,7 @@ instance DeepFrz a => DeepFrz (PureLVar s a) where
   type FrzType (PureLVar s a) = PureLVar Frzn (FrzType a)
   frz = unsafeCoerce#
 
--- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
-logDbgLn_ :: Monad m => t -> t1 -> m ()
+-- FIXME: need an efficient way to extract the logger and access it from the callbacks.
+-- Currently there is no good way to log from IO context:
+logDbgLn_ :: Int -> String -> IO ()
 logDbgLn_ _ _ = return ()
