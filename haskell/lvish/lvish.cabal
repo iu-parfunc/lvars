@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.1.5
+version:             1.1.2.90
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -22,6 +22,7 @@ version:             1.1.1.5
 -- 1.1.0.3 -- expose BulkRetry prototype
 -- 1.1.1.0 -- expose logging routines
 -- 1.1.1.5 -- various bugfixes
+-- 1.1.2   -- bugfixes and small additions, work-around for -fbeta problems
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -65,9 +66,9 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
 
-flag newcontainers
-  description: Use a pre-release version of containers to enable splitting.
-  default: False
+-- flag newcontainers
+--   description: Use a pre-release version of containers to enable splitting.
+--   default: False
 
 flag getonce
   description: Ensure that continuations of get run at most once 
@@ -79,17 +80,18 @@ flag generic
   description: Use (forthcoming) generic interfaces for Par monads.
   default: True
 
-flag beta
-  description: These features are in beta and not fully supported yet.
-  default: True
+-- flag beta
+--   description: These features are in beta and not fully supported yet.
+--   default: True
+
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/lvish
+--    tag:      release-lvish-1.0.0.6
 
 --------------------------------------------------------------------------------
 library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/lvish
---    tag:      release-lvish-1.0.0.6
 
   -- Modules exported by the library.
   exposed-modules:
@@ -117,23 +119,27 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
-  if flag(beta)
-    exposed-modules: 
-                      -- Not quite ready for prime-time yet:
-                      Data.LVar.NatArray
-                      Data.LVar.NatArray.Unsafe
-                      Data.LVar.MaxPosInt
-                      Data.LVar.Counter
-                      Data.LVar.AddRemoveSet
-                      Data.LVar.PNCounter
-                      -------------------------------------------
-                      -- New / Experimental:
-                      Data.LVar.Memo                    
-                      Data.LVar.CycGraph
 
-  if flag(beta) && flag(newcontainers)
-    exposed-modules: 
-                      Control.LVish.BulkRetry
+                    Data.LVar.CycGraph
+
+  -- TEMP: using a flag to control exports doesn't really work with Hackage currently:
+  -- if flag(beta)
+  --   exposed-modules: 
+  --                     -- Not quite ready for prime-time yet:
+  --                     Data.LVar.NatArray
+  --                     Data.LVar.NatArray.Unsafe
+  --                     Data.LVar.MaxPosInt
+  --                     Data.LVar.Counter
+  --                     Data.LVar.AddRemoveSet
+  --                     Data.LVar.PNCounter
+  --                     -------------------------------------------
+  --                     -- New / Experimental:
+  --                     Data.LVar.Memo                    
+
+
+  -- if flag(beta) && flag(newcontainers)
+  --   exposed-modules: 
+  --                     Control.LVish.BulkRetry
 
   -- Modules included in this library but not exported.
   other-modules:
@@ -165,8 +171,9 @@ library
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
-  if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
-   else { build-depends: containers >= 0.5 }
+  -- if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
+  --  else { build-depends: containers >= 0.5 }
+  build-depends: containers >= 0.5
   if flag(generic)
     cpp-options: -DGENERIC_PAR
     build-depends: par-classes     >= 1.0 && < 2.0,
