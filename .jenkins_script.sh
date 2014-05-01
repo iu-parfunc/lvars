@@ -36,7 +36,10 @@ else
 fi  
 #   --reinstall  --force-reinstalls
 
-# Install custom version of monad-par:
+# Temporary hack, install containers first or we run into problems with the sandbox:
+cabal install containers --constraint='containers>=0.5.5.1'
+
+# Also install custom version of monad-par:
 cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
 cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --only-dep $*
 
