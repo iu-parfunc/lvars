@@ -170,9 +170,9 @@ library
 
   if flag(debug)
      -- TEMP: depending on these for visualzing MemoCyc DAGs:
-     build-depends: fgl, graphviz, text
+--     build-depends: fgl, graphviz, text
      cpp-options: -DDEBUG_LVAR
-     cpp-options: -DDEBUG_MEMO
+--     cpp-options: -DDEBUG_MEMO
   if flag(chaselev)
      build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
@@ -227,9 +227,9 @@ test-suite test-lvish
     build-depends:   lvish
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
-       build-depends: fgl, graphviz, text
+--       build-depends: fgl, graphviz, text
        cpp-options: -DDEBUG_LVAR
-       cpp-options: -DDEBUG_MEMO
+--       cpp-options: -DDEBUG_MEMO
     if flag(chaselev)
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
