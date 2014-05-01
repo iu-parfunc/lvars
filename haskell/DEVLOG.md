@@ -639,3 +639,7 @@ Here's an example:
 
 Rather than debug this, it may be better to test whether the non-idem branch does better.
 
+
+[2014.05.01] {Still seeing problems with lotsaPar test}
+--------------------------------------------------------
+
