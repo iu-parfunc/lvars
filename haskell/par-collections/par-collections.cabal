@@ -28,12 +28,12 @@ flag newcontainers
   description: Use (forthcoming) new version of containers.
   default: False
 
-Library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/par-collections
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-collections
 
+Library
   Exposed-modules:
      Data.Par
      Data.Par.Splittable
