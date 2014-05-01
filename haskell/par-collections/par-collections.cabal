@@ -69,11 +69,16 @@ Test-suite test-par-collections
                , time >= 1.4 
                , par-classes >= 1.0 && < 2.0
                , monad-par >= 0.3.4.7
-               , atomic-primops >= 0.4
+               , atomic-primops >= 0.6
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9
   --              , ghc-prim 
+
+  -- Atomic-primops fails when used by template-haskell/ghci on linux:
+  if impl(ghc < 7.7) && os(linux) {
+    buildable: False
+  }
 
   -- (3) Additional depends to test concrete instances:
   -- Build-depends: lvish  >= 1.1.1.0
