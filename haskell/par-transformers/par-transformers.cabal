@@ -54,7 +54,7 @@ Library
                , transformers >= 0.2
                , vector       >= 0.9
                , ghc-prim 
-               , atomic-primops >= 0.4 
+               , atomic-primops >= 0.6 
   ghc-options: -O2
 
 
