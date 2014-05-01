@@ -41,19 +41,22 @@ else
 fi  
 #   --reinstall  --force-reinstalls
 
-# Temporary hack, install containers first or we run into problems with the sandbox:
-# $CABAL install containers --constraint='containers>=0.5.5.1'
+# Simpler but not ideal:
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
 
-# Also install custom version of monad-par:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --only-dep $*
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
+# # Temporary hack, install containers first or we run into problems with the sandbox:
+# # $CABAL install containers --constraint='containers>=0.5.5.1'
 
-# Avoding the atomic-primops related bug on linux / GHC 7.6:
-if ! [ `uname` == "Linux" ]; then  
-  for path in $PKGS; do 
-    echo "Test package in path $path."
-    cd $TOP/$path
-    # Assume cabal 1.20+:
-    cabal test --show-details=$SHOWDETAILS
-  done
-fi
+# # Also install custom version of monad-par:
+# $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --only-dep $*
+# $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
+
+# # Avoding the atomic-primops related bug on linux / GHC 7.6:
+# if ! [ `uname` == "Linux" ]; then  
+#   for path in $PKGS; do 
+#     echo "Test package in path $path."
+#     cd $TOP/$path
+#     # Assume cabal 1.20+:
+#     cabal test --show-details=$SHOWDETAILS
+#   done
+# fi
