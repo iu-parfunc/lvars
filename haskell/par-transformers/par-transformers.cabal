@@ -88,3 +88,7 @@ Test-suite test-par-transformers
 
   ghc-options: -threaded
 
+    -- Atomic-primops fails when used by template-haskell/ghci on linux:
+    if impl(ghc < 7.7) && os(linux) {
+      buildable: False
+    }
