@@ -26,7 +26,7 @@ import Control.LVish.Types (DbgCfg(..))
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
 
-import Data.Concurrent.Deque.ChaseLev as CL
+import qualified Data.Concurrent.Deque.ChaseLev as CL
 
 type Deque a = CL.ChaseLevDeque a
 newDeque = CL.newQ
