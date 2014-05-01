@@ -76,9 +76,15 @@ Test-suite test-par-collections
   -- (2) Dependencies common to test files and the library:
   Build-depends: base >= 4 && < 5
                , time >= 1.4 
+<<<<<<< HEAD
                , par-classes >= 1.1 && < 2.0
                , monad-par >= 0.3.4.6
                , atomic-primops >= 0.6
+=======
+               , par-classes >= 1.0 && < 2.0
+               , monad-par >= 0.3.4.7
+               , atomic-primops >= 0.4
+>>>>>>> 9cba622... Install par-* modules as well as lvish module during jenkins test.  Not yet running all test-suites, however.
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9
@@ -95,5 +101,4 @@ Test-suite test-par-collections
   -- Debugging info:
   -- ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
   -- ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
-
 
