@@ -77,13 +77,19 @@ flag getonce
                (by using extra synchronization)
   default: False
 
+
+-- flag beta
+--   description: These features are in beta and not fully supported yet.
+--   default: True
+
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/lvish
+--    tag:      release-lvish-1.0.0.6
+
 --------------------------------------------------------------------------------
 library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/lvish
---    tag:      release-lvish-1.0.0.6
 
   -- Modules exported by the library.
   exposed-modules:
