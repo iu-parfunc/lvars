@@ -22,8 +22,9 @@ module Data.LVar.Generic.Internal
        where
 
 import           Control.LVish.Types
+import           Control.Par.EffectSigs
 import           Control.LVish.Basics
-import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.Internal (Par)
 import           Control.LVish.SchedIdempotent (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
@@ -48,7 +49,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
 
   -- | Add a handler function which is called whenever an element is
   -- added to the LVar.
-  addHandler :: Maybe HandlerPool -> f s elt -> (elt -> Par d s ()) -> Par d s ()
+  addHandler :: Maybe HandlerPool -> f s elt -> (elt -> Par e s ()) -> Par e s ()
 
   -- | An /O(1)/ operation that atomically switches the LVar into a
   -- frozen state.  Any threads waiting on the freeze are woken.
@@ -59,7 +60,7 @@ class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
   --
   -- However, note that `Frzn` LVars cannot be folded, because they may have
   -- nondeterministic ordering after being frozen.  See `sortFreeze`.
-  freeze :: f s a -> Par QuasiDet s (f Frzn a)
+  freeze :: HasFreeze e => f s a -> Par e s (f Frzn a)
 
   -- | Perform a freeze followed by a /sort/ operation which guarantees
   -- that the elements produced will be produced in a deterministic order.
@@ -79,9 +80,9 @@ class LVarWBottom (f :: * -> * -> *) where
   -- | Requirements for contents types of this LVar.
   type LVContents f a :: Constraint
   
-  newBottom :: (LVContents f a) => Par d s (f s a)
+  newBottom :: (LVContents f a) => Par e s (f s a)
 
-  -- singletonLV :: (LVContents f a) => a -> Par d s (f s a)
+  -- singletonLV :: (LVContents f a) => a -> Par e s (f s a)
 
 -- | Carries a `Foldable` type, but you don't get to know which one.
 --   The purpose of this type is that `sortFreeze` should not have

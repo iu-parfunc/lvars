@@ -86,7 +86,7 @@ tests = $(testGroupGenerator)
 case_v9a :: Assertion
 case_v9a = assertEqual "basic NatArray" 4 =<< v9a
 v9a :: IO Word8
-v9a = runParIO$ do
+v9a = runParNonDet$ do
   arr <- NA.newNatArray 10
   NA.put arr 5 (4::Word8)
   NA.get arr 5
@@ -97,7 +97,7 @@ v9a = runParIO$ do
 -- case_i9b = exceptionOrTimeOut 0.3 [] i9b
 -- -- | A test to make sure that we get an error when we should.
 -- i9b :: IO Word8
--- i9b = runParIO$ do
+-- i9b = runParNonDet$ do
 --   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
 --   fork $ do NA.get arr 5
 --             logDbgLn "Unblocked!  Shouldn't see this."
@@ -108,7 +108,7 @@ v9a = runParIO$ do
 case_i9c :: Assertion
 case_i9c = exceptionOrTimeOut 0.3 ["thread blocked indefinitely"] i9c
 i9c :: IO Word8
-i9c = runParIO$ do
+i9c = runParNonDet$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logDbgLn 1 "Unblocked!  Shouldn't see this."
@@ -118,7 +118,7 @@ i9c = runParIO$ do
 case_v9d :: Assertion
 case_v9d = assertEqual "NatArray blocking/unblocking" 99 =<< v9d
 v9d :: IO Word8
-v9d = runParIO$ do
+v9d = runParNonDet$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logDbgLn 1 "Unblocked! Good."
@@ -138,7 +138,7 @@ out9e = fromIntegral$ in9e * (in9e + 1) `quot` 2 -- 5000050000
 
 -- | Fill in all elements of a NatArray, and then sum them.
 v9e :: IO Word64
-v9e = runParIO$ do
+v9e = runParNonDet$ do
   let size = in9e
   arr <- NA.newNatArray size
   fork $
@@ -167,7 +167,7 @@ case_v9e_NatArr = assertEqual "Scale up a bit" out9e =<< v9e
 case_i9h :: Assertion
 case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
 i9i :: IO Word
-i9i = runParIO$ do
+i9i = runParNonDet$ do
   arr <- NA.newNatArray 1
   NA.put arr 0 0
   NA.get arr 0
@@ -187,7 +187,7 @@ case_v9f1_fillIvarArr :: Assertion
 --              Bafflingly that happens on DEBUG=2 but not 5.
 case_v9f1_fillIvarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
-v9f = runParIO$ do
+v9f = runParNonDet$ do
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
@@ -205,7 +205,7 @@ v9f = runParIO$ do
 
 -- | A variation of the previous, change the order work is spawned to tickle the scheduler differently.
 case_v9f2_seq_fillIvarArray :: Assertion
-case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParIO (do 
+case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
@@ -236,7 +236,7 @@ case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:"
 case_v9g_istruct :: Assertion
 case_v9g_istruct = assertEqual "IStructure, compare effficiency:" out9e =<< v9g
 v9g :: IO Word64
-v9g = runParIO$ do
+v9g = runParNonDet$ do
   let size = in9e
   arr <- ISt.newIStructure size      
   fork $

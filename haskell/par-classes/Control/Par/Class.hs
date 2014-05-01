@@ -105,11 +105,11 @@ class ParMonad m => ParFuture m where
   --
   spawn  :: (NFData a, FutContents m a) => m a -> m (Future m a)
 
--- | Like 'spawn', but the result is only head-strict, not fully-strict.
+  -- | Like 'spawn', but the result is only head-strict, not fully-strict.
   spawn_ :: FutContents m a => m a -> m (Future m a)
               
   -- | Wait for the result of a future, and then return it.
-  get    :: Future m a -> m a
+  get    :: FutContents m a => Future m a -> m a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
@@ -136,7 +136,7 @@ class ParFuture m  => ParIVar m  where
   
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
+  new  :: forall a . FutContents m a => m (Future m a) 
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -261,7 +261,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 class (Functor m, Monad m) => ParIMap m  where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
-  type IMap m k :: * -> *
+  type IMap m :: * -> * -> *
 
   -- | Different implementations may place different constraints on
   -- what is allowable inside a Future.  For example, some

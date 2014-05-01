@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds, TypeFamilies #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
@@ -39,7 +40,7 @@ case_i7b = do
 -- | A quasi-deterministic example.
 i7b :: IO (M.Map Int (S.Set Float))
 -- A manual nested freeze instead of DeepFrz:
-i7b = runParIO $ do
+i7b = runParQuasiDet $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
   s2 <- IS.newEmptySet
@@ -58,7 +59,7 @@ i7b = runParIO $ do
 -- | This example is valid because two modifies may race.
 v7c :: IO (M.Map Int (S.Set Float))
 -- Do we need a "deep freeze" that freezes nested structures?
-v7c = runParIO $ do
+v7c = runParQuasiDet $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
   f1 <- IV.spawn_ $ IM.insert 1 s1 mp 

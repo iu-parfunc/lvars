@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns, CPP, ScopedTypeVariables, RankNTypes #-}
+{-# LANGUAGE DataKinds #-}
 
 -- | This provides additional helpers that depend specifically on the lvish package.
 
@@ -18,6 +19,7 @@ import Test.HUnit as HU
 
 -- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Control.LVish (runParDetailed, Par, OutDest(..), DbgCfg(..))
+import Control.Par.EffectSigs 
 import Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -29,7 +31,7 @@ stressTest :: Show a =>
               Word -- ^ Number of repetitions 
            -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
                    -- number of tasks that can run in parallel; otherwise this will deadlock.
-           -> (forall s . Par d s a)   -- ^ Computation to run
+           -> (forall s . Par (Ef P G F B I) s a)   -- ^ Computation to run
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
 stressTest reps workers comp oracle = 

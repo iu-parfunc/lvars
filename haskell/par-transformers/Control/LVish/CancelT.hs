@@ -1,6 +1,7 @@
 {-# LANGUAGE Unsafe #-}
 
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -13,25 +14,35 @@
 
 module Control.LVish.CancelT
        (
-         -- * The transformer that adds thecancellation capability
-         CancelT(), ThreadId,
+         -- * The transformer that adds the cancellation capability
+         CancelT(), ThreadId, CFut, CFutFate(..),
          
          -- * Operations specific to CancelT
          runCancelT,
-         forkCancelable, createTid, forkCancelableWithTid,
+
+         -- * Forking computations that may be canceled
+         forkCancelable, forkCancelableND,
+
+         -- * More detailed interface, separating forking and TID creation
+         createTid, forkCancelableWithTid, forkCancelableNDWithTid,
+
+         -- * Performing cancellation, or waiting for results
+         readCFut,
          cancel,         
          pollForCancel,
          cancelMe,
 
          -- * Boolean operations with cancellation
-         asyncAnd
+         asyncAnd, asyncAndCPS
        )
        where
 
 import Control.Monad.State as S
 import Data.IORef
+-- import Data.LVar.IVar
 
 import Control.Par.Class as PC
+import Control.Par.EffectSigs as E
 import Control.Par.Class.Unsafe (ParMonad(..))
 
 import qualified Data.Atomics.Counter as C
@@ -56,14 +67,24 @@ instance MonadTrans CancelT where
 
 data CPair = CPair !Bool ![CState]
 
+-- | Futures that may be canceled before the result is available.
+data CFut m a = CFut (Future m CFutFate) (Future m a)
+-- Nothing signifies that it was canceled, whereas Just that it completed.
+
+-- | (Internal datatype).  In a deterministic scenario, a `CFut` can only be canceled or read, not both.
+data CFutFate = Canceled | Completed
+  deriving (Show,Read,Eq)
+
 --------------------------------------------------------------------------------
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it is
 -- possible to cancel subtrees of computations.
-runCancelT :: PC.ParMonad m => CancelT m a -> m a
+runCancelT :: (PC.ParMonad m) => CancelT m a -> m a
 runCancelT (CancelT st) = do
   ref <- internalLiftIO $ newIORef (CPair True []) 
   evalStateT st (CState ref) 
+
+
 
 -- Check for cancellation of our thread.
 poll :: (PC.ParMonad m, LVarSched m) => CancelT m Bool
@@ -79,7 +100,9 @@ pollForCancel = do
   b <- poll
   unless b $ cancelMe
 
--- | Self cancellation.  Equivalent to the parent calling `cancel`.
+-- | Self cancellation.  Not the same as the parent calling `cancel`, because
+-- cancelMe only cancels the current leaf of the computation tree, not its siblings
+-- (not the entire subtree under a forkCancelable, that is).
 cancelMe :: (LVarSched m) => CancelT m ()
 cancelMe = lift $ returnToSched
 
@@ -88,13 +111,37 @@ type ThreadId = CState
 
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
 -- (and all its descendents).  This is equivalent to `createTid` followed by `forkCancelableWithTid`.
-forkCancelable :: (PC.ParMonad m, LVarSched m) => CancelT m () -> CancelT m ThreadId
+-- 
+-- This version is expected to retain /determinism/.  Therefore, the canceled
+-- computations must be read only.
+--
+-- Finally, note that this currently returns a value in the same monad as the child
+-- computation.  That is merely a convenience, and to make typing less of a headache.
+-- It is expected, in particular, that the user will lift the read-only computation
+-- into a non-read-only parent computation at some point.
+forkCancelable :: (PC.ParIVar m, LVarSched m, 
+--                   ReadOnlyM m,
+                   e ~ GetEffects m, NoPut e,
+                   FutContents m CFutFate, FutContents m a) => 
+                  CancelT m a -> CancelT m (ThreadId, CFut m a)
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     tid <- createTid
-    forkCancelableWithTid tid act
-    return tid
+    fut <- forkCancelableWithTid tid act
+    return $! (tid,fut)
+
+-- | This is a version of `forkCancelable` which allows side-effecting computation to
+--   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
+--   introduces nondeterminism and must register the "IO effect".
+forkCancelableND :: (PC.ParIVar m, LVarSched m, HasIOM m, 
+                     FutContents m CFutFate, FutContents m a) => 
+                  CancelT m a -> CancelT m (ThreadId, CFut m a)
+-- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
+forkCancelableND act = do
+    tid <- createTid
+    fut <- forkCancelableNDWithTid tid act
+    return $! (tid, fut)
 
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
 -- computations in question.  For that purpose, we provide a two-phase interface:
@@ -105,12 +152,44 @@ createTid = CancelT$ do
     newSt <- lift$ internalLiftIO$ newIORef (CPair True [])
     return (CState newSt)
 
--- | Fork a thread whil emaking it cancelable with the provided threadId argument.
+-- | Add a new computation to an existing cancelable thread.
+-- 
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParMonad m, LVarSched m) => ThreadId -> CancelT m () -> CancelT m ()
+forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, -- ReadOnlyM m, 
+                          FutContents m CFutFate, FutContents m a) => 
+                         ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
-forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
+forkCancelableWithTid tid act = forkInternal tid act
+
+-- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
+forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m, 
+                            FutContents m CFutFate, FutContents m a) => 
+                         ThreadId -> CancelT m a -> CancelT m (CFut m a)
+{-# INLINE forkCancelableNDWithTid #-}
+forkCancelableNDWithTid tid act = forkInternal tid act
+
+
+-- Internal version -- no rules!
+forkInternal :: forall m a . 
+                 (PC.ParIVar m, LVarSched m, 
+                  FutContents m CFutFate, FutContents m a) => 
+                 ThreadId -> CancelT m a -> CancelT m (CFut m a)
+{-# INLINE forkInternal #-} 
+forkInternal (CState childRef) (CancelT act) = CancelT$ do
+    -- The following line gives me this GHC panic:
+    -- ghc: panic! (the 'impossible' happened)
+    --   (GHC version 7.6.3 for x86_64-apple-darwin):
+    --         cgLookupPanic (probably invalid Core; try -dcore-lint)
+    --     cobox{v aQh} [lid]
+    --     static binds for:
+    --     local binds for:
+    --     main:Control.LVish.CancelT.$WCPair{v rM6} [gid[DataConWrapper]]
+--    fate   <- lift (PC.new :: m CFutFate)
+
+    fate   <- lift (PC.new :: m (Future m CFutFate))
+    result <- lift (PC.new :: m (Future m a))
+
     CState parentRef <- S.get
     -- Create new child state:  
     live <- lift$ internalLiftIO $ 
@@ -120,17 +199,33 @@ forkCancelableWithTid (CState childRef) (CancelT act) = CancelT$ do
           (CPair True (CState childRef : ls), True)
         else -- The current thread has already been canceled: DONT fork:
           (orig, False)
+    let act' = do x <- act 
+                  lift $ PC.put_ result x
+                  return ()
     if live then
-       lift $ forkLV (evalStateT act (CState childRef))
+       lift $ forkLV (evalStateT act' (CState childRef))
       else cancelMe'
-    return ()
+    return $! CFut fate result
 
+
+-- | Do a blocking read on the result of a cancelable-future.  This is an ERROR if
+--   the future has been cancelled.  (And for determinism, the reverse is also true.
+--   A cancellation after this read is an error.)
+readCFut :: (PC.ParIVar m, HasPut (GetEffects m), 
+             FutContents m CFutFate, FutContents m a)
+         => CFut m a -> m a
+readCFut (CFut fate res) = do 
+  PC.put_ fate Completed -- Possible throw a multiple-put error.
+  PC.get res
 
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
-cancel (CState ref) = do
+cancel :: (PC.ParMonad m, Monad m, HasPut (GetEffects m)) => ThreadId -> CancelT m ()
+cancel = internal_cancel
+
+internal_cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
+internal_cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
   -- be added to that node.
@@ -138,14 +233,17 @@ cancel (CState ref) = do
     if flg 
      then (CPair False [], ls)
      else (orig, [])
+
+  -- FIXME: write the fates of all associated futures -- lift $ PC.put_ fate 
+
   -- We could do this traversal in parallel if we liked...
-  S.forM_ chldrn cancel
+  S.forM_ chldrn internal_cancel
 
 cancelMe' :: LVarSched m => StateT CState m ()
 cancelMe' = unCancelT cancelMe
   
 instance (PC.ParSealed m) => PC.ParSealed (CancelT m) where
-  type GetSession (CancelT m) = GetSession m
+  type GetSession (CancelT m) = PC.GetSession m
   
 instance (PC.ParMonad m, PC.ParIVar m, PC.LVarSched m) =>
          PC.LVarSched (CancelT m) where
@@ -219,15 +317,30 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 
 --------------------------------------------------------------------------------
 
--- | A parallel and operation that not only signals its output early when it receives
+-- | A parallel AND operation that not only signals its output early when it receives
 -- a False input, but also attempts to cancel the other, unneeded computation.
 --
--- FIXME: This is unsafe until there is a way to guarantee that read-only
--- computations are performed!
-asyncAnd :: forall p . (PC.ParMonad p, LVarSched p)
-            => ((CancelT p) Bool) -> (CancelT p Bool) -> (Bool -> CancelT p ()) -> CancelT p ()
+asyncAnd :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
+                        FutContents p CFutFate, FutContents p (), FutContents p Bool)
+            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            -> CancelT p Bool
+asyncAnd lef rig = do
+  res <- PC.new 
+  asyncAndCPS lef rig (PC.put res)
+  PC.get res
+
+-- | A continuation-passing-sytle version of `asyncAnd`.  This version is
+-- non-blocking, simply registering a call-back that receives the result of the AND
+-- computation.
+-- 
+-- This version may be more efficient because it saves the allocation of an
+-- additional data structure to synchronize on when waiting on the result.
+asyncAndCPS :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
+                        FutContents p CFutFate, FutContents p ())
+            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
-asyncAnd leftM rightM kont = do
+asyncAndCPS leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch mine theirs m =
@@ -249,7 +362,7 @@ asyncAnd leftM rightM kont = do
                                  -- but since we have the counter anyway let us dedup:
                                  do n <- internalLiftIO$ C.incrCounter 100 cnt                                    
                                     case n of
-                                      100 -> do cancel theirs; kont False
+                                      100 -> do internal_cancel theirs; kont False
                                       101 -> kont False
                                       200 -> return ()
   tid1 <- createTid
@@ -258,5 +371,4 @@ asyncAnd leftM rightM kont = do
   launch tid2 tid1 rightM
 
   return ()
-
 

@@ -43,6 +43,7 @@ import           Data.List (intersperse)
 import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
+import           Control.Par.EffectSigs
 import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import           Data.LVar.Generic as G
@@ -117,7 +118,7 @@ instance Show a => Show (IStructure Trvrsbl a) where
 ------------------------------------------------------------------------------
 
 -- | Retrieve the number of slots in the `IStructure`.
-getLength :: IStructure s a -> Par d s Int
+getLength :: IStructure s a -> Par e s Int
 getLength (IStructure vec) = return $! V.length vec
 
 -- Physical identity, just as with IORefs.
@@ -126,13 +127,13 @@ getLength (IStructure vec) = return $! V.length vec
 
 -- | Create a new, empty, monotonically growing 'IStructure' of a given size.
 --   All entries start off as zero, which must be \"bottom\".
-newIStructure :: Int -> Par d s (IStructure s elt)
+newIStructure :: Int -> Par e s (IStructure s elt)
 newIStructure len = fmap IStructure $
                     V.generateM len (\_ -> IV.new)
 
 -- | Register handlers on each internal IVar as it is created.
 --   This operation should be more efficient than `newIStructure` followed by `forEachHP`.
-newIStructureWithCallback :: Int -> (Int -> elt -> Par d s ()) -> Par d s (IStructure s elt)
+newIStructureWithCallback :: Int -> (Int -> elt -> Par e s ()) -> Par e s (IStructure s elt)
 newIStructureWithCallback len fn =
   fmap IStructure $
    V.generateM len $ \ix -> do 
@@ -142,7 +143,7 @@ newIStructureWithCallback len fn =
 
 -- | /O(N)/ complexity, unfortunately. This implementation of `IStructure`s requires
 -- freezing each of the individual IVars stored in the array.
-freezeIStructure :: IStructure s a -> LV.Par QuasiDet s (V.Vector (Maybe a))
+freezeIStructure :: HasFreeze e => IStructure s a -> LV.Par e s (V.Vector (Maybe a))
 freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 
 {-# INLINE forEachHP #-}
@@ -151,8 +152,8 @@ freezeIStructure (IStructure vec) = V.mapM IV.freezeIVar vec
 forEachHP :: -- (Eq a) =>
              Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> IStructure s a              -- ^ `IStructure` to listen to
-          -> (Int -> a -> Par d s ())    -- ^ callback
-          -> Par d s ()
+          -> (Int -> a -> Par e s ())    -- ^ callback
+          -> Par e s ()
 forEachHP hp (IStructure vec) callb =
   -- F.traverse_ (\iv -> IV.addHandler hp iv callb) vec
   for_ (0, V.length vec) $ \ ix ->
@@ -163,7 +164,7 @@ forEachHP hp (IStructure vec) callb =
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
 forVec :: Storable a =>
-          M.IOVector a -> (Int -> a -> Par d s ()) -> Par d s ()
+          M.IOVector a -> (Int -> a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0 
   where
     len = M.length vec
@@ -176,7 +177,7 @@ forVec vec fn = loop 0
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set
 forEach :: (Num a, Storable a, Eq a) =>
-           NatArray s a -> (Int -> a -> Par d s ()) -> Par d s ()
+           NatArray s a -> (Int -> a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 -}
 
@@ -187,14 +188,14 @@ forEach = forEachHP Nothing
 
 -- | Put a single element in the `IStructure` at a given index.  That index must be previously empty.  (WHNF)
 -- Strict in the element being put in the set.
-put_ :: Eq elt => IStructure s elt -> Int -> elt -> Par d s ()
+put_ :: (Eq elt, HasPut e) => IStructure s elt -> Int -> elt -> Par e s ()
 put_ (IStructure vec) !ix !elm = IV.put_ (vec ! ix) elm
 
 -- | Put a single element in the `IStructure` at a given index.  This variant is deeply strict (`NFData`).
-put :: (NFData elt, Eq elt) => IStructure s elt -> Int -> elt -> Par d s ()
+put :: (NFData elt, Eq elt, HasPut e) => IStructure s elt -> Int -> elt -> Par e s ()
 put (IStructure vec) !ix !elm = IV.put (vec ! ix) elm
 
 {-# INLINE get #-}
 -- | Wait for the indexed entry to contain a value, and return that value.
-get :: Eq elt => IStructure s elt -> Int -> Par d s elt
+get :: (Eq elt, HasGet e) => IStructure s elt -> Int -> Par e s elt
 get (IStructure vec) !ix = IV.get (vec ! ix)

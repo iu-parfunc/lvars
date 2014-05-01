@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, DataKinds #-}
 {-# LANGUAGE KindSignatures, EmptyDataDecls #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -O2 #-}
 
 {-|
@@ -35,20 +36,20 @@ import Data.LVar.IVar as IV
 --------------------------------------------------------------------------------
 
 -- | A Memo-table that stores cached results of executing a `Par` computation.
-data Memo (d::Determinism) s a b =
+data Memo (e::EffectSig) s a b =
      Memo !(IS.ISet s a)
           !(IM.IMap a s b)
 
 -- | A result from a lookup in a Memo-table, unforced.
 --   The two-stage `getLazy`/`force` lookup is useful to separate
 --   spawning the work from demanding its result.
-newtype MemoFuture (d :: Determinism) s b = MemoFuture (Par d s b)
+newtype MemoFuture (e :: EffectSig) s b = MemoFuture (Par e s b)
 
 --------------------------------------------------------------------------------
 
 -- | Reify a function in the `Par` monad as an explicit memoization table.
-makeMemo :: (Ord a, Eq b, Show a, Show b) =>
-            (a -> Par d s b) -> Par d s (Memo d s a b)
+makeMemo :: (HasPut e, Ord a, Eq b, Show a, Show b) =>
+            (a -> Par e s b) -> Par e s (Memo e s a b)
 makeMemo fn = do
   st <- newEmptySet
   mp <- IM.newEmptyMap
@@ -63,7 +64,7 @@ makeMemo fn = do
 
 -- | Read from the memo-table.  If the value must be computed, do that right away and
 -- block until its complete.
-getMemo :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s b 
+getMemo :: (HasPut e, HasGet e, Ord a, Eq b) => Memo e s a b -> a -> Par e s b 
 getMemo tab key =
   do fut <- getLazy tab key
      force fut
@@ -71,7 +72,7 @@ getMemo tab key =
 -- | Begin to read from the memo-table.  Initiate the computation if the key is not
 -- already present.  Don't block on the computation being complete, rather, return a
 -- future.
-getLazy :: (Ord a, Eq b) => Memo d s a b -> a -> Par d s (MemoFuture d s b)
+getLazy :: (HasPut e, HasGet e, Ord a, Eq b) => Memo e s a b -> a -> Par e s (MemoFuture e s b)
 getLazy (Memo st mp) key = do 
   IS.insert key st
   return $! MemoFuture (IM.getKey key mp)
@@ -79,7 +80,7 @@ getLazy (Memo st mp) key = do
 
 -- | This will throw exceptions that were raised during the computation, INCLUDING
 -- multiple put.
-force :: MemoFuture d s b -> Par d s b 
+force :: MemoFuture e s b -> Par e s b 
 force (MemoFuture pr) = pr
 -- FIXME!!! Where do errors in the memoized function (e.g. multiple put) surface?
 -- We must pick a determined, consistent place.

@@ -1,10 +1,14 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds, ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes, CPP #-}
 
-module CancelTests (tests, runTests) where
+module CancelTests -- (tests, runTests)
+       where
 
-import Control.LVish (logDbgLn, runParLogged, runParIO, runPar, Par)
+import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, runParPoly, runParPolyIO, Par,
+                      isDet, isQD, isND, isReadOnly, liftReadOnly)
 import Control.LVish.CancelT as CT
 import qualified Control.Par.Class as PC
+import Control.Par.EffectSigs
 import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
 -- import Control.LVish.Unsafe ()
 import Data.LVar.IVar as IV
@@ -19,21 +23,29 @@ import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (testGroupGenerator)
 
 --------------------------------------------------------------------------------
+-- Helpers:
 
+-- Invisible, untracked, unsafe IO:
 io :: ParMonad m => IO a -> m a
 io = internalLiftIO
 
+appreciableDelay :: IO ()
+appreciableDelay = threadDelay (100 * 1000)
+
 -- FIXME: Need to replace this with something that will work when NOT in debug mode.
-dbg :: String -> CancelT (Par d s) ()
+dbg :: String -> CancelT (Par e s) ()
 dbg = lift . logDbgLn (-1)
+
+--------------------------------------------------------------------------------
+-- Tests:
 
 -- case_cancel01 =
 
--- type MyM a = CancelT (Par d s)
+-- type MyM a = CancelT (Par e s)
 
 -- | This deadlocks, because the last computation was canceled!
 cancel01 :: IO ([String],())
-cancel01 = runParLogged$ runCancelT $ do
+cancel01 = runParLogged$ isDet $ runCancelT $ do
   dbg$ "Begin test 01"
   cancelMe
   dbg$ "Past cancelation point!"
@@ -45,31 +57,124 @@ cancel01 = runParLogged$ runCancelT $ do
 
 -- | This should always cancel the child before printing "!!".
 cancel02 :: IO ([String],())
-cancel02 = runParLogged$ runCancelT $ do
-  dbg$ "[parent] Begin test 02"
-  iv  <- lift new
-  tid <- forkCancelable $ do
-           dbg$ "[child] Running on child thread... block so parent can run"
-           -- lift $ Control.LVish.yield -- Not working!
-           lift$ get iv -- This forces the parent to get scheduled.
-           dbg$ "[child] Woke up, now wait so we will be cancelled..."
-           io$ appreciableDelay
-           pollForCancel
-           dbg$ "!! [child] thread got past delay!"
-  lift$ put iv ()
-  cancel tid
-  dbg$ "[parent] Issued cancel, now exiting."
-  return ()
+cancel02 = 
+  -- runParLogged$ isDet $ runCancelT comp
+  undefined
+ where 
+  comp :: forall m1 m2 m3 m4 s . 
+          ( m1 ~ Par (Ef NP G NF NB NI) s
+          , PC.ParIVar m1, PC.LVarSched m1, ReadOnlyM m1  -- Sanity check.
+          -- , PC.FutContents m1 CFutFate  -- ERROR HERE.  Why?
+          -- , PC.FutContents m1 () -- ERROR HERE.  Why?
+                                    -- Couldn't match type 'NP with 'P
+                                    -- Inaccessible code in
+                                    --   the type signature for
+          , m2 ~ CancelT m1
+          , m3 ~ Par (Ef P G NF NB NI) s
+          , m4 ~ CancelT m3
+          )
+       => m4 ()
+  comp = do 
+     dbg$ "[parent] Begin test 02"
+     iv  <- lift new
+     let 
+         p1 :: m2 ()
+         p1 = do dbg$ "[child] Running on child thread... block so parent can run"
+                -- lift $ Control.LVish.yield -- Not working!
+     --           lift$ get iv -- This forces the parent to get scheduled.
+                 dbg$ "[child] Woke up, now wait so we will be cancelled..."
+                 io$ appreciableDelay
+                 pollForCancel
+                 dbg$ "!! [child] thread got past delay!"
+
+         p2 :: (PC.ParIVar m, PC.LVarSched m, ReadOnlyM m, 
+                PC.FutContents m CFutFate, PC.FutContents m a) => 
+               CancelT m (CT.ThreadId, CFut m a)
+         p2 = forkCancelable undefined
+
+         p3 :: CancelT m1 (CT.ThreadId, CFut m1 ())
+         p3 = undefined -- This is ok.
+         -- Then here we fail, with a strange "Couldn't match type 'NP with 'P":
+--         p3 = forkCancelable undefined
+--         p3 = forkCancelable p1 -- This gets the same error as the line above.
+
+{-
+   -- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
+   --       p2 :: m2 (CT.ThreadId, CFut m1 ())
+   --       p2 = undefined -- forkCancelable p
+
+
+   --      p2 = forkCancelable p
+   --  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
+     let tid = undefined
+     lift$ put iv ()
+     cancel tid
+     dbg$ "[parent] Issued cancel, now exiting."
+-}
+     return ()
+
+-- | A variant of liftReadOnly which works on a particular transformer
+-- stack... creating the GENERAL version of this has proven difficult.
+liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a -> CancelT (Par (Ef p g f b i) s) a
+liftReadOnly2 = error "FINISHME"
+
+
 
 case_cancel02 :: IO ()
 case_cancel02 = do (lines,_) <- cancel02
 --                   assertEqual "" 4 (length lines)
                    assertEqual "" False (or$ map (isInfixOf "!!") lines)
 
+isDet2 :: (e ~ (Ef P G NF B NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
+isDet2 x = x
+
+
+isRO :: (e ~ (Ef NP G NF NB NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
+isRO x = x
+
+#if 1
+cancel02B :: IO ()
+cancel02B = runParPolyIO$ runCancelT $ do
+  dbg$ "Begin test 02B"
+--  _ <- isRO$ forkTemp $ isRO$ do
+  _ <- isRO$ id $ isRO$ do
+      dbg$ "(1) Running on child thread..."
+      cancelMe
+      dbg$ "(2) Running on child thread..."
+  dbg$ "Waiting on main thread..."
+  io$ appreciableDelay
+  dbg$ "Now exiting on main thread."
+  return ()
+#endif
+
+-- | DEBUGGING -- this really should look like an identity function:
+forkTemp :: ( PC.ParIVar m, PC.LVarSched m
+             -- ReadOnlyM m,
+             -- e ~ GetEffects m, 
+             -- NoPut e, 
+            -- , PC.FutContents m CFutFate
+            , PC.FutContents m a -- This line alone screws it up:
+                                 --   Couldn't match type 'NP with 'P
+            ) => 
+            (CancelT m a -> CancelT m a)
+forkTemp = error "FINISHME"
+
+ro1 :: CancelT (Par (Ef NP G NF NB NI) s) ()
+ro1 = undefined
+
+ro2 :: CancelT (Par (Ef NP G NF NB NI) s) ()
+-- ro2 = id ro1
+ro2 = forkTemp ro1
+
+
+main = cancel02B
+
+------------------------------------------------------------
+
 cancel03 :: IO ()
-cancel03 = runParIO$ runCancelT $ do
+cancel03 = runParNonDet$ runCancelT $ do
   dbg$ "Begin test 03"
-  tid <- forkCancelable $ do
+  tid <- forkCancelableND $ do
       dbg$ "(1) Running on child thread..."
       cancelMe
       dbg$ "(2) Running on child thread..."
@@ -78,9 +183,9 @@ cancel03 = runParIO$ runCancelT $ do
   io$ appreciableDelay
   dbg$ "Now exiting on main thread."
   return ()
-
-appreciableDelay :: IO ()
-appreciableDelay = threadDelay (100 * 1000)
+{-
+-}
+{-
 
 --------------------------------------------------------------------------------
 -- -- BOOLEAN TESTS:
@@ -118,14 +223,14 @@ case_andTreeT :: Assertion
 case_andTreeT = assertEqual "" True $ runPar $ runCancelT $ andTreeT 16
 
 -- | Takes a depth N and does 2^N operations in a binary tree
-andTreeF :: Int -> CancelT (Par d s) Bool
+andTreeF :: Int -> CancelT (Par e s) Bool
 andTreeF 0 = return False
 andTreeF depth = do
   v <- PC.new
   CT.asyncAnd (andTreeF (depth-1)) (andTreeF (depth-1)) (PC.put v)
   PC.get v
 
-andTreeT :: Int -> CancelT (Par d s) Bool
+andTreeT :: Int -> CancelT (Par e s) Bool
 andTreeT 0 = return True
 andTreeT depth = do
   v <- PC.new
@@ -175,6 +280,8 @@ andTreeT depth = do
 tests :: Test
 tests = $(testGroupGenerator)
 
+-}
+
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMain [] -- [tests]
 

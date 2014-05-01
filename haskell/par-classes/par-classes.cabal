@@ -1,10 +1,11 @@
 Name:                par-classes
-Version:             1.0.1
+Version:             1.1
 Synopsis:            Type classes providing a general interface to various @Par@ monads.
 
 -- Version history:
 --  1.0      : Replacing old 'abstract-par' package with this new, extended version.
 --  1.0.1    : Add Data.Splittable
+--  1.1      : Add EffectSigs
 
 Description:
   A @Par@ monad offers a parallel programming API based on dataflow
@@ -39,6 +40,7 @@ Library
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
+           Control.Par.EffectSigs
            Data.Splittable.Class
 
   -- This needs to stay low-dependencies!!  Interfaces only.

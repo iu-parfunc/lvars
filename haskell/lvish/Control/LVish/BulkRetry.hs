@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns, ConstraintKinds, TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 
 -- | EXPERIMENTAL version which eventually should be made generic across Par monads
@@ -39,8 +39,8 @@ data RetryHub s = RetryHub (ISet s Int) -- ^ This stores the iterations that fai
 
 -- -- | Non-blocking get on a `NatArray`.
 -- getNB :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
---          RetryHub s -> NatArray s elt -> Int -> Par d s elt
--- -- LVarSched (Par d s)         
+--          RetryHub s -> NatArray s elt -> Int -> Par e s elt
+-- -- LVarSched (Par e s)         
 -- getNB (RetryHub fails) arr ind = do
 --   x <- unsafePeek arr ind
 --   -- if empty, don't block, do this:
@@ -59,13 +59,13 @@ data RetryHub s = RetryHub (ISet s Int) -- ^ This stores the iterations that fai
 -- robust to us dropping the current continuation with `returnToSched`.  We would
 -- need a version of HandlerPool's that interoperates with a user-level callCC, that is
 -- we would need something like bracket/dynamic-wind for our continuation monad.
-getNB_cps :: forall s d elt . (Storable elt, B.AtomicBits elt, Num elt) =>
+getNB_cps :: forall s e elt . (Storable elt, B.AtomicBits elt, Num elt) =>
          RetryHub s
          -> NatArray s elt      -- ^ Array to dereference
          -> Int                 -- ^ Which index to get
-         -> (elt -> Par d s ()) -- ^ Delimited continuation.
-         -> Par d s ()
--- LVarSched (Par d s)         
+         -> (elt -> Par e s ()) -- ^ Delimited continuation.
+         -> Par e s ()
+-- LVarSched (Par e s)         
 getNB_cps (RetryHub fails thisiter) arr ind cont = do
   x <- unsafePeek arr ind
   -- if empty, don't block, do this:
@@ -87,9 +87,9 @@ desired_tasks = 16 -- FIXME: num procs * overpartition
 -- 
 -- `forSpeculative` continues retrying until ALL iterations have completed.  It is
 -- thus a *synchronous* parallel for loop.
-forSpeculative :: (Int, Int)  -- ^ Inclusive/Exclusive range to run.
-                  -> (RetryHub s -> Int -> Par d s ()) -- ^ Body of the loop
-                  -> Par d s ()
+forSpeculative :: Idempotent e => (Int, Int)  -- ^ Inclusive/Exclusive range to run.
+                  -> (RetryHub s -> Int -> Par e s ()) -- ^ Body of the loop
+                  -> Par e s ()
 -- forSpeculative :: (Int, Int) -> (RetryHub s -> Int -> Par QuasiDet s ()) -> Par QuasiDet s ()
 -- TODO: Requires idempotency!!
 forSpeculative (st,end) bodyfn = do

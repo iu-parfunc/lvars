@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds, TypeFamilies #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 

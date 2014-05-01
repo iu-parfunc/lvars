@@ -119,7 +119,7 @@ bls_server :: S.Set Sched -> [Benchmark DefaultParamMeaning]
 bls_server = bls_desktop -- TODO.
 
 mergeBench args@[sz,sthresh,mthresh,sortA,mergeA] ss =
- (mkBenchmark "mergesort/Makefile" args (futures ss))
+ (mkBenchmark "mergesort/" args (futures ss))
   { progname=Just$ "mergesort_"++sortA++"_"++mergeA }
 
 -- Factor out boilerplate:
@@ -154,7 +154,7 @@ sched :: Sched -> BenchSpace DefaultParamMeaning
 sched s =
  --  Set (Variant$ show s) $ CompileParam $ schedToCabalFlag s
 --  Set (Variant$ show s) $ RuntimeEnv "WHICHSCHED" (schedToModule s)
-    Set (Variant$ show s) $ CompileParam ("-DPARSCHED="++(schedToModule s))
+    Set (Variant$ show s) $ CompileParam ("--ghc-options='-DPARSCHED="++(schedToModule s)++"'")
 
 -- | By default, we usually don't test meta-par 
 defaultSchedSet :: S.Set Sched

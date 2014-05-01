@@ -23,7 +23,7 @@ instance STSplittable (Tree a) where
 -- The structure description process could be something like a zipper, operating only
 -- "with gloves on".
 
-p0 :: ParST (Tree Int s0) (LV.Par d s1) String
+p0 :: ParST (Tree Int s0) (LV.Par e s1) String
 p0 = do
 
   x <- liftST $ newSTRef 10

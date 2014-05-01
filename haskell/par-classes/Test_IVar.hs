@@ -187,7 +187,7 @@ fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (I.state lv)
 {-# INLINE whenFull #-}
 -- | Register a handler that fires when the IVar is filled, which, of course, only
 --   happens once.
-whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par d s ()) -> Par d s ()
+whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par e s ()) -> Par e s ()
 whenFull mh (IVar (WrapLVar lv)) fn = 
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
@@ -203,11 +203,11 @@ whenFull mh (IVar (WrapLVar lv)) fn =
 {-# INLINE spawn #-}
 -- | A simple future represented as an IVar.  The result is fully evaluated before
 -- the child computation returns.
-spawn :: (Eq a, NFData a) => Par d s a -> Par d s (IVar s a)
+spawn :: (Eq a, NFData a) => Par e s a -> Par e s (IVar s a)
 spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
 
 {-# INLINE spawnP #-}
-spawnP :: (Eq a, NFData a) => a -> Par d s (IVar s a)
+spawnP :: (Eq a, NFData a) => a -> Par e s (IVar s a)
 spawnP a = spawn (return a)
 
 -}
