@@ -37,15 +37,12 @@ fi
 #   --reinstall  --force-reinstalls
 
 # Install custom version of monad-par:
-cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --only-dep --enable-tests $*
-# ./monad-par/monad-par/ 
-cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $*
+cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
+cabal install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --only-dep $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
 if ! [ `uname` == "Linux" ]; then  
-#  CFG=" $CFG --enable-tests "
-#  for path in $PKGS; do 
-  for path in ./lvish; do 
+  for path in $PKGS; do 
     echo "Test package in path $path."
     cd $TOP/$path
     # Assume cabal 1.20+:
