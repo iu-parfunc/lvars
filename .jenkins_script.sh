@@ -39,7 +39,7 @@ if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
 else
   CFG="--enable-library-profiling --enable-executable-profiling"
 fi  
-#   --reinstall  --force-reinstalls
+CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
 
 # Simpler but not ideal:
 $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
