@@ -19,12 +19,12 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
-Library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/par-transformers
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-transformers
 
+Library
   Exposed-modules: 
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
