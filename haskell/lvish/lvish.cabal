@@ -77,7 +77,7 @@ flag getonce
 -- We won't really support this until LVish 2.0:
 flag generic
   description: Use (forthcoming) generic interfaces for Par monads.
-  default: True
+  default: False
   manual: True 
 
 -- flag beta
@@ -166,12 +166,15 @@ library
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
-  build-depends: containers >= 0.5.4.0
   if flag(generic)
     cpp-options: -DGENERIC_PAR
+--    build-depends: containers >= 0.5.4.0
+    build-depends: containers >= 0.5
     build-depends: par-classes     >= 1.0 && < 2.0,
                    par-collections >= 1.0 && < 2.0
 --                   par-transformers <= 2.0
+  else     
+    build-depends: containers >= 0.5
 
   ghc-options: -O2 -rtsopts
 

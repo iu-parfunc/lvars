@@ -29,12 +29,12 @@ Cabal-version:       >=1.8
 
 extra-source-files:
 
-Library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/par-classes
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-classes
 
+Library
   Exposed-modules: 
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
