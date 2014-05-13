@@ -61,20 +61,24 @@ flag debug
   description: Activate additional debug assertions, and printed output.
 --               if DEBUGLVL env var is set to 1 or higher.
   default: False
+  manual: True
 
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
-
+  manual: True
+  
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
   default: False
+  manual: True
 
 -- We won't really support this until LVish 2.0:
 flag generic
   description: Use (forthcoming) generic interfaces for Par monads.
   default: True
+  manual: True 
 
 -- flag beta
 --   description: These features are in beta and not fully supported yet.
