@@ -353,7 +353,7 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
                          ] ]
     loop (Index indm slm) = do
       ls <- LM.toList indm
-      strs <- forM [ (i,tup) | i <- [0..] | tup@(k,_) <- ls ] $ -- , startCheck k
+      strs <- forM [ (i,tup) | i <- [(0::Int)..] | tup@(k,_) <- ls ] $ -- , startCheck k
               \ (ix, (key, (shortcut::t, val))) -> do
         -- Peek at the next layer down:
 {-        
