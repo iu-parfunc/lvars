@@ -256,6 +256,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 
 --------------------------------------------------------------------------------
 
+{-
 --  | A commonly desired monotonic data structure is an insertion-only Map or Set.
 --   This captures Par monads which are able to provide that capability.
 class (Functor m, Monad m) => ParIMap m  where
@@ -302,6 +303,8 @@ class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
   -- uses.)
   freezeMap :: IMap m k v -> qm (SomeFoldable (k,v))
   -- FIXME: We can't actually provide an instance of SomeFoldable (k,v) easily... [2013.10.30]
+
+-}
 
 data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
