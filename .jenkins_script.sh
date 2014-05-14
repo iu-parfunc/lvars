@@ -34,10 +34,12 @@ for path in $PKGS; do
 done
 cd $TOP
 
+CFG=" --force-reinstalls "
+
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then 
-  CFG="--disable-library-profiling --disable-executable-profiling"
+  CFG="$CFG --disable-library-profiling --disable-executable-profiling"
 else
-  CFG="--enable-library-profiling --enable-executable-profiling"
+  CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
 CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
 
