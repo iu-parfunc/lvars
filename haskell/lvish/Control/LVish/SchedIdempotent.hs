@@ -784,7 +784,7 @@ busyTakeMVar tids msg mv =
  maxWait = 10000 -- nanoseconds
  timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
  try bkoff | totalWait bkoff >= timeOut = do
-     error "OVER WAIT"
+--     error "busyTakeMVar (debugging): time-out expired for waiting on MVar"
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
