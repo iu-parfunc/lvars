@@ -146,7 +146,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- 
 -- Unfortunately, that means that this takes another computation for creating new
 -- \"bottom\" elements for the nested LVars stored inside the `IMap`.
-modify :: forall f a b e s key . (Ord key, LVarData1 f, Show key, Ord a, HasPut e) =>
+modify :: forall f a b e s key . (Ord key, Show key, Ord a, HasPut e) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (Par e s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
