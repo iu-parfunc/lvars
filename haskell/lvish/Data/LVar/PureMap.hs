@@ -175,7 +175,7 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
-gmodify :: forall f a b d s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
