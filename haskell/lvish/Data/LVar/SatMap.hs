@@ -100,7 +100,7 @@ class PartialJoinSemiLattice a where
 -- 
 -- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
-newtype SatMap k s v = SatMap (LVar s (IORef (M.Map k v)) (k,v))
+newtype SatMap k s v = SatMap (LVar s (IORef (Maybe (M.Map k v))) (k,v))
 
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (SatMap k s v) where
@@ -112,7 +112,10 @@ instance LVarData1 (SatMap k) where
   freeze orig@(SatMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
   addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
-  sortFrzn (SatMap lv) = AFoldable$ unsafeDupablePerformIO (readIORef (state lv))
+  sortFrzn (SatMap lv) = 
+    case unsafeDupablePerformIO (readIORef (state lv)) of 
+      Nothing -> AFoldable [] -- Map saturated, contents are empty.
+      Just m  -> AFoldable m 
 
 -- | The `SatMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
@@ -125,8 +128,10 @@ instance OrderedLVarData1 (SatMap k) where
 -- `Trvrsbl`.
 instance F.Foldable (SatMap k Frzn) where
   foldr fn zer (SatMap lv) =
-    let set = unsafeDupablePerformIO (readIORef (state lv)) in
-    F.foldr fn zer set 
+    let mp = unsafeDupablePerformIO (readIORef (state lv)) in
+    case mp of 
+      Nothing -> zer 
+      Just m  -> F.foldr fn zer m
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (SatMap k Trvrsbl) where
@@ -141,10 +146,11 @@ instance DeepFrz a => DeepFrz (SatMap k s a) where
 
 instance (Show k, Show a) => Show (SatMap k Frzn a) where
   show (SatMap lv) =
-    let mp' = unsafeDupablePerformIO (readIORef (state lv)) in
-    "{IMap: " ++
-    (concat $ intersperse ", " $ map show $
-     M.toList mp') ++ "}"
+    let mp' = unsafeDupablePerformIO (readIORef (state lv)) 
+        contents = case mp' of 
+                     Nothing -> "saturated!"
+                     Just m  -> concat $ intersperse ", " $ map show $ M.toList m
+    in "{IMap: " ++ contents ++ "}"
 
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (SatMap k Trvrsbl a) where
@@ -164,18 +170,20 @@ forEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
     globalCB ref = do
       mp <- L.liftIO $ readIORef ref -- Snapshot
-      unWrapPar $ 
-        traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
+      case mp of 
+        Nothing -> return () -- Already saturated, nothing to do.
+        Just m  -> unWrapPar $ 
+                   traverseWithKey_ (\ k v -> forkHP mh$ callb k v) m
 
 --------------------------------------------------------------------------------
 
 -- | Create a fresh map with nothing in it.
 newEmptyMap :: Par d s (SatMap k s v)
-newEmptyMap = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef M.empty
+newEmptyMap = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just M.empty)
 
 -- | Create a new map populated with initial elements.
 newMap :: M.Map k v -> Par d s (SatMap k s v)
-newMap m = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef m
+newMap m = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just m)
 
 -- | A convenience function that is equivalent to calling `Data.Map.fromList`
 -- followed by `newMap`.
@@ -198,15 +206,17 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> L.Par ()
+    initCB :: HandlerPool -> IV.IVar s b -> (IORef (Maybe (M.Map k v))) -> L.Par ()
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- L.liftIO $ readIORef ref -- Snapshot
-      unWrapPar $ do 
-        traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) mp
-        res <- action -- Any additional puts here trigger the callback.
-        IV.put_ resIV res
+      case mp of 
+        Nothing -> return () -- Already saturated, nothing to do.
+        Just m -> unWrapPar $ do 
+                    traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) m
+                    res <- action -- Any additional puts here trigger the callback.
+                    IV.put_ resIV res
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
@@ -220,8 +230,9 @@ forEach = forEachHP Nothing
 insert :: (Ord k, PartialJoinSemiLattice v) =>
           k -> v -> SatMap k s v -> Par d s () 
 insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ putLV lv putter
-  where putter ref  = atomicModifyIORef' ref update
-        update mp =
+  where putter ref  = atomicModifyIORef' ref update  -- TODO: try optimistic CAS version.
+        update Nothing = (Nothing,Nothing) -- Ignored on saturated LVar.
+        update (Just mp) =
           let mp' = M.insertWith fn key elm mp
               fn v1 v2 = 
                 case joinMaybe v1 v2 of 
@@ -233,8 +244,8 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ putLV lv putter
           -- Here we do a constant time check to see if we actually changed anything:
           -- For idempotency it is important that we return Nothing if not.
           if M.size mp' > M.size mp
-          then (mp',Just (key,elm))
-          else (mp, Nothing)
+          then (Just mp',Just (key,elm))
+          else (Just mp, Nothing)
 {-
 
 -- | `SatMap`s containing other LVars have some additional capabilities compared to
