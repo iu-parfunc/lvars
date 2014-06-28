@@ -142,7 +142,8 @@ instance F.Foldable (SatMap k Trvrsbl) where
 --  `runParThenFreeze`.  Hence they need a `DeepFrz` instance.
 --  @DeepFrz@ is just a type-coercion.  No bits flipped at runtime.
 instance DeepFrz a => DeepFrz (SatMap k s a) where
-  type FrzType (SatMap k s a) = SatMap k Frzn (FrzType a)
+--   type FrzType (SatMap k s a) = SatMap k Frzn (FrzType a)
+  type FrzType (SatMap k s a) = SatMap k Frzn a -- No need to recur deeper.
   frz = unsafeCoerceLVar
 
 instance (Show k, Show a) => Show (SatMap k Frzn a) where
@@ -230,7 +231,12 @@ forEach = forEachHP Nothing
 --   better be equal @(==)@, or a multiple-put error is raised.
 insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
           k -> v -> SatMap k s v -> Par d s () 
-insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ putLV lv putter
+insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do 
+    -- OPTIONAL: Take the fast path if it is saturated:
+    snap <- L.liftIO (readIORef (L.state lv))
+    case snap of 
+      Nothing -> return () -- Fizzle.
+      Just _  -> putLV lv putter
   where putter ref  = atomicModifyIORef' ref update  -- TODO: try optimistic CAS version.
         update Nothing = (Nothing,Nothing) -- Ignored on saturated LVar.
         update (Just mp) =
