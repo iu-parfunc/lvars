@@ -288,53 +288,7 @@ gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show 
           -> Par d s b
 gmodify map key fn = modify map key G.newBottom fn
 
-{-# INLINE getOrInit #-}
--- | Return the preexisting value for a key if it exists, and otherwise return
--- 
---   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b d s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a) =>
-          key -> SatMap key s (f s a) -> Par d s (f s a)
-getOrInit key mp = gmodify mp key return
 
--- | Wait for the map to contain a specified key, and return the associated value.
-getKey :: Ord k => k -> SatMap k s v -> Par d s v
-getKey !key (SatMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      mp <- readIORef ref
-      return (M.lookup key mp)
-    deltaThresh (k,v) | k == key  = return$ Just v
-                      | otherwise = return Nothing 
-
--- | Wait until the map contains a certain value (on any key).
-waitValue :: (Ord k, Eq v) => v -> SatMap k s v -> Par d s ()
-waitValue !val (SatMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      mp <- readIORef ref
-      -- This is very inefficient:
-      let fn Nothing v | v == val  = Just ()
-                       | otherwise = Nothing
-          fn just _  = just
-      -- FIXME: no short-circuit for this fold:
-      return $! M.foldl fn Nothing mp
-    deltaThresh (_,v) | v == val  = return$ Just ()
-                      | otherwise = return Nothing 
-
-
--- | Wait on the /size/ of the map, not its contents.
-waitSize :: Int -> SatMap k s v -> Par d s ()
-waitSize !sz (SatMap (WrapLVar lv)) = WrapPar $
-    getLV lv globalThresh deltaThresh
-  where
-    globalThresh ref _frzn = do
-      mp <- readIORef ref
-      case M.size mp >= sz of
-        True  -> return (Just ())
-        False -> return (Nothing)
-    -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.
-    deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map.  As with any
 -- quasi-deterministic operation, using `freezeMap` may cause your
@@ -356,11 +310,15 @@ freezeMap (SatMap (WrapLVar lv)) = WrapPar $
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
+-}
+
 -- | /O(1)/: Convert from an `SatMap` to a plain `Data.Map`.
 --   This is only permitted when the `SatMap` has already been frozen.
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
-fromIMap :: SatMap k Frzn a -> M.Map k a 
+fromIMap :: SatMap k Frzn a -> Maybe (M.Map k a)
 fromIMap (SatMap lv) = unsafeDupablePerformIO (readIORef (state lv))
+
+{-
 
 -- | Traverse a frozen map for side effect.  This is useful (in comparison with more
 -- generic operations) because the function passed in may see the key as well as the
@@ -470,6 +428,7 @@ t0 = runParThenFreeze $ do
   m <- newEmptyMap
   insert "hi" (32::Int) m
   insert "hi" (34::Int) m
+  insert "there" (1::Int) m
   return m
 
 t1 :: SatMap String Frzn Int
