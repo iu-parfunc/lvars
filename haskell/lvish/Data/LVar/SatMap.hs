@@ -47,6 +47,7 @@ module Data.LVar.SatMap
 -- import           Algebra.Lattice
 -- import           Algebra.Lattice.Dropped
 import           Control.LVish.DeepFrz.Internal
+import           Control.LVish.DeepFrz (runParThenFreeze)
 import           Control.LVish
 import           Control.LVish.Internal as LI
 import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
@@ -148,7 +149,7 @@ instance (Show k, Show a) => Show (SatMap k Frzn a) where
   show (SatMap lv) =
     let mp' = unsafeDupablePerformIO (readIORef (state lv)) 
         contents = case mp' of 
-                     Nothing -> "saturated!"
+                     Nothing -> "saturated"
                      Just m  -> concat $ intersperse ", " $ map show $ M.toList m
     in "{IMap: " ++ contents ++ "}"
 
@@ -227,25 +228,21 @@ forEach = forEachHP Nothing
 -- 
 --   As with other container LVars, if a key is inserted multiple times, the values had
 --   better be equal @(==)@, or a multiple-put error is raised.
-insert :: (Ord k, PartialJoinSemiLattice v) =>
+insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
           k -> v -> SatMap k s v -> Par d s () 
 insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORef' ref update  -- TODO: try optimistic CAS version.
         update Nothing = (Nothing,Nothing) -- Ignored on saturated LVar.
         update (Just mp) =
-          let mp' = M.insertWith fn key elm mp
-              fn v1 v2 = 
-                case joinMaybe v1 v2 of 
-                  Just v3 -> v3
-                  Nothing -> 
-                    -- FIXME: this 
-                    throw$ ConflictingPutExn$ "Multiple puts to one entry in an SatMap!"
-          in
-          -- Here we do a constant time check to see if we actually changed anything:
-          -- For idempotency it is important that we return Nothing if not.
-          if M.size mp' > M.size mp
-          then (Just mp',Just (key,elm))
-          else (Just mp, Nothing)
+          case M.lookup key mp of 
+            Nothing -> (Just (M.insert key elm mp),Just (key,elm))
+            Just oldVal -> 
+              case joinMaybe elm oldVal of 
+                Just newVal -> if newVal == oldVal 
+                               then (Just mp, Nothing)
+                               else (Just (M.insert key newVal mp), Just (key,newVal))               
+                Nothing -> (Nothing,Nothing) -- SATURATED!
+
 {-
 
 -- | `SatMap`s containing other LVars have some additional capabilities compared to
@@ -463,3 +460,27 @@ instance PC.Generator (SatMap k Frzn a) where
 
 
 -}
+
+----------------------------------------
+-- Simple tests
+----------------------------------------
+
+t0 :: SatMap String Frzn Int
+t0 = runParThenFreeze $ do 
+  m <- newEmptyMap
+  insert "hi" (32::Int) m
+  insert "hi" (34::Int) m
+  return m
+
+t1 :: SatMap String Frzn Int
+t1 = runParThenFreeze $ do 
+  m <- newEmptyMap
+  insert "hi" (32::Int) m
+  insert "hi" (33::Int) m
+  return m
+
+instance PartialJoinSemiLattice Int where
+  joinMaybe a b 
+    | even a && even b = Just (max a b)
+    | odd  a && odd  b = Just (max a b)
+    | otherwise        = Nothing
