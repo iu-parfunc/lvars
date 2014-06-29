@@ -101,7 +101,14 @@ class PartialJoinSemiLattice a where
 -- 
 -- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
-newtype SatMap k s v = SatMap (LVar s (IORef (Maybe (M.Map k v))) (k,v))
+newtype SatMap k s v = SatMap (LVar s (IORef (SatMapContents k v)) (k,v))
+     -- SatMap { lvar  :: (LVar s (IORef (Maybe (M.Map k v))) (k,v)) 
+     --        , onSat :: L.Par () }
+
+type SatMapContents k v = Maybe (M.Map k v, OnSat)
+
+-- | Callback to execute when saturating occurs.
+type OnSat = L.Par ()
 
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (SatMap k s v) where
@@ -116,7 +123,7 @@ instance LVarData1 (SatMap k) where
   sortFrzn (SatMap lv) = 
     case unsafeDupablePerformIO (readIORef (state lv)) of 
       Nothing -> AFoldable [] -- Map saturated, contents are empty.
-      Just m  -> AFoldable m 
+      Just (m,_) -> AFoldable m 
 
 -- | The `SatMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
@@ -132,7 +139,7 @@ instance F.Foldable (SatMap k Frzn) where
     let mp = unsafeDupablePerformIO (readIORef (state lv)) in
     case mp of 
       Nothing -> zer 
-      Just m  -> F.foldr fn zer m
+      Just (m,_) -> F.foldr fn zer m
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (SatMap k Trvrsbl) where
@@ -151,7 +158,7 @@ instance (Show k, Show a) => Show (SatMap k Frzn a) where
     let mp' = unsafeDupablePerformIO (readIORef (state lv)) 
         contents = case mp' of 
                      Nothing -> "saturated"
-                     Just m  -> concat $ intersperse ", " $ map show $ M.toList m
+                     Just (m,_) -> concat $ intersperse ", " $ map show $ M.toList m
     in "{IMap: " ++ contents ++ "}"
 
 -- | For convenience only; the user could define this.
@@ -174,18 +181,18 @@ forEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
       mp <- L.liftIO $ readIORef ref -- Snapshot
       case mp of 
         Nothing -> return () -- Already saturated, nothing to do.
-        Just m  -> unWrapPar $ 
-                   traverseWithKey_ (\ k v -> forkHP mh$ callb k v) m
+        Just (m,_) -> unWrapPar $ 
+                      traverseWithKey_ (\ k v -> forkHP mh$ callb k v) m
 
 --------------------------------------------------------------------------------
 
 -- | Create a fresh map with nothing in it.
 newEmptyMap :: Par d s (SatMap k s v)
-newEmptyMap = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just M.empty)
+newEmptyMap = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just (M.empty, return ()))
 
 -- | Create a new map populated with initial elements.
 newMap :: M.Map k v -> Par d s (SatMap k s v)
-newMap m = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just m)
+newMap m = WrapPar$ fmap (SatMap . WrapLVar) $ newLV$ newIORef (Just (m,return()))
 
 -- | A convenience function that is equivalent to calling `Data.Map.fromList`
 -- followed by `newMap`.
@@ -208,14 +215,14 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (Maybe (M.Map k v))) -> L.Par ()
+    initCB :: HandlerPool -> IV.IVar s b -> (IORef (SatMapContents k v)) -> L.Par ()
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- L.liftIO $ readIORef ref -- Snapshot
       case mp of 
         Nothing -> return () -- Already saturated, nothing to do.
-        Just m -> unWrapPar $ do 
+        Just (m,_) -> unWrapPar $ do 
                     traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) m
                     res <- action -- Any additional puts here trigger the callback.
                     IV.put_ resIV res
@@ -236,18 +243,31 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
     snap <- L.liftIO (readIORef (L.state lv))
     case snap of 
       Nothing -> return () -- Fizzle.
-      Just _  -> putLV lv putter
-  where putter ref  = atomicModifyIORef' ref update  -- TODO: try optimistic CAS version.
+      Just _  -> putLV_ lv putter
+  where -- putter :: _ -> L.Par (Maybe d,b)
+        putter ref = do 
+          -- TODO: try optimistic CAS version.
+          x <- L.liftIO$ atomicModifyIORef' ref update 
+          return (x,())
         update Nothing = (Nothing,Nothing) -- Ignored on saturated LVar.
-        update (Just mp) =
-          case M.lookup key mp of 
-            Nothing -> (Just (M.insert key elm mp),Just (key,elm))
+        update orig@(Just (mp,onsat)) =
+          case M.lookup key mp of  -- A bit painful... double lookup on normal inserts.
+            Nothing -> (Just (M.insert key elm mp, onsat),
+                        Just (key,elm))
             Just oldVal -> 
               case joinMaybe elm oldVal of 
                 Just newVal -> if newVal == oldVal 
-                               then (Just mp, Nothing)
-                               else (Just (M.insert key newVal mp), Just (key,newVal))               
+                               then (orig, Nothing) -- No change
+                               else (Just (M.insert key newVal mp, onsat), 
+                                     Just (key,newVal))
                 Nothing -> (Nothing,Nothing) -- SATURATED!
+                           -- FIXME!  Call onsat
+
+
+whenSat :: SatMap k s v -> Par d s () -> Par d s ()
+whenSat (SatMap lv) (WrapPar p) = 
+  liftIO $ 
+    error "FINISHME"
 
 {-
 
@@ -322,7 +342,11 @@ freezeMap (SatMap (WrapLVar lv)) = WrapPar $
 --   This is only permitted when the `SatMap` has already been frozen.
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
 fromIMap :: SatMap k Frzn a -> Maybe (M.Map k a)
-fromIMap (SatMap lv) = unsafeDupablePerformIO (readIORef (state lv))
+fromIMap (SatMap lv) = unsafeDupablePerformIO $ do 
+  x <- readIORef (state lv)
+  case x of 
+    Just (m,_) -> return $! Just m
+    Nothing    -> return $  Nothing
 
 {-
 
