@@ -247,27 +247,41 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
   where -- putter :: _ -> L.Par (Maybe d,b)
         putter ref = do 
           -- TODO: try optimistic CAS version.
-          x <- L.liftIO$ atomicModifyIORef' ref update 
+          (x,act) <- L.liftIO$ atomicModifyIORef' ref update 
+          case act of 
+            Nothing -> return ()
+            Just a  -> a 
           return (x,())
-        update Nothing = (Nothing,Nothing) -- Ignored on saturated LVar.
+
+        delt x = (x,Nothing)
+        update Nothing = (Nothing,delt Nothing) -- Ignored on saturated LVar.
         update orig@(Just (mp,onsat)) =
           case M.lookup key mp of  -- A bit painful... double lookup on normal inserts.
             Nothing -> (Just (M.insert key elm mp, onsat),
-                        Just (key,elm))
+                        delt (Just (key,elm)))
             Just oldVal -> 
               case joinMaybe elm oldVal of 
                 Just newVal -> if newVal == oldVal 
-                               then (orig, Nothing) -- No change
+                               then (orig, delt Nothing) -- No change
                                else (Just (M.insert key newVal mp, onsat), 
-                                     Just (key,newVal))
-                Nothing -> (Nothing,Nothing) -- SATURATED!
-                           -- FIXME!  Call onsat
-
+                                     delt (Just (key,newVal)))
+                Nothing -> -- Here we SATURATE!
+                           (Nothing, (Nothing, Just onsat))
 
 whenSat :: SatMap k s v -> Par d s () -> Par d s ()
-whenSat (SatMap lv) (WrapPar p) = 
-  liftIO $ 
-    error "FINISHME"
+whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
+  x <- L.liftIO $ atomicModifyIORef' (state lv) fn
+  case x of 
+    Nothing -> return ()
+    Just a  -> a 
+ where
+  fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
+  -- In this case we register newact to execute later:
+  fn (Just (mp,onsat)) = let onsat' = onsat' >> newact in
+                         (Just (mp,onsat'), Nothing)
+  -- In this case we execute newact right away:
+  fn Nothing = (Nothing, Just newact)
+
 
 {-
 
