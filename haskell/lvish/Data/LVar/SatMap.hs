@@ -268,6 +268,8 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
                 Nothing -> -- Here we SATURATE!
                            (Nothing, (Nothing, Just onsat))
 
+-- | Register a callback that is only called if the SatMap LVar
+-- becomes /saturated/.
 whenSat :: SatMap k s v -> Par d s () -> Par d s ()
 whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
   x <- L.liftIO $ atomicModifyIORef' (state lv) fn
@@ -281,6 +283,18 @@ whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do
                          (Just (mp,onsat'), Nothing)
   -- In this case we execute newact right away:
   fn Nothing = (Nothing, Just newact)
+
+-- | Drive the variable to top.  This is equivalent to an insert of a
+-- conflicting binding.
+saturate :: SatMap k s v -> Par d s ()
+saturate (SatMap lv) = WrapPar $ do
+   act <- L.liftIO $ atomicModifyIORef' (state lv) fn
+   case act of 
+     Nothing -> return ()
+     Just a  -> a
+ where
+  fn (Just (mp,onsat)) = (Nothing, Just onsat)
+  fn Nothing           = (Nothing,Nothing)
 
 
 {-
