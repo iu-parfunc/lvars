@@ -250,8 +250,12 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
           (x,act) <- L.liftIO$ atomicModifyIORef' ref update 
           case act of 
             Nothing -> return ()
-            Just a  -> a 
+            Just a  -> do L.logStrLn 5 $ " [SatMap] insert saturated lvar "++lvid++", running callback."
+                          a 
+                          L.logStrLn 5 $ " [SatMap] lvar "++lvid++", saturation callback completed."
           return (x,())
+
+        lvid = L.lvarDbgName lv
 
         delt x = (x,Nothing)
         update Nothing = (Nothing,delt Nothing) -- Ignored on saturated LVar.
@@ -272,14 +276,16 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
 -- becomes /saturated/.
 whenSat :: SatMap k s v -> Par d s () -> Par d s ()
 whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
+  L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
   x <- L.liftIO $ atomicModifyIORef' (state lv) fn
   case x of 
-    Nothing -> return ()
-    Just a  -> a 
+    Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
+    Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
+                  a 
  where
   fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
   -- In this case we register newact to execute later:
-  fn (Just (mp,onsat)) = let onsat' = onsat' >> newact in
+  fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
                          (Just (mp,onsat'), Nothing)
   -- In this case we execute newact right away:
   fn Nothing = (Nothing, Just newact)
@@ -288,10 +294,13 @@ whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do
 -- conflicting binding.
 saturate :: SatMap k s v -> Par d s ()
 saturate (SatMap lv) = WrapPar $ do
+   let lvid = L.lvarDbgName $ unWrapLVar lv
+   L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
    act <- L.liftIO $ atomicModifyIORef' (state lv) fn
    case act of 
-     Nothing -> return ()
-     Just a  -> a
+     Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
+     Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
+                   a
  where
   fn (Just (mp,onsat)) = (Nothing, Just onsat)
   fn Nothing           = (Nothing,Nothing)
