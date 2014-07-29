@@ -25,9 +25,8 @@ test-junit:
 # This won't work with cabal-dev or older cabal:
 #	${CABAL} configure --enable-tests
 #	${CABAL} build
-	${CABAL} install --with-ghc=$(GHC)
-	test-lambdaLVar -j1 --jxml=test-lambdaLVar.xml
-#	./dist/build/test-lambdaLVar/test-lambdaLVar -j1 --jxml=test-lambdaLVar.xml
+	${CABAL} install --with-ghc=$(GHC) --bindir=.
+	./test-lambdaLVar -j1 --jxml=test-lambdaLVar.xml
 
 clean:
 	${CABAL} clean
