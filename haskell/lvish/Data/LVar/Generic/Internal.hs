@@ -42,6 +42,9 @@ import GHC.Prim (Constraint)
 -- parameter, as well as an `s` parameter for session safety.
 -- 
 -- LVars that fall into this class are typically collection types.
+--
+-- The superclass constraint on this class serves to ensure that once frozen, the
+-- LVar contents are foldable.
 class (F.Foldable (f Trvrsbl)) => LVarData1 (f :: * -> * -> *)
      --   TODO: if there is a Par class to generalize LVar Par monads, then
      --   it needs to be a superclass of this.
