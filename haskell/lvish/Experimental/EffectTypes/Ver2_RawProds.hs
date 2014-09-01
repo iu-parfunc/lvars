@@ -39,8 +39,6 @@ type HasIOM m = HasIO (GetEffects m)
 
 ----------------------------------------
 
-type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
-
 
 --------------------------------------------------------------------------------
 -- Core ops:
@@ -219,6 +217,8 @@ liftReadOnly2 = undefined
 -- liftReadOnly3 = undefined
 
 
+type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
+
 -- This, on the other hand, works fine:
 liftReadOnly4 :: forall m a . (LVarMonad m) 
               => (ReadOnlyOf m) a 
@@ -235,6 +235,10 @@ c2 = liftReadOnly4 c1
 
 c3 :: CancelT (Par (Ef p G f b i) s) Int
 c3 = liftReadOnly4 c1
+
+-- Error, not read only:
+-- c4 :: CancelT (Par (Ef p G f b i) s) Int
+-- c4 = liftReadOnly4 c2
 
 main :: IO ()
 main = putStrLn "hi"
