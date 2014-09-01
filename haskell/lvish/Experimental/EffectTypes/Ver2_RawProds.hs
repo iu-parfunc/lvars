@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, KindSignatures, GADTs, TypeOperators, CPP,
     GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
-    ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
+    ConstraintKinds, FlexibleContexts, UndecidableInstances, ScopedTypeVariables #-}
 
 -- APPROACH: Expose type level products explicitly in all methods.
 
@@ -11,6 +11,33 @@ import Control.Applicative
 import Control.Monad.Trans.Class
 import Common
 import GHC.Exts
+
+--------------------------------------------------------------------------------
+
+-- type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+
+type family ReadOnly (e :: EffectsSig) :: Constraint
+-- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
+type instance (ReadOnly (Ef NP g NF NB NI)) = ()
+-- (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+
+-- type HasPut e    = (GetP e ~ P)
+
+type family HasPut (e :: EffectsSig) :: Constraint
+type instance (HasPut (Ef p g f b i)) = (p ~ P)
+
+
+type HasGet e    = (GetG e ~ G)
+type HasFreeze e = (GetF e ~ F)
+type HasIO  e    = (GetI e ~ I)
+
+type NoFreeze e = (NF ~ GetF e)
+
+type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+
+type HasIOM m = HasIO (GetEffects m)
+
 
 --------------------------------------------------------------------------------
 -- Core ops:
@@ -76,31 +103,36 @@ getMemoRO = undefined
 --------------------------------------------------------------------------------
 -- Async and and typechecking
 
-asyncAnd' :: (GetEffects m1 ~ Ef NP g NF NB NI,
-              m2 ~ SetEffects (Ef p G f b i) m1,
-              LVarMonad m1, LVarMonad m2) =>
-  CancelT m1 Bool -> CancelT m1 Bool -> CancelT m2 Bool
-asyncAnd' = undefined  
+-- Stopped working in GHC 7.8:
 
-type ROMemo g s a b = Memo (Ef NP g NF NB NI) s a b
+-- asyncAnd introduces a get effect:
+-- asyncAnd' :: forall p g f b i m1 m2 . 
+--              (GetEffects m1 ~ Ef NP g NF NB NI,
+--               m2 ~ SetEffects (Ef p G f b i) m1,
+--               LVarMonad m1, LVarMonad m2) =>
+--   CancelT m1 Bool -> CancelT m1 Bool -> CancelT m2 Bool
+-- asyncAnd' = undefined  
 
-subtype :: ROMemo g s (Type,Type) Bool -> Type -> Type -> 
-             CancelT (Par (Ef p G f b i) s) Bool
-subtype mem s t = 
-  case (s,t) of
-    (Pair s1 s2, Pair t1 t2) -> 
-       -- getMemoRO mem (s1, t1) -- type checks
-       asyncAnd' (lift$ getMemoRO mem (s1, t1))
-                 (lift$ getMemoRO mem (s2, t2))
 
-data Type = Pair Type Type | TInt
-  deriving (Show,Read,Eq,Ord)
+-- type ROMemo g s a b = Memo (Ef NP g NF NB NI) s a b
+-- data Type = Pair Type Type | TInt
+--   deriving (Show,Read,Eq,Ord)
+
+-- subtype :: ROMemo g s (Type,Type) Bool -> Type -> Type -> 
+--              CancelT (Par (Ef p G f b i) s) Bool
+-- subtype mem s t = 
+--   case (s,t) of
+--     (Pair s1 s2, Pair t1 t2) -> 
+--        -- getMemoRO mem (s1, t1) -- type checks
+--        asyncAnd' (lift$ getMemoRO mem (s1, t1))
+--                  (lift$ getMemoRO mem (s2, t2))
 
 --------------------------------------------------------------------------------
-
+{-
 -- runPar :: (forall s . Par (Ef p g NF b) s a) -> a
 runPar :: NoFreeze e => (forall s . Par e s a) -> a
 runPar = undefined
+
 
 runDeadlockT :: LVarMonad m => 
                 (forall s . s ~ GetSession m => DeadlockT m a)
@@ -162,30 +194,12 @@ _ = runPar test3
 -- Couldn't match type 'F with 'NF
 
 ------------------------------------------------------------
+-}
 
--- type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+--------------------------------------------------------------------------------
 
-type family ReadOnly (e :: EffectsSig) :: Constraint
--- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
-type instance (ReadOnly (Ef NP g NF NB NI)) = ()
--- (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
-
--- type HasPut e    = (GetP e ~ P)
-
-type family HasPut (e :: EffectsSig) :: Constraint
-type instance (HasPut (Ef p g f b i)) = (p ~ P)
-
-
-type HasGet e    = (GetG e ~ G)
-type HasFreeze e = (GetF e ~ F)
-type HasIO  e    = (GetI e ~ I)
-
-type NoFreeze e = (NF ~ GetF e)
-
-type ReadOnlyM m = (ReadOnly (GetEffects m))
-
-
-type HasIOM m = HasIO (GetEffects m)
+liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
+liftReadOnly = undefined
 
 --------------------------------------------------------------------------------
 

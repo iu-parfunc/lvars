@@ -6,6 +6,7 @@
 -- PolyKinds, ImpredicativeTypes
 module Common where
 import Control.Monad.Trans.Class
+import Control.Applicative
 
 --------------------------------------------------------------------------------
 -- Dummy definitions:
@@ -19,6 +20,11 @@ newtype Par :: EffectsSig -> * -> * -> * where
 instance Monad (Par efs s) where
   (>>=) = undefined
   return = undefined
+
+instance Applicative (Par efs s) where
+
+instance Functor     (Par efs s) where
+  fmap = undefined 
 
 instance LVarMonad (Par efs s) where
 
