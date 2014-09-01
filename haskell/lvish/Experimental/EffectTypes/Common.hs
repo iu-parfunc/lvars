@@ -129,3 +129,6 @@ type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
 
 type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
 type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
+
+-- A different attempt:
+----------------------------------------

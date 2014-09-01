@@ -35,8 +35,11 @@ type NoFreeze e = (NF ~ GetF e)
 
 type ReadOnlyM m = (ReadOnly (GetEffects m))
 
-
 type HasIOM m = HasIO (GetEffects m)
+
+----------------------------------------
+
+type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
 
 
 --------------------------------------------------------------------------------
@@ -201,7 +204,37 @@ _ = runPar test3
 liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
 liftReadOnly = undefined
 
+-- A trivial step
+liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a 
+              -> CancelT (Par (Ef p g f b i) s)     a
+liftReadOnly2 = undefined
+
+-- Here's where we run into trouble:
+-- This would be a rigid type variable problem:
+-- liftReadOnly3 :: forall m1 m2 p g f b i a . 
+--                  ( GetEffects m1 ~ (Ef NP g NF NB NI)
+--                  , m2 ~ SetEffects (Ef p g f b i) m1) 
+--               => CancelT m1 a 
+--               -> CancelT m2 a
+-- liftReadOnly3 = undefined
+
+
+-- This, on the other hand, works fine:
+liftReadOnly4 :: forall m a . (LVarMonad m) 
+              => (ReadOnlyOf m) a 
+              -> m a
+liftReadOnly4 = undefined
+
 --------------------------------------------------------------------------------
+
+c1 :: CancelT (Par (Ef NP G NF NB NI) s) Int
+c1 = undefined
+
+c2 :: CancelT (Par (Ef P G F B I) s) Int
+c2 = liftReadOnly4 c1
+
+c3 :: CancelT (Par (Ef p G f b i) s) Int
+c3 = liftReadOnly4 c1
 
 main :: IO ()
 main = putStrLn "hi"
