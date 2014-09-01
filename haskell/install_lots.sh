@@ -24,13 +24,6 @@ if [ -e "$D/monad-par" ] && [ "$MONADPAR" != 0 ]; then
   echo ' [!!] Building monad-par as well as LVish.'
 fi
 
-# Likewise if you want to build containers HEAD (0.5.3.2) to get
-# splitting functionality...
-if [ -e "$D/containers" ]; then
-  PKGS="$PKGS -fnewcontainers $D/containers/"
-  echo ' [!!] Building containers as well as LVish.'
-fi
-
 set -e
 set -x
 
