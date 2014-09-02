@@ -3,7 +3,23 @@
     ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
 
 -- | Type-level effect signatures that characterize the side-effects of a given `Par`
--- computation.
+-- computation.  
+--
+-- This notion of effect tracking is coarse.  We track whether a given
+-- computation may:
+--
+--  * Put - may mutate one or more variables outside the computation.
+--  * Get - may read and thus block on one or more variables outside
+--          the scope of the computation.
+--  * Frz - may freeze 
+--  * Bmp - may perform non-idempotent writes
+--  * IO  - may perform arbitrary IO effects and thus is nondeterministic.
+--
+-- These are conservative in the sense that a "Put" means only the
+-- possibility of a put, not a guarantee that one may occur.  Thus
+-- there is an effect subtype ordering for the above effect signatures
+-- in which "pgfbi" is bottom and "PGFBI" is top (all off vs all on).
+
 
 module Control.Par.EffectSigs 
        (
