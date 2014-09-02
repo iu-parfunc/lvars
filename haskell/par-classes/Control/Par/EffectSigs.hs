@@ -20,7 +20,6 @@
 -- there is an effect subtype ordering for the above effect signatures
 -- in which "pgfbi" is bottom and "PGFBI" is top (all off vs all on).
 
-
 module Control.Par.EffectSigs 
        (
         -- * A type-level record of effects
@@ -39,6 +38,9 @@ module Control.Par.EffectSigs
         GetEffects, SetEffects,
         GetSession, SetSession,
 
+        -- * Subtyping and conversions
+        ReadOnlyOf, gliftReadOnly,
+
         -- * Accessor and setter functions for EffectSigs
         GetP, GetG, GetF, GetB, GetI,
         SetP, SetG, SetF, SetB, SetI,
@@ -48,6 +50,7 @@ module Control.Par.EffectSigs
         SetMP, SetMG, SetMF, SetMB, SetMI,
         HasIOM,  
         ReadOnlyM, IdempotentM
+       
        )
        where
 import GHC.Exts (Constraint)
@@ -202,30 +205,39 @@ type Idempotent    e = (NoBump e,   NoIO e)
 type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
 
 #else
--- APPROACH (2): [Total] type families.
+      -- APPROACH (2): [Total] type families.
 
-type family HasPut (e :: EffectSig) :: Constraint
-type instance (HasPut (Ef p g f b i)) = (p ~ P)
+      type family HasPut (e :: EffectSig) :: Constraint
+      type instance (HasPut (Ef p g f b i)) = (p ~ P)
 
--- Derived constraints, i.e. shorthands for common combinations:
-----------------------------------------
+      -- Derived constraints, i.e. shorthands for common combinations:
+      ----------------------------------------
 
-type family ReadOnly (e :: EffectSig) :: Constraint
--- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
-type instance (ReadOnly (Ef NP g NF NB NI)) = ()
--- type instance (ReadOnly e) = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
--- type instance (ReadOnly e) = (NoPut e, ..)
+      type family ReadOnly (e :: EffectSig) :: Constraint
+      -- type instance (ReadOnly (Ef p g f b i)) = (p ~ NP, b ~ NB , f ~ NF , i ~ NI)
+      type instance (ReadOnly (Ef NP g NF NB NI)) = ()
+      -- type instance (ReadOnly e) = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
+      -- type instance (ReadOnly e) = (NoPut e, ..)
 
-type family Deterministic (e :: EffectSig) :: Constraint
-type instance (ReadOnly (Ef p g NF b NI)) = ()
+      type family Deterministic (e :: EffectSig) :: Constraint
+      type instance (ReadOnly (Ef p g NF b NI)) = ()
 
-type family QuasiDeterministic (e :: EffectSig) :: Constraint
-type instance (ReadOnly (Ef p g nf b NI)) = ()
-
+      type family QuasiDeterministic (e :: EffectSig) :: Constraint
+      type instance (ReadOnly (Ef p g nf b NI)) = ()
 #endif
 
 
 ----------------------------------------------------------------
+
+-- | A shorthand for taking the ReadOnly restriction of a given Par
+-- monadic type.
+type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
+
+-- | A generalized lift operation for a read-only value into a
+-- not-necessarily-read-only context.  This is one particular form of
+-- valid "upcast" in the implicit effect subtype ordering.
+gliftReadOnly :: (ReadOnlyOf m) a -> m a
+gliftReadOnly = error "FINISHME - gliftReadOnly should use safe coerce."
 
 
 ----------------------------------------
