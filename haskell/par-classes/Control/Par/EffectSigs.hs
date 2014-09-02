@@ -81,9 +81,10 @@ data IOing    = I | NI
 --------------------------------------------------------------------------------
 {-
 -- Would closed type families help anything?
-type family GetEffects m where
-  GetEffects (Par e s) = e
-  GetEffects (trans m) = GetEffects m
+    type family GetEffects m where
+      GetEffects (Par e s) = e
+      GetEffects (trans m) = GetEffects m
+-- That would need a role restriction on trans?
 -}
 
 -- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
@@ -243,8 +244,11 @@ gliftReadOnly = error "FINISHME - gliftReadOnly should use safe coerce."
 ----------------------------------------
 -- And then at the level of monads:
 
+-- | Constraint that a given Par-monad is ReadOnly.
 type ReadOnlyM m = (ReadOnly (GetEffects m))
 
+-- | Constraint that a given Par-monad is Idempotent.
 type IdempotentM m = (Idempotent (GetEffects m))
 
+-- | Constraint that a given Par-monad performs IO.
 type HasIOM m = HasIO (GetEffects m)
