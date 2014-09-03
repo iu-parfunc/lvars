@@ -12,6 +12,8 @@ import Control.Monad.Trans.Class
 import Common
 import GHC.Exts
 
+import Data.Coerce (coerce, Coercible)
+
 --------------------------------------------------------------------------------
 
 -- type ReadOnly e  = (GetP e ~ NP, GetB e ~ NB , GetF e ~ NF , GetI e ~ NI)
@@ -70,6 +72,17 @@ data CFut a = CFut
 forkCancelable :: (LVarMonad m, ReadOnlyM m ) =>
                    CancelT m a -> CancelT m (CFut a)
 forkCancelable = undefined
+
+-- Alternative method, which includes lifting the RO subtype to RW:
+forkCancelable2 :: (LVarMonad m) =>
+                   CancelT (ReadOnlyOf m) a -> CancelT m (CFut a)
+forkCancelable2 = undefined
+
+forkCancelable3 :: (LVarMonad m) =>
+                   CancelT (ReadOnlyOf2 m) a -> CancelT m (CFut a)
+forkCancelable3 = undefined
+
+
 
 -- Non-deterministic version
 forkCancelableND :: (LVarMonad m, HasIOM m) =>

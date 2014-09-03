@@ -56,6 +56,8 @@ module Control.Par.EffectSigs
 import GHC.Exts (Constraint)
 -- import Control.Monad.Trans.Class
 
+import Unsafe.Coerce (unsafeCoerce) -- Nooooo....
+
 -- import Control.LVish.Types
 
 --------------------------------------------------------------------------------
@@ -238,7 +240,7 @@ type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
 -- not-necessarily-read-only context.  This is one particular form of
 -- valid "upcast" in the implicit effect subtype ordering.
 gliftReadOnly :: (ReadOnlyOf m) a -> m a
-gliftReadOnly = error "FINISHME - gliftReadOnly should use safe coerce."
+gliftReadOnly = unsafeCoerce
 
 
 ----------------------------------------
