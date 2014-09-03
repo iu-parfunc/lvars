@@ -45,26 +45,11 @@ newtype Par :: EffectsSig -> * -> * -> * where
 
 type role Par nominal nominal representational
 
-
-#if 1
 instance LVarMonad (Par efs s) where
   type GetEffects2 (Par efs s) = efs  -- Why is this a problem?
   type SetEffects2 efs (Par e2 s) = Par efs s 
   liftRO (WrapPar y) = (WrapPar (coerce y))
 
-#else
-instance LVarMonad (Par (Ef p g f b i) s) where
-  type GetEffects2 (Par (Ef p g f b i) s) = (Ef p g f b i)
-  type SetEffects2 efs (Par (Ef p g f b i) s) = Par efs s 
-
-  -- If the inner RealComp is non-indexed, can just unwrap/rewrap:
-  -- liftRO (WrapPar x :: Par (Ef NP g NF NB NI) s a) = 
-  --   (WrapPar x) :: Par (Ef p g f b i) s a
-
-  -- If it is indexed, we have to use safe coercion:
-  liftRO (WrapPar x :: Par (Ef NP g NF NB NI) s a) = 
-    (WrapPar (coerce x)) :: Par (Ef p g f b i) s a
-#endif
 
 instance Monad (Par efs s) where
   (>>=) = undefined
