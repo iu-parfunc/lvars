@@ -1,17 +1,14 @@
 {-# LANGUAGE Trustworthy #-}
-
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 -- FlexibleInstances, UndecidableInstances
-
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DefaultSignatures #-}
-
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -42,6 +39,8 @@ module Control.Par.Class
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
+  -- * Full LVar monads with effect tracking.
+  , ParLVar(..)
 
   --  Monotonically growing finite maps
 --  , ParIMap(..) -- Not ready yet.
@@ -61,8 +60,20 @@ module Control.Par.Class
 
   -- * Simple tracking of WHICH Par monads permit only threadsafe effects
   , ParThreadSafe()
-    
-  , NFData() -- This is reexported.
+
+  -- * Manipulating the phantom types of a Par monad 
+
+   --  , GetSession, SetSession
+
+  -- * Subtyping and conversions
+  , ReadOnlyOf
+
+  -- * Lifted constraints and type functions directly on monads
+  , SetMP, SetMG, SetMF, SetMB, SetMI
+  , HasIOM, ReadOnlyM, IdempotentM
+
+  -- * Reexports    
+  , NFData() 
   )
 where
 
@@ -70,6 +81,8 @@ import Control.DeepSeq
 import Control.Par.Class.Unsafe
 import Data.Splittable.Class as Sp 
 import GHC.Prim (Constraint)
+
+import Control.Par.EffectSigs
 
 import qualified Data.Foldable as F
 
@@ -253,6 +266,70 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
    -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
    freezeLV :: LVar m a d -> (Proxy (m()), qm ())
    -- It is the implementor's responsibility to expose this as quasi-deterministic.
+
+-- | A full LVar-compatible Par monad has effect tracking.
+class LVarSched m => ParLVar m where
+  -- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
+  type GetEffects m :: EffectSig
+  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
+  type SetEffects (e::EffectSig) m :: (* -> *)
+
+  -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
+  liftReadOnly :: (ReadOnlyOf m) a -> m a
+
+
+-- | A shorthand for taking the ReadOnly restriction of a given Par
+-- monadic type.
+--
+-- This is one particular form of valid "upcast" in the implicit
+-- effect subtype ordering.
+type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
+
+
+{-
+  -- | Type-level utility function for extracting the `s` part of a valid Par-monad stack.
+  type family GetSession (m :: (* -> *)) :: *
+  type instance GetSession (trans (m :: * -> *)) = GetSession m 
+
+  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
+  type family SetSession (s :: *) (m :: (* -> *)) :: (* -> *)
+  type instance SetSession s2 (trans (m :: * -> *)) = trans (SetSession s2 m)
+-}
+
+-- Undecidable instances:
+
+-- | Shorthand for setting the Put effeect of a Par monad.
+type family SetMP (p :: Putting) (m :: * -> *) :: (* -> *)
+type instance SetMP p m = SetEffects (SetP p (GetEffects m)) m
+
+-- | Shorthand for setting the Get effeect of a Par monad.
+type family SetMG (g :: Getting) (m :: * -> *) :: (* -> *)
+type instance SetMG g m = SetEffects (SetG g (GetEffects m)) m
+
+-- | Shorthand for setting the Freeze effeect of a Par monad.
+type family SetMF (f :: Freezing) (m :: * -> *) :: (* -> *)
+type instance SetMF f m = SetEffects (SetF f (GetEffects m)) m
+
+-- | Shorthand for setting the Bump effeect of a Par monad.
+type family SetMB (b :: Bumping) (m :: * -> *) :: (* -> *)
+type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
+
+-- | Shorthand for setting the IO effeect of a Par monad.
+type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
+type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
+
+----------------------------------------
+-- And then at the level of monads:
+
+-- | Constraint that a given Par-monad is ReadOnly.
+type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+-- | Constraint that a given Par-monad is Idempotent.
+type IdempotentM m = (Idempotent (GetEffects m))
+
+-- | Constraint that a given Par-monad performs IO.
+type HasIOM m = HasIO (GetEffects m)
+
 
 --------------------------------------------------------------------------------
 

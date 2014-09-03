@@ -34,23 +34,9 @@ module Control.Par.EffectSigs
         -- * Derived constraints, i.e. shorthands for common combinations:
         ReadOnly, Deterministic, QuasiDeterministic, Idempotent,
 
-        -- * Manipulating the phantom types of a Par monad 
-        GetEffects, SetEffects,
-        GetSession, SetSession,
-
-        -- * Subtyping and conversions
-        ReadOnlyOf, gliftReadOnly,
-
         -- * Accessor and setter functions for EffectSigs
         GetP, GetG, GetF, GetB, GetI,
-        SetP, SetG, SetF, SetB, SetI,
-
-        -- * Lifted constraints and type functions directly on monads
-        -- HasGetM 
-        SetMP, SetMG, SetMF, SetMB, SetMI,
-        HasIOM,  
-        ReadOnlyM, IdempotentM
-       
+        SetP, SetG, SetF, SetB, SetI,       
        )
        where
 import GHC.Exts (Constraint)
@@ -81,40 +67,6 @@ data IOing    = I | NI
 --------------------------------------------------------------------------------
 -- Effect sigs and their extraction:
 --------------------------------------------------------------------------------
-{-
--- Would closed type families help anything?
-    type family GetEffects m where
-      GetEffects (Par e s) = e
-      GetEffects (trans m) = GetEffects m
--- That would need a role restriction on trans?
--}
-
--- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
-type family GetEffects (m :: (* -> *)) :: EffectSig
--- This is a bit dangerous, but it does things once-and-for-all for all transformers:
-type instance GetEffects (trans (m :: * -> *)) = GetEffects m 
--- type instance GetEffects (CancelT m) = GetEffects m
--- type instance GetEffects (DeadlockT m) = GetEffects m
-
--- | Type-level utility function for extracting the `s` part of a valid Par-monad stack.
-type family GetSession (m :: (* -> *)) :: *
-type instance GetSession (trans (m :: * -> *)) = GetSession m 
-
--- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
-type family SetSession (s :: *) (m :: (* -> *)) :: (* -> *)
-type instance SetSession s2 (trans (m :: * -> *)) = trans (SetSession s2 m)
-
--- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
-type family SetEffects (e::EffectSig) (m :: (* -> *)) :: (* -> *)
-type instance SetEffects s2 (trans (m :: * -> *)) = trans (SetEffects s2 m)
-
-
--- type instance GetSession (CancelT m)   = GetSession m
--- type instance GetSession (DeadlockT m) = GetSession m
--- type instance SetSession e (CancelT m)   = CancelT   (SetSession e m)
--- type instance SetSession e (DeadlockT m) = DeadlockT (SetSession e m)
--- type instance SetEffects e (CancelT m)   = CancelT   (SetEffects e m)
--- type instance SetEffects e (DeadlockT m) = DeadlockT (SetEffects e m)
 
 -- | Utility for getting just the Put effect flag.
 type family GetP (e :: EffectSig) :: Putting
@@ -159,27 +111,6 @@ type instance SetI i2 (Ef p g f b i) = (Ef p g f b i2)
 ----------------------------------------
 -- Same thing but lifted to work over monads:
 
--- Undecidable instances:
-
--- | Shorthand for setting the Put effeect of a Par monad.
-type family SetMP (p :: Putting) (m :: * -> *) :: (* -> *)
-type instance SetMP p m = SetEffects (SetP p (GetEffects m)) m
-
--- | Shorthand for setting the Get effeect of a Par monad.
-type family SetMG (g :: Getting) (m :: * -> *) :: (* -> *)
-type instance SetMG g m = SetEffects (SetG g (GetEffects m)) m
-
--- | Shorthand for setting the Freeze effeect of a Par monad.
-type family SetMF (f :: Freezing) (m :: * -> *) :: (* -> *)
-type instance SetMF f m = SetEffects (SetF f (GetEffects m)) m
-
--- | Shorthand for setting the Bump effeect of a Par monad.
-type family SetMB (b :: Bumping) (m :: * -> *) :: (* -> *)
-type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
-
--- | Shorthand for setting the IO effeect of a Par monad.
-type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
-type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
 
 --------------------------------------------------------------------------------
 -- Now for constraints:
@@ -232,25 +163,3 @@ type ReadOnly e = (NoPut e, NoBump e, NoFreeze e, NoIO e)
 
 ----------------------------------------------------------------
 
--- | A shorthand for taking the ReadOnly restriction of a given Par
--- monadic type.
-type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
-
--- | A generalized lift operation for a read-only value into a
--- not-necessarily-read-only context.  This is one particular form of
--- valid "upcast" in the implicit effect subtype ordering.
-gliftReadOnly :: (ReadOnlyOf m) a -> m a
-gliftReadOnly = unsafeCoerce
-
-
-----------------------------------------
--- And then at the level of monads:
-
--- | Constraint that a given Par-monad is ReadOnly.
-type ReadOnlyM m = (ReadOnly (GetEffects m))
-
--- | Constraint that a given Par-monad is Idempotent.
-type IdempotentM m = (Idempotent (GetEffects m))
-
--- | Constraint that a given Par-monad performs IO.
-type HasIOM m = HasIO (GetEffects m)

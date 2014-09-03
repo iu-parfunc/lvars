@@ -77,7 +77,7 @@ case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 v3 :: (HasPut e, HasGet e) => Par e s ()
 v3 = 
      do s <- ARS.newEmptySet
-        mapM_ (\n -> fork $ ARS.insert n s) [1..10]
+        mapM_ (\n -> fork $ ARS.insert n s) [1..10::Int]
         ARS.waitAddedSize 10 s
 
 -- Getting occasional failures here with -N2, don't know what's

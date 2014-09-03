@@ -56,10 +56,8 @@ newtype Par :: EffectSig -> * -> * -> * where
   WrapPar :: L.Par a -> Par e s a
   deriving (Monad, Functor, Applicative)
 
-type instance GetEffects (Par e s) = e
-type instance SetEffects e2 (Par e1 s) = Par e2 s
-type instance GetSession (Par e s) = s
-type instance SetSession s2 (Par e s) = Par e s2
+-- type instance GetSession (Par e s) = s
+--- type instance SetSession s2 (Par e s) = Par e s2
 
 -- Example type error:
 -- _ = foo bar

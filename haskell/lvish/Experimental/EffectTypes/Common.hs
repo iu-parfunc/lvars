@@ -12,6 +12,7 @@ import Control.Monad.Trans.Class
 -- import qualified Control.Monad.State as S
 import Control.Applicative
 import Data.Coerce (coerce, Coercible)
+import Unsafe.Coerce (unsafeCoerce)
 
 data EffectsSig  = Ef Putting Getting Freezing Bumping IOing
 data Putting  = P | NP
@@ -26,7 +27,8 @@ data IOing    = I | NI
 class ParMonad (m :: * -> *) where
 
 class 
-     (Coercible (ReadOnlyOf2 m) m) => 
+     -- Future work: get constraints like this to work:
+--     (Coercible ((ReadOnlyOf2 m)) (m)) => 
 --      (Coercible (SetEffects2 e m) m) => 
 --      (Coercible (SetEffects2 (Ef P G F B I) m) m) => 
       LVarMonad (m :: * -> *) where
@@ -68,6 +70,8 @@ data IVar s a = IVar
 data LVar s a = LVar 
 data DeadlockT (p:: * -> *) a = DeadlockT
 
+dbg = True
+
 -- Here we just capture the notion that it's a state monad
 newtype CancelT (p:: * -> *) a  = CancelT (Int -> p (a,Int))
 
@@ -88,8 +92,10 @@ instance (LVarMonad m) => LVarMonad (CancelT m) where
   
   -- Simple case, if we have a computation in the inner monad, we can do it:
   -- This SHOULD be a zero-cost coerce, however!!
-  liftRO (CancelT fn) = CancelT (\s -> liftRO (fn s))
-  -- liftRO = unsafeCoerce
+  liftRO = if dbg 
+           then \ (CancelT fn) -> CancelT (\s -> liftRO (fn s))
+           else unsafeCoerce
+  -- Can't get safe coercion working yet:
   -- liftRO x = coerce x b
 
 instance Functor m => Functor (DeadlockT m) where

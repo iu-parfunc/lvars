@@ -141,7 +141,7 @@ v8d :: (HasFreeze e, HasPut e) => Par e s [Int]
 v8d = do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."  
-  m1 <- IM.newFromList [(1,1),(2,2)]
+  m1 <- IM.newFromList [(1,1),(2,2) :: (Int,Int)]
   m2 <- IM.newFromList [(40,40),(50,50)]
   logDbgLn 1 " [v8d] Got two fresh maps..."
   let cb k v = do logDbgLn 1$" [v8d]  Inside callback for traverse.. key="++show k

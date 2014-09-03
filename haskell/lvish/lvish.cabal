@@ -126,7 +126,7 @@ library
                     Data.LVar.CycGraph
 
   -- These are in "beta" and aren't exposed yet:
-  other-modules
+  other-modules:
                     -- Not quite ready for prime-time yet:
                     Data.LVar.AddRemoveSet
                     Data.LVar.PNCounter

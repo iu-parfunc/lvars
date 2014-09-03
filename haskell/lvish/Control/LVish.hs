@@ -164,6 +164,11 @@ instance (Deterministic e1, e2 ~ SetF F e1) =>
 instance PU.ParThreadSafe (Par e s) where
   unsafeParIO = I.liftIO
 
+instance PC.ParLVar (Par e s) where
+  type GetEffects (Par e s) = e
+  type SetEffects e2 (Par e1 s) = Par e2 s
+  liftReadOnly (WrapPar y) = (WrapPar y)
+
 -- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
 -- signature.
 parIO :: HasIO e => IO a -> Par e s a
