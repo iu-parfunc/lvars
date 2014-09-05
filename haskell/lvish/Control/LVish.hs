@@ -127,6 +127,8 @@ import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
 import           Control.LVish.Logging (OutDest(..))
 import           Data.LVar.IVar 
+import           Data.Proxy
+import           Data.Coerce (coerce)
 
 import Data.IORef
 --------------------------------------------------------------------------------
@@ -165,9 +167,12 @@ instance PU.ParThreadSafe (Par e s) where
   unsafeParIO = I.liftIO
 
 instance PC.ParLVar (Par e s) where
+
+instance PU.ParWEffects (Par e s) where
   type GetEffects (Par e s) = e
   type SetEffects e2 (Par e1 s) = Par e2 s
   liftReadOnly (WrapPar y) = (WrapPar y)
+  coerceProp Proxy eprox = PU.MkConstraint
 
 -- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
 -- signature.

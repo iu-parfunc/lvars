@@ -52,7 +52,7 @@ module Control.Par.Class
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
   , ParQuasi (..), ParSealed(..)
-  , Proxy(Proxy)
+  , ParWEffects(..)
                    
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
@@ -74,17 +74,19 @@ module Control.Par.Class
 
   -- * Reexports    
   , NFData() 
+  , Proxy(Proxy)
   )
 where
 
 import Control.DeepSeq
 import Control.Par.Class.Unsafe
-import Data.Splittable.Class as Sp 
+-- import Data.Splittable.Class as Sp 
 import GHC.Prim (Constraint)
 
 import Control.Par.EffectSigs
 
 import qualified Data.Foldable as F
+import Data.Proxy (Proxy(..))
 
 --------------------------------------------------------------------------------
 
@@ -185,8 +187,6 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
--- | Carry a phantom type argument.
-data Proxy a = Proxy
 
 -- TODO: Move to Control.LVish.Class:
 
@@ -202,6 +202,9 @@ class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi m qm | m -> qm wher
 class ParSealed (m :: * -> *) where
    -- | Extract the @s@ parameter from a Par monad type.
    type GetSession m :: *
+
+-- | The standard class for all LVar-supporting Par monads.
+class (LVarSched m, ParWEffects m) => ParLVar m where
 
 -- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
 class (Monad m, ParSealed m) => LVarSched m  where
@@ -266,24 +269,6 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
    -- | Freeze an LVar (introducing quasi-determinism).  This requires marking it at runtime.
    freezeLV :: LVar m a d -> (Proxy (m()), qm ())
    -- It is the implementor's responsibility to expose this as quasi-deterministic.
-
--- | A full LVar-compatible Par monad has effect tracking.
-class LVarSched m => ParLVar m where
-  -- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
-  type GetEffects m :: EffectSig
-  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
-  type SetEffects (e::EffectSig) m :: (* -> *)
-
-  -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
-  liftReadOnly :: (ReadOnlyOf m) a -> m a
-
-
--- | A shorthand for taking the ReadOnly restriction of a given Par
--- monadic type.
---
--- This is one particular form of valid "upcast" in the implicit
--- effect subtype ordering.
-type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
 
 
 {-

@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 
 module STTests (tests, runTests) where
 
@@ -27,6 +29,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
+import Control.Par.EffectSigs (GetG, Getting(G))
 
 import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
 import Test.Framework.Providers.HUnit
@@ -50,7 +53,9 @@ case_v_t0 = assertEqual "basic forkSTSplit usage"
 t0 :: String            
 t0 = LV.runPar $ V.runParVecT 10 p0
 
-p0 :: V.ParVecT s1 Int (LV.Par e s0) String
+-- p0 :: (HasGet e) => V.ParVecT s1 Int (LV.Par e s0) String
+-- p0 :: (GetG e ~ G) => V.ParVecT s1 Int (LV.Par e s0) String
+p0 :: (HasGet e, HasPut e) => V.ParVecT s1 Int (LV.Par e s0) String
 p0 = do
   
   V.set 0

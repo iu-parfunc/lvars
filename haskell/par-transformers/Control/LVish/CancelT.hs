@@ -1,5 +1,4 @@
 {-# LANGUAGE Unsafe #-}
-
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,13 +6,16 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, InstanceSigs #-}
 
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-} -- TEMP,
+
 -- | A module for adding the cancellation capability.
 -- 
 --   In its raw form, this is unsafe, because cancelating could cancel something that
 --   would have performed a visible side effect.
 
 module Control.LVish.CancelT
-       (
+{-       (
          -- * The transformer that adds the cancellation capability
          CancelT(), ThreadId, CFut, CFutFate(..),
          
@@ -34,17 +36,17 @@ module Control.LVish.CancelT
 
          -- * Boolean operations with cancellation
          asyncAnd, asyncAndCPS
-       )
+       )-}
        where
 
 import Control.Monad.State as S
+import Control.Applicative (Applicative)
 import Data.IORef
 -- import Data.LVar.IVar
 
 import Control.Par.Class as PC
 import Control.Par.EffectSigs as E
-import Control.Par.Class.Unsafe (ParMonad(..))
-
+import Control.Par.Class.Unsafe (ParMonad(..), ParWEffects(..), ReifyConstraint(..))
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
@@ -52,7 +54,7 @@ import qualified Data.Atomics.Counter as C
 -- this, it must track, and periodically poll, extra mutable state for each
 -- cancellable computation in the fork-tree.
 newtype CancelT m a = CancelT ((StateT CState m) a)
-  deriving (Monad, Functor)
+  deriving (Monad, Functor, Applicative)
 
 unCancelT :: CancelT t t1 -> StateT CState t t1
 unCancelT (CancelT m) = m
@@ -109,6 +111,7 @@ cancelMe = lift $ returnToSched
 -- | The type of cancellable thread identifiers.
 type ThreadId = CState
 
+{-
 -- | Fork a computation while retaining a handle on it that can be used to cancel it
 -- (and all its descendents).  This is equivalent to `createTid` followed by `forkCancelableWithTid`.
 -- 
@@ -121,16 +124,17 @@ type ThreadId = CState
 -- into a non-read-only parent computation at some point.
 forkCancelable :: (PC.ParIVar m, LVarSched m, 
 --                   ReadOnlyM m,
-                   e ~ GetEffects m, NoPut e,
                    FutContents m CFutFate, FutContents m a) => 
-                  CancelT m a -> CancelT m (ThreadId, CFut m a)
+                  (ReadOnlyOf (CancelT m)) a -> CancelT m (ThreadId, CFut m a)
 forkCancelable act = do
 --    b <- poll   -- Tradeoff: we could poll once before the atomic op.
 --    when b $ do
     tid <- createTid
     fut <- forkCancelableWithTid tid act
     return $! (tid,fut)
+-}
 
+{-
 -- | This is a version of `forkCancelable` which allows side-effecting computation to
 --   be canceled.  Be warned, that is a dangerous business.  Accordingly, this function
 --   introduces nondeterminism and must register the "IO effect".
@@ -142,6 +146,7 @@ forkCancelableND act = do
     tid <- createTid
     fut <- forkCancelableNDWithTid tid act
     return $! (tid, fut)
+-}
 
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
 -- computations in question.  For that purpose, we provide a two-phase interface:
@@ -158,9 +163,15 @@ createTid = CancelT$ do
 --   be canceled as a group.
 forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, -- ReadOnlyM m, 
                           FutContents m CFutFate, FutContents m a) => 
-                         ThreadId -> CancelT m a -> CancelT m (CFut m a)
+                         ThreadId -> (ReadOnlyOf (CancelT m)) a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
-forkCancelableWithTid tid act = forkInternal tid act
+forkCancelableWithTid tid act = 
+  -- unsafeCastEffects2 (Proxy::Proxy(GetEffects (ReadOnlyOf (CancelT m))))
+--                     (forkInternal tid act)
+  (error "FINISHME")
+
+
+{-
 
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
 forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m, 
@@ -168,13 +179,13 @@ forkCancelableNDWithTid :: (PC.ParIVar m, LVarSched m, HasIOM m,
                          ThreadId -> CancelT m a -> CancelT m (CFut m a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
-
+-}
 
 -- Internal version -- no rules!
 forkInternal :: forall m a . 
                  (PC.ParIVar m, LVarSched m, 
                   FutContents m CFutFate, FutContents m a) => 
-                 ThreadId -> CancelT m a -> CancelT m (CFut m a)
+                 ThreadId -> ((CancelT m)) a -> CancelT m (CFut m a)
 {-# INLINE forkInternal #-} 
 forkInternal (CState childRef) (CancelT act) = CancelT$ do
     -- The following line gives me this GHC panic:
@@ -320,14 +331,18 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 -- | A parallel AND operation that not only signals its output early when it receives
 -- a False input, but also attempts to cancel the other, unneeded computation.
 --
-asyncAnd :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
+asyncAnd :: forall p . (PC.ParIVar p, PC.ParLVar p,  
+                        PC.ParWEffects (CancelT p), -- TEMP
                         FutContents p CFutFate, FutContents p (), FutContents p Bool)
-            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            => ((ReadOnlyOf (CancelT p)) Bool) 
+            -> ((ReadOnlyOf (CancelT p)) Bool) 
             -> CancelT p Bool
 asyncAnd lef rig = do
   res <- PC.new 
   asyncAndCPS lef rig (PC.put res)
   PC.get res
+
+type SetReadOnly e = Ef NP (GetG e) NF NB NI 
 
 -- | A continuation-passing-sytle version of `asyncAnd`.  This version is
 -- non-blocking, simply registering a call-back that receives the result of the AND
@@ -335,15 +350,22 @@ asyncAnd lef rig = do
 -- 
 -- This version may be more efficient because it saves the allocation of an
 -- additional data structure to synchronize on when waiting on the result.
-asyncAndCPS :: forall p . (PC.ParIVar p, LVarSched p, ReadOnlyM p, 
-                        FutContents p CFutFate, FutContents p ())
-            => ((CancelT p) Bool) -> (CancelT p Bool) 
+asyncAndCPS :: forall p . (PC.ParIVar p, PC.ParLVar p, 
+                           PC.ParWEffects (CancelT p),
+                           FutContents p CFutFate, FutContents p ())
+--            => ((CancelT p) Bool) -> (CancelT p Bool) 
+            => ((ReadOnlyOf (CancelT p)) Bool) 
+            -> ((ReadOnlyOf (CancelT p)) Bool) 
             -> (Bool -> CancelT p ()) -> CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`            
 asyncAndCPS leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
-  let launch mine theirs m =
+  let -- launch :: ThreadId -> ThreadId -> CancelT p Bool -> CancelT p (CFut p ())
+      launch :: ThreadId -> ThreadId -> 
+                ((ReadOnlyOf (CancelT p)) Bool) -> 
+                             (CancelT p) (CFut p ())
+      launch mine theirs m =
              forkCancelableWithTid mine $
              -- Here are the possible states:
              -- T?   -- 1
@@ -352,23 +374,38 @@ asyncAndCPS leftM rightM kont = do
              -- FT   -- 101
              -- TF   -- 101
              -- FF   -- 200
+                let roprox = (Proxy::Proxy(SetReadOnly (GetEffects (CancelT p)))) in
+                case law2 (Proxy::Proxy((CancelT p) ())) roprox of 
+                  MkConstraint -> 
                    do b <- m
+                      let kont2 x = unsafeCastEffects roprox (kont x)
                       case b of
                         True  -> do n <- internalLiftIO$ C.incrCounter 1 cnt
                                     if n==2
-                                      then kont True
+                                      then kont2 True
                                       else return ()
+{-
                         False -> -- We COULD assume idempotency and execute kont False twice,
                                  -- but since we have the counter anyway let us dedup:
-                                 do n <- internalLiftIO$ C.incrCounter 100 cnt                                    
-                                    case n of
-                                      100 -> do internal_cancel theirs; kont False
-                                      101 -> kont False
+                                 do n <- internalLiftIO$ C.incrCounter 100 cnt                                                                       case n of
+                                      100 -> do internal_cancel theirs; kont2 False
+                                      101 -> kont2 False
                                       200 -> return ()
+-}
   tid1 <- createTid
   tid2 <- createTid  
-  launch tid1 tid2 leftM
-  launch tid2 tid1 rightM
+  -- let prox = (Proxy::Proxy (GetEffects p))
+--  launch tid1 tid2 leftM
+--  launch tid2 tid1 rightM
+
+-- The above approach results in:
+    -- Could not deduce (SetEffects (GetEffects p) (CancelT p)
+    --                   ~ CancelT p)
+
+--  let prox =  Proxy :: Proxy (GetEffects (ReadOnlyOf (CancelT p)))
+--  launch tid1 tid2 leftM
+--  unsafeCastEffects2 prox $ launch tid1 tid2 leftM
+--  unsafeCastEffects2 prox $ launch tid2 tid1 rightM
 
   return ()
 

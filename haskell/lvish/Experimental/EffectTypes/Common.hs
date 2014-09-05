@@ -2,6 +2,7 @@
     GeneralizedNewtypeDeriving, FlexibleInstances, TypeFamilies, RankNTypes,
     ConstraintKinds, FlexibleContexts, ScopedTypeVariables, RoleAnnotations #-}
 {-# LANGUAGE UndecidableInstances #-}    
+{-# LANGUAGE GADTs, RankNTypes #-}
 
 -- PolyKinds, ImpredicativeTypes
 module Common ( Par(), EffectsSig(..), Putting(..), Getting(..), Freezing(..), 
@@ -13,6 +14,7 @@ import Control.Monad.Trans.Class
 import Control.Applicative
 import Data.Coerce (coerce, Coercible)
 import Unsafe.Coerce (unsafeCoerce)
+import Data.Proxy as P
 
 data EffectsSig  = Ef Putting Getting Freezing Bumping IOing
 data Putting  = P | NP
@@ -37,6 +39,17 @@ class
   type SetEffects2 (e::EffectsSig) m :: (* -> *)
 
   liftRO :: (ReadOnlyOf2 m) a -> m a
+  coerceProp :: forall e a . 
+                Proxy (m ()) -> Proxy e -> 
+              ReifyDict (Coercible m (SetEffects2 e m))
+  --              ReifyDict (Coercible (m a) ((SetEffects2 e m) a))
+
+data ReifyDict c where 
+  MkDict :: c => ReifyDict c
+--  MkDict :: (forall w . Coercible Int Int) => Dict ma
+--  MkDict :: (Num Int) => Dict ma
+--  MkDict :: Int -> Dict ma
+
 
 type ReadOnlyOf2 m = (SetEffects2 (Ef NP (GetG (GetEffects2 m)) NF NB NI) m)
 
@@ -45,13 +58,13 @@ data Determinism = Det | QuasiDet deriving Show
 newtype Par :: EffectsSig -> * -> * -> * where
   WrapPar :: RealComp e -> Par e s a
 
-type role Par nominal nominal representational
+-- type role Par nominal nominal representational
 
 instance LVarMonad (Par efs s) where
   type GetEffects2 (Par efs s) = efs  -- Why is this a problem?
   type SetEffects2 efs (Par e2 s) = Par efs s 
   liftRO (WrapPar y) = (WrapPar (coerce y))
-
+  coerceProp Proxy Proxy = MkDict
 
 instance Monad (Par efs s) where
   (>>=) = undefined
@@ -97,6 +110,24 @@ instance (LVarMonad m) => LVarMonad (CancelT m) where
            else unsafeCoerce
   -- Can't get safe coercion working yet:
   -- liftRO x = coerce x b
+  coerceProp Proxy eprox = 
+    case (coerceProp (Proxy::Proxy(m())) eprox) of
+      MkDict -> MkDict
+--      MkDict -> undefined
+
+type AllOn  = (Ef P G F B I)
+type AllOff = (Ef NP NG NF NB NI)
+
+-- test1 :: ReifyDict (Coercible (Par AllOn s a) (Par AllOff s a))
+test1 :: ReifyDict (Coercible (Par AllOn s) (Par AllOff s))
+test1 = coerceProp Proxy Proxy
+-- test1 = coerceProp (Proxy::Proxy (Par AllOn s ())) (Proxy::Proxy AllOff)
+
+-- test2 :: ReifyDict (Coercible (CancelT (Par AllOn s) a)
+--                               (CancelT (Par AllOff s) a))
+test2 :: ReifyDict (Coercible (CancelT (Par AllOn s))
+                              (CancelT (Par AllOff s)))
+test2 = coerceProp Proxy Proxy
 
 instance Functor m => Functor (DeadlockT m) where
   fmap = undefined
@@ -217,3 +248,4 @@ _ = coerce :: forall p g f b i s a . Par (Ef NP NG NF NB NI) s a -> Par (Ef p g 
 -- y = coerce :: Test Int -> Test Bool
 
 data Test x = Test x
+

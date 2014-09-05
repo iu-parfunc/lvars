@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds, ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes, CPP #-}
 
-module CancelTests -- (tests, runTests)
+module CancelTests (tests, runTests)
        where
 
 import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, runParPoly, runParPolyIO, Par,
@@ -63,7 +63,7 @@ cancel02 =
  where 
   comp :: forall m1 m2 m3 m4 s . 
           ( m1 ~ Par (Ef NP G NF NB NI) s
-          , PC.ParIVar m1, PC.LVarSched m1, ReadOnlyM m1  -- Sanity check.
+          , PC.ParIVar m1, PC.LVarSched m1, PC.ReadOnlyM m1  -- Sanity check.
           -- , PC.FutContents m1 CFutFate  -- ERROR HERE.  Why?
           -- , PC.FutContents m1 () -- ERROR HERE.  Why?
                                     -- Couldn't match type 'NP with 'P
@@ -87,7 +87,7 @@ cancel02 =
                  pollForCancel
                  dbg$ "!! [child] thread got past delay!"
 
-         p2 :: (PC.ParIVar m, PC.LVarSched m, ReadOnlyM m, 
+         p2 :: (PC.ParIVar m, PC.LVarSched m, PC.ReadOnlyM m, 
                 PC.FutContents m CFutFate, PC.FutContents m a) => 
                CancelT m (CT.ThreadId, CFut m a)
          p2 = forkCancelable undefined
@@ -153,7 +153,7 @@ forkTemp :: ( PC.ParIVar m, PC.LVarSched m
              -- e ~ GetEffects m, 
              -- NoPut e, 
             -- , PC.FutContents m CFutFate
-            , PC.FutContents m a -- This line alone screws it up:
+--            , PC.FutContents m a -- This line alone screws it up:
                                  --   Couldn't match type 'NP with 'P
             ) => 
             (CancelT m a -> CancelT m a)
@@ -164,7 +164,7 @@ ro1 = undefined
 
 ro2 :: CancelT (Par (Ef NP G NF NB NI) s) ()
 -- ro2 = id ro1
-ro2 = forkTemp ro1
+ro2 = forkTemp ro1 -- Activate WEIRD bug.
 
 
 main = cancel02B
@@ -185,7 +185,6 @@ cancel03 = runParNonDet$ runCancelT $ do
   return ()
 {-
 -}
-{-
 
 --------------------------------------------------------------------------------
 -- -- BOOLEAN TESTS:
@@ -194,53 +193,53 @@ cancel03 = runParNonDet$ runCancelT $ do
 case_and1 :: Assertion
 case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
               v <- PC.new
-              CT.asyncAnd (return True) (return False) (PC.put v)
+              CT.asyncAndCPS (return True) (return False) (PC.put v)
               PC.get v
 
-case_and2 :: Assertion
-case_and2 = assertEqual "" False $ runPar $ runCancelT $ do
-              v <- PC.new
-              CT.asyncAnd (return False) (return False) (PC.put v)
-              PC.get v
+-- case_and2 :: Assertion
+-- case_and2 = assertEqual "" False $ runPar $ runCancelT $ do
+--               v <- PC.new
+--               CT.asyncAnd (return False) (return False) (PC.put v)
+--               PC.get v
 
-case_and3 :: Assertion
-case_and3 = assertEqual "" True $ runPar $ runCancelT $ do
-              v <- PC.new
-              CT.asyncAnd (return True) (return True) (PC.put v)
-              PC.get v                        
+-- case_and3 :: Assertion
+-- case_and3 = assertEqual "" True $ runPar $ runCancelT $ do
+--               v <- PC.new
+--               CT.asyncAnd (return True) (return True) (PC.put v)
+--               PC.get v                        
 
-case_and4 :: Assertion
-case_and4 = assertEqual "" False $ runPar $ runCancelT $ do
-              v <- PC.new
-              CT.asyncAnd (return False) (return True) (PC.put v)
-              PC.get v
+-- case_and4 :: Assertion
+-- case_and4 = assertEqual "" False $ runPar $ runCancelT $ do
+--               v <- PC.new
+--               CT.asyncAnd (return False) (return True) (PC.put v)
+--               PC.get v
 
 
-case_andTreeF :: Assertion
-case_andTreeF = assertEqual "" False $ runPar $ runCancelT $ andTreeF 16
+-- case_andTreeF :: Assertion
+-- case_andTreeF = assertEqual "" False $ runPar $ runCancelT $ andTreeF 16
 
-case_andTreeT :: Assertion
-case_andTreeT = assertEqual "" True $ runPar $ runCancelT $ andTreeT 16
+-- case_andTreeT :: Assertion
+-- case_andTreeT = assertEqual "" True $ runPar $ runCancelT $ andTreeT 16
 
--- | Takes a depth N and does 2^N operations in a binary tree
-andTreeF :: Int -> CancelT (Par e s) Bool
-andTreeF 0 = return False
-andTreeF depth = do
-  v <- PC.new
-  CT.asyncAnd (andTreeF (depth-1)) (andTreeF (depth-1)) (PC.put v)
-  PC.get v
+-- -- | Takes a depth N and does 2^N operations in a binary tree
+-- andTreeF :: Int -> CancelT (Par e s) Bool
+-- andTreeF 0 = return False
+-- andTreeF depth = do
+--   v <- PC.new
+--   CT.asyncAnd (andTreeF (depth-1)) (andTreeF (depth-1)) (PC.put v)
+--   PC.get v
 
-andTreeT :: Int -> CancelT (Par e s) Bool
-andTreeT 0 = return True
-andTreeT depth = do
-  v <- PC.new
-  CT.asyncAnd (andTreeT (depth-1)) (andTreeT (depth-1)) (PC.put v)
-  PC.get v
+-- andTreeT :: Int -> CancelT (Par e s) Bool
+-- andTreeT 0 = return True
+-- andTreeT depth = do
+--   v <- PC.new
+--   CT.asyncAnd (andTreeT (depth-1)) (andTreeT (depth-1)) (PC.put v)
+--   PC.get v
 
 
 
 -- TODO: tree of ANDs with cancellation..
-
+{-
 -- case_or1 :: Assertion
 -- case_or1 = assertEqual "" True $ runPar $ do
 --               v <- IV.new
@@ -276,11 +275,11 @@ andTreeT depth = do
 -- -- TODO: add ones with explicit timing controls (sleep).
 
 -- --------------------------------------------------------------------------------
+-}
 
 tests :: Test
 tests = $(testGroupGenerator)
 
--}
 
 runTests :: IO ()
 runTests = defaultMain [] -- [tests]
