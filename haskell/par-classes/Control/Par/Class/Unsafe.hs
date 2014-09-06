@@ -69,7 +69,6 @@ class ParWEffects m where
   -- type families to go through.
   law1 :: forall e. Proxy (m ()) -> Proxy e -> 
           ReifyConstraint (e ~ GetEffects (SetEffects e m))
-
   law2 :: forall e. Proxy (m ()) -> Proxy e -> 
           ReifyConstraint (ParMonad (SetEffects e m))
 

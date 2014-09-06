@@ -42,6 +42,7 @@ module Control.LVish.CancelT
 import Control.Monad.State as S
 import Control.Applicative (Applicative)
 import Data.IORef
+import Data.Coerce
 -- import Data.LVar.IVar
 
 import Control.Par.Class as PC
@@ -66,6 +67,38 @@ newtype CState = CState (IORef CPair)
 
 instance MonadTrans CancelT where
   lift m = CancelT (lift m)
+
+instance ParWEffects m => ParWEffects (CancelT m) where  
+  type GetEffects (CancelT m)     = GetEffects m
+  type SetEffects efs (CancelT m) = CancelT (SetEffects efs m)
+
+  liftReadOnly comp = 
+    let prox = Proxy::Proxy (SetReadOnly (GetEffects (CancelT m)))
+    in unsafeCastEffects2 prox comp
+
+  unsafeCastEffects eprox comp = 
+    case coerceProp (Proxy::Proxy(m())) eprox of 
+      MkConstraint -> coerce comp
+    
+  unsafeCastEffects2 eprox comp = 
+    case coerceProp (Proxy::Proxy(m())) eprox of 
+      MkConstraint -> undefined
+  --     MkConstraint -> coerce comp
+
+  coerceProp Proxy eprox = 
+    let mprox = Proxy::Proxy (m()) in 
+    case (law1 mprox eprox, law2 mprox eprox) of 
+     (MkConstraint, MkConstraint) -> 
+      case (coerceProp (Proxy::Proxy(m())) eprox) of
+        MkConstraint -> MkConstraint
+  law1 _ eprox = 
+    let mprox = Proxy::Proxy (m()) in 
+    case law1 mprox eprox of 
+      MkConstraint -> MkConstraint
+  law2 _ eprox = 
+    let mprox = Proxy::Proxy (m()) in 
+    case (law1 mprox eprox, law2 mprox eprox) of 
+     (MkConstraint, MkConstraint) -> MkConstraint
 
 data CPair = CPair !Bool ![CState]
 
@@ -350,7 +383,7 @@ type SetReadOnly e = Ef NP (GetG e) NF NB NI
 -- 
 -- This version may be more efficient because it saves the allocation of an
 -- additional data structure to synchronize on when waiting on the result.
-asyncAndCPS :: forall p . (PC.ParIVar p, PC.ParLVar p, 
+asyncAndCPS :: forall p . (PC.ParMonad p, PC.ParIVar p, PC.ParLVar p, 
                            PC.ParWEffects (CancelT p),
                            FutContents p CFutFate, FutContents p ())
 --            => ((CancelT p) Bool) -> (CancelT p Bool) 
@@ -384,28 +417,19 @@ asyncAndCPS leftM rightM kont = do
                                     if n==2
                                       then kont2 True
                                       else return ()
-{-
                         False -> -- We COULD assume idempotency and execute kont False twice,
                                  -- but since we have the counter anyway let us dedup:
-                                 do n <- internalLiftIO$ C.incrCounter 100 cnt                                                                       case n of
-                                      100 -> do internal_cancel theirs; kont2 False
+                                 do n <- internalLiftIO$ C.incrCounter 100 cnt
+                                    case n of
+                                      100 -> do 
+                                                unsafeCastEffects roprox 
+                                                  (internal_cancel theirs :: (CancelT p) ())
+                                                kont2 False
                                       101 -> kont2 False
                                       200 -> return ()
--}
   tid1 <- createTid
   tid2 <- createTid  
-  -- let prox = (Proxy::Proxy (GetEffects p))
---  launch tid1 tid2 leftM
---  launch tid2 tid1 rightM
-
--- The above approach results in:
-    -- Could not deduce (SetEffects (GetEffects p) (CancelT p)
-    --                   ~ CancelT p)
-
---  let prox =  Proxy :: Proxy (GetEffects (ReadOnlyOf (CancelT p)))
---  launch tid1 tid2 leftM
---  unsafeCastEffects2 prox $ launch tid1 tid2 leftM
---  unsafeCastEffects2 prox $ launch tid2 tid1 rightM
-
+  launch tid1 tid2 leftM
+  launch tid2 tid1 rightM
   return ()
 

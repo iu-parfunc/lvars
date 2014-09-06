@@ -173,6 +173,8 @@ instance PU.ParWEffects (Par e s) where
   type SetEffects e2 (Par e1 s) = Par e2 s
   liftReadOnly (WrapPar y) = (WrapPar y)
   coerceProp Proxy eprox = PU.MkConstraint
+  law1 _ _ = PU.MkConstraint
+  law2 _ _ = PU.MkConstraint
 
 -- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
 -- signature.
