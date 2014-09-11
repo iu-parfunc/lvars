@@ -126,7 +126,7 @@ parMapM_ f l =
 -- Graph algorithms
 --------------------------------------------------------------------------------
 
-bfs_async :: (HasPut d) => AdjacencyGraph -> NodeID -> Par d s (ISet s NodeID)
+bfs_async :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (ISet s NodeID)
 bfs_async gr@(AdjacencyGraph vvec evec) start = do 
   st <- S.newFromList [start]
   S.forEach st $ \ nd -> do
@@ -137,7 +137,7 @@ bfs_async gr@(AdjacencyGraph vvec evec) start = do
 
 
 -- | A version that uses an array rather than set representation.
-bfs_async_arr :: (HasPut d) => AdjacencyGraph -> NodeID -> Par d s (IStructure s Bool)
+bfs_async_arr :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (IStructure s Bool)
 bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newIStructure (U.length vvec)
   let callback nd bool = do
@@ -151,7 +151,7 @@ bfs_async_arr gr@(AdjacencyGraph vvec evec) start = do
   return arr
 
 -- | Same, but with NatArray.
-bfs_async_arr2 :: (HasPut d) => AdjacencyGraph -> NodeID -> Par d s (NatArray s Word8)
+bfs_async_arr2 :: (HasPut e) => AdjacencyGraph -> NodeID -> Par e s (NatArray s Word8)
 bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do 
   arr <- newNatArray (U.length vvec)
   let callback nd flg = do
@@ -169,7 +169,7 @@ bfs_async_arr2 gr@(AdjacencyGraph vvec evec) start = do
 
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
-forVec :: U.Unbox a => U.Vector a -> (a -> Par d s ()) -> Par d s ()
+forVec :: U.Unbox a => U.Vector a -> (a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0 
   where
     len = U.length vec

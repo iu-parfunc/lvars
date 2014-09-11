@@ -59,7 +59,7 @@ import Data.LVar.NatArray as NArr
 -- A simple FOLD operation.
 ------------------------------------------------------------------------------------------  
 
-maxDegreeS :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxPosInt s)
+maxDegreeS :: AdjacencyGraph -> (ISet s NodeID) -> Par e s (MaxPosInt s)
 maxDegreeS gr component = do
   mc <- newMaxPosInt 0 
   S.forEach component $ \ nd ->
@@ -67,7 +67,7 @@ maxDegreeS gr component = do
   return mc
 
 
-maxDegreeN :: AdjacencyGraph -> (NatArray s Word8) -> Par d s (MaxPosInt s)
+maxDegreeN :: AdjacencyGraph -> (NatArray s Word8) -> Par e s (MaxPosInt s)
 maxDegreeN gr component = do
   mc <- newMaxPosInt 0 
   NArr.forEach component $ \ nd flg ->
@@ -76,7 +76,7 @@ maxDegreeN gr component = do
   return mc
 
 
-maxDegreeI :: AdjacencyGraph -> (IStructure s Word8) -> Par d s (MaxPosInt s)
+maxDegreeI :: AdjacencyGraph -> (IStructure s Word8) -> Par e s (MaxPosInt s)
 maxDegreeI gr component = do
   mc <- newMaxPosInt 0
   -- INEFFICIENT: this attaches a handler to ALL ivars:
@@ -100,7 +100,7 @@ maxDegreeI gr component = do
 ------------------------------------------------------------------------------------------  
 
 -- workEachNode :: (NatArray s Word8) -> (Word8 -> Par d s ()) -> Par d s (MaxPosInt s)
-workEachNode :: Word64 -> (NatArray s Word8) -> Par d s ()
+workEachNode :: Word64 -> (NatArray s Word8) -> Par e s ()
 workEachNode clocks component = do
   NArr.forEach component $ \ nd flg ->
     when (flg == 1) $ do
@@ -108,7 +108,7 @@ workEachNode clocks component = do
       return ()
 
 -- After freezing... this is a parallel loop, but doesn't use any monotonic data.
-workEachVec :: Word64 -> UV.Vector Word8 -> Par d s ()
+workEachVec :: Word64 -> UV.Vector Word8 -> Par e s ()
 workEachVec clocks vec = do
   np <- liftIO$ getNumCapabilities
   -- for_ (0,UV.length vec) $ \ ix ->    
@@ -127,7 +127,7 @@ workEachVec clocks vec = do
   --     return ()
 
 
-workEachNodeI :: Word64 -> (IStructure s Word8) -> Par d s ()
+workEachNodeI :: Word64 -> (IStructure s Word8) -> Par e s ()
 workEachNodeI clocks component = do
   ISt.forEachHP Nothing component $ \ nd flg ->
     when (flg == 1) $ do
@@ -135,7 +135,7 @@ workEachNodeI clocks component = do
       return ()
 
 -- After freezing... this is a parallel loop, but doesn't use any monotonic data.
-workEachVecMayb :: Word64 -> V.Vector (Maybe Word8) -> Par d s ()
+workEachVecMayb :: Word64 -> V.Vector (Maybe Word8) -> Par e s ()
 workEachVecMayb clocks vec = do
   np <- liftIO$ getNumCapabilities
   -- for_ (0,UV.length vec) $ \ ix ->    
@@ -154,7 +154,7 @@ workEachVecMayb clocks vec = do
 
 {-# INLINE forVec #-}
 -- | Simple for-each loops over vector elements.
-forVec :: U.Unbox a => U.Vector a -> (a -> Par d s ()) -> Par d s ()
+forVec :: U.Unbox a => U.Vector a -> (a -> Par e s ()) -> Par e s ()
 forVec vec fn = loop 0 
   where
     len = U.length vec
@@ -162,5 +162,5 @@ forVec vec fn = loop 0
            | otherwise = fn (U.unsafeIndex vec i) >>
                          loop (i+1)
 
-type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+type ParFor e s = (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 

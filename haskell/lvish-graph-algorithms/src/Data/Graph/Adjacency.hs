@@ -109,7 +109,7 @@ readAdjacencyGraph path = do
 
 -- | Parse an AdjacencyGraph file already in memory (ByteString), in parallel.
 --   The first parameter is a tuning parameter -- how many parallel chunks to parse.
-parseAdjacencyGraph :: (HasGet d, HasPut d) => Int -> B.ByteString -> Par d s AdjacencyGraph
+parseAdjacencyGraph :: (HasGet e, HasPut e) => Int -> B.ByteString -> Par e s AdjacencyGraph
 parseAdjacencyGraph chunks bs = 
   case B.splitAt (B.length tag) bs of
     (fst, rst) | fst /= tag -> error$ "readAdjacencyGraph: First word in file was not "++B.unpack tag
@@ -181,8 +181,8 @@ testReadNumFile path = do
 -- | Read all the decimal numbers from a Bytestring.  They must be positive integers.
 -- Be warned that this function is very permissive -- all non-digit characters are
 -- treated as separators.
-parReadNats :: forall nty d s . (HasGet d, HasPut d, U.Unbox nty, Num nty, Eq nty) =>
-               Int -> BS.ByteString -> Par d s [PartialNums nty]
+parReadNats :: forall nty e s . (HasGet e, HasPut e, U.Unbox nty, Num nty, Eq nty) =>
+               Int -> BS.ByteString -> Par e s [PartialNums nty]
 parReadNats chunks bs = par
   where
     (each,left) = BS.length bs `quotRem` chunks
@@ -194,7 +194,7 @@ parReadNats chunks bs = par
       return [partial]
     reducer a b = return (a++b) -- Quadratic, but just at the chunk level.
 
-    par :: LV.Par d s [PartialNums nty]
+    par :: LV.Par e s [PartialNums nty]
     par = do _ <- I.new
              -- parMapReduceRangeThresh 1 (InclusiveRange 0 (chunks - 1))
              --                      mapper reducer []              

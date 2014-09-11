@@ -69,12 +69,12 @@ flag_NBRCHOSEN = 2
 
 
 
-type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+type ParFor e s = (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 
 {-# INLINE maximalIndependentSet #-}
 -- maximalIndependentSet :: ISet s NodeID -> Par d s (ISet s NodeID)  -- Operate on a subgraph
 -- maximalIndependentSet :: AdjacencyGraph -> Par d s (ISet s NodeID) -- Operate on a whole graph.
-maximalIndependentSet :: (HasGet d, HasPut d) => ParFor d s -> AdjacencyGraph -> Par d s (NatArray s Word8) -- Operate on a whole graph.
+maximalIndependentSet :: (HasGet e, HasPut e) => ParFor e s -> AdjacencyGraph -> Par e s (NatArray s Word8) -- Operate on a whole graph.
 maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
@@ -108,7 +108,7 @@ maximalIndependentSet parFor gr@(AdjacencyGraph vvec evec) = do
   return flagsArr
 
 -- | DUPLICATE CODE: IStructure version.
-maximalIndependentSet2 :: (HasGet d, HasPut d) => ParFor d s -> AdjacencyGraph -> Par d s (IStructure s Word8) -- Operate on a whole graph.
+maximalIndependentSet2 :: (HasGet e, HasPut e) => ParFor e s -> AdjacencyGraph -> Par e s (IStructure s Word8) -- Operate on a whole graph.
 maximalIndependentSet2 parFor gr@(AdjacencyGraph vvec evec) = do
   logDbgLn 3$ " [MIS] Beginning maximalIndependentSet / Istructures"
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
@@ -196,7 +196,7 @@ maximalIndependentSet3B gr@(AdjacencyGraph vvec evec) vec = UV.create $ do
 -- MIS over a preexisting, filtered subgraph
 ------------------------------------------------------------
 -- Right now this uses an IStructure because it's (temporarily) better at blocking gets:
-maximalIndependentSet4 :: (HasGet d, HasPut d) => AdjacencyGraph -> (NatArray s Word8) -> Par d s (IStructure s Word8)
+maximalIndependentSet4 :: (HasGet e, HasPut e) => AdjacencyGraph -> (NatArray s Word8) -> Par e s (IStructure s Word8)
 maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
   let numVerts = U.length vvec
   -- Tradeoff: we use storage proportional to the ENTIRE graph.  If the subset is
@@ -232,7 +232,7 @@ maximalIndependentSet4 gr@(AdjacencyGraph vvec evec) vertSubset = do
 
 #ifdef NEW_CONTAINERS
 
-maximalIndependentSetBR :: AdjacencyGraph -> Par d s (NatArray s Word8) -- Operate on a whole graph.
+maximalIndependentSetBR :: AdjacencyGraph -> Par e s (NatArray s Word8) -- Operate on a whole graph.
 maximalIndependentSetBR gr@(AdjacencyGraph vvec _) = do
   -- For each vertex, we record whether it is CHOSEN, not chosen, or undecided:
   let numVerts = U.length vvec
