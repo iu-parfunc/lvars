@@ -1,4 +1,8 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 import Data.Set as Set
 
@@ -14,7 +18,8 @@ import Data.PBBS.Timing (wait_clocks, runAndReport)
 import Control.LVish
 import Control.LVish.Internal
 import Control.LVish.DeepFrz (runParThenFreezeIO)
-import qualified Control.LVish.SchedIdempotent as L
+import Control.LVish.DeepFrz.Internal
+-- import qualified Control.LVish.SchedIdempotent as L
 
 import Control.Monad
 -- import Control.Monad.Par.Combinator (parFor, InclusiveRange(..))
@@ -151,69 +156,64 @@ main = do
       ----------------------------------------
       "bfsS" -> do 
                    putStrLn " ! Version 2: BFS only, with sets "
-                   let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                       -- par2 :: Par d0 s0 ()
-                       par2 = do comp <- bfs_async gr 0
-                                 waitSize numVerts comp -- A proxy for completeness... assumes fully connected graph.
-                                 return comp
-                   _ <- runParIO_ par2
+                   let par2 :: Par ('Ef 'P g f b i) s0 (ISet s0 NodeID)
+                       par2 = bfs_async gr 0
+                   runParThenFreezeIO par2
+                   return ()
                    -- set:: Snapshot ISet NodeID <- runParThenFreezeIO par2
                    -- let ISetSnap s = set                                          
                    -- putStrLn$ "Connected component, set size "++show (Set.size s)
-                   return ()
 
       ----------------------------------------
       "bfsI" -> do putStrLn " ! Version 3: BFS only, with IStructures "
-                   let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                       par3 :: Par d0 s0 (IStructure s0 Bool)
+                   let par3 :: Par ('Ef 'P g f b i) s0 (IStructure s0 Bool)
                        par3 = bfs_async_arr gr 0
-                   _ <- runParIO_ par3
+                   runParThenFreezeIO par3
                    return ()
 
       ----------------------------------------
       "bfsN" -> do putStrLn " ! Version 4: BFS only, with NatArrays "
-                   let -- par2 :: Par d0 s0 (ISet s0 NodeID)
-                       par4 :: Par d0 s0 (NatArray s0 Word8)
+                   let par4 :: Par ('Ef 'P g f b i) s0 (NatArray s0 Word8)
                        par4 = bfs_async_arr2 gr 0
-                   _ <- runParIO_ par4
+                   runParThenFreezeIO par4
                    return ()
 
       ----------------------------------------
       "misN1" -> do 
               putStrLn " ! Version 5: MIS only, with NatArrays / parForSimple"
-              let par :: Par d0 s0 (NatArray s0 Word8)
+              let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForSimple gr
 #ifdef DEBUG_CHECKS
               NatArraySnap (x :: UV.Vector Word8) <- runParThenFreezeIO par
               putStrLn$ "MIS: result prefix: "++show (UV.take 100 x)
               putStrLn$ "MIS: number of vertices in result: "++show (UV.sum (UV.filter (==1) x))
 #else
-              _ <- runParIO_ par
+              runParThenFreezeIO par
 #endif
               return ()
 
       ----------------------------------------
       "misN2" -> do 
               putStrLn " ! Version 6: MIS only, with NatArrays / parForTree"
-              let par :: Par d0 s0 (NatArray s0 Word8)
+              let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForTree gr
-              _ <- runParIO_ par
+              runParThenFreezeIO par
               return ()
 
       ----------------------------------------
       "misN3" -> do 
               putStrLn " ! Version 7: MIS only, with NatArrays / parForL"
-              let par :: Par d0 s0 (NatArray s0 Word8)
+              let par :: Par ('Ef 'P 'G b f i) s0 (NatArray s0 Word8)
                   par = maximalIndependentSet parForL gr
-              _ <- runParIO_ par
+              runParThenFreezeIO par
               return ()
 
       ----------------------------------------
       "misI3" -> do 
               putStrLn " ! Version 8: MIS only, with IStructures / parForL"
-              let par :: Par d0 s0 (IStructure s0 Word8)
+              let par :: Par ('Ef 'P 'G f b i) s0 (IStructure s0 Word8)
                   par = maximalIndependentSet2 parForL gr
-              _ <- runParIO_ par
+              runParThenFreezeIO par
               return ()
       -- This version doesn't get the horrible parallel slowdown of version 5-7.
       -- But alas, version 7 sequential is better.
@@ -225,7 +225,7 @@ main = do
               evaluate $ maximalIndependentSet3 gr
               return ()
 
-      ----------------------------------------
+{-      ----------------------------------------
 #ifdef NEW_CONTAINERS
       "misBR" -> do
               putStrLn " ! Version 10: MIS only, BulkRetry"
@@ -234,14 +234,15 @@ main = do
               _ <- runParIO_ par
               return ()
 #endif
-{-
+
+
       ----------------------------------------
       "bfsN_misI" -> do 
               putStrLn " ! Version 11: BFS and then MIS w/ NatArrays/IStructure"
-              let par :: Par d0 s0 (IStructure s0 Word8)
+              let par :: Par ('Ef 'P 'G b f i) s0 (IStructure s0 Word8)
                   par = do natarr <- bfs_async_arr2 gr 0
                            maximalIndependentSet4 gr natarr
-              _ <- runParIO_ par
+              runParThenFreezeIO par
               return ()
 
       ----------------------------------------
@@ -327,12 +328,6 @@ main = do
       oth -> error$"Unknown benchmark mode "++oth
 
   putStrLn$ "Done"
-  
 
--- runParIO_ :: (forall s . Par d s a) -> IO ()
--- runParIO_ p = do runParIO p; return ()
-
--- Unsafe version, fix this:
-runParIO_ :: (Par d s a) -> IO ()
-runParIO_ (WrapPar p) = L.runParIO p >> return ()
-
+instance DeepFrz a => DeepFrz (NatArray s a) where
+  type FrzType (NatArray s a) = NatArray s a
