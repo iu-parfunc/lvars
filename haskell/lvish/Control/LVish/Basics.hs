@@ -55,10 +55,6 @@ import           Prelude hiding (rem)
 import qualified Control.Par.Class.Unsafe as PU
 import qualified Control.Par.Class     as PC
 import qualified Data.Splittable.Class as SC
-
-instance PU.ParMonad (Par e s) where
-  fork = fork  
-  internalLiftIO = I.liftIO  
 #endif
 
 {-# DEPRECATED parForL, parForSimple, parForTree, parForTiled

@@ -31,6 +31,7 @@ import Control.Monad as M hiding (mapM, sequence, join)
 import GHC.Conc (getNumProcessors)
 
 import Control.Par.Class
+import Control.Par.EffectSigs
 import Data.Splittable.Class as Sp
 import Prelude hiding (init,max,sequence, head,tail)
 
@@ -181,7 +182,7 @@ num_procs = unsafePerformIO getNumProcessors
 -- combining function.  Commutativity, however, is not required.  This will always
 -- combine lower iteration results on the left and higher on the right.
 pmapReduce
-   :: (NFData a, ParFuture p, FutContents p a)
+   :: (NFData a, ParFuture p, HasPut e, HasGet e, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
       -> (Int -> p e s a)     -- ^ compute one result
       -> (a -> a -> p e s a)  -- ^ combine two results 
@@ -193,7 +194,7 @@ pmapReduce = mkMapReduce spawn
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
 pmapReduce_
-   :: (ParFuture p, FutContents p a)
+   :: (ParFuture p, HasPut e, HasGet e, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
       -> (Int -> p e s a)     -- ^ compute one result
       -> (a -> a -> p e s a)  -- ^ combine two results 
@@ -203,7 +204,8 @@ pmapReduce_ = mkMapReduce spawn_
 
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
-mkMapReduce :: (ParFuture m, FutContents m t) => (m e s t -> m e s (Future m t)) ->
+mkMapReduce :: (ParFuture m, HasPut e,  HasGet e, FutContents m t) => 
+               (m e s t -> m e s (Future m s t)) ->
                Range -> (Int -> m e s t) -> (t -> t -> m e s t) -> t -> m e s t
 mkMapReduce spawner irng fn binop init = loop irng
  where

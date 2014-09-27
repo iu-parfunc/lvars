@@ -1,4 +1,5 @@
 {-# LANGUAGE Unsafe #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
@@ -41,6 +42,17 @@ import           Control.Par.EffectSigs
 import qualified Data.Foldable    as F
 import           Data.List (sort)
 
+#ifdef GENERIC_PAR
+import qualified Control.Par.Class.Unsafe as PU
+import qualified Control.Par.Class     as PC
+import qualified Data.Splittable.Class as SC
+
+-- | This provides a Monad instance also.
+instance PU.ParMonad Par where
+  fork = PC.fork  
+  internalLiftIO = liftIO  
+#endif
+
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}
 {-# INLINE unWrapPar #-}
@@ -54,7 +66,7 @@ import           Data.List (sort)
 -- Implementation note: This is a wrapper around the internal `Par` type, only with more type parameters.  
 newtype Par :: EffectSig -> * -> * -> * where
   WrapPar :: L.Par a -> Par e s a
-  deriving (Monad, Functor, Applicative)
+--  deriving (Monad, Functor, Applicative)
 
 -- type instance GetSession (Par e s) = s
 --- type instance SetSession s2 (Par e s) = Par e s2

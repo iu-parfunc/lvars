@@ -3,6 +3,7 @@
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| 
@@ -28,12 +29,15 @@ module Data.Par.Splittable
 where 
 
 import Control.DeepSeq
+-- import Control.Par.EffectSigs
+import Control.Par.Class
 import Data.Traversable
 import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
 import GHC.Conc (numCapabilities)
 
 import Control.Par.Class     as PC
+import Control.Par.EffectSigs
 import Data.Splittable.Class (Split(..)) 
 
 import Debug.Trace
@@ -62,7 +66,7 @@ import Debug.Trace
 -- platform portability does NOT require a commutative reduce function.  This combinator
 -- will always fold earlier results on the left and later on the right.
 pmapReduce :: forall c e s m a t .
-      (Split c, Generator c, ParFuture m, FutContents m a, NFData a)
+      (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a, NFData a)
       => c                 -- ^ element generator to consume
       -> (ElemOf c -> m e s a) -- ^ compute one result
       -> (a -> a -> m e s a)   -- ^ combine two results 
@@ -74,7 +78,7 @@ pmapReduce = mkMapReduce split PC.foldM spawn
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
 pmapReduce_ :: forall c e s m a t .
-      (Split c, Generator c, ParFuture m, FutContents m a)
+      (Split c, Generator c, HasPut e, HasGet e, ParFuture m, FutContents m a)
       => c                     -- ^ element generator to consume
       -> (ElemOf c -> m e s a) -- ^ compute one result
       -> (a -> a -> m e s a)   -- ^ combine two results 
@@ -85,7 +89,7 @@ pmapReduce_ = mkMapReduce split PC.foldM spawn_
 
 -- | A version of `pmapReduce_` that uses a custom splitting function.
 pmapReduceWith_ :: forall c e s m a t .
-      (Generator c, ParFuture m, FutContents m a)
+      (Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a)
       => (c -> [c])        -- ^ splitting function.
       -> c                 -- ^ element generator to consume
       -> (ElemOf c -> m e s a) -- ^ compute one result
@@ -100,7 +104,7 @@ pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 -- 
 --  This is SYNCHRONOUS; that is, it does not return until all of the actions are
 --  executed.
-pforEach :: (Split c, Generator c, ParFuture m, FutContents m ())
+pforEach :: (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m ())
       => c                  -- ^ element generator to consume
       -> (ElemOf c -> m e s ()) -- ^ compute one result
       -> m e s ()
@@ -124,10 +128,10 @@ asyncForEach gen fn =
 --   function for spawning work.
 mkMapReduce 
    :: forall c e f s m a t .
-      (ParFuture m, FutContents m a)
+      (ParFuture m, HasPut f, HasGet f, FutContents m a)
       => (c -> [c])              -- ^ splitting function
       -> ((a -> e -> m f s a) -> a -> c -> m f s a) -- ^ sequential fold function
-      -> (m f s a -> m f s(Future m a)) -- ^ spawn function
+      -> (m f s a -> m f s (Future m s a)) -- ^ spawn function
       -> c                       -- ^ element generator to consume
       -> (e -> m f s a)              -- ^ compute one result
       -> (a -> a -> m f s a)         -- ^ combine two results 

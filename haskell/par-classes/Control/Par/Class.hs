@@ -88,8 +88,8 @@ import Data.Proxy (Proxy(..))
 class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
 -- class (Monad m, Functor m) => ParFuture m where
   -- | The type of a future that goes along with the particular `Par`
-  -- monad the user chooses.
-  type Future m :: * -> *
+  -- monad the user chooses.  The future is parameterized by the 's' param as well.
+  type Future m :: * -> * -> *
 
   -- | Different implementations may place different constraints on
   -- what is allowable inside a Future.  For example, some
@@ -105,18 +105,23 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- >    fork (p >>= put r)
   -- >    return r
   --
-  spawn  :: (NFData a, FutContents m a) => m e s a -> m e s (Future m a)
+  spawn  :: (NFData a, HasPut e, FutContents m a) => 
+            m e s a -> m e s (Future m s a)
 
   -- | Like 'spawn', but the result is only head-strict, not fully-strict.
-  spawn_ :: FutContents m a => m e s a -> m e s (Future m a)
+  spawn_ :: (HasPut e, FutContents m a) =>
+            m e s a -> m e s (Future m s a)
               
   -- | Wait for the result of a future, and then return it.
-  get    :: FutContents m a => Future m a -> m e s a
+  get    :: (HasGet e, FutContents m a) => Future m s a -> m e s a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
   -- >  spawnP = spawn . return
-  spawnP :: (NFData a, FutContents m a) => a -> m e s (Future m a)
+  spawnP :: (NFData a, HasPut e, FutContents m a) => a -> m e s (Future m s a)
+
+  -- FIXME: We could conceivably elide the HasPut constraints, because spawn does not 
+  -- have any possibility of doing a write to memory outside its scope (already allocated).
 
   -- Default implementations:
   spawn  p = spawn_ (do x <- p; deepseq x (return x))
@@ -128,7 +133,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
 --------------------------------------------------------------------------------
 
 -- | A simple type alias.  A hint.
-type IVar m a = Future m a
+type IVar m s a = Future m s a
 
 -- | @ParIVar@ builds on futures by adding full /anyone-writes, anyone-reads/ IVars.
 --   These are more expressive but may not be supported by all distributed schedulers.
@@ -138,7 +143,7 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
  
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall a e s . FutContents m a => m e s (Future m a) 
+  new  :: forall a e s . FutContents m a => m e s (Future m s a)
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -151,22 +156,22 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   --
   -- Sometimes partial strictness is more appropriate: see 'put_'.
   --
-  put  :: forall a e s . (FutContents m a, NFData a) =>
-          IVar m a -> a -> m e s ()
+  put  :: forall a e s . (FutContents m a, HasPut e, NFData a) =>
+          IVar m s a -> a -> m e s ()
   put v a = deepseq a (put_ v a)
   
   -- | like 'put', but only head-strict rather than fully-strict.  
-  put_ :: forall a e s . (FutContents m a) =>
-          IVar m a -> a -> m e s ()
+  put_ :: forall a e s . (FutContents m a, HasPut e) =>
+          IVar m s a -> a -> m e s ()
 
   -- Extra API routines that have default implementations:
 
   -- | creates a new @IVar@ that contains a value
-  newFull :: (FutContents m a, NFData a) => a -> m e s (IVar m a)
+  newFull :: (HasPut e, FutContents m a, NFData a) => a -> m e s (IVar m s a)
   newFull a = deepseq a (newFull_ a)
 
   -- | creates a new @IVar@ that contains a value (head-strict only)
-  newFull_ :: FutContents m a => a -> m e s (IVar m a)
+  newFull_ :: (HasPut e, FutContents m a) => a -> m e s (IVar m s a)
   newFull_ a = do v <- new
                   -- This is usually inefficient!
         	  put_ v a
@@ -360,7 +365,7 @@ class Generator c where
 -- | Collection types which can be consumed in parallel.
 class Generator c => ParFoldable c where  
   pmapFold :: forall m e s a t .
-              (ParFuture m, FutContents m a)
+              (ParFuture m, HasGet e, HasPut e, FutContents m a)
               => (ElemOf c -> m e s a) -- ^ compute one result
               -> (a -> a -> m e s a)   -- ^ combine two results 
               -> a                 -- ^ initial accumulator value

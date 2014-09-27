@@ -17,6 +17,7 @@ where
 
 -- import Control.Monad.Par.Class
 import Control.Par.EffectSigs
+import Control.Applicative
 import Data.Proxy as P
 
 import Data.Coerce
@@ -56,3 +57,10 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
 instance ParMonad p => Monad (p e s) where
   (>>=) = pbind 
   return = preturn 
+
+
+instance ParMonad p => Functor (p e s) where
+  -- FINISHME
+
+instance ParMonad p => Applicative (p e s) where
+

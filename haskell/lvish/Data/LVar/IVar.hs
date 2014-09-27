@@ -218,13 +218,13 @@ put v a = deepseq a (put_ v a)
 --   type Future (Par (Ef P G f b i) s) = IVar s
 --   type FutContents (Par (Ef P G f b i) s) a = (Eq a)
 
-instance PC.ParFuture (Par e s) where
-  type Future (Par e s) = IVar s
-  type FutContents (Par e s) a = (Eq a, HasPut e, HasGet e)
+instance PC.ParFuture Par where
+  type Future Par = IVar 
+  type FutContents Par a = (Eq a)
   spawn_ f = spawn_ f
   get iv = get iv
 
-instance PC.ParIVar (Par e s) where
+instance PC.ParIVar Par where
   put_ = put_
   new = new
 
