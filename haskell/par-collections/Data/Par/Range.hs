@@ -183,10 +183,10 @@ num_procs = unsafePerformIO getNumProcessors
 pmapReduce
    :: (NFData a, ParFuture p, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
-      -> (Int -> p a)     -- ^ compute one result
-      -> (a -> a -> p a)  -- ^ combine two results 
+      -> (Int -> p e s a)     -- ^ compute one result
+      -> (a -> a -> p e s a)  -- ^ combine two results 
       -> a                -- ^ initial result
-      -> p a
+      -> p e s a
 -- pmapReduce = P.pmapReduce 
 pmapReduce = mkMapReduce spawn
 
@@ -195,16 +195,16 @@ pmapReduce = mkMapReduce spawn
 pmapReduce_
    :: (ParFuture p, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
-      -> (Int -> p a)     -- ^ compute one result
-      -> (a -> a -> p a)  -- ^ combine two results 
+      -> (Int -> p e s a)     -- ^ compute one result
+      -> (a -> a -> p e s a)  -- ^ combine two results 
       -> a                -- ^ initial result
-      -> p a
+      -> p e s a
 pmapReduce_ = mkMapReduce spawn_
 
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
-mkMapReduce :: (ParFuture m, FutContents m t) => (m t -> m (Future m t)) ->
-               Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
+mkMapReduce :: (ParFuture m, FutContents m t) => (m e s t -> m e s (Future m t)) ->
+               Range -> (Int -> m e s t) -> (t -> t -> m e s t) -> t -> m e s t
 mkMapReduce spawner irng fn binop init = loop irng
  where
   mapred b ac = do x <- fn b;

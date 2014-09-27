@@ -61,37 +61,37 @@ import Debug.Trace
 -- on different machines if the reduce function is not associative.  But even then,
 -- platform portability does NOT require a commutative reduce function.  This combinator
 -- will always fold earlier results on the left and later on the right.
-pmapReduce :: forall c e m a t .
+pmapReduce :: forall c e s m a t .
       (Split c, Generator c, ParFuture m, FutContents m a, NFData a)
       => c                 -- ^ element generator to consume
-      -> (ElemOf c -> m a) -- ^ compute one result
-      -> (a -> a -> m a)   -- ^ combine two results 
+      -> (ElemOf c -> m e s a) -- ^ compute one result
+      -> (a -> a -> m e s a)   -- ^ combine two results 
       -> a                 -- ^ initial accumulator value
-      -> m a
+      -> m e s a
 {-# INLINE pmapReduce #-}      
 pmapReduce = mkMapReduce split PC.foldM spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
-pmapReduce_ :: forall c e m a t .
+pmapReduce_ :: forall c e s m a t .
       (Split c, Generator c, ParFuture m, FutContents m a)
-      => c                 -- ^ element generator to consume
-      -> (ElemOf c -> m a) -- ^ compute one result
-      -> (a -> a -> m a)   -- ^ combine two results 
+      => c                     -- ^ element generator to consume
+      -> (ElemOf c -> m e s a) -- ^ compute one result
+      -> (a -> a -> m e s a)   -- ^ combine two results 
       -> a                 -- ^ initial accumulator value
-      -> m a
+      -> m e s a
 {-# INLINE pmapReduce_ #-}      
 pmapReduce_ = mkMapReduce split PC.foldM spawn_
 
 -- | A version of `pmapReduce_` that uses a custom splitting function.
-pmapReduceWith_ :: forall c e m a t .
+pmapReduceWith_ :: forall c e s m a t .
       (Generator c, ParFuture m, FutContents m a)
       => (c -> [c])        -- ^ splitting function.
       -> c                 -- ^ element generator to consume
-      -> (ElemOf c -> m a) -- ^ compute one result
-      -> (a -> a -> m a)   -- ^ combine two results 
+      -> (ElemOf c -> m e s a) -- ^ compute one result
+      -> (a -> a -> m e s a)   -- ^ combine two results 
       -> a                 -- ^ initial accumulator value
-      -> m a
+      -> m e s a
 {-# INLINE pmapReduceWith_ #-}      
 pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 
@@ -102,16 +102,16 @@ pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
 --  executed.
 pforEach :: (Split c, Generator c, ParFuture m, FutContents m ())
       => c                  -- ^ element generator to consume
-      -> (ElemOf c -> m ()) -- ^ compute one result
-      -> m ()
+      -> (ElemOf c -> m e s ()) -- ^ compute one result
+      -> m e s ()
 {-# INLINE pforEach #-}
 pforEach gen mp = pmapReduce_ gen mp (\ () () -> return ()) ()
 
 -- | Non-blocking version of pforEach.  
 asyncForEach :: (Split c, Generator c, ParFuture m, FutContents m ())
       => c                  -- ^ element generator to consume
-      -> (ElemOf c -> m ()) -- ^ compute one result
-      -> m ()
+      -> (ElemOf c -> m e s ()) -- ^ compute one result
+      -> m e s ()
 -- asyncForEach = asyncForEachHP Nothing
 asyncForEach gen fn =
   case split gen of
@@ -123,24 +123,24 @@ asyncForEach gen fn =
 -- | Make a parallel map-reduce function given a custom
 --   function for spawning work.
 mkMapReduce 
-   :: forall c e m a t .
+   :: forall c e f s m a t .
       (ParFuture m, FutContents m a)
       => (c -> [c])              -- ^ splitting function
-      -> ((a -> e -> m a) -> a -> c -> m a) -- ^ sequential fold function
-      -> (m a -> m (Future m a)) -- ^ spawn function
+      -> ((a -> e -> m f s a) -> a -> c -> m f s a) -- ^ sequential fold function
+      -> (m f s a -> m f s(Future m a)) -- ^ spawn function
       -> c                       -- ^ element generator to consume
-      -> (e -> m a)              -- ^ compute one result
-      -> (a -> a -> m a)         -- ^ combine two results 
+      -> (e -> m f s a)              -- ^ compute one result
+      -> (a -> a -> m f s a)         -- ^ combine two results 
       -> a                       -- ^ initial accumulator value
-      -> m a
+      -> m f s a
 {-# INLINE mkMapReduce #-}
 mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
  where
-  mapred :: a -> e -> m a 
+  mapred :: a -> e -> m f s a 
   mapred ac b = do x <- fn b;
                    result <- ac `binop` x
                    return result
-  loop :: c -> m a
+  loop :: c -> m f s a
   loop gen =
     -- trace ("[DBG] Looping around mkMapReduce...") $ 
     case splitter gen of
