@@ -1,6 +1,7 @@
 {-# LANGUAGE Unsafe #-}
 {-# LANGUAGE GADTs, RankNTypes, ConstraintKinds #-}
 {-# LANGUAGE DataKinds, KindSignatures, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
@@ -11,10 +12,7 @@
 module Control.Par.Class.Unsafe 
   ( ParThreadSafe(unsafeParIO)
   , ParMonad(..)
-  , ParWEffects(..)
-  , ReadOnlyOf
-  , ReifyConstraint(..)
-  ) 
+  )
 where
 
 -- import Control.Monad.Par.Class
@@ -39,51 +37,22 @@ class Monad p => ParThreadSafe p where
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
 -- should not be able to access the `internalLiftIO` operation of this class from
 -- @Safe@ code.
-class (Functor p, Monad p) => ParMonad p where
+class ParMonad (p :: EffectSig -> * -> * -> *) 
+  where
+  pbind :: p e s a -> (a -> p e s b) -> p e s b
+  preturn :: a -> p e s a 
 
   -- | Forks a computation to happen in parallel.  
-  fork :: p () -> p ()
-  
+  fork :: p e s () -> p e s ()
+
   -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
   -- only be used by other infrastructure-level components, e.g. the implementation
   -- of monad transformers or LVars.
-  internalLiftIO :: IO a -> p a
-
-
--- unsafeCastEffects :: ParLVar p => p a -> (SetEffects p) a
-
--- | A full LVar-compatible Par monad has effect tracking.
-class ParWEffects m where
-  -- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
-  type GetEffects m :: EffectSig
-  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
-  type SetEffects (e::EffectSig) m :: (* -> *)
+  internalLiftIO :: IO a -> p e s a
 
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
-  liftReadOnly :: (ReadOnlyOf m) a -> m a
-  
-  unsafeCastEffects :: P.Proxy e -> m a -> (SetEffects e m) a
-  unsafeCastEffects2 :: P.Proxy e -> (SetEffects e m) a -> m a
+  liftReadOnly :: p (SetReadOnly e) s a -> p e s a
 
-  -- Include evidence of a property that we might need for getting our
-  -- type families to go through.
-  law1 :: forall e. Proxy (m ()) -> Proxy e -> 
-          ReifyConstraint (e ~ GetEffects (SetEffects e m))
-  law2 :: forall e. Proxy (m ()) -> Proxy e -> 
-          ReifyConstraint (ParMonad (SetEffects e m))
-
-  coerceProp :: forall e a . 
-                Proxy (m ()) -> Proxy e -> 
-                ReifyConstraint (Coercible m (SetEffects e m))
-  --              ReifyConstraint (Coercible (m a) ((SetEffects2 e m) a))
-
-data ReifyConstraint c where 
-  MkConstraint :: c => ReifyConstraint c
-
--- | A shorthand for taking the ReadOnly restriction of a given Par
--- monadic type.
---
--- This is one particular form of valid "upcast" in the implicit
--- effect subtype ordering.
-type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
-
+instance ParMonad p => Monad (p e s) where
+  (>>=) = pbind 
+  return = preturn 

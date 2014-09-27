@@ -33,6 +33,7 @@ module Control.Par.EffectSigs
 
         -- * Derived constraints, i.e. shorthands for common combinations:
         ReadOnly, Deterministic, QuasiDeterministic, Idempotent,
+        SetReadOnly,
 
         -- * Accessor and setter functions for EffectSigs
         GetP, GetG, GetF, GetB, GetI,
@@ -67,6 +68,8 @@ data IOing    = I | NI
 --------------------------------------------------------------------------------
 -- Effect sigs and their extraction:
 --------------------------------------------------------------------------------
+
+-- TODO: Could make these all closed families:
 
 -- | Utility for getting just the Put effect flag.
 type family GetP (e :: EffectSig) :: Putting
@@ -107,6 +110,10 @@ type instance SetB b2 (Ef p g f b i) = (Ef p g f b2 i)
 -- | Utility for setting just the IO effect flag.
 type family SetI (b :: IOing) (e :: EffectSig) :: EffectSig
 type instance SetI i2 (Ef p g f b i) = (Ef p g f b i2)
+
+-- | Replace the relevant effect bits with those required by `ReadOnly`.
+type family SetReadOnly (e :: EffectSig) :: EffectSig where
+  SetReadOnly (Ef p g f b i) = Ef NP g NF NB NI
 
 ----------------------------------------
 -- Same thing but lifted to work over monads:
