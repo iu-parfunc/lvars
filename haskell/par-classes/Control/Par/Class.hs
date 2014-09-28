@@ -34,7 +34,7 @@
 module Control.Par.Class
   (
   -- * The essence of Par monads: forking control flow
-    ParMonad(fork)
+    ParMonad(fork, pbind, preturn, liftReadOnly)
   -- * Futures: basic parallelism with communication
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
