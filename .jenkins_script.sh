@@ -7,7 +7,12 @@ set -e
 set -x
 
 # Temporarily staying off of 1.20 due to cabal issue #1811:
-CABAL=cabal-1.18.0
+# CABAL=cabal-1.18.0
+# That issue is passed, now requiring a recent version of cabal:
+if [ "$CABAL" == "" ]; then 
+  CABAL=cabal-1.21
+fi
+
 SHOWDETAILS=always
 # SHOWDETAILS=streaming
 
@@ -22,7 +27,7 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers"
+PKGS=" ./lvish ./par-classes ./par-collections ./par-collections ./par-transformers"
 
 cd ./haskell/
 TOP=`pwd`
@@ -50,8 +55,8 @@ CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
 # # $CABAL install containers --constraint='containers>=0.5.5.1'
 
 # Also install custom version of monad-par:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --only-dep $*
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
+# In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --enable-tests  $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
 if ! [ `uname` == "Linux" ]; then  
