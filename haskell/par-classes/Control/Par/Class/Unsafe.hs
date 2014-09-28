@@ -24,10 +24,10 @@ import Data.Coerce
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
 -- care which thread they execute on.  Thus it is ok to inject additional parallelism.
-class Monad p => ParThreadSafe p where 
+class ParThreadSafe (p :: EffectSig -> * -> * -> *) where 
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
-  unsafeParIO :: IO a -> p a
+  unsafeParIO :: IO a -> p e s a
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.

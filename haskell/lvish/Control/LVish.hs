@@ -150,7 +150,7 @@ instance PC.LVarSched Par where
 
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
-instance PU.ParThreadSafe (Par e s) where
+instance PU.ParThreadSafe Par where
   unsafeParIO = I.liftIO
 
 -- instance PC.ParLVar (Par e s) where
