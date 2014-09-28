@@ -54,13 +54,16 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a
 
+-- If we use this design for ParMonad, we suffer these orphan instances:
+-- (We cannot include Monad as a super-class of ParMonad, because it would 
+--  have to universally quantify over 'e' and 's', which is not allowed.)
 instance ParMonad p => Monad (p e s) where
   (>>=) = pbind 
   return = preturn 
 
-
 instance ParMonad p => Functor (p e s) where
-  -- FINISHME
+  fmap f p = pbind p (return . f)
 
 instance ParMonad p => Applicative (p e s) where
-
+  pure = preturn
+  f <*> x = pbind f (\f' -> pbind x (return . f'))

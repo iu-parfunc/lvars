@@ -51,6 +51,12 @@ import qualified Data.Splittable.Class as SC
 instance PU.ParMonad Par where
   fork = PC.fork  
   internalLiftIO = liftIO  
+  liftReadOnly (WrapPar p) = WrapPar p
+
+  pbind (WrapPar lp) fn = WrapPar (lp >>= fn')
+    where
+      fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
+  preturn x = WrapPar (return x)
 #endif
 
 {-# INLINE state  #-}
