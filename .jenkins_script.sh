@@ -52,11 +52,11 @@ $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --
 $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
-if ! [ `uname` == "Linux" ]; then  
+# if ! [ `uname` == "Linux" ]; then  
   for path in $PKGS; do 
     echo "Test package in path $path."
     cd $TOP/$path
     # Assume cabal 1.20+:
     cabal test --show-details=$SHOWDETAILS
   done
-fi
+# fi
