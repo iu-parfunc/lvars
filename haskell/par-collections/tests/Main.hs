@@ -2,7 +2,7 @@
 
 module Main (tests, main) where
 
--- import Control.LVish
+import Control.LVish as P
 -- import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
 -- import Control.LVish.Unsafe
@@ -18,7 +18,7 @@ import Control.Exception (evaluate)
 import Control.Par.Class as PC (Generator(..))
 import Data.Par.Range
 import Data.IORef
-import qualified Control.Monad.Par as P -- This expects monad-par >= 0.3.4.6 with -fnewgeneric
+-- import qualified Control.Monad.Par as P -- This expects monad-par >= 0.3.4.6 with -fnewgeneric
 import qualified Data.Atomics.Counter as C
 
 -- import Data.List
@@ -56,7 +56,7 @@ case_seqfoldM = do
 case_seqfoldMP :: Assertion
 case_seqfoldMP = do
   assertEqual "Fold a range of ints in IO" expectedSum =<<
-    (timeit $ P.runParIO $
+    (timeit $ P.runParNonDet $
      foldMP (\ x y -> return $! x + fromIntegral y) 0 $ irange 1 size)
 
 -- Runs at 0.3s for 500M if there's no work done in the body at all.  With an IORef
@@ -98,7 +98,7 @@ case_seqfor1 = do
 case_seqforMP1 :: Assertion
 case_seqforMP1 = do
   assertEqual "For loop over a range of ints in Par monad" expectedSum =<<
-    (timeit $ P.runParIO $ do 
+    (timeit $ P.runParNonDet $ do 
        cnt <- internalLiftIO $ C.newCounter 0
        PC.forMP_ (irange 1 size) $ \ i -> do 
          x <- internalLiftIO$ C.readCounter cnt
@@ -112,7 +112,7 @@ case_seqforMP1 = do
 case_seqforMP2 :: Assertion
 case_seqforMP2 = do
   assertEqual "For loop over a range of ints in Par monad" () =<<
-    (timeit $ P.runParIO $ do 
+    (timeit $ P.runParNonDet $ do 
        PC.forMP_ (irange 1 size) $ \ i -> 
          return ()
     )
