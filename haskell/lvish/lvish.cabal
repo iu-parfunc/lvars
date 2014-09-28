@@ -187,6 +187,9 @@ library
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
+    -- This test-suite rebuilds the LVish sources rather than depending 
+    -- on the package externally... reason is that it needs to access unexported modules.
+    -- TODO: Move all such modules under an Internal namespace.
     hs-source-dirs: tests/ ./
     other-modules:  TestHelpers, 
                     LVishAndIVar,
