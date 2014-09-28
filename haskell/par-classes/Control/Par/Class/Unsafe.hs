@@ -67,3 +67,4 @@ instance ParMonad p => Functor (p e s) where
 instance ParMonad p => Applicative (p e s) where
   pure = preturn
   f <*> x = pbind f (\f' -> pbind x (return . f'))
+

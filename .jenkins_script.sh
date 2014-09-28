@@ -10,7 +10,8 @@ set -x
 # CABAL=cabal-1.18.0
 # That issue is passed, now requiring a recent version of cabal:
 if [ "$CABAL" == "" ]; then 
-  CABAL=cabal-1.21
+  CABAL=cabal-1.20
+#  CABAL=cabal-1.21
 fi
 
 SHOWDETAILS=always

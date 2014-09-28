@@ -56,6 +56,9 @@ module Control.Par.Class
     --  Channels (Streams)
     --  , ParChan(..)
 
+  -- * Par-monad Transformers
+  , ParMonadTrans(..)
+
   -- * Simple tracking of WHICH Par monads permit only threadsafe effects
   , ParThreadSafe()
 
@@ -408,6 +411,17 @@ class Monad m => ParChan snd rcv m | m -> snd, m -> rcv where
 
 ----------------------------------------------------------------------------------------------------
 
+-- | ParMonad's have a different kind than regular monads, and as such
+-- they cannot use the regular `MonadTrans` class.  Rather, a
+-- transformer in this class adds additional effects to a `ParMonad`
+-- while leaving the `e` and `s` parameters exposed.
+class ParMonadTrans (t :: (EffectSig -> * -> * -> *) 
+                       -> (EffectSig -> * -> * -> *)) where
+   lift :: ParMonad p => 
+           p e s a -> (t p) e s a
+
+----------------------------------------------------------------------------------------------------
+
 {-
 -- t1 :: P.Par Int
 -- If the ParIVar => ParFuture instance exists the following is sufficient:
@@ -428,4 +442,6 @@ t2 = do
 --  SPECIALISE parMap  :: (NFData b) => (a -> b)     -> [a] -> Par [b]
 -- SPECIALISE parMapM :: (NFData b) => (a -> Par b) -> [a] -> Par [b]
 -}
+
+
 
