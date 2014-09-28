@@ -28,7 +28,7 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-collections ./par-collections/tests "
+PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests "
 # ./par-transformers
 
 cd ./haskell/
