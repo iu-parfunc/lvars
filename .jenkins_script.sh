@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS, if available.
+# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS[1-3], if available.
 #       Also passes through extra args to the major cabal install command.
 
 set -e
@@ -10,11 +10,12 @@ set -x
 # CABAL=cabal-1.18.0
 # That issue is passed, now requiring a recent version of cabal:
 if [ "$CABAL" == "" ]; then 
-  CABAL=cabal-1.21
+  CABAL=cabal-1.20
+#  CABAL=cabal-1.21
 fi
 
-SHOWDETAILS=always
-# SHOWDETAILS=streaming
+# SHOWDETAILS=always
+SHOWDETAILS=streaming
 
 if [ "$JENKINS_GHC" == "" ]; then 
   GHC=ghc
@@ -27,7 +28,7 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-collections ./par-transformers"
+PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers "
 
 cd ./haskell/
 TOP=`pwd`
@@ -46,7 +47,9 @@ if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
 else
   CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
-CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+if [ "$CABAL_FLAGS" == "" ]; then 
+  CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+fi
 
 # Simpler but not ideal:
 # $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
@@ -59,11 +62,11 @@ CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
 $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --enable-tests  $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
-if ! [ `uname` == "Linux" ]; then  
+# if ! [ `uname` == "Linux" ]; then  
   for path in $PKGS; do 
     echo "Test package in path $path."
     cd $TOP/$path
     # Assume cabal 1.20+:
-    cabal test --show-details=$SHOWDETAILS
+    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
   done
-fi
+# fi
