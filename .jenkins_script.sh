@@ -66,6 +66,6 @@ $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --enable-tests  $*
     echo "Test package in path $path."
     cd $TOP/$path
     # Assume cabal 1.20+:
-    cabal test --show-details=$SHOWDETAILS --test-option='-j1'
+    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
   done
 # fi
