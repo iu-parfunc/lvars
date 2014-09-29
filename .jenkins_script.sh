@@ -59,7 +59,7 @@ fi
 
 # Also install custom version of monad-par:
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --enable-tests  $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests  $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
 # if ! [ `uname` == "Linux" ]; then  
