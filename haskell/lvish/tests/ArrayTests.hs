@@ -156,7 +156,7 @@ v9e = runParIO$ do
 -- tests.
 case_v9e_NatArr :: Assertion
 case_v9e_NatArr = 
-   timeOutWarning 1.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
+   timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
    (assertEqual "Scale up a bit" out9e =<< v9e)
 
 
@@ -190,7 +190,9 @@ case_v9f1_fillIvarArr :: Assertion
 --              Could this possibly be a GHC bug?
 -- [2013.12.13] Runaway duplication of callbacks is ALSO possible on this test.
 --              Bafflingly that happens on DEBUG=2 but not 5.
-case_v9f1_fillIvarArr = assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
+case_v9f1_fillIvarArr = 
+   timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
+   assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
 v9f = runParIO$ do
   let size = in9e
