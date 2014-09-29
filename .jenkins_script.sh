@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS, if available.
+# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS[1-3], if available.
 #       Also passes through extra args to the major cabal install command.
 
 set -e
@@ -48,7 +48,9 @@ if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
 else
   CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
-CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+if [ "$CABAL_FLAGS" == "" ]; then 
+  CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+fi
 
 # Simpler but not ideal:
 # $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
