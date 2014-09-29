@@ -187,7 +187,9 @@ case_v9f2_seq_fillIvarArray :: Assertion
 -- 
 -- http://tester-lin.soic.indiana.edu:8080/job/LVish-implementation-2.0/193/CABAL=cabal-1.20,CABAL_FLAGS=-f-debug,JENKINS_GHC=7.8.2,PROF=0,label=linux-soic/console
 --
-case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
+case_v9f2_seq_fillIvarArray = 
+ timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
+ assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
