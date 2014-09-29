@@ -2,7 +2,7 @@
 module Main where
 
 import qualified STTests
-import qualified CancelTests
+-- import qualified CancelTests
 import Test.Framework 
 
 --------------------------------------------------------------------------------
