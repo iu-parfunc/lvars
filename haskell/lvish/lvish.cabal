@@ -227,9 +227,10 @@ test-suite test-lvish
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2, QuickCheck,
                    HUnit, time, text
--- And the self-dependency:  TODO -- how to get this to work? [2013.10.10]
--- For now it gets compiled TWICE:
-    build-depends:   lvish
+-- TODO: Add the self-dependency, WHEN there are no internal modules tested:
+--    build-depends:   lvish
+
+-- For now we instead duplicate these flag-dependent options:
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
 --       build-depends: fgl, graphviz, text
@@ -245,4 +246,3 @@ test-suite test-lvish
     if impl(ghc < 7.7) && os(linux) {
       buildable: False
     }
-
