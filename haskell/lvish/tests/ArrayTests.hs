@@ -11,60 +11,26 @@
 module ArrayTests where
 
 import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
+import Test.Framework (Test)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
 import Test.Framework.TH (testGroupGenerator)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import qualified Test.HUnit as HU
-import TestHelpers (defaultMainSeqTests)
-
-import Control.Applicative
 import Control.Monad
-import Control.Concurrent
-import Control.Concurrent.MVar
-import GHC.Conc
-import Data.List (isInfixOf, intersperse)
 import qualified Data.Vector as V
-import qualified Data.Set as S
-import Data.IORef
-import Data.Time.Clock
-import System.Environment (getArgs)
-import System.IO
-import System.Exit
-import System.Random
-
 import Control.Exception (catch, evaluate, SomeException)
-
-import Data.Traversable (traverse)
-import qualified Data.Set as S
-import qualified Data.Map as M
 import Data.Word
 
   -- TODO: Remove most of this!  This file should not tests LVars other than IVars:
 
-import qualified Data.LVar.Generic as G
 import qualified Data.LVar.NatArray as NA
-import Data.LVar.PureSet as IS
-import Data.LVar.PureMap as IM
-
-import qualified Data.LVar.SLMap as SM
-import qualified Data.LVar.SLSet as SS
-import Data.LVar.Memo  as Memo
 
 import qualified Data.LVar.IVar as IV
 import qualified Data.LVar.IStructure as ISt
-import qualified Data.LVar.Pair as IP
 
 import Control.LVish
 import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import qualified Control.LVish.Internal as I
 import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import qualified Control.LVish.SchedIdempotent as L
-
-import qualified Data.Concurrent.SNZI as SNZI
-import qualified Data.Concurrent.LinkedMap as LM
-import qualified Data.Concurrent.SkipListMap as SLM
 
 import Debug.Trace
 import TestHelpers as T
@@ -205,6 +171,10 @@ v9f = runParNonDet$ do
 
 -- | A variation of the previous, change the order work is spawned to tickle the scheduler differently.
 case_v9f2_seq_fillIvarArray :: Assertion
+-- It's much more rare, but I have seen this one timeout in the same way as v9e:
+-- 
+-- http://tester-lin.soic.indiana.edu:8080/job/LVish-implementation-2.0/193/CABAL=cabal-1.20,CABAL_FLAGS=-f-debug,JENKINS_GHC=7.8.2,PROF=0,label=linux-soic/console
+--
 case_v9f2_seq_fillIvarArray = assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
   let size = in9e
       news = V.replicate size IV.new
