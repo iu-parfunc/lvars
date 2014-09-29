@@ -14,8 +14,8 @@ if [ "$CABAL" == "" ]; then
 #  CABAL=cabal-1.21
 fi
 
-SHOWDETAILS=always
-# SHOWDETAILS=streaming
+# SHOWDETAILS=always
+SHOWDETAILS=streaming
 
 if [ "$JENKINS_GHC" == "" ]; then 
   GHC=ghc
