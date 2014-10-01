@@ -218,7 +218,7 @@ case_v9f2_seq_fillIvarArray :: Assertion
 --
 case_v9f2_seq_fillIvarArray = 
  timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
- assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
+ assertEqual "Array of ivars, compare effficiency:" out9e =<< runParIO (do 
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
