@@ -234,8 +234,8 @@ forEach = forEachHP Nothing
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
 -- 
---   As with other container LVars, if a key is inserted multiple times, the values had
---   better be equal @(==)@, or a multiple-put error is raised.
+--   If a key is inserted multiple times, the values had
+--   better be compatible @joinMaybe@, or the map becomes "Saturated".
 insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
           k -> v -> SatMap k s v -> Par d s () 
 insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do 
