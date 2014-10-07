@@ -106,6 +106,7 @@ library
                     Data.LVar.PureSet
                     Data.LVar.PureMap
                     Data.LVar.SatMap
+                    Data.LVar.LayeredSatMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     -------------------------------------------
