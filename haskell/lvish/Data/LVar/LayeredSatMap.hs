@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MagicHash #-}
 
 module Data.LVar.LayeredSatMap
     ( forEachHP
@@ -13,9 +14,9 @@ module Data.LVar.LayeredSatMap
     , insert
     , whenSat
     , saturate
-    , fromIMap
-    , t0
-    ) where
+    , test0
+    )
+    where
 
 import Data.LVar.SatMap(PartialJoinSemiLattice(..))
 
@@ -34,12 +35,12 @@ import Control.LVish
 import Data.IORef
 import qualified Data.Map as M
 import qualified Data.Foldable as F
+import           GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-data LayeredSatMap k s v = LayeredSatMap (LVar s (IORef (LayeredSatMapContents k v)) (k, v))
+data LayeredSatMap k s v = LayeredSatMap (LVar s (LSMContents k v) (k, v))
 
-data LayeredSatMapContents k v = Contents (M.Map k v) (Maybe (IORef (LayeredSatMapContents k v))) OnSat
-                               | Saturated
+data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
 
 type OnSat = L.Par ()
 
@@ -52,17 +53,19 @@ forEachHP mh (LayeredSatMap (WrapLVar lv)) callback = WrapPar $ do
     return ()
     where
       deltaCB (k, v) = return $ Just $ unWrapPar $ callback k v
-      globalCB ref = do
-        mp <- L.liftIO $ readIORef ref
+      globalCB (LSMContents (mpRef:mps)) = do
+        (mp, _) <- L.liftIO $ readIORef mpRef
         case mp of
-          Saturated -> return ()
-          Contents m _ _ -> unWrapPar $ traverseWithKey_ (\k v -> forkHP mh $ callback k v) m
+          Nothing -> return ()
+          Just m -> unWrapPar $ traverseWithKey_ (\k v -> forkHP mh $ callback k v) m
 
 newEmptyMap :: Par d s (LayeredSatMap k s v)
-newEmptyMap = WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ newIORef $ Contents M.empty Nothing $ return ()
+newEmptyMap = newMap M.empty
 
 newMap :: M.Map k v -> Par d s (LayeredSatMap k s v)
-newMap m = WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ newIORef $ Contents m Nothing $ return ()
+newMap m = WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ do
+  ref <- newIORef (Just m, return ())
+  return $ LSMContents [ref]
 
 newFromList :: (Ord k, Eq v) =>
                [(k,v)] -> Par d s (LayeredSatMap k s v)
@@ -78,39 +81,42 @@ withCallbacksThenFreeze (LayeredSatMap (WrapLVar lv)) callback action = do
   IV.get res
       where
         deltaCB (k, v) = return $ Just $ unWrapPar $ callback k v
-        initCB hp resIV ref = do
-          mp <- L.liftIO $ readIORef ref
+        initCB hp resIV (LSMContents (mpRef:mps)) = do
+          mp <- L.liftIO $ readIORef mpRef
           case mp of
-            Saturated -> return ()
-            c@(Contents m parent _) -> unWrapPar $ do
+            (Nothing, _) -> return ()
+            (Just m, _) -> unWrapPar $ do
                traverseWithKey_ (\k v -> forkHP (Just hp) $ callback k v) m
                res <- action
-               -- TODO: when do we flatten?
                IV.put_ resIV res
 
 -- | Flatten this stack of LVars, merging all layers together
--- according the the insert operation. To be called when the map is
--- frozen.
-flatten :: (Ord k, PartialJoinSemiLattice v, Eq v) => LayeredSatMap k s v -> Par d s ()
-flatten lsm@(LayeredSatMap (WrapLVar lv)) = do
-  contents <- WrapPar $ L.liftIO $ readIORef $ L.state lv
-  flatten' contents
-    where
-      flatten' contents = case contents of
-        Saturated -> return ()
-        Contents _ Nothing _ -> return () -- the bottom layer of the map
-        Contents m (Just parent) onsat -> do -- recursively flatten, then merge
-          parentMap <- WrapPar $ L.liftIO $ readIORef parent
-          flatten' parentMap
-          parentMap' <- WrapPar $ L.liftIO $ readIORef parent
-          case parentMap' of
-            Saturated -> return ()
-            -- TODO: This may need to be replaced with a forEach so
-            -- that we see later updates to the parent map. If we
-            -- guarantee that flatten only occurs after freezing this
-            -- is fine; otherwise this will take a bit of type
-            -- rearranging.
-            Contents m _ _ -> traverseWithKey_ (\k v -> insert k v lsm) m
+-- according the the insert operation.
+flatten :: (PartialJoinSemiLattice v, Ord k) => LayeredSatMap k Frzn v -> Maybe (M.Map k v)
+flatten lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
+  let LSMContents (mpRef:mps) = state lv
+  (mp, onsat) <- readIORef mpRef
+  case mp of
+    Nothing -> return Nothing
+    Just m -> do
+      result <- flatten' m mps
+      return result
+  where
+    flatten' acc [] = return $ Just acc
+    flatten' acc (p:ps) = do
+      parent <- readIORef p
+      case parent of
+        (Nothing, _) -> return Nothing
+        (Just pMap, _) -> case merge acc pMap of
+          Nothing -> return Nothing
+          Just m -> flatten' m ps
+    merge acc m = M.foldWithKey go (Just acc) m
+    go _ _ Nothing = Nothing
+    go k v (Just m) = case M.lookup k m of
+      Nothing -> Just $ M.insert k v m
+      Just old -> case joinMaybe old v of
+        Nothing -> Nothing
+        Just newVal -> Just $ M.insert k newVal m
 
 forEach :: LayeredSatMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
@@ -118,13 +124,14 @@ forEach = forEachHP Nothing
 insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
           k -> v -> LayeredSatMap k s v -> Par d s ()
 insert !key !elm (LayeredSatMap (WrapLVar lv)) = WrapPar $ do
-    contents <- L.liftIO (readIORef (L.state lv))
-    case contents of
-      Saturated -> return ()
-      Contents _ _ _ -> putLV_ lv putter
+    let LSMContents (mpRef:mps) = L.state lv
+    mp <- L.liftIO $ readIORef mpRef
+    case mp of
+      (Nothing, _) -> return ()
+      (Just _, _) -> putLV_ lv putter
     where
-      putter ref = do
-        (x, act) <- L.liftIO $ atomicModifyIORef' ref update
+      putter (LSMContents (mpRef:mps)) = do
+        (x, act) <- L.liftIO $ atomicModifyIORef' mpRef update
         case act of
           Nothing -> return ()
           (Just a) -> do L.logStrLn 5 $ " [LayeredSatMap] insert saturated lvar" ++ lvid ++ ", running callback."
@@ -133,114 +140,61 @@ insert !key !elm (LayeredSatMap (WrapLVar lv)) = WrapPar $ do
         return (x, ())
       lvid = L.lvarDbgName lv
       delt x = (x, Nothing)
-      update Saturated = (Saturated, delt Nothing)
-      update orig@(Contents mp parent onsat) =
-          case M.lookup key mp of
-            Nothing -> (Contents (M.insert key elm mp) parent onsat,
-                        delt $ Just (key, elm))
-            Just oldVal ->
-                case joinMaybe elm oldVal of
-                  Just newVal -> if newVal == oldVal
-                                 then (orig, delt Nothing)
-                                 else (Contents (M.insert key newVal mp) parent onsat,
-                                       delt $ Just (key, newVal))
-                  Nothing -> (Saturated, (Nothing, Just onsat))
+      update n@(Nothing, _) = (n, delt Nothing)
+      update orig@(Just m, onsat) = case M.lookup key m of
+        Nothing -> ((Just $ M.insert key elm m, onsat), delt $ Just (key, elm))
+        Just oldVal -> case joinMaybe elm oldVal of
+          Just newVal -> if newVal == oldVal
+                         then (orig, delt Nothing)
+                         else ((Just $ M.insert key newVal m, onsat), delt $ Just (key, newVal))
+          Nothing -> ((Nothing, onsat), (Nothing, Just onsat))
 
 -- | Create a new LVar by pushing a layer onto the existing contents
 -- of this map.
 pushLayer :: LayeredSatMap k s v -> Par d s (LayeredSatMap k s v)
 pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
-    contents <- WrapPar $ L.liftIO $ readIORef $ L.state lv
-    case contents of
-      -- if the map is already saturated, just return it
-      Saturated -> return orig
-      c@(Contents mp parent onsat) -> do
-          parentRef <- WrapPar $ L.liftIO $ newIORef c
-          let ref = newIORef $ Contents M.empty (Just parentRef) (return ())
-          new <- WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV ref
-          whenSat orig $ saturate new
-          return new
+  let LSMContents mps = L.state lv
+  ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
+  WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
 
 whenSat :: LayeredSatMap k s v -> Par d s () -> Par d s ()
 whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
     L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
-    x <- L.liftIO $ atomicModifyIORef' (state lv) fn
+    let LSMContents (mpRef:mps) = state lv
+    x <- L.liftIO $ atomicModifyIORef' mpRef fn
     case x of
       Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
       Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
     where
-      fn :: LayeredSatMapContents k v -> (LayeredSatMapContents k v, Maybe (L.Par ()))
-      fn Saturated = (Saturated, Just newact)
-      fn (Contents m ref onsat) = let onsat' = onsat >> newact
-                                  in (Contents m ref onsat', Nothing)
---   FN :: LayeredSatMapContents k v -> (LayeredSatMapContents k v, Maybe (L.Par ()))
+      fn n@(Nothing, _) = (n, Just newact)
+      fn (Just m, onsat) = let onsat' = onsat >> newact in
+        ((Just m, onsat'), Nothing)
 
 saturate :: LayeredSatMap k s v -> Par d s ()
 saturate (LayeredSatMap lv) = WrapPar $ do
     let lvid = L.lvarDbgName $ unWrapLVar lv
+        LSMContents (mpRef:mps) = state lv
     L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
-    act <- L.liftIO $ atomicModifyIORef' (state lv) fn
+    act <- L.liftIO $ atomicModifyIORef' mpRef fn
     case act of
       Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
       Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
     where
-      fn Saturated = (Saturated, Nothing)
-      fn (Contents _ _ onsat) = (Saturated, Just onsat)
-
-fromIMap :: LayeredSatMap k Frzn v -> Maybe (M.Map k v)
-fromIMap (LayeredSatMap lv) = unsafeDupablePerformIO $ do
-    x <- readIORef $ state lv
-    -- Note that this requires us to ensure that a frozen LSM is
-    -- always flattened. Maybe add a sanity check that the parent
-    -- layer IORef is Nothing?
-    case x of
-      Contents m _ _ -> return $! Just m
-      Saturated -> return Nothing
-
-instance LVarData1 (LayeredSatMap k) where
-    freeze orig@(LayeredSatMap (WrapLVar lv)) = WrapPar $ do
-        -- Hm... need a (PartialJoinSemilattice v) constraint here in
-        -- order to flatten on freeze.
-        -- unWrapPar $ flatten orig
-        freezeLV lv
-        return $ unsafeCoerceLVar orig
-    addHandler mh mp fn = forEachHP mh mp (\_ v -> fn v)
-    sortFrzn (LayeredSatMap lv) =
-        case unsafeDupablePerformIO $ readIORef $ state lv of
-          Saturated -> AFoldable []
-          Contents m _ _ -> AFoldable m
-
-instance F.Foldable (LayeredSatMap k Frzn) where
-  foldr fn zer (LayeredSatMap lv) =
-    let mp = unsafeDupablePerformIO (readIORef (state lv)) in
-    case mp of
-      Saturated -> zer
-      Contents m _ _ -> F.foldr fn zer m
-
-instance F.Foldable (LayeredSatMap k Trvrsbl) where
-  foldr fn zer mp = F.foldr fn zer (castFrzn mp)
+      fn n@(Nothing, _) = (n, Nothing)
+      -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
+      fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn (FrzType a) -- No need to recur deeper.
- frz = unsafeCoerceLVar
+ frz = unsafeCoerce# -- Can't use unsafeCoerceLVar due to LVarData1 constraint
 
--- TO ADD:
-------------------------
-
--- (1) pushLayer -- done
-
--- (2) a way for the merging to happen UPON FREEZE,
---  That will require at least an internal mechanism for post-freeze callbacks.
-
-t0 = (\(a, b) -> (fromIMap a, fromIMap b)) $ runParThenFreeze $ do
+test0 :: [Maybe (M.Map String Int)]
+test0 = map flatten $ runParThenFreeze $ do
   m <- newEmptyMap
-  insert "hi" (32::Int) m
-  insert "hi" (34::Int) m
-  insert "there" (1::Int) m
-  newLayer <- pushLayer m
-  insert "hi" (46 :: Int) newLayer
-  flatten newLayer
-  -- current issue: ("foo", 0) is not seen by newLayer.
-  insert "foo" 0 m
-  flatten newLayer
-  return (m, newLayer)
+  insert "foo" (0 :: Int) m
+  newLayer1 <- pushLayer m
+  newLayer2 <- pushLayer m
+  insert "foo" 2 newLayer1
+  insert "foo" 1 newLayer2 -- should fail
+  insert "bar" 48 m
+  return [m, newLayer1, newLayer2]
