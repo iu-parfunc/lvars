@@ -17,6 +17,8 @@
   join fails the map fails (saturates), after which it requires only a
   small, constant amount of memory.
 
+-- FIXME: we need effect signatures on all methods! - RRN [2014.10.21]
+
  -}
 
 module Data.LVar.SatMap
@@ -203,8 +205,8 @@ newFromList = newMap . M.fromList
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           SatMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
+                           SatMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
     do hp  <- newPool 
        res <- IV.new 
@@ -215,7 +217,7 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (SatMapContents k v)) -> L.Par ()
+    initCB :: HandlerPool -> IV.IVar s b -> IORef (SatMapContents k v) -> L.Par ()
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:

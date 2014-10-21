@@ -68,8 +68,8 @@ newFromList :: (Ord k, Eq v) =>
                [(k,v)] -> Par d s (LayeredSatMap k s v)
 newFromList = newMap . M.fromList
 
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           LayeredSatMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
+                           LayeredSatMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (LayeredSatMap (WrapLVar lv)) callback action = do
   hp <- newPool
   res <- IV.new
