@@ -23,8 +23,8 @@ module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar,
 
-         waitPureLVar, freezePureLVar,
-         getPureLVar, getPureLVarSets, unsafeGetPureLVar,
+         waitPureLVar, freezePureLVar, fromPureLVar, 
+         getPureLVar, unsafeGetPureLVar,
 
          -- * Verifying lattice structure
          verifyFiniteJoin, verifyFiniteGet
@@ -38,7 +38,7 @@ import qualified Data.Set as S
 import qualified Control.LVish.SchedIdempotent as LI 
 import Algebra.Lattice
 import GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
@@ -220,6 +220,12 @@ freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
     globalThresh ref True = fmap Just $ readIORef ref
     globalThresh _  False = return Nothing
     deltaThresh  _        = return Nothing
+
+-- | Read the exact contents of an already frozen PureLVar.
+fromPureLVar :: PureLVar Frzn t -> t
+fromPureLVar (PureLVar lv) =
+  unsafeDupablePerformIO $ readIORef $ state lv
+
 
 ------------------------------------------------------------
 

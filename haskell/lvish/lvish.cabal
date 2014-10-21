@@ -23,6 +23,8 @@ version:             2.0
 -- 1.1.1.0 -- expose logging routines
 -- 1.1.1.5 -- various bugfixes
 -- 1.1.2   -- bugfixes and small additions, work-around for -fbeta problems
+-- 1.1.3   -- add fromPureLVar
+-- 1.1.4   -- add SatMap 
 
 -- 2.0     -- Major changes to all types to track effect signatures
 
@@ -100,6 +102,8 @@ library
                     Data.LVar.IStructure 
                     Data.LVar.PureSet
                     Data.LVar.PureMap
+                    Data.LVar.SatMap
+                    Data.LVar.LayeredSatMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     Data.LVar.Counter

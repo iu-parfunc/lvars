@@ -42,7 +42,7 @@ module Control.LVish.SchedIdempotent
     addHandler, liftIO, toss,
 
     -- * Internal, private bits.
-    mkPar, Status(..), sched, Listener(..)
+    mkPar, Status(..), sched, Listener(..), lvarDbgName
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -226,6 +226,11 @@ logOffRecord  _ _ _  = return ()
 ------------------------------------------------------------------------------
 -- LVar operations
 ------------------------------------------------------------------------------
+
+-- | Debugging only -- create some kind of printable identifier for
+-- the LVar (uses StableName).
+lvarDbgName :: LVar a d -> String
+lvarDbgName (LVar {state, status}) = (show$ unsafeName state)
     
 -- | Create an LVar.
 newLV :: IO a -> Par (LVar a d)
@@ -249,7 +254,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   -- that, if we are not currently above the threshhold, we will have to poll
   -- /again/ after enrolling the callback.  This race may also result in the
   -- continuation being executed twice, which is permitted by idempotence.
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  let uniqsuf = ", lv "++lvarDbgName lv++" on worker "++(show$ Sched.no q)
   
   logWith q 7$ " [dbg-lvish] getLV: first readIORef "++uniqsuf
   curStatus <- readIORef status
@@ -268,7 +273,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
               onFreeze   = unblockWhen $ globalThresh state True
               {-# INLINE unblockWhen #-}
               unblockWhen thresh tok q = do
-                let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+                let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
                 logWith q 7$ " [dbg-lvish] getLV (active): callback: check thresh"++uniqsuf
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
@@ -361,8 +366,8 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
-putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+putLV_ lv@(LVar {state, status, name}) doPut = mkPar $ \k q -> do
+  let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
       putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
   logWith q 8 $ " [dbg-lvish] putLV: initial lvar status read"++uniqsuf
   fstStatus <- readIORef status
@@ -400,8 +405,8 @@ putLV lv doPut = putLV_ lv doPut'
 -- | Freeze an LVar (introducing quasi-determinism).
 --   It is the data structure implementor's responsibility to expose this as quasi-deterministc.
 freezeLV :: LVar a d -> Par ()
-freezeLV LVar {name, status} = mkPar $ \k q -> do
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+freezeLV lv@(LVar {name, status}) = mkPar $ \k q -> do
+  let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
   logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status to Freezing"++uniqsuf
   oldStatus <- atomicModifyIORef status $ \s -> (Freezing, s)    
   case oldStatus of
@@ -784,7 +789,7 @@ busyTakeMVar tids msg mv =
  maxWait = 10000 -- nanoseconds
  timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
  try bkoff | totalWait bkoff >= timeOut = do
-     error "SchedIdempotent: [debugging] busyTakeMVar exceeded wait.  Deadlocked?"
+--     error "busyTakeMVar (debugging): time-out expired for waiting on MVar"
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:
