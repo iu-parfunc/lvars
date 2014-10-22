@@ -76,7 +76,7 @@ flag chaselev
 flag getonce
   description: Ensure that continuations of get run at most once 
                (by using extra synchronization)
-  default: False
+  default: True
   manual: True
 
 -- flag beta
