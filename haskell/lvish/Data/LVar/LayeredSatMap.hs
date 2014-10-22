@@ -5,15 +5,19 @@
 {-# LANGUAGE MagicHash #-}
 
 module Data.LVar.LayeredSatMap
-    ( forEachHP
+    (
+      LayeredSatMap
+    , forEachHP
     , newEmptyMap
     , newMap
     , newFromList
     , withCallbacksThenFreeze
     , forEach
     , insert
+    , pushLayer
     , whenSat
     , saturate
+    , fromIMap
     , test0
     )
     where
@@ -41,6 +45,10 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 data LayeredSatMap k s v = LayeredSatMap (LVar s (LSMContents k v) (k, v))
 
 data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
+                       deriving (Eq)
+
+instance Eq (LayeredSatMap k s v) where
+  LayeredSatMap lv1 == LayeredSatMap lv2 = state lv1 == state lv2
 
 type OnSat = L.Par ()
 
@@ -91,25 +99,26 @@ withCallbacksThenFreeze (LayeredSatMap (WrapLVar lv)) callback action = do
                IV.put_ resIV res
 
 -- | Flatten this stack of LVars, merging all layers together
--- according the the insert operation.
-flatten :: (PartialJoinSemiLattice v, Ord k) => LayeredSatMap k Frzn v -> Maybe (M.Map k v)
-flatten lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
+-- according the the insert operation, and return the aggregated
+-- result map.
+fromIMap :: (PartialJoinSemiLattice v, Ord k) => LayeredSatMap k Frzn v -> Maybe (M.Map k v)
+fromIMap lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
   let LSMContents (mpRef:mps) = state lv
   (mp, onsat) <- readIORef mpRef
   case mp of
     Nothing -> return Nothing
     Just m -> do
-      result <- flatten' m mps
+      result <- flatten m mps
       return result
   where
-    flatten' acc [] = return $ Just acc
-    flatten' acc (p:ps) = do
+    flatten acc [] = return $ Just acc
+    flatten acc (p:ps) = do
       parent <- readIORef p
       case parent of
         (Nothing, _) -> return Nothing
         (Just pMap, _) -> case merge acc pMap of
           Nothing -> return Nothing
-          Just m -> flatten' m ps
+          Just m -> flatten m ps
     merge acc m = M.foldWithKey go (Just acc) m
     go _ _ Nothing = Nothing
     go k v (Just m) = case M.lookup k m of
@@ -185,11 +194,11 @@ saturate (LayeredSatMap lv) = WrapPar $ do
       fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
- type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn (FrzType a) -- No need to recur deeper.
+ type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.
  frz = unsafeCoerce# -- Can't use unsafeCoerceLVar due to LVarData1 constraint
 
 test0 :: [Maybe (M.Map String Int)]
-test0 = map flatten $ runParThenFreeze $ do
+test0 = map fromIMap $ runParThenFreeze $ do
   m <- newEmptyMap
   insert "foo" (0 :: Int) m
   newLayer1 <- pushLayer m
