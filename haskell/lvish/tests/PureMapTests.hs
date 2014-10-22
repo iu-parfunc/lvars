@@ -9,9 +9,15 @@
 module PureMapTests(tests, runTests) where
 
 import Data.LVar.PureSet as IS
-import Data.LVar.PureMap as IM
+import qualified Data.LVar.PureMap as IM 
+  -- The common interface under test:
+  (IMap, waitSize, waitValue, getKey, insert, newEmptyMap, newFromList, 
+   freezeMap, unionHP, forEach, forEachHP, traverseMap, traverseMapHP, modify)
 
+-- TODO: Use backpack for this when it is available:
 #include "CommonMapTests.hs"
+
+type TheMap k s v = IM.IMap k s v 
 
 --------------------------------------------------------------------------------
 

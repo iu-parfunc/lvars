@@ -37,6 +37,8 @@ alltests =
        , MaxPosIntTests.tests
        , SetTests.tests
        , PureMapTests.tests 
+--       , LayeredSatMap.tests 
+--       , SatMap.tests 
 #ifdef FAILING_TESTS
        , SLMapTests.tests    -- TODO: close Issue #27, #28 first.  
        , SkipListTests.tests -- Seems to diverge on some sizes on slm2/slm3 [2013.12.07]

@@ -16,6 +16,8 @@ import qualified Data.LVar.SLMap as SM
 
 #include "CommonMapTests.hs"
 
+type TheMap k s v = IM.IMap k s v 
+
 --------------------------------------------------------------------------------
 
 tests :: Test

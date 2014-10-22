@@ -37,7 +37,7 @@ import qualified Control.Par.Class as PC
 -- conversions in the middle.
 mkSimpleIdentityProp ::
   (Ord v, Ord k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
-  (IM.IMap k NonFrzn v -> Par (Ef P G NF B NI) NonFrzn a) -> [(k, v)] -> Bool
+  (TheMap k NonFrzn v -> Par (Ef P G NF B NI) NonFrzn a) -> [(k, v)] -> Bool
 mkSimpleIdentityProp trans prs =
   (L.sort$ L.nub$ map snd prs) == 
   (L.sort$ L.nub $ F.toList $
@@ -135,7 +135,7 @@ case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParQuasiDet v8d
            -- stressTest 0 30 v8d (== [40,50,101,102])
 
 -- fmap (L.sort . F.toList) $
--- v8d :: Par QuasiDet s (IM.IMap Int Frzn Int)
+-- v8d :: Par QuasiDet s (TheMap Int Frzn Int)
 -- v8d :: QuasiDeterministic e => Par e s [Int]
 v8d :: (HasFreeze e, HasPut e) => Par e s [Int]
 v8d = do
@@ -215,8 +215,8 @@ incr ref = atomicModifyIORef' ref (\x -> (x+1,()))
 --------------------------------------------------------------------------------
 
 -- -- | Perform a fork-join computation and populate a SkipListMap in parallel.
-fillOne :: (HasPut e, HasGet e) => [(Int, Int)] -> Par e s (IM.IMap Int s Int)
--- fillOne :: PC.ParMonad p => [(Int, Int)] -> p (IM.IMap Int Int)
+fillOne :: (HasPut e, HasGet e) => [(Int, Int)] -> Par e s (TheMap Int s Int)
+-- fillOne :: PC.ParMonad p => [(Int, Int)] -> p (TheMap Int Int)
 fillOne chunks = do
   mp <- IM.newEmptyMap 
   vars <- forM chunks $ \ (start,end) -> do
