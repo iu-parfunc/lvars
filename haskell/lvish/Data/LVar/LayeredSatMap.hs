@@ -5,7 +5,8 @@
 {-# LANGUAGE MagicHash #-}
 
 module Data.LVar.LayeredSatMap
-    ( forEachHP
+    ( LayeredSatMap
+    , forEachHP
     , newEmptyMap
     , newMap
     , newFromList

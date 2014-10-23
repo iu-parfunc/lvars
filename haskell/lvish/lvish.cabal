@@ -193,7 +193,7 @@ test-suite test-lvish
     main-is:        Main.hs
     -- This test-suite rebuilds the LVish sources rather than depending 
     -- on the package externally... reason is that it needs to access unexported modules.
-    -- TODO: Move all such modules under an Internal namespace.
+    -- TODO: Move all such modules under an Internal namespace.  (Issue #73)
     hs-source-dirs: tests/ ./
     other-modules:  TestHelpers, 
                     LVishAndIVar,
