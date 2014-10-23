@@ -16,7 +16,7 @@
 -- *should* go.  This low-level interface is intended for use in higher-level
 -- data structures, e.g. SkipListMap.
 
-module Data.Concurrent.LinkedMap (
+module Internal.Data.Concurrent.LinkedMap (
   LMap(), LMList(..),
   newLMap, Token(), value, find, FindResult(..), tryInsert,
   foldlWithKey, map, reverse, head, toList, fromList, findIndex,

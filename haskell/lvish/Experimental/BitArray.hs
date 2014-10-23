@@ -61,9 +61,9 @@ import qualified Data.Traversable as T
 
 import           Control.LVish as LV hiding (addHandler)
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.SchedIdempotent as L
 
 ------------------------------------------------------------------------------
 

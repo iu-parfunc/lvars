@@ -47,7 +47,7 @@ import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!  FIXME.  We can't keep t
 import Data.Maybe (fromMaybe)
 import Data.IORef
 import Data.Atomics
-import qualified Data.Concurrent.LinkedMap as LM
+import qualified Internal.Data.Concurrent.LinkedMap as LM
 import Prelude hiding (map)
 import qualified Prelude as P
 

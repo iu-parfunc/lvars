@@ -119,7 +119,7 @@ import           Control.LVish.Types
 import           Control.LVish.Internal as I
 import           Control.LVish.Basics as B
 import           Control.LVish.Logical
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
 import           Control.LVish.Logging (OutDest(..))

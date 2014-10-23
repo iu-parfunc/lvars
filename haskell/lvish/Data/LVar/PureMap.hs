@@ -50,8 +50,8 @@ module Data.LVar.PureMap
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
 import           Data.LVar.PureMap.Unsafe
