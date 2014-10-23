@@ -154,8 +154,9 @@ catchAll parent exn =
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: (Int,Int) -- ^ What inclusive range of messages do we accept?  Defaults to `(0,dbgLvl)`.
-          -> [OutDest]
-          -> WaitMode
+          -> [OutDest] -- ^ Where do we write debugging messages?
+          -> WaitMode  -- ^ Do we wait for workers before proceeding sequentially but randomly (fuzz
+                       --   testing event interleavings)?
           -> IO Logger
 newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   logged      <- newIORef []  
@@ -177,8 +178,15 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
 
 --------------------------------------------------------------------------------
 
--- | Run a logging coordinator thread until completion/shutdown.
-runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
+-- | Run a logging coordinator thread until completion/shutdown.  This
+-- coordinator manages the interleaving of events that 
+runCoordinator :: WaitMode   -- ^ By which method do we wait for all workers to quiesce?
+               -> IORef Bool -- ^ Set to True (by someone other than the coordinator) when the
+                             --   system should shutdown.
+               -> SmplChan Writer -- ^ Input queue where the coordinator recvs dbg messages 
+               -> IORef [String]  -- ^ Output queue where the coordinator writes out messages
+               -> [OutDest]       -- ^ Where to write log messages
+               -> IO ()
 runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
        case waitWorkers of
          DontWait -> printLoop =<< newBackoff maxWait
