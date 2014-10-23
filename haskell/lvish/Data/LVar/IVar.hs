@@ -63,10 +63,8 @@ import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PC
-#endif
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -213,7 +211,6 @@ spawnP a = spawn (return a)
 put :: (HasPut e, Eq a, NFData a) => IVar s a -> a -> Par e s ()
 put v a = deepseq a (put_ v a)
 
-#ifdef GENERIC_PAR
 -- instance PC.ParFuture (Par (Ef P G f b i) s) where
 --   type Future (Par (Ef P G f b i) s) = IVar s
 --   type FutContents (Par (Ef P G f b i) s) a = (Eq a)
@@ -227,6 +224,4 @@ instance PC.ParFuture (Par e s) where
 instance PC.ParIVar (Par e s) where
   put_ = put_
   new = new
-
-#endif
 

@@ -74,7 +74,6 @@ import           Control.Applicative ((<$>))
 import qualified Data.Foldable as F
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 
-#ifdef GENERIC_PAR
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
 
@@ -82,7 +81,6 @@ import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 -- | A partial version of "Algebra.Lattice.JoinSemiLattice", this
 -- could be made into a complete lattice by the addition of a top
@@ -449,8 +447,7 @@ unsafeName x = unsafePerformIO $ do
 --------------------------------------------------------------------------------
 -- Interfaces for generic programming with containers:
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
+
 instance PC.Generator (SatMap k Frzn a) where
   type ElemOf (SatMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -463,8 +460,6 @@ instance PC.Generator (SatMap k Frzn a) where
 -- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
 -- instance.  
 -- instance Show k => PC.ParFoldable (SatMap k Frzn a) where
-
-#endif  
 
 
 -}

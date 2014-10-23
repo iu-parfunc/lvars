@@ -22,10 +22,7 @@ import qualified SatMapTests
 import qualified SetTests
 import qualified MaxPosIntTests
 import qualified AddRemoveSetTests
-
-#ifdef GENERIC_PAR
 import qualified GenericTests
-#endif
 
 main :: IO ()
 main = defaultMainSeqTests alltests
@@ -49,9 +46,7 @@ alltests =
        , SkipListTests.tests -- Seems to diverge on some sizes on slm2/slm3 [2013.12.07]
 --       , SNZITests.tests     -- These have failures still [2013.10.23]
 
-#ifdef GENERIC_PAR         
        , GenericTests.tests -- Divergence... debugging [2013.12.07]
-#endif
 #endif
        , AddRemoveSetTests.tests
        ]

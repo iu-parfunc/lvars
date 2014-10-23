@@ -91,10 +91,7 @@ module Control.LVish
      -- * Various loop constructs
      parForL, parForSimple, parForTree, parForTiled, for_,
 
--- This is not fully ready yet till LVish 2.0:
-#ifdef GENERIC_PAR
      asyncForEachHP,
-#endif
 
      -- * Logical control flow operators
      module Control.LVish.Logical,
@@ -133,8 +130,6 @@ import           Data.Coerce (coerce)
 import Data.IORef
 --------------------------------------------------------------------------------
 
-
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
 
@@ -181,7 +176,7 @@ instance PU.ParWEffects (Par e s) where
 parIO :: HasIO e => IO a -> Par e s a
 parIO = I.liftIO
 
-#endif
+
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a

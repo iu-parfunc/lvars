@@ -167,7 +167,6 @@ library
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
   build-depends: containers >= 0.5.4.0
-  cpp-options: -DGENERIC_PAR
 
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0
@@ -222,7 +221,6 @@ test-suite test-lvish
                    -- Used in NatArray:
                    bits-atomic, missing-foreign
 
-    cpp-options: -DGENERIC_PAR
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     -- END DUPLICATED

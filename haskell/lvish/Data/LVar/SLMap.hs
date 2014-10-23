@@ -80,12 +80,10 @@ import           Prelude
 
 import Debug.Trace
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 import qualified Data.Splittable.Class as Sp
 import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -431,8 +429,6 @@ instance F.Foldable (IMap k Frzn) where
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -473,7 +469,6 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
 
 -- UNSAFE!  It is naughty if this instance escapes to the outside world, which it can...
 instance F.Foldable (SLMapSlice k) where
-#endif  
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
@@ -491,7 +486,6 @@ instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
 
 --------------------------------------------------------------------------------
   
--- #ifdef GENERIC_PAR
 -- Not exported yet: 
 #if 0  
 instance PC.ParIMap (Par e s) where

@@ -63,7 +63,6 @@ import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
-#ifdef GENERIC_PAR
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
 
@@ -71,7 +70,6 @@ import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 --------------------------------------------------------------------------------
 
@@ -335,8 +333,6 @@ unsafeName x = unsafePerformIO $ do
 --------------------------------------------------------------------------------
 -- Interfaces for generic programming with containers:
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -349,7 +345,5 @@ instance PC.Generator (IMap k Frzn a) where
 -- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
 -- instance.  
 -- instance Show k => PC.ParFoldable (IMap k Frzn a) where
-
-#endif  
 
 
