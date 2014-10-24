@@ -669,3 +669,21 @@ default, and I got this:
     ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
 
 
+[2014.10.24] {Criterion Microbenchmarking}
+------------------------------------------
+
+Each pureset insert is doing A LOT of allocation.  When inserting
+between 1-260K Ints, the average is 781ns/insert with 1835 bytes.
+
+newFromList on 10 elements does WAY less allocation than 10 inserts...
+
+SLSet microbenchmarks are WAY slower than PureSet.
+PureSet might benefit from atomicModifyIORefCAS_ ...
+
+SLSet fillN seems to have a non-linear uptick around 41.6K inserts.
+(Cache?  Hmm, L3 cache could have blown before that...)
+
+
+
+
+

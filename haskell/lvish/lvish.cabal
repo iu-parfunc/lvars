@@ -265,9 +265,6 @@ benchmark bench-lvish
                    , random
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
-    -- build-depends: test-framework, test-framework-hunit, test-framework-th, 
-    --                test-framework-quickcheck2, QuickCheck,
-    --                HUnit, time, text
     build-depends: criterion >= 1.0
 
     -- For we duplicate these flag-dependent options:
@@ -282,8 +279,4 @@ benchmark bench-lvish
        cpp-options: -DCHASE_LEV
     if flag(getonce)
        cpp-options: -DGET_ONCE
-    -- Atomic-primops fails when used by template-haskell/ghci on linux:
-    if impl(ghc < 7.7) && os(linux) {
-      buildable: False
-    }
 
