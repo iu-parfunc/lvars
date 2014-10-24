@@ -683,7 +683,145 @@ PureSet might benefit from atomicModifyIORefCAS_ ...
 SLSet fillN seems to have a non-linear uptick around 41.6K inserts.
 (Cache?  Hmm, L3 cache could have blown before that...)
 
+----------------------------------------
 
+Here's an example of the inner loop when benchmarking PureSet/new.
+Honestly, it looks as good as it could be.  Each LVar currently
+allocates several mutable locations.  (But I thought it would be
+3.. how'd it get to 4?)
 
+It's taking 17.25ns / 128-bytes currently.  It's the 128 bytes of
+allocation that seems excessive.
 
+    (\ (w_scwM :: () -> ClosedPar) ->
+		       letrec {
+			 $wa_scwR :: Int# -> (() -> ClosedPar) -> ClosedPar
+			 $wa_scwR =
+			   \ (ww_scwP :: Int#) (w1_Xcxf :: () -> ClosedPar) ->
+			     case tagToEnum# (># ww_scwP x#_a9Y7) of _ {
+			       False ->
+				 let {
+				   a_scut :: Int#
+				   a_scut = +# ww_scwP 1 } in
+				 (\ (eta1_B2 :: SchedState) (eta2_XB :: State# RealWorld) ->
+				    case newMutVar# (Nothing) eta2_XB
+				    of _ { (# ipv_aaNi, ipv1_aaNj #) ->
+				    case newMutVar# (Nil) ipv_aaNi of _ { (# ipv2_aaMP, ipv3_aaMQ #) ->
+				    case newMutVar# (Active ((STRef ipv3_aaMQ) `cast` ...)) ipv2_aaMP
+				    of _ { (# ipv4_aaMU, ipv5_aaMV #) ->
+				    case newMutVar# () ipv4_aaMU of _ { (# ipv6_aaMZ, ipv7_aaN0 #) ->
+				    (((($wa_scwR a_scut w1_Xcxf) `cast` ...) eta1_B2) `cast` ...)
+				      ipv6_aaMZ
+				    }
+				    }
+				    }
+				    })
+				 `cast` ...;
+			       True -> w1_Xcxf ()
+			     }; } in
+		       $wa_scwR 1 w_scwM)
+
+If we proceed to STG, where let=allocation and case=evaluation, then
+we see three let's in the loop.  The first is for the (SchedState ->
+...) function, and then the other two are:
+
+	 let {
+	   sat_scyg
+	     :: Bag
+		  (Listener
+		     Any) =
+	       NO_CCS STRef! [ipv3_scyf]; } in
+	 let {
+	   sat_scyh
+	     :: Status
+		  Any =
+	       NO_CCS Active! [sat_scyg];
+
+How about if we look at the "fill10" example instead?  It posts up a
+whopping 8700 bytes of allocation (and ~2 microseconds / 5.6K cycles).
+(A regular Data.Set.fromList on [1..10] takes 600 cycles and does 700
+bytes alloc.  Huh, it looks like that version is specializing on
+[Int]... )
+
+This one clearly only does the 4 newMutVar calls once, and then goes
+into "$wloop_".  Our "insert" inlined but the Data.Set insert did not,
+requiring us to box the Int on the way off to that library function.
+
+    letrec {
+      $wloop_scNC :: Int# -> Par Full Any ()
+      $wloop_scNC =
+	\ (ww1_scNA :: Int#) ->
+	  let {
+	    i_X9jQ :: Int
+	    i_X9jQ = I# ww1_scNA } in
+	  let {
+	    lvl6_scP1 :: Maybe Int
+	    lvl6_scP1 = Just i_X9jQ } in
+	  case tagToEnum# (># ww1_scNA 10) of _ {
+	    False ->
+	      let {
+		a1_sawc :: Par Full Any ()
+		a1_sawc = $wloop_scNC (+# ww1_scNA 1) } in
+	      let {
+		m1_aasA :: Par ()
+		m1_aasA =
+		  let {
+		    lvl7_scP4 :: (Set Int, Maybe Int)
+		    lvl7_scP4 = (Tip, lvl6_scP1) } in
+		  let {
+		    lvl8_scP6 :: Set Int -> (Set Int, Maybe Int)
+		    lvl8_scP6 =
+		      \ (set_aach :: Set Int) ->
+			case insert $fOrdInt i_X9jQ set_aach
+			of wild4_aacG {
+			  Bin dt_aacI ds4_aacJ ds5_aacK ds6_aacL ->
+			    case set_aach of wild5_aacn {
+			      Bin dt1_aacp ds7_aacq ds8_aacr ds9_aacs ->
+				case tagToEnum# (># dt_aacI dt1_aacp)
+				of _ {
+				  False -> (wild5_aacn, Nothing);
+				  True -> (wild4_aacG, lvl6_scP1)
+				};
+			      Tip ->
+				case tagToEnum# (># dt_aacI 0) of _ {
+				  False -> lvl_rcGu;
+				  True -> (wild4_aacG, lvl6_scP1)
+				}
+			    };
+			  Tip ->
+			    case set_aach of wild5_aacn {
+			      Bin dt_aacp ds4_aacq ds5_aacr ds6_aacs ->
+				case tagToEnum# (># 0 dt_aacp) of _ {
+				  False -> (wild5_aacn, Nothing);
+				  True -> lvl7_scP4
+				};
+			      Tip -> lvl_rcGu
+			    }
+			} } in
+		  $wputLV_
+		    (a_scvn `cast` ...)
+		    ipv5_aaPg
+		    ipv7_aaPl
+		    ((\ (a3_acwW :: IORef (Set Int))
+			(eta3_B3 :: (Maybe Int, ()) -> ClosedPar)
+			(eta4_XY :: SchedState)
+			(eta5_X1V :: State# RealWorld) ->
+			case a3_acwW `cast` ... of _ { STRef ww3_aavD ->
+			case $wa ww3_aavD lvl8_scP6 eta5_X1V
+			of _ { (# ipv8_acx3, ipv9_acx4 #) ->
+			((((eta3_B3 (ipv9_acx4, ())) `cast` ...)
+			    eta4_XY)
+			 `cast` ...)
+			  ipv8_acx3
+			}
+			})
+		     `cast` ...) } in
+	      (\ (eta3_Xato :: () -> ClosedPar) ->
+		 let {
+		   lvl7_scP7 :: ClosedPar
+		   lvl7_scP7 = (a1_sawc `cast` ...) eta3_Xato } in
+		 (m1_aasA `cast` ...) (\ _ -> lvl7_scP7))
+	      `cast` ...;
+	    True -> lvl1_rcQD `cast` ...
+	  }; }
 
