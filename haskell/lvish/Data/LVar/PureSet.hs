@@ -231,7 +231,7 @@ forEach = forEachHP Nothing
 -- set.     
 insert :: HasPut e => Ord a => a -> ISet s a -> Par e s ()
 insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
-  where putter ref  = atomicModifyIORef ref update
+  where putter ref  = atomicModifyIORef' ref update
         update set =
           let set' = S.insert elm set in
           -- Here we do a constant time check to see if we actually changed anything:
