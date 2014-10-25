@@ -747,6 +747,10 @@ This one clearly only does the 4 newMutVar calls once, and then goes
 into "$wloop_".  Our "insert" inlined but the Data.Set insert did not,
 requiring us to box the Int on the way off to that library function.
 
+One immediate difference from the above is that "Par" did not go away
+in exposing the "ClosedPar" underneath in this one.  Presumably
+because this is a loop IN the par monad rather than the IO monad....
+
     letrec {
       $wloop_scNC :: Int# -> Par Full Any ()
       $wloop_scNC =
