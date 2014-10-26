@@ -53,7 +53,7 @@ import GHC.Prim (unsafeCoerce#)
 
 -- import Control.LVish (LVarData1(..))
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), NonFrzn, Frzn, Trvrsbl)
-import Control.LVish.Internal (Determinism(..), Par(WrapPar))
+import Control.LVish.Internal (Par(WrapPar))
 import Control.Par.EffectSigs
 import Control.LVish.Sched (runPar, runParIO)
 --------------------------------------------------------------------------------

@@ -56,7 +56,7 @@ import           Control.Par.EffectSigs
 import qualified Control.LVish.Basics as LV 
 import           Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal as I
-import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), Determinism(QuasiDet))
+import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar))
 import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.Sched as LI 
 import           Data.LVar.Generic

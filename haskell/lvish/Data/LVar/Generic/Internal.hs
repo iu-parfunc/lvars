@@ -24,7 +24,7 @@ module Data.LVar.Generic.Internal
 import           Control.LVish.Types
 import           Control.Par.EffectSigs
 import           Control.LVish.Basics
-import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.Internal (Par)
 import           Control.LVish.Sched    (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
