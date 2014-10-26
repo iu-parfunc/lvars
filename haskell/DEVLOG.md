@@ -594,6 +594,42 @@ Haven't seen this one before, a compile failure on the cfa package:
           ...
     ld: symbol(s) not found for architecture x86_64
 
+
+[2014.01.24] {Failure after recent nonidem merge}
+-------------------------------------------------
+
+    Failed to install lvish-1.2.0.0
+    Last 10 lines of the build log ( /ffh/ryan/cloud_drive/working_copies/lvars/lvars/haskell/.cabal-sandbox/logs/lvish-1.2.0.0.log ):
+     Passed  5           64           69
+     Failed  0           1            1
+     Total   5           65           70
+     [*] test-framework exiting with: ExitFailure 1
+     [*] GC finished on main thread.
+     [*] Main thread exiting.
+    Test suite test-lvish: FAIL
+    Test suite logged to:
+    dist/dist-sandbox-38f74c87/test/lvish-1.2.0.0-test-lvish.log
+    0 of 1 test suites (0 of 1 test cases) passed.
+
+Specifically, the failure is:
+
+    ThreadKilled exception inside child thread, ThreadId 79270 (not propagating!): "worker thread"
+      v4: [Failed]
+    Bad test outcome--exception: PutAfterFreezeExn "Attempt to change a frozen LVar"
+
+It's proving a bit hard to reproduce, however.
+
+Also... test after i9h is apparently deadlocking on -N4.  Hmm.. why
+are timeouts not working? 
+  (And I'm getting plenty of the blocked-indefinitely errors in
+  various papers... these are probably the same failure but sometimes
+  the GC turns it into an exception.  Not sure why timeouts aren't 
+  working consistently on this branch.  I see them sometimes.)
+
+Ah, ok, I can get failures on AddRemoveSetTests 
+
+
+
 [2014.01.24] {More scheduler debugging}
 ----------------------------------------
 
@@ -667,6 +703,8 @@ default, and I got this:
       v8a: [OK]
       v8b: [Failed]
     ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
+
+
 
 
 [2014.10.24] {Criterion Microbenchmarking}
@@ -829,3 +867,38 @@ because this is a loop IN the par monad rather than the IO monad....
 	    True -> lvl1_rcQD `cast` ...
 	  }; }
 
+
+
+
+[2014.10.26] {Debugging nonidem branch}
+----------------------------------------
+
+On the main (2.0) branch we're having some trouble with duplicated
+gets inspite of `-fgetonce`.  I wanted to try (finally) merging the
+nonidem branch instead.  I've done most of the merges to bring it up
+to speed.  However, not only does it still have errors like this:
+
+  "Bad test outcome--exception: Final continuation of Par computation
+   was duplicated, in spite of GET_ONCE!"
+
+But, it also has some divergences.  Timeouts on the following:
+
+      v3b: [Failed]
+    ERROR: <<timeout>>
+
+      i3c: [Failed]
+    Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "<<timeout>>"
+
+      v3d: [Failed]
+    ERROR: <<timeout>>
+
+      v3e: [Failed]
+    ERROR: <<timeout>>
+
+      v8a: [Failed]
+    ERROR: <<timeout>>
+
+      v8b: [Failed]
+    ERROR: <<timeout>>

@@ -34,7 +34,7 @@ module Control.LVish.Internal
 
 import           Control.LVish.MonadToss
 import           Control.Applicative
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.Sched as L
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import           Control.Par.EffectSigs
 
@@ -74,7 +74,7 @@ newtype Par :: EffectSig -> * -> * -> * where
 -- to.
 
 -- LK: I don't care if we use `a` and `d` or `all` and `delt`, but why
--- not be consistent between here and SchedIdempotent.hs?  Also, what
+-- not be consistent between here and Sched.hs?  Also, what
 -- does `all` mean?
 newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 

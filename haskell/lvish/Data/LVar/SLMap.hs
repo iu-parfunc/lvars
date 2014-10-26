@@ -72,8 +72,9 @@ import           Control.Monad.IO.Class
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.Sched (newLV, putLV, putLV_, getLV, freezeLV)
+import qualified Internal.Control.LVish.Sched as L
+import           System.Random (randomIO)
 import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude

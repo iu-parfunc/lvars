@@ -19,8 +19,8 @@ module Data.LVar.PureMap.Unsafe
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish hiding (parIO)
 import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (freezeLV)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.Sched (freezeLV)
+import qualified Internal.Control.LVish.Sched as L
 import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Data.UtilInternal (traverseWithKey_)

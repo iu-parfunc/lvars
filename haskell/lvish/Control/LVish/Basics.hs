@@ -42,7 +42,7 @@ import qualified Data.Foldable    as F
 import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.Sched as L
 import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           Control.Par.EffectSigs

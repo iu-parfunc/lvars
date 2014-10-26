@@ -72,9 +72,9 @@ flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
   manual: True
-  
+
 flag getonce
-  description: Ensure that continuations of get run at most once 
+  description: Ensure that both handlers and continuations of get run at most once
                (by using extra synchronization)
   default: True
   manual: True
@@ -148,7 +148,7 @@ library
 
   -- Package-internal and should not be exposed:
                     Internal.Data.Concurrent.LinkedMap
-                    Internal.Control.LVish.SchedIdempotent
+                    Internal.Control.LVish.Sched
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -159,7 +159,7 @@ library
                     Data.Concurrent.SNZI
                     Data.Concurrent.AlignedIORef
                     Control.Reagent
-                    Control.LVish.SchedIdempotentInternal 
+                    Control.LVish.SchedQueue
                     Control.LVish.MonadToss
                     Control.LVish.Types
                     Control.LVish.Basics
@@ -196,7 +196,7 @@ library
      build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
   if flag(getonce)
-     cpp-options: -DGET_ONCE
+     cpp-options: -DLVISH_DEDUP
 
 
 --------------------------------------------------------------------------------
@@ -245,7 +245,7 @@ test-suite test-lvish
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
     if flag(getonce)
-       cpp-options: -DGET_ONCE
+       cpp-options: -DLVISH_DEDUP
 
     -- Atomic-primops fails when used by template-haskell/ghci on linux:
     if impl(ghc < 7.7) && os(linux) {

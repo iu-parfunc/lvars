@@ -57,8 +57,8 @@ import qualified Control.LVish.Basics as LV
 import           Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal as I
 import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar))
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
-import qualified Internal.Control.LVish.SchedIdempotent as LI 
+import           Internal.Control.LVish.Sched (newLV, putLV, getLV, freezeLV)
+import qualified Internal.Control.LVish.Sched as LI 
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)

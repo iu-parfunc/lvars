@@ -30,7 +30,9 @@ import qualified Data.LVar.IStructure as ISt
 
 import Control.LVish
 import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import qualified Control.LVish.Internal as I
+import Internal.Control.LVish.Sched (liftIO, dbgLvl, forkWithExceptions)
+
 import System.IO (hPutStrLn, stderr)
 import Debug.Trace
 import TestHelpers as T

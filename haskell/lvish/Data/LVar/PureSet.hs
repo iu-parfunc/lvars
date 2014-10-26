@@ -57,8 +57,8 @@ import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.Sched (newLV, putLV, getLV, freezeLV, freezeLVAfter)
+import qualified Internal.Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (insert)
 

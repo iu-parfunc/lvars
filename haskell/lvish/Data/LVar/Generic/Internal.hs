@@ -25,7 +25,7 @@ import           Control.LVish.Types
 import           Control.Par.EffectSigs
 import           Control.LVish.Basics
 import           Control.LVish.Internal (Par)
-import           Internal.Control.LVish.SchedIdempotent (HandlerPool)
+import           Internal.Control.LVish.Sched    (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort, intersperse)
