@@ -47,6 +47,7 @@ module Data.LVar.PureSet
 import           Control.Monad (void)
 import           Control.Applicative ((<$>))
 import           Data.IORef
+import           Data.Atomics (atomicModifyIORefCAS)
 import           Data.List (intersperse)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
@@ -124,6 +125,7 @@ instance (Show a) => Show (ISet Frzn a) where
 instance Show a => Show (ISet Trvrsbl a) where
   show = show . castFrzn
 
+{-# INLINE newEmptySet #-}
 -- | Create a new, empty, monotonically growing set.
 newEmptySet :: Par e s (ISet s a)
 newEmptySet = newSet S.empty
@@ -227,11 +229,12 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
 forEach :: ISet s a -> (a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 
+{-# INLINE insert #-}
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
 insert :: HasPut e => Ord a => a -> ISet s a -> Par e s ()
 insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
-  where putter ref  = atomicModifyIORef ref update
+  where putter ref  = atomicModifyIORefCAS ref update
         update set =
           let set' = S.insert elm set in
           -- Here we do a constant time check to see if we actually changed anything:

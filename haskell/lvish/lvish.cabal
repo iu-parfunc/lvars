@@ -79,6 +79,17 @@ flag getonce
   default: True
   manual: True
 
+flag useopt
+  description: Use optimization (O2).  This is always good for LVish.
+  default: True
+  manual: True
+
+flag threaded
+  description: Should the tests be threaded?  Typically yes.
+  default: True
+  manual: True
+
+
 -- flag beta
 --   description: These features are in beta and not fully supported yet.
 --   default: True
@@ -172,7 +183,9 @@ library
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0
 
-  ghc-options: -O2 -rtsopts
+  ghc-options: -rtsopts
+  if flag(useopt)
+    ghc-options: -O2 
 
   if flag(debug)
      -- TEMP: depending on these for visualzing MemoCyc DAGs:
@@ -191,9 +204,6 @@ library
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
-    -- This test-suite rebuilds the LVish sources rather than depending 
-    -- on the package externally... reason is that it needs to access unexported modules.
-    -- TODO: Move all such modules under an Internal namespace.  (Issue #73)
     hs-source-dirs: tests/ 
     other-modules:  TestHelpers, 
                     LVishAndIVar,
@@ -209,8 +219,6 @@ test-suite test-lvish
                     AddRemoveSetTests,
                     GenericTests
                     
-    ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
-
     build-depends: lvish 
     build-depends: base >= 4.6 && <= 4.8
                    , containers >= 0.5
@@ -222,12 +230,17 @@ test-suite test-lvish
                    test-framework-quickcheck2, QuickCheck,
                    HUnit, time, text
 
--- For now we instead duplicate these flag-dependent options:
+    -- For we duplicate these flag-dependent options:
+    if flag(useopt)
+      ghc-options: -O2 
+    if flag(threaded)
+      ghc-options: -threaded -rtsopts -with-rtsopts=-N4
+
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
---       build-depends: fgl, graphviz, text
-       cpp-options: -DDEBUG_LVAR
+       -- build-depends: fgl, graphviz, text
 --       cpp-options: -DDEBUG_MEMO
+       cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
@@ -238,3 +251,32 @@ test-suite test-lvish
     if impl(ghc < 7.7) && os(linux) {
       buildable: False
     }
+
+
+benchmark bench-lvish
+    type:	    exitcode-stdio-1.0
+    main-is:        Bench.hs
+    hs-source-dirs: tests/ 
+                    
+    build-depends: lvish 
+    build-depends: base >= 4.6 && <= 4.8
+                   , containers >= 0.5
+                   , vector >=0.10
+                   , random
+    build-depends: par-classes     >= 1.1 && < 2.0,
+                   par-collections >= 1.1 && < 2.0
+    build-depends: criterion >= 1.0
+
+    -- For we duplicate these flag-dependent options:
+    if flag(useopt)
+      ghc-options: -O2 
+    if flag(threaded)
+      ghc-options: -threaded -rtsopts -with-rtsopts=-N4
+    if flag(debug)
+       cpp-options: -DDEBUG_LVAR
+    if flag(chaselev)
+       build-depends: chaselev-deque
+       cpp-options: -DCHASE_LEV
+    if flag(getonce)
+       cpp-options: -DGET_ONCE
+
