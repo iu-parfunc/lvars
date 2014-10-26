@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 
 module STTests (tests, runTests) where
 
@@ -27,6 +29,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
+import Control.Par.EffectSigs (GetG, Getting(G))
 
 import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
 import Test.Framework.Providers.HUnit
@@ -50,7 +53,9 @@ case_v_t0 = assertEqual "basic forkSTSplit usage"
 t0 :: String            
 t0 = LV.runPar $ V.runParVecT 10 p0
 
-p0 :: V.ParVecT s1 Int (LV.Par d s0) String
+-- p0 :: (HasGet e) => V.ParVecT s1 Int (LV.Par e s0) String
+-- p0 :: (GetG e ~ G) => V.ParVecT s1 Int (LV.Par e s0) String
+p0 :: (HasGet e, HasPut e) => V.ParVecT s1 Int (LV.Par e s0) String
 p0 = do
   
   V.set 0
@@ -72,7 +77,7 @@ case_v_t1 = assertEqual "testing transmute"
 t1 :: String
 t1 = LV.runPar $ V.runParVecT 1 p1
 
-p1 :: V.ParVecT s1 Int (LV.Par d s0) String
+p1 :: V.ParVecT s1 Int (LV.Par e s0) String
 p1 = do  
   V.set 0  
   PST.transmute (\v -> PST.STTup2 v v) 
@@ -92,7 +97,7 @@ t2 = LV.runPar $ V.runParVecT 2 p2
 -- | FIXME: This is an example of what we should NOT be allowed to do.
 --   Arbitrary transmute can't be allowed, it allows aliasing.
 --   However, controlled zooming in and out will be allowed.
-p2 :: V.ParVecT s1 Int (LV.Par d s0) String
+p2 :: V.ParVecT s1 Int (LV.Par e s0) String
 p2 = do
   V.set 0
   str <- PST.transmute (\v -> PST.STTup2 v v)

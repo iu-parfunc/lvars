@@ -679,3 +679,29 @@ Rather than debug this, it may be better to test whether the non-idem branch doe
 [2014.05.01] {Still seeing problems with lotsaPar test}
 --------------------------------------------------------
 
+[2014.10.22] {Debugging unit tests}
+----------------------------------------
+
+I'm trying to reactivat the SLMap tests.  Now "-fgetonce" is the
+default, so that should fix some problems with duplication.  But what
+is the deal with these exceptions?  Work dupliction does not seem
+sufficient to explain them.
+
+      Common:
+	SLMapTests:
+	  traverse: [Failed]
+    *** Failed! Exception: 'ConflictingPutExn "Multiple puts to one entry in an IMap!"' (after 2 tests):
+
+      v8d: [Failed]
+     ERROR: ConflictingPutExn "Multiple puts to one entry in an IMap!"
+
+Argh, and I just turned on -fdebug, in addition to making -fgetonce
+default, and I got this:
+
+      v3e: [Failed]
+    ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
+      v8a: [OK]
+      v8b: [Failed]
+    ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
+
+

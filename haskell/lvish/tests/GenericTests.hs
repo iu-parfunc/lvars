@@ -1,6 +1,7 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies  #-}
 
 -- | Tests for the generic Par-programming interfaces.
 
@@ -31,12 +32,13 @@ case_toQPar :: Assertion
 case_toQPar = t1 >>= assertEqual "" "hi" 
 
 t1 :: IO String
-t1 = runParIO par
+t1 = runParQuasiDet $ isQD par
  where
-  par :: Par QuasiDet s String
+--  par :: QuasiDeterministic e => Par e s String
   par = do
     iv <- IV.new
-    PC.toQPar $ IV.put iv "hi"
+    -- PC.toQPar $ 
+    IV.put iv "hi"
     IV.get iv
 
 --------------------------------------------------------------------------------
@@ -50,7 +52,7 @@ expectedSum = (s * (s + 1)) `quot` 2
 
 -- ParFold instance
 case_pfold_imap :: Assertion 
-case_pfold_imap = assertNoTimeOut 3.0 $ runParIO $ do
+case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ do
   mp <- SM.newEmptyMap
   -- pforEach (zrange sz) $ \ ix -> do
   forM_ [1..size] $ \ ix -> do       

@@ -14,15 +14,15 @@ import qualified Data.Vector.Unboxed as U
 
 type NodeInfo s = IS.IStructure s Int
 
-parent :: NodeInfo s -> Par d s NodeID
+parent :: NodeInfo s -> Par e s NodeID
 parent info = IS.get info 0
 
-rank :: NodeInfo s -> Par d s Int
+rank :: NodeInfo s -> Par e s Int
 rank info = IS.get info 1
 
 type DisjointSet s = SLM.IMap Int s (NodeInfo s)
 
-make_set :: NodeID -> Par d s (NodeInfo s)
+make_set :: NodeID -> Par e s (NodeInfo s)
 make_set nd = do 
   ni <- IS.newIStructure 2
   IS.put ni 0 nd >> return ni
@@ -30,7 +30,7 @@ make_set nd = do
 
 -- Implements "union by rank", where the rank approximates subtree size
 
-union :: DisjointSet s -> NodeID -> NodeID -> Par d s ()
+union :: DisjointSet s -> NodeID -> NodeID -> Par e s ()
 union ds x y = do
   [px,py] <- mapM (find_set ds) [x,y]
   rankPx <- SLM.getKey px ds >>= rank
@@ -46,7 +46,7 @@ union ds x y = do
 
 -- Implements path compression
 
-find_set :: DisjointSet s -> NodeID -> Par d s NodeID
+find_set :: DisjointSet s -> NodeID -> Par e s NodeID
 find_set ds nd = do
   info <- SLM.getKey nd ds
   p <- parent info
@@ -59,12 +59,12 @@ find_set ds nd = do
 
 -- Both types of updates return a new NodeInfo since multiple puts are not allowed
 
-update_parent :: NodeID -> NodeInfo s -> Par d s (NodeInfo s)
+update_parent :: NodeID -> NodeInfo s -> Par e s (NodeInfo s)
 update_parent pID info = do
   ni <- IS.newIStructure 2
   IS.put ni 0 pID >> rank info >>= IS.put ni 1 >> return ni
 
-update_rank :: Int -> NodeInfo s -> Par d s (NodeInfo s)
+update_rank :: Int -> NodeInfo s -> Par e s (NodeInfo s)
 update_rank r info = do
   ni <- IS.newIStructure 2
   parent info >>= IS.put ni 0 >> IS.put ni 1 r >> return ni
@@ -74,11 +74,11 @@ update_rank r info = do
 
 data EdgeGraph = EdgeGraph (U.Vector (NodeID, NodeID))
 
-type ParFor d s = (Int,Int) -> (Int -> Par d s ()) -> Par d s ()
+type ParFor e s = (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 
 -- Minimum spanning forest via Kruskal's algorithm
 
-msf_kruskal :: ParFor d s -> EdgeGraph -> Par d s (IS.IStructure s Bool)
+msf_kruskal :: ParFor e s -> EdgeGraph -> Par e s (IS.IStructure s Bool)
 msf_kruskal parFor (EdgeGraph edges) = do
   msf <- IS.newIStructure (U.length edges)
   let maxV = U.foldl (\a (u,v) -> max a $ max u v) 0 edges

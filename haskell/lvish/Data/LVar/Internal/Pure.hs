@@ -102,13 +102,13 @@ verifyFiniteGet allStates (bot,top) getter =
 
 -- | A new pure LVar populated with the provided initial state.
 newPureLVar :: JoinSemiLattice t =>
-               t -> Par d s (PureLVar s t)
+               t -> Par e s (PureLVar s t)
 newPureLVar st = WrapPar$ fmap (PureLVar . WrapLVar) $
                  LI.newLV $ newIORef st
 
 -- | Blocks until the contents of `lv` are at or above one element of
 -- `thrshSet`, then returns that one element.
-getPureLVar :: (JoinSemiLattice t, Eq t) => PureLVar s t -> [t] -> Par d s t
+getPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> [t] -> Par e s t
 getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
@@ -121,14 +121,54 @@ getPureLVar (PureLVar (WrapLVar lv)) thrshSet =
 -- | Returns the element of thrshSet that `currentState` is above, if
 -- it exists.  (Assumes that there is only one such element!)
 checkThresholds :: (JoinSemiLattice t, Eq t) => t -> [t] -> Maybe t
+-- ARGH: This is inefficient IF the state is IN the threshold set.  In that case a
+-- log(N) Set.member test should be enough, not a full O(N) traversal of all states
+-- in the threshold set.
 checkThresholds currentState thrshSet = case thrshSet of
   []               -> Nothing
   (thrsh : thrshs) -> if thrsh `joinLeq` currentState
                       then Just thrsh
                       else checkThresholds currentState thrshs
 
+-- | A variant of getPureLVar that allows /equivalence classes/ of sets.
+--   All equivalence classes in a threshold set must still be pairwise incompatible.
+--
+--   Further, as a result of running this get, you find out only which equivalence
+--   class the current state is at or above, not exactly which state within that
+--   equivalence class.
+-- 
+--   Finally, to make it easy to know WHICH set you got back, we allow each set to be
+--   tagged with an arbitrary additional value.  For example, it may be useful to use
+--   a unique `Int` for this purpose.
+getPureLVarSets :: (JoinSemiLattice t, Eq t, Ord t, HasGet e) 
+                => PureLVar s t -> [(b, S.Set t)] -> Par e s (b, S.Set t)
+getPureLVarSets (PureLVar (WrapLVar lv)) thrshSets =
+  WrapPar$ LI.getLV lv globalThresh deltaThresh
+  where globalThresh ref _ = do
+          x <- readIORef ref
+          logDbgLn_ 5 "  [Pure] Getting from a Pure LVar.. read ref."
+          deltaThresh x
+        deltaThresh x =
+          return $ checkThresholds2 x thrshSets
+
+-- | Returns the element of thrshSet that `currentState` is above, if
+-- it exists.  (Assumes that there is only one such element!)
+checkThresholds2 :: (JoinSemiLattice t, Eq t) => t -> [(b,S.Set t)] -> Maybe (b,S.Set t)
+checkThresholds2 currentState thrshSet = case thrshSet of
+  []               -> Nothing
+  (hd@(tag,eqset) : thrshs) -> if anySet eqset (`joinLeq` currentState)
+                          then Just hd
+                          else checkThresholds2 currentState thrshs
+
+-- Huh, why is this not in Data.Set, analogous to Data.List.any
+anySet :: S.Set a -> (a -> Bool) -> Bool
+anySet st fn = 
+  -- ARGH: this should short circuit.  Data.Set screws us up here by not giving us
+  -- efficient iteration with control over recursion.
+  S.foldl' (\ flg elm -> flg || fn elm) False st
+
 -- | Like `getPureLVar` but uses a threshold function rather than an explicit set.
-unsafeGetPureLVar :: (JoinSemiLattice t, Eq t) => PureLVar s t -> (t -> Bool) -> Par d s t
+unsafeGetPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) => PureLVar s t -> (t -> Bool) -> Par e s t
 unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
   WrapPar$ LI.getLV lv globalThresh deltaThresh
   where globalThresh ref _ = do
@@ -142,8 +182,8 @@ unsafeGetPureLVar (PureLVar (WrapLVar lv)) thrsh =
 
 -- | Wait until the pure LVar has crossed a threshold and then unblock.  (In the
 -- semantics, this is a singleton query set.)
-waitPureLVar :: (JoinSemiLattice t, Eq t) =>
-                PureLVar s t -> t -> Par d s ()
+waitPureLVar :: (JoinSemiLattice t, Eq t, HasGet e) =>
+                PureLVar s t -> t -> Par e s ()
 waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
    WrapPar$ LI.getLV iv globalThresh deltaThresh
   where globalThresh ref _ = do
@@ -156,8 +196,8 @@ waitPureLVar (PureLVar (WrapLVar iv)) thrsh =
                                                return Nothing 
 
 -- | Put a new value which will be joined with the old.
-putPureLVar :: JoinSemiLattice t =>
-               PureLVar s t -> t -> Par d s ()
+putPureLVar :: (JoinSemiLattice t, HasPut e) =>
+               PureLVar s t -> t -> Par e s ()
 putPureLVar (PureLVar (WrapLVar iv)) !new =
     WrapPar $ LI.putLV iv putter
   where
@@ -171,7 +211,7 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
 
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
-freezePureLVar :: PureLVar s t -> Par QuasiDet s t
+freezePureLVar :: HasFreeze e => PureLVar s t -> Par e s t
 freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$ 
   do LI.freezeLV lv
      LI.getLV lv globalThresh deltaThresh
@@ -201,6 +241,7 @@ instance DeepFrz a => DeepFrz (PureLVar s a) where
   type FrzType (PureLVar s a) = PureLVar Frzn (FrzType a)
   frz = unsafeCoerce#
 
--- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
+-- FIXME: need an efficient way to extract the logger and access it from the callbacks.
+-- Currently there is no good way to log from IO context:
 logDbgLn_ :: Int -> String -> IO ()
 logDbgLn_ _ _ = return ()

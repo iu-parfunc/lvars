@@ -19,8 +19,8 @@ library
 
   -- other-modules:       
   other-extensions:    CPP, BangPatterns, OverloadedStrings, ScopedTypeVariables, NamedFieldPuns
-  build-depends:       base >=4.6, process==1.1.0.2, directory ==1.2.0.1,
-                       vector >=0.10, time ==1.4.0.1,
+  build-depends:       base >=4.6, process>=1.1.0.2, directory ==1.2.1.0,
+                       vector >=0.10, time ==1.4.2,
                        containers >=0.5, fgl >= 5.4, deepseq >= 1.3,
                        lvish >=1.0, par-collections >= 1.0, 
                        HUnit, bytestring-mmap >= 0.2, bytestring >= 0.10
@@ -33,8 +33,8 @@ executable lvish-graph-benchmarks
   main-is:             Main.hs
   hs-source-dirs:      src
   ghc-options:         -O2 -threaded -rtsopts
-  build-depends:       base >=4.6, process==1.1.0.2, directory ==1.2.0.1,
-                       vector >=0.10, time ==1.4.0.1, 
+  build-depends:       base >=4.6, process>=1.1.0.2, directory >=1.2.1.0,
+                       vector >=0.10, time >=1.4.2,
                        containers >=0.5,
                        fgl >= 5.4, deepseq >= 1.3,
                        lvish >=1.0, par-collections >= 1.0, 

@@ -31,6 +31,7 @@ import Control.Monad.State as S
 import Data.IORef
 
 import Control.Par.Class as PC
+import Control.Par.EffectSigs
 import Control.Par.Class.Unsafe (PrivateMonadIO(..))
 
 -- import qualified Data.Atomics.Counter as C
@@ -67,7 +68,8 @@ instance PrivateMonadIO m => PrivateMonadIO (StateT s m) where
 
 -- | Run a Par monad with the deadlock-detection effect.  Return ONLY when all
 -- subcomputations have quiesced or blocked.
-runDeadlockT :: (ParIVar m, PrivateMonadIO m) => DeadlockT m a -> m a
+runDeadlockT :: (ParIVar m, PrivateMonadIO m, NoGet (GetEffects m)) => 
+                DeadlockT m a -> m a
 runDeadlockT (DeadlockT task) = do
   ref <- internalLiftIO $ C.newCounter 1
   let task' = do _ <- task

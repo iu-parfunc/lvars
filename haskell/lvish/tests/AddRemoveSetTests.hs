@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Tests for the Data.LVar.AddRemoveSet module.
 
@@ -35,9 +36,10 @@ case_v1 :: Assertion
 case_v1 = v1 >>= assertEqual "freeze with 3 elements"
           (S.fromList [1..3] :: S.Set Int)
 
--- If you have a computation that does freezing, you have to run it with runParIO.
+-- If you have a computation that does freezing, you have to run it with
+-- runParQuasiDet / runParNonDet.
 v1 :: IO (S.Set Int)
-v1 = runParIO $
+v1 = runParQuasiDet $
      do s <- ARS.newEmptySet
         ARS.insert 1 s
         ARS.insert 2 s
@@ -50,7 +52,7 @@ case_v2 = v2 >>= assertEqual "freeze with 10 elements added, asynchronously"
           (S.fromList [1.. v2size] :: S.Set Int)
 
 v2 :: IO (S.Set Int)
-v2 = runParIO $
+v2 = runParQuasiDet $
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ do
                      -- liftIO$ threadDelay 5000 
@@ -72,10 +74,10 @@ case_v3 = stressTest T.stressTestReps 15 v3 (\()->True)
 -- "freeze with 3 elements added, asynchronously"
 -- If we're doing a guaranteed-deterministic computation we can't
 -- actually read out the contents of the set.
-v3 :: Par d s ()
+v3 :: (HasPut e, HasGet e) => Par e s ()
 v3 = 
      do s <- ARS.newEmptySet
-        mapM_ (\n -> fork $ ARS.insert n s) [1..10]
+        mapM_ (\n -> fork $ ARS.insert n s) [1..10::Int]
         ARS.waitAddedSize 10 s
 
 -- Getting occasional failures here with -N2, don't know what's
@@ -84,7 +86,7 @@ case_v4 :: Assertion
 case_v4 = stressTest T.stressTestReps 30 v4 (== (S.fromList [1..10] :: S.Set Int))
 
 -- "additions and removals"
-v4 :: Par QuasiDet s (S.Set Int)
+v4 :: (HasPut e, HasGet e, HasFreeze e) => Par e s (S.Set Int)
 v4 = 
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..15]
@@ -104,7 +106,7 @@ case_i1 = do
 
 -- Unblock too early, leaving a put-after-freeze possibility.
 i1 :: IO (S.Set Int)
-i1 = runParIO $
+i1 = runParQuasiDet $
      do s <- ARS.newEmptySet
         mapM_ (\n -> fork $ ARS.insert n s) [1..15]
         mapM_ (\n -> fork $ ARS.remove n s) [11..15]

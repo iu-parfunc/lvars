@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS, if available.
+# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS[1-3], if available.
 #       Also passes through extra args to the major cabal install command.
 
 set -e
@@ -28,7 +28,7 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers"
+PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers "
 
 cd ./haskell/
 TOP=`pwd`
@@ -40,12 +40,16 @@ for path in $PKGS; do
 done
 cd $TOP
 
+CFG=" --force-reinstalls "
+
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then 
-  CFG="--disable-library-profiling --disable-executable-profiling"
+  CFG="$CFG --disable-library-profiling --disable-executable-profiling"
 else
-  CFG="--enable-library-profiling --enable-executable-profiling"
+  CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
-CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+if [ "$CABAL_FLAGS" == "" ]; then 
+  CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
+fi
 
 # Simpler but not ideal:
 # $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
@@ -54,7 +58,8 @@ CABAL_FLAGS="$CABAL_FLAGS1 $CABAL_FLAGS2 $CABAL_FLAGS3"
 # # $CABAL install containers --constraint='containers>=0.5.5.1'
 
 # Also install custom version of monad-par:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests $*
+# In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests  $*
 
 # Avoding the atomic-primops related bug on linux / GHC 7.6:
 # if ! [ `uname` == "Linux" ]; then  

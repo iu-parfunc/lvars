@@ -31,9 +31,12 @@
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-} -- For Deterministic e superclass constraint.
+
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- This module reexports the default LVish scheduler, adding some type-level
@@ -58,23 +61,37 @@ module Control.LVish
 
     -- * Par computations and their parameters
     Par(), 
-    Determinism(..), liftQD,
     LVishException(..),
+
+    -- * Running various Par computations
+    runPar, runParQuasiDet, runParNonDet,
+    -- * More polymorphic variants of same
+    runParPoly, runParPolyIO, 
+
+    -- * Effect signature manipulation and conversion
+    module Control.Par.EffectSigs,
+    liftQD,
+
+    -- * Combinators for manually constraining the type of a given Par computation
+    isDet, isQD, isND, isIdemD, isIdemQD, isReadOnly,
+    hasPut, hasFreeze, hasBump, hasGet, hasIO,
+    noPut, noFreeze, noBump, noGet, noIO,
+
+    -- * Subtyping, add more effects to the signature
+    -- | These effects are a conservative approximation, therefore it is always ok,
+    --   for example, to turn "no put" (`NP`) into "put" (`P`).
+    addP, addG, addF, addB, addI, liftReadOnly,
     
     -- * Basic control flow
-    fork,
-    yield, 
-    runPar, runParIO,
-    --    runParIO_, runParLogged,
+    fork, yield, 
     --    quiesceAll,    
 
+    -- * Lifting IO, sacrifices determinism
+    parIO,
      -- * Various loop constructs
      parForL, parForSimple, parForTree, parForTiled, for_,
 
--- This is not fully ready yet till LVish 2.0:
-#ifdef GENERIC_PAR
      asyncForEachHP,
-#endif
 
      -- * Logical control flow operators
      module Control.LVish.Logical,
@@ -105,25 +122,28 @@ import           Control.LVish.Logical
 import qualified Control.LVish.Sched as L
 import           Control.LVish.SchedQueue (State)
 
+import           Control.Par.EffectSigs
 import           Control.LVish.Logging (OutDest(..))
 import           Data.LVar.IVar 
+import           Data.Proxy
+import           Data.Coerce (coerce)
 
 import Data.IORef
 --------------------------------------------------------------------------------
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
 
-instance PC.ParQuasi (Par d s) (Par QuasiDet s) where
+instance (Deterministic e1, e2 ~ SetF F e1) => 
+         PC.ParQuasi (Par e1 s) (Par e2 s) where
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
   toQPar act = unsafeConvert act
   
-instance PC.ParSealed (Par d s) where
-  type GetSession (Par d s) = s
+instance PC.ParSealed (Par e s) where
+  type GetSession (Par e s) = s
   
-instance PC.LVarSched (Par d s) where
-  type LVar (Par d s) = L.LVar 
+instance PC.LVarSched (Par e s) where
+  type LVar (Par e s) = L.LVar 
 
   forkLV = fork
   newLV  = WrapPar . L.newLV
@@ -134,16 +154,108 @@ instance PC.LVarSched (Par d s) where
 
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
-instance PC.LVarSchedQ (Par d s) (Par QuasiDet s)  where
+
+instance (Deterministic e1, e2 ~ SetF F e1) => 
+         PC.LVarSchedQ (Par e1 s) (Par e2 s)  where
 --  freezeLV = WrapPar . L.freezeLV  -- FINISHME
 
-instance PU.ParThreadSafe (Par d s) where
+instance PU.ParThreadSafe (Par e s) where
   unsafeParIO = I.liftIO
 
-#endif
+instance PC.ParLVar (Par e s) where
+
+instance PU.ParWEffects (Par e s) where
+  type GetEffects (Par e s) = e
+  type SetEffects e2 (Par e1 s) = Par e2 s
+  liftReadOnly (WrapPar y) = (WrapPar y)
+  coerceProp Proxy eprox = PU.MkConstraint
+  law1 _ _ = PU.MkConstraint
+  law2 _ _ = PU.MkConstraint
+
+-- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
+-- signature.
+parIO :: HasIO e => IO a -> Par e s a
+parIO = I.liftIO
+
+
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
 mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
 type SchedState = State L.ClosedPar LVarID
 type LVarID = IORef ()
+
+------------------------------------------------------------
+
+hasPut :: HasPut e => Par e s a -> Par e s a
+hasPut x = x
+
+hasFreeze :: HasFreeze e => Par e s a -> Par e s a
+hasFreeze x = x
+
+hasBump :: HasBump e => Par e s a -> Par e s a
+hasBump x = x
+
+hasIO :: HasIO e => Par e s a -> Par e s a
+hasIO x = x
+
+hasGet :: HasGet e => Par e s a -> Par e s a
+hasGet x = x
+
+
+noPut :: NoPut e => Par e s a -> Par e s a
+noPut x = x
+
+noFreeze :: NoFreeze e => Par e s a -> Par e s a
+noFreeze x = x
+
+noBump :: NoBump e => Par e s a -> Par e s a
+noBump x = x
+
+noIO :: NoIO e => Par e s a -> Par e s a
+noIO x = x
+
+noGet :: NoGet e => Par e s a -> Par e s a
+noGet x = x
+
+
+
+isDet :: (e ~ (Ef P G NF B NI)) => Par e s a -> Par e s a
+isDet x = x
+
+isQD :: (e ~ (Ef P G F B NI)) => Par e s a -> Par e s a
+isQD x = x
+
+isND :: (e ~ (Ef P G F B I)) => Par e s a -> Par e s a
+isND x = x
+
+isIdemD :: (e ~ (Ef P G NF NB NI)) => Par e s a -> Par e s a
+isIdemD x = x
+
+isIdemQD :: (e ~ (Ef P G F NB NI)) => Par e s a -> Par e s a
+isIdemQD x = x
+
+isReadOnly :: (e ~ (Ef NP G NF NB NI)) => Par e s a -> Par e s a
+isReadOnly x = x
+
+-- | Lift a read-only computation to participate in a parent computation with more
+-- effects.
+liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
+liftReadOnly (WrapPar p) = WrapPar p
+
+
+addP :: Par (Ef NP g f b i) s a -> Par (Ef p g f b i) s a
+addP (WrapPar p) = WrapPar p
+
+addG :: Par (Ef p NG f b i) s a -> Par (Ef p g f b i) s a
+addG (WrapPar p) = WrapPar p
+
+addF :: Par (Ef p g NF b i) s a -> Par (Ef p g f b i) s a
+addF (WrapPar p) = WrapPar p
+
+addB :: Par (Ef p g f NB i) s a -> Par (Ef p g f b i) s a
+addB (WrapPar p) = WrapPar p
+
+addI :: Par (Ef p g f b NI) s a -> Par (Ef p g f b i) s a
+addI (WrapPar p) = WrapPar p
+

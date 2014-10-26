@@ -8,3 +8,5 @@ docs_examples
 *.chs.h
 .DS_Store
 *~
+*cabal.sandbox.config
+.cabal-sandbox

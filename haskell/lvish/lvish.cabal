@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.4
+version:             2.0
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -26,6 +26,9 @@ version:             1.1.4
 -- 1.1.3   -- add fromPureLVar
 -- 1.1.4   -- add SatMap 
 
+-- 2.0     -- Major changes to all types to track effect signatures
+
+
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
 description: 
@@ -36,7 +39,7 @@ description:
   .
     * FHPC 2013: /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
-    * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
+    * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://dl.acm.org/citation.cfm?id=2535842>).
   . 
     * PLDI 2014: /Taming the Parallel Effect Zoo: Extensible Deterministic Parallelism with LVish/ (<http://www.cs.indiana.edu/~rrnewton/papers/effectzoo-draft.pdf>).
   . 
@@ -72,14 +75,8 @@ flag chaselev
 flag dedup
   description: Ensure that both handlers and continuations of get run at most once
                (by using extra synchronization)
-  default: False
-  manual: True
-
--- We won't really support this until LVish 2.0:
-flag generic
-  description: Use (forthcoming) generic interfaces for Par monads.
   default: True
-  manual: True 
+  manual: True
 
 -- flag beta
 --   description: These features are in beta and not fully supported yet.
@@ -108,6 +105,11 @@ library
                     Data.LVar.LayeredSatMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
+                    Data.LVar.Counter
+                    Data.LVar.MaxPosInt
+                    Data.LVar.NatArray
+                    Data.LVar.NatArray.Unsafe
+                    Data.LVar.Memo                    
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
@@ -123,23 +125,17 @@ library
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
 
+                    -- New / Experimental:
                     Data.LVar.CycGraph
 
-  -- TEMP: using a flag to control exports doesn't really work with Hackage currently:
-  -- if flag(beta)
-  --   exposed-modules: 
-  --                     -- Not quite ready for prime-time yet:
-  --                     Data.LVar.NatArray
-  --                     Data.LVar.NatArray.Unsafe
-  --                     Data.LVar.MaxPosInt
-  --                     Data.LVar.Counter
-  --                     Data.LVar.AddRemoveSet
-  --                     Data.LVar.PNCounter
-  --                     -------------------------------------------
-  --                     -- New / Experimental:
-  --                     Data.LVar.Memo                    
+  -- These are in "beta" and aren't exposed yet:
+  other-modules:
+                    -- Not quite ready for prime-time yet:
+                    Data.LVar.AddRemoveSet
+                    Data.LVar.PNCounter
+                    -------------------------------------------
 
-  -- Modules included in this library but not exported.
+  -- Internal modules included in this library but not exported:
   other-modules:
                     Data.UtilInternal
                     Data.LVar.Pair 
@@ -169,15 +165,10 @@ library
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
-  if flag(generic)
-    cpp-options: -DGENERIC_PAR
---    build-depends: containers >= 0.5.4.0
-    build-depends: containers >= 0.5
-    build-depends: par-classes     >= 1.0 && < 2.0,
-                   par-collections >= 1.0 && < 2.0
---                   par-transformers <= 2.0
-  else     
-    build-depends: containers >= 0.5
+  build-depends: containers >= 0.5.4.0
+
+  build-depends: par-classes     >= 1.1 && < 2.0,
+                 par-collections >= 1.1 && < 2.0
 
   ghc-options: -O2 -rtsopts
 
@@ -198,6 +189,9 @@ library
 test-suite test-lvish
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
+    -- This test-suite rebuilds the LVish sources rather than depending 
+    -- on the package externally... reason is that it needs to access unexported modules.
+    -- TODO: Move all such modules under an Internal namespace.  (Issue #73)
     hs-source-dirs: tests/ ./
     other-modules:  TestHelpers, 
                     LVishAndIVar,
@@ -225,20 +219,19 @@ test-suite test-lvish
                    async,
                    -- Used in NatArray:
                    bits-atomic, missing-foreign
-    if flag(generic)
-      cpp-options: -DGENERIC_PAR
-      build-depends: par-classes     >= 1.0 && < 2.0,
-                     par-collections >= 1.0 && < 2.0
+
+    build-depends: par-classes     >= 1.1 && < 2.0,
+                   par-collections >= 1.1 && < 2.0
     -- END DUPLICATED
-    if flag(generic)
-      other-modules:  GenericTests
+    other-modules:  GenericTests
 
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2, QuickCheck,
                    HUnit, time, text
--- And the self-dependency:  TODO -- how to get this to work? [2013.10.10]
--- For now it gets compiled TWICE:
-    build-depends:   lvish
+-- TODO: Add the self-dependency, WHEN there are no internal modules tested:
+--    build-depends:   lvish
+
+-- For now we instead duplicate these flag-dependent options:
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
 --       build-depends: fgl, graphviz, text

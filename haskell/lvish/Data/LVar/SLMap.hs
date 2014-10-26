@@ -11,6 +11,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 {-|
 
@@ -32,10 +33,13 @@ module Data.LVar.SLMap
          newEmptyMap, newMap, newFromList,
          insert, 
          getKey, waitSize, waitValue,
-         modify,
+         modify, 
+
+         -- * Generic routines and convenient aliases
+         gmodify, getOrInit,
 
          -- * Quasi-deterministic operations
-         freezeMap,
+         freezeMap, fromIMap,
          traverseFrzn_,         
 
          -- * Iteration and callbacks
@@ -61,7 +65,7 @@ import qualified Data.Foldable    as F
 import           Data.IORef (readIORef)
 import           Data.UtilInternal (traverseWithKey_)
 import           Data.List (intersperse)
-import           Data.LVar.Generic
+import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -77,12 +81,10 @@ import           Prelude
 
 import Debug.Trace
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 import qualified Data.Splittable.Class as Sp
 import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -146,16 +148,16 @@ defaultLevels :: Int
 defaultLevels = 8
 
 -- | Create a fresh map with nothing in it.
-newEmptyMap :: Ord k => Par d s (IMap k s v)
+newEmptyMap :: Ord k => Par e s (IMap k s v)
 newEmptyMap = newEmptyMap_ defaultLevels
 
 -- | Create a fresh map with nothing in it, with the given number of skiplist
 -- levels.
-newEmptyMap_ :: Ord k => Int -> Par d s (IMap k s v)
+newEmptyMap_ :: Ord k => Int -> Par e s (IMap k s v)
 newEmptyMap_ n = fmap (IMap . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 
 -- | Create a new map populated with initial elements.
-newMap :: Ord k => M.Map k v -> Par d s (IMap k s v)
+newMap :: Ord k => M.Map k v -> Par e s (IMap k s v)
 newMap mp =
  fmap (IMap . WrapLVar) $ WrapPar $ newLV $ do
   slm <- SLM.newSLMap defaultLevels  
@@ -166,12 +168,12 @@ newMap mp =
 
 -- | Create a new map drawing initial elements from an existing list.
 newFromList :: (Ord k, Eq v) =>
-               [(k,v)] -> Par d s (IMap k s v)
+               [(k,v)] -> Par e s (IMap k s v)
 newFromList ls = newFromList_ ls defaultLevels
 
 -- | Create a new map drawing initial elements from an existing list, with
 -- the given number of skip list levels.
-newFromList_ :: Ord k => [(k,v)] -> Int -> Par d s (IMap k s v)
+newFromList_ :: Ord k => [(k,v)] -> Int -> Par e s (IMap k s v)
 newFromList_ ls n = do  
   m@(IMap lv) <- newEmptyMap_ n
   -- TODO: May want to consider parallelism here for sufficiently large inputs:
@@ -181,8 +183,8 @@ newFromList_ ls n = do
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           IMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
+                           IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap lv) callback action = do
   hp  <- newPool 
   res <- IV.new 
@@ -206,8 +208,8 @@ withCallbacksThenFreeze (IMap lv) callback action = do
 -- added to the map, optionally tied to a handler pool.
 forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
           -> IMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par d s ())      -- ^ callback
-          -> Par d s ()
+          -> (k -> v -> Par e s ())      -- ^ callback
+          -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
     L.addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
@@ -221,12 +223,12 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
         
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
-forEach :: IMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
+forEach :: IMap k s v -> (k -> v -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing         
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
-insert :: (Ord k, Eq v) =>
-          k -> v -> IMap k s v -> Par d s () 
+insert :: (Ord k, Eq v, HasPut e) =>
+          k -> v -> IMap k s v -> Par e s () 
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter slm = do
           putRes <- SLM.putIfAbsent slm key $ return elm
@@ -239,12 +241,12 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a \"bottom\" element if there is no existing entry for the key.
 --
-modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
+modify :: forall f a b e s key . (Ord key, Show key, Ord a, HasPut e) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
-          -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
-          -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
-          -> Par d s b
+          -> (Par e s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
+          -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
+          -> Par e s b
 modify (IMap (WrapLVar lv)) key newBottom fn = do
     act <- WrapPar $ putLV_ lv putter
     act
@@ -253,9 +255,29 @@ modify (IMap (WrapLVar lv)) key newBottom fn = do
           case putRes of
             Added v -> return (Just (key,v), fn v)
             Found v -> return (Nothing,      fn v)          
+
+{-# INLINE gmodify #-}
+-- | A generic version of `modify` that does not require a `newBottom` argument,
+-- rather, it uses the generic version of that function.
+gmodify :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+          IMap key s (f s a)
+          -> key                  -- ^ The key to lookup.
+          -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
+          -> Par e s b
+gmodify map key fn = modify map key G.newBottom fn
+
+
+{-# INLINE getOrInit #-}
+-- | Return the preexisting value for a key if it exists, and otherwise return
+-- 
+--   This is a convenience routine that can easily be defined in terms of `gmodify`
+getOrInit :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+          key -> IMap key s (f s a) -> Par e s (f s a)
+getOrInit key mp = gmodify mp key return
+
             
 -- | Wait for the map to contain a specified key, and return the associated value.
-getKey :: Ord k => k -> IMap k s v -> Par d s v
+getKey :: (HasGet e, Ord k) => k -> IMap k s v -> Par e s v
 getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     globalThresh slm _frzn = SLM.find slm key
@@ -263,7 +285,7 @@ getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
                       | otherwise = return Nothing 
 
 -- | Wait until the map contains a certain value (on any key).
-waitValue :: (Ord k, Eq v) => v -> IMap k s v -> Par d s ()
+waitValue :: (HasGet e, Ord k, Eq v) => v -> IMap k s v -> Par e s ()
 waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     deltaThresh (_,v) | v == val  = return$ Just ()
@@ -278,7 +300,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
       SLM.foldlWithKey id fn Nothing slm
 
 -- | Wait on the SIZE of the map, not its contents.
-waitSize :: Int -> IMap k s v -> Par d s ()
+waitSize :: HasGet e => Int -> IMap k s v -> Par e s ()
 waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
     getLV lv globalThresh deltaThresh
   where
@@ -299,7 +321,7 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
 --
 -- This is an /O(1)/ operation that doesn't copy the in-memory representation of the
 -- IMap.
-freezeMap :: Ord k => IMap k s v -> QPar s (IMap k Frzn v)
+freezeMap :: (HasFreeze e, Ord k) => IMap k s v -> Par e s (IMap k Frzn v)
 -- freezeMap (IMap (WrapLVar lv)) = return (IMap (WrapLVar lv))
 -- OR we can just do this:
 
@@ -310,11 +332,21 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   return (unsafeCoerce# x)
 
 
+-- | /O(N)/: Convert from an `IMap` to a plain `Data.Map`.  This is only permitted
+--   when the `IMap` has already been frozen.  This is useful for processing the
+--   result of `Control.LVish.DeepFrz.runParThenFreeze`, using standard library
+--   functions.
+fromIMap :: IMap k Frzn a -> M.Map k a 
+fromIMap (IMap (WrapLVar lv)) = unsafeDupablePerformIO $
+  SLM.foldlWithKey id
+                   (\ acc k v -> return $! M.insert k v acc)
+                   M.empty (L.state lv)
+
 -- | Traverse a frozen map for side effect.  This is useful (in comparison with more
 -- generic operations) because the function passed in may see the key as well as the
 -- value.
 traverseFrzn_ :: (Ord k) =>
-                 (k -> a -> Par d s ()) -> IMap k Frzn a -> Par d s ()
+                 (k -> a -> Par e s ()) -> IMap k Frzn a -> Par e s ()
 traverseFrzn_ fn (IMap (WrapLVar lv)) = 
   SLM.foldlWithKey LI.liftIO
                    (\ () k v -> fn k v)
@@ -326,14 +358,14 @@ traverseFrzn_ fn (IMap (WrapLVar lv)) =
 
 -- | Establish a monotonic map between the input and output map  Produce a new result
 -- based on each element, while leaving the keys the same.
-traverseMap :: (Ord k, Eq b) =>
-               (k -> a -> Par d s b) -> IMap k s a -> Par d s (IMap k s b)
+traverseMap :: (Ord k, Eq b, HasPut e) =>
+               (k -> a -> Par e s b) -> IMap k s a -> Par e s (IMap k s b)
 traverseMap f s = traverseMapHP Nothing f s
 
 -- | An imperative-style, in-place version of 'traverseMap' that takes the output map
 -- as an argument.
-traverseMap_ :: (Ord k, Eq b) =>
-                (k -> a -> Par d s b) -> IMap k s a -> IMap k s b -> Par d s ()
+traverseMap_ :: (Ord k, Eq b, HasPut e) =>
+                (k -> a -> Par e s b) -> IMap k s a -> IMap k s b -> Par e s ()
 traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
 --------------------------------------------------------------------------------
@@ -342,22 +374,22 @@ traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
 -- | Return a fresh map which will contain strictly more elements than the input.
 -- That is, things put in the former go in the latter, but not vice versa.
-copy :: (Ord k, Eq v) => IMap k s v -> Par d s (IMap k s v)
+copy :: (Ord k, Eq v, HasPut e) => IMap k s v -> Par e s (IMap k s v)
 copy = traverseMap (\ _ x -> return x)
 
 -- | Variant of `traverseMap` that optionally ties the handlers to a pool.
-traverseMapHP :: (Ord k, Eq b) =>
-                 Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a ->
-                 Par d s (IMap k s b)
+traverseMapHP :: (Ord k, Eq b, HasPut e) =>
+                 Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a ->
+                 Par e s (IMap k s b)
 traverseMapHP mh fn set = do
   os <- newEmptyMap
   traverseMapHP_ mh fn set os  
   return os
 
 -- | Variant of `traverseMap_` that optionally ties the handlers to a pool.
-traverseMapHP_ :: (Ord k, Eq b) =>
-                  Maybe HandlerPool -> (k -> a -> Par d s b) -> IMap k s a -> IMap k s b ->
-                  Par d s ()
+traverseMapHP_ :: (Ord k, Eq b, HasPut e) =>
+                  Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a -> IMap k s b ->
+                  Par e s ()
 traverseMapHP_ mh fn set os = do
   forEachHP mh set $ \ k x -> do 
     x' <- fn k x
@@ -366,8 +398,8 @@ traverseMapHP_ mh fn set os = do
 -- | Return a new map which will (ultimately) contain everything in either input
 --   map.  Conflicting entries will result in a multiple put exception.
 --   Optionally ties the handlers to a pool.
-unionHP :: (Ord k, Eq a) => Maybe HandlerPool ->
-           IMap k s a -> IMap k s a -> Par d s (IMap k s a)
+unionHP :: (Ord k, Eq a, HasPut e) => Maybe HandlerPool ->
+           IMap k s a -> IMap k s a -> Par e s (IMap k s a)
 unionHP mh m1 m2 = do
   os <- newEmptyMap
   forEachHP mh m1 (\ k v -> insert k v os)
@@ -398,8 +430,6 @@ instance F.Foldable (IMap k Frzn) where
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -440,7 +470,6 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
 
 -- UNSAFE!  It is naughty if this instance escapes to the outside world, which it can...
 instance F.Foldable (SLMapSlice k) where
-#endif  
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
@@ -458,12 +487,11 @@ instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
 
 --------------------------------------------------------------------------------
   
--- #ifdef GENERIC_PAR
 -- Not exported yet: 
 #if 0  
-instance PC.ParIMap (Par d s) where
-  type PC.IMap (Par d s) k = IMap k s
-  type PC.IMapContents (Par d s) k v = (Ord k, Eq v)
+instance PC.ParIMap (Par e s) where
+  type PC.IMap (Par e s) k = IMap k s
+  type PC.IMapContents (Par e s) k v = (Ord k, Eq v)
   PC.waitSize    = waitSize
   PC.newEmptyMap = newEmptyMap
   PC.insert      = insert

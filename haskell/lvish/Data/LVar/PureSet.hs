@@ -31,7 +31,7 @@ module Data.LVar.PureSet
          -- * Iteration and callbacks
          forEach, forEachHP, 
 
-         -- * Quasi-deterministic operations
+         -- * Freezing and quasi-deterministic operations
          freezeSetAfter, withCallbacksThenFreeze, freezeSet,
          fromISet,
          
@@ -125,15 +125,15 @@ instance Show a => Show (ISet Trvrsbl a) where
   show = show . castFrzn
 
 -- | Create a new, empty, monotonically growing set.
-newEmptySet :: Par d s (ISet s a)
+newEmptySet :: Par e s (ISet s a)
 newEmptySet = newSet S.empty
 
 -- | Create a new set populated with initial elements.
-newSet :: S.Set a -> Par d s (ISet s a)
+newSet :: S.Set a -> Par e s (ISet s a)
 newSet s = WrapPar$ fmap (ISet . WrapLVar) $ newLV$ newIORef s
 
 -- | Create a new set drawing initial elements from an existing list.
-newFromList :: Ord a => [a] -> Par d s (ISet s a)
+newFromList :: Ord a => [a] -> Par e s (ISet s a)
 newFromList ls = newSet (S.fromList ls)
 
 -- (Todo: in production you might want even more ... like going from a Vector)
@@ -147,13 +147,15 @@ newFromList ls = newSet (S.fromList ls)
 -- the context of the handlers.
 -- 
 --    (@'freezeSetAfter' 's' 'f' == 'withCallbacksThenFreeze' 's' 'f' 'return ()' @)
-freezeSetAfter :: ISet s a -> (a -> QPar s ()) -> QPar s ()
+freezeSetAfter :: (HasPut e, HasGet e, HasFreeze e) => 
+                  ISet s a -> (a -> Par e s ()) -> Par e s ()
 freezeSetAfter s f = withCallbacksThenFreeze s f (return ())
 
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: Eq b => ISet s a -> (a -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: (HasPut e, HasGet e, HasFreeze e, Eq b) => 
+                           ISet s a -> (a -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     do
        hp  <- newPool 
@@ -186,7 +188,7 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of sets that "Data.Set"
 -- uses.)
-freezeSet :: ISet s a -> QPar s (S.Set a)
+freezeSet :: HasFreeze e => ISet s a -> Par e s (S.Set a)
 freezeSet (ISet (WrapLVar lv)) = WrapPar $ 
    do freezeLV lv
       getLV lv globalThresh deltaThresh
@@ -198,7 +200,7 @@ freezeSet (ISet (WrapLVar lv)) = WrapPar $
 -- | /O(1)/: Convert from an `ISet` to a plain `Data.Set`.
 --   This is only permitted when the `ISet` has already been frozen.
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`. 
-fromISet :: ISet Frzn a -> S.Set a 
+fromISet :: Ord a => ISet Frzn a -> S.Set a 
 -- Alternate names? -- toPure? toSet? fromFrzn??
 fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))
 
@@ -209,8 +211,8 @@ fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))
 -- the set, optionally enrolled in a handler pool.
 forEachHP :: Maybe HandlerPool           -- ^ pool to enroll in, if any
           -> ISet s a                    -- ^ Set to listen to
-          -> (a -> Par d s ())           -- ^ callback
-          -> Par d s ()
+          -> (a -> Par e s ())           -- ^ callback
+          -> Par e s ()
 forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
     return ()
@@ -222,12 +224,12 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set.
-forEach :: ISet s a -> (a -> Par d s ()) -> Par d s ()
+forEach :: ISet s a -> (a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
-insert :: Ord a => a -> ISet s a -> Par d s ()
+insert :: HasPut e => Ord a => a -> ISet s a -> Par e s ()
 insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORef ref update
         update set =
@@ -240,7 +242,7 @@ insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
 
 
 -- | Wait for the set to contain a specified element.
-waitElem :: Ord a => a -> ISet s a -> Par d s ()
+waitElem :: HasGet e => Ord a => a -> ISet s a -> Par e s ()
 waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
     getLV lv globalThresh deltaThresh
   where
@@ -254,7 +256,7 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
 
 
 -- | Wait on the /size/ of the set, not its contents.
-waitSize :: Int -> ISet s a -> Par d s ()
+waitSize :: HasGet e => Int -> ISet s a -> Par e s ()
 waitSize !sz (ISet lv) = do
     logDbgLn (-2) "PureSet.waitSize: about to (potentially) block:"
     WrapPar$ getLV (unWrapLVar lv) globalThresh deltaThresh
@@ -274,32 +276,32 @@ waitSize !sz (ISet lv) = do
 
 -- | Return a fresh set which will contain strictly more elements than the input set.
 -- That is, things put in the former go in the latter, but not vice versa.
-copy :: Ord a => ISet s a -> Par d s (ISet s a)
+copy :: (HasPut e, Ord a) => ISet s a -> Par e s (ISet s a)
 copy = traverseSet return
 
 -- | Establish a monotonic map between the input and output sets.
-traverseSet :: Ord b => (a -> Par d s b) -> ISet s a -> Par d s (ISet s b)
+traverseSet :: (HasPut e, Ord b) => (a -> Par e s b) -> ISet s a -> Par e s (ISet s b)
 traverseSet f s = traverseSetHP Nothing f s
 
 -- | An imperative-style, in-place version of 'traverseSet' that takes the output set
 -- as an argument.
-traverseSet_ :: Ord b => (a -> Par d s b) -> ISet s a -> ISet s b -> Par d s ()
+traverseSet_ :: (HasPut e, Ord b) => (a -> Par e s b) -> ISet s a -> ISet s b -> Par e s ()
 traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
-union :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
+union :: (HasPut e, Ord a) => ISet s a -> ISet s a -> Par e s (ISet s a)
 union = unionHP Nothing
 
 -- | Build a new set which will contain the intersection of the two input sets.
-intersection :: Ord a => ISet s a -> ISet s a -> Par d s (ISet s a)
+intersection :: (HasPut e, Ord a) => ISet s a -> ISet s a -> Par e s (ISet s a)
 intersection = intersectionHP Nothing
 
 -- | Take the cartesian product of two sets.
-cartesianProd :: (Ord a, Ord b) => ISet s a -> ISet s b -> Par d s (ISet s (a,b))
+cartesianProd :: (HasPut e, Ord a, Ord b) => ISet s a -> ISet s b -> Par e s (ISet s (a,b))
 cartesianProd s1 s2 = cartesianProdHP Nothing s1 s2 
   
 -- | Take the cartesian product of several sets.
-cartesianProds :: Ord a => [ISet s a] -> Par d s (ISet s [a])
+cartesianProds :: (HasPut e, Ord a) => [ISet s a] -> Par e s (ISet s [a])
 cartesianProds ls = cartesianProdsHP Nothing ls
 
 --------------------------------------------------------------------------------
@@ -307,16 +309,16 @@ cartesianProds ls = cartesianProdsHP Nothing ls
 --------------------------------------------------------------------------------
 
 -- | Variant of `traverseSet` that optionally ties the handlers to a pool.
-traverseSetHP :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a ->
-                 Par d s (ISet s b)
+traverseSetHP :: (HasPut e, Ord b) => Maybe HandlerPool -> (a -> Par e s b) -> ISet s a ->
+                 Par e s (ISet s b)
 traverseSetHP mh fn set = do
   os <- newEmptySet
   traverseSetHP_ mh fn set os  
   return os
 
 -- | Variant of `traverseSet_` that optionally ties the handlers to a pool.
-traverseSetHP_ :: Ord b => Maybe HandlerPool -> (a -> Par d s b) -> ISet s a -> ISet s b ->
-                  Par d s ()
+traverseSetHP_ :: (HasPut e, Ord b) => Maybe HandlerPool -> (a -> Par e s b) -> ISet s a -> ISet s b ->
+                  Par e s ()
 traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
     x' <- fn x
@@ -324,7 +326,7 @@ traverseSetHP_ mh fn set os = do
 
 -- | Variant of `union` that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
-unionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+unionHP :: (HasPut e, Ord a) => Maybe HandlerPool -> ISet s a -> ISet s a -> Par e s (ISet s a)
 unionHP mh s1 s2 = do
   os <- newEmptySet
   forEachHP mh s1 (`insert` os)
@@ -333,7 +335,7 @@ unionHP mh s1 s2 = do
 
 -- | Variant of `intersection` that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
-intersectionHP :: Ord a => Maybe HandlerPool -> ISet s a -> ISet s a -> Par d s (ISet s a)
+intersectionHP :: (HasPut e, Ord a) => Maybe HandlerPool -> ISet s a -> ISet s a -> Par e s (ISet s a)
 -- Can we do intersection with only the public interface?  It should be monotonic.
 -- Well, for now we cheat and use liftIO:
 intersectionHP mh s1 s2 = do
@@ -350,8 +352,8 @@ intersectionHP mh s1 s2 = do
       else return ()
 
 -- | Variant of 'cartesianProd' that optionally ties the handlers to a pool.
-cartesianProdHP :: (Ord a, Ord b) => Maybe HandlerPool -> ISet s a -> ISet s b ->
-                   Par d s (ISet s (a,b))
+cartesianProdHP :: (HasPut e, Ord a, Ord b) => Maybe HandlerPool -> ISet s a -> ISet s b ->
+                   Par e s (ISet s (a,b))
 cartesianProdHP mh s1 s2 = do
   -- This is implemented much like intersection:
   os <- newEmptySet
@@ -366,8 +368,8 @@ cartesianProdHP mh s1 s2 = do
 
 
 -- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
-cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
-                    Par d s (ISet s [a])
+cartesianProdsHP :: (HasPut e, Ord a) => Maybe HandlerPool -> [ISet s a] ->
+                    Par e s (ISet s [a])
 cartesianProdsHP _ [] = newEmptySet
 cartesianProdsHP mh ls = do
 #if 1

@@ -6,7 +6,7 @@
 #          $(shell find ../Control/ -name "*.hs")
 LIBSRC =
 
-ARGS = -DGET_ONCE=1 -DGENERIC_PAR -rtsopts -threaded -DDEBUG_LVAR $(GHC_ARGS)
+ARGS = -DGET_ONCE=1 -rtsopts -threaded -DDEBUG_LVAR $(GHC_ARGS)
 ARGS += -O2 -eventlog
 # -fforce-recomp
 

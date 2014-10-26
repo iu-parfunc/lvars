@@ -1,6 +1,9 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}  -- For Determinism
 
 -- | A generic interface providing operations that work on /all/ LVars.
@@ -18,8 +21,9 @@ module Data.LVar.Generic
        where
 
 import           Control.LVish.Types
+import           Control.Par.EffectSigs
 import           Control.LVish.Basics
-import           Control.LVish.Internal (Par, Determinism(..))
+import           Control.LVish.Internal (Par)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort)
@@ -37,7 +41,7 @@ import           Data.LVar.Generic.Internal
 class LVarData1 f => OrderedLVarData1 (f :: * -> * -> *) where
   -- | Don't just freeze the LVar, but make the full contents
   -- completely available and `Foldable`.  Guaranteed /O(1)/.
-  snapFreeze :: f s a -> Par QuasiDet s (f Trvrsbl a)
+  snapFreeze :: HasFreeze e => f s a -> Par e s (f Trvrsbl a)
 
 {- 
 -- | Just like LVarData1 but for type constructors of kind `*`.
@@ -46,8 +50,8 @@ class LVarData0 (t :: *) where
   -- e.g. a whole set instead of one element, or the full/empty information for an
   -- IVar, instead of just the payload.
   type Snapshot0 t
-  freeze0 :: t -> Par QuasiDet s (Snapshot0 t)
-  newBottom0 :: Par d s t
+  freeze0 :: HasFreeze e => t -> Par e s (Snapshot0 t)
+  newBottom0 :: Par e s t
 -}
 
 
@@ -63,7 +67,7 @@ castFrzn x = unsafeCoerceLVar x
 -- | LVish `Par` actions must commute, therefore one safe way to consume a frozen (but
 -- unordered) LVar, even in another `runPar` session, is to run a `Par` computation for
 -- each element.
-forFrzn :: LVarData1 f => f Frzn a -> (a -> Par d s ()) -> Par d s ()
+forFrzn :: LVarData1 f => f Frzn a -> (a -> Par e s ()) -> Par e s ()
 forFrzn fzn fn =
   F.foldrM (\ a () -> fn a) () $ 
     unsafeDupablePerformIO $ -- ASSUME idempotence.

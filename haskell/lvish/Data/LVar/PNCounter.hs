@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies  #-}
 
 -- LK: N.B. Once Data.LVar.Counter is done, we should just be able to
 -- glue two of those together for this, just as AddRemoveSet does with
@@ -37,11 +38,11 @@ import           Data.IORef
 data PNCounter s = LVar s (AC.AtomicCounter, AC.AtomicCounter)
   
 -- | Create a new `PNCounter` set to zero.
-newCounter :: Par d s (PNCounter s)
+newCounter :: Par e s (PNCounter s)
 newCounter = newCounterWithValue 0
 
 -- | Create a new `PNCounter` with the specified initial value.
-newCounterWithValue :: Int -> Par d s (PNCounter s)
+newCounterWithValue :: Int -> Par e s (PNCounter s)
 -- LK: hm, how do I create IORefs and then return a Par?  I think what
 -- I'm supposed to be doing here is wrapping an unsafe internal Par
 -- computation (that's allowed to do IO) in a safe one that I return.
@@ -52,19 +53,19 @@ newCounterWithValue n = undefined
   -- decs <- newIORef Nothing
 
 -- | Increment the `PNCounter`.
-increment :: PNCounter s -> Par d s ()
+increment :: HasBump e => PNCounter s -> Par e s ()
 increment = undefined
 
 -- | Wait for the number of increments to reach a given number.
-waitForIncrements :: Int -> PNCounter s -> Par d s ()
+waitForIncrements :: HasGet e => Int -> PNCounter s -> Par e s ()
 waitForIncrements = undefined
 
 -- | Decrement the `PNCounter`.
-decrement :: PNCounter s -> Par d s ()
+decrement :: HasBump e => PNCounter s -> Par e s ()
 decrement = undefined
 
 -- | Wait for the number of decrements to reach a given number.
-waitForDecrements :: Int -> PNCounter s -> Par d s ()
+waitForDecrements :: HasGet e => Int -> PNCounter s -> Par e s ()
 waitForDecrements = undefined
 
 -- | Get the exact contents of the counter.  As with any
@@ -72,6 +73,6 @@ waitForDecrements = undefined
 -- program to exhibit a limited form of nondeterminism: it will never
 -- return the wrong answer, but it may include synchronization bugs
 -- that can (nondeterministically) cause exceptions.
-freezeCounter :: PNCounter s -> QPar s Int
+freezeCounter :: HasFreeze e => PNCounter s -> Par e s Int
 -- Freezing takes the difference of increments and decrements.
 freezeCounter = undefined

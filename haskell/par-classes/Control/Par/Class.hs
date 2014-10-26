@@ -1,17 +1,14 @@
 {-# LANGUAGE Trustworthy #-}
-
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 -- FlexibleInstances, UndecidableInstances
-
 {-# LANGUAGE TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DefaultSignatures #-}
-
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -42,6 +39,8 @@ module Control.Par.Class
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
+  -- * Full LVar monads with effect tracking.
+  , ParLVar(..)
 
   --  Monotonically growing finite maps
 --  , ParIMap(..) -- Not ready yet.
@@ -53,7 +52,7 @@ module Control.Par.Class
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..), LVarSchedQ(..)
   , ParQuasi (..), ParSealed(..)
-  , Proxy(Proxy)
+  , ParWEffects(..)
                    
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
@@ -61,17 +60,33 @@ module Control.Par.Class
 
   -- * Simple tracking of WHICH Par monads permit only threadsafe effects
   , ParThreadSafe()
-    
-  , NFData() -- This is reexported.
+
+  -- * Manipulating the phantom types of a Par monad 
+
+   --  , GetSession, SetSession
+
+  -- * Subtyping and conversions
+  , ReadOnlyOf
+
+  -- * Lifted constraints and type functions directly on monads
+  , SetMP, SetMG, SetMF, SetMB, SetMI
+  , HasIOM, ReadOnlyM, IdempotentM
+
+  -- * Reexports    
+  , NFData() 
+  , Proxy(Proxy)
   )
 where
 
 import Control.DeepSeq
 import Control.Par.Class.Unsafe
-import Data.Splittable.Class as Sp 
+-- import Data.Splittable.Class as Sp 
 import GHC.Prim (Constraint)
 
+import Control.Par.EffectSigs
+
 import qualified Data.Foldable as F
+import Data.Proxy (Proxy(..))
 
 --------------------------------------------------------------------------------
 
@@ -105,11 +120,11 @@ class ParMonad m => ParFuture m where
   --
   spawn  :: (NFData a, FutContents m a) => m a -> m (Future m a)
 
--- | Like 'spawn', but the result is only head-strict, not fully-strict.
+  -- | Like 'spawn', but the result is only head-strict, not fully-strict.
   spawn_ :: FutContents m a => m a -> m (Future m a)
               
   -- | Wait for the result of a future, and then return it.
-  get    :: Future m a -> m a
+  get    :: FutContents m a => Future m a -> m a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
@@ -136,7 +151,7 @@ class ParFuture m  => ParIVar m  where
   
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall frsh . FutContents m frsh => m (Future m frsh) 
+  new  :: forall a . FutContents m a => m (Future m a) 
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -172,8 +187,6 @@ class ParFuture m  => ParIVar m  where
 
 --------------------------------------------------------------------------------
 
--- | Carry a phantom type argument.
-data Proxy a = Proxy
 
 -- TODO: Move to Control.LVish.Class:
 
@@ -189,6 +202,9 @@ class (Monad m, Functor m, Monad qm, Functor qm) => ParQuasi m qm | m -> qm wher
 class ParSealed (m :: * -> *) where
    -- | Extract the @s@ parameter from a Par monad type.
    type GetSession m :: *
+
+-- | The standard class for all LVar-supporting Par monads.
+class (LVarSched m, ParWEffects m) => ParLVar m where
 
 -- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
 class (Monad m, ParSealed m) => LVarSched m  where
@@ -254,6 +270,52 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
    freezeLV :: LVar m a d -> (Proxy (m()), qm ())
    -- It is the implementor's responsibility to expose this as quasi-deterministic.
 
+
+{-
+  -- | Type-level utility function for extracting the `s` part of a valid Par-monad stack.
+  type family GetSession (m :: (* -> *)) :: *
+  type instance GetSession (trans (m :: * -> *)) = GetSession m 
+
+  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
+  type family SetSession (s :: *) (m :: (* -> *)) :: (* -> *)
+  type instance SetSession s2 (trans (m :: * -> *)) = trans (SetSession s2 m)
+-}
+
+-- Undecidable instances:
+
+-- | Shorthand for setting the Put effeect of a Par monad.
+type family SetMP (p :: Putting) (m :: * -> *) :: (* -> *)
+type instance SetMP p m = SetEffects (SetP p (GetEffects m)) m
+
+-- | Shorthand for setting the Get effeect of a Par monad.
+type family SetMG (g :: Getting) (m :: * -> *) :: (* -> *)
+type instance SetMG g m = SetEffects (SetG g (GetEffects m)) m
+
+-- | Shorthand for setting the Freeze effeect of a Par monad.
+type family SetMF (f :: Freezing) (m :: * -> *) :: (* -> *)
+type instance SetMF f m = SetEffects (SetF f (GetEffects m)) m
+
+-- | Shorthand for setting the Bump effeect of a Par monad.
+type family SetMB (b :: Bumping) (m :: * -> *) :: (* -> *)
+type instance SetMB b m = SetEffects (SetB b (GetEffects m)) m
+
+-- | Shorthand for setting the IO effeect of a Par monad.
+type family SetMI (i :: IOing) (m :: * -> *) :: (* -> *)
+type instance SetMI i m = SetEffects (SetI i (GetEffects m)) m
+
+----------------------------------------
+-- And then at the level of monads:
+
+-- | Constraint that a given Par-monad is ReadOnly.
+type ReadOnlyM m = (ReadOnly (GetEffects m))
+
+-- | Constraint that a given Par-monad is Idempotent.
+type IdempotentM m = (Idempotent (GetEffects m))
+
+-- | Constraint that a given Par-monad performs IO.
+type HasIOM m = HasIO (GetEffects m)
+
+
 --------------------------------------------------------------------------------
 
 {-
@@ -262,7 +324,7 @@ class (Monad qm, LVarSched m, ParQuasi m qm) => LVarSchedQ m qm | m -> qm where
 class (Functor m, Monad m) => ParIMap m  where
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.
-  type IMap m k :: * -> *
+  type IMap m :: * -> * -> *
 
   -- | Different implementations may place different constraints on
   -- what is allowable inside a Future.  For example, some

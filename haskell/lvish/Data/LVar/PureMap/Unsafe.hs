@@ -17,7 +17,7 @@ module Data.LVar.PureMap.Unsafe
        where
 
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish
+import           Control.LVish hiding (parIO)
 import           Control.LVish.Internal as LI
 import           Control.LVish.Sched (freezeLV)
 import qualified Control.LVish.Sched as L
@@ -98,8 +98,8 @@ instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
 -- the map, optionally enrolled in a handler pool.
 forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
           -> IMap k s v                  -- ^ Map to listen to
-          -> (k -> v -> Par d s ())      -- ^ callback
-          -> Par d s ()
+          -> (k -> v -> Par e s ())      -- ^ callback
+          -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler mh lv globalCB deltaCB
     return ()
@@ -114,7 +114,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
 
 
 -- | An unsafe, nonblocking version of `getKey`.  This reveals whether
-unsafePeekKey :: Ord k => k -> IMap k s v -> Par d s (Maybe v)
+unsafePeekKey :: Ord k => k -> IMap k s v -> Par e s (Maybe v)
 unsafePeekKey key (IMap (WrapLVar lv)) = do
     mp <- liftIO$ readIORef (L.state lv)
     return$! M.lookup key mp
@@ -123,10 +123,10 @@ unsafePeekKey key (IMap (WrapLVar lv)) = do
 -- otherwise filling in a new "bottom" value and returning it.
 --     
 -- The boolean return value is @True@ iff a new, fresh entry was created.
-unsafeGetOrInit :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+unsafeGetOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           key -- ^ The key to lookup or populate.
           -> IMap key s (f s a) 
-          -> Par d s (Bool, f s a)
+          -> Par e s (Bool, f s a)
 unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
  where
   -- go1 is OPTIONAL optimization.  Could skip right to go2.
@@ -154,7 +154,7 @@ unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
 
 -- | An unsafe way to race to insert.  Returns Nothing if the insert is successful,
 -- and the found value otherwise.
-unsafeInsertIfAbsent :: Ord k => k -> v -> IMap k s v -> Par d s (Maybe v)a
+unsafeInsertIfAbsent :: (HasBump e, Ord k) => k -> v -> IMap k s v -> Par e s (Maybe v)a
 unsafeInsertIfAbsent key val (IMap (WrapLVar lv)) = liftIO$ 
   atomicModifyIORef' (L.state lv) $ \ mp -> 
     case M.lookup key mp of

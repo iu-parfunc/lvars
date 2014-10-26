@@ -17,32 +17,38 @@
   join fails the map fails (saturates), after which it requires only a
   small, constant amount of memory.
 
+-- FIXME: we need effect signatures on all methods! - RRN [2014.10.21]
+
  -}
 
 module Data.LVar.SatMap
-       {-(
+       (
          -- * Basic operations
          SatMap(..), 
          newEmptyMap, newMap, newFromList,
          insert, 
 
-         -- * Generic routines and convenient aliases
-         gmodify, getOrInit,
-         
+         -- * A new class for join that can fail
+         PartialJoinSemiLattice(..),
+
+-- NOT sure about how handlers might work for saturating LVars yet...
+-- It's possible that they can operate only with idempotent callbacks
+-- and be nondeterministic in whether they guarantee duplicate-suppression.
+
          -- * Iteration and callbacks
-         forEach, forEachHP,
-         withCallbacksThenFreeze,
+         -- forEach, forEachHP,
+         -- withCallbacksThenFreeze,
 
          -- * Quasi-deterministic operations
          freezeMap, fromIMap,
-         traverseFrzn_,
+         -- traverseFrzn_,
 
          -- * Higher-level derived operations
-         copy, traverseMap, traverseMap_,  union,
+         -- copy, traverseMap, union,
          
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
-         traverseMapHP, traverseMapHP_, unionHP                                        
-       )-} where
+         -- traverseMapHP, traverseMapHP_, unionHP                                        
+       ) where
 
 -- import           Algebra.Lattice
 -- import           Algebra.Lattice.Dropped
@@ -58,7 +64,7 @@ import           Data.LVar.Generic as G
 import           Data.UtilInternal (traverseWithKey_)
 
 import           Control.Exception (throw)
-import           Data.List (intersperse)
+import           Data.List (intersperse, intercalate)
 import           Data.IORef
 import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
@@ -68,7 +74,6 @@ import           Control.Applicative ((<$>))
 import qualified Data.Foldable as F
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 
-#ifdef GENERIC_PAR
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
 
@@ -76,7 +81,6 @@ import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 -- | A partial version of "Algebra.Lattice.JoinSemiLattice", this
 -- could be made into a complete lattice by the addition of a top
@@ -158,8 +162,8 @@ instance (Show k, Show a) => Show (SatMap k Frzn a) where
     let mp' = unsafeDupablePerformIO (readIORef (state lv)) 
         contents = case mp' of 
                      Nothing -> "saturated"
-                     Just (m,_) -> concat $ intersperse ", " $ map show $ M.toList m
-    in "{IMap: " ++ contents ++ "}"
+                     Just (m,_) -> intercalate ", " $ map show $ M.toList m
+    in "{SatMap: " ++ contents ++ "}"
 
 -- | For convenience only; the user could define this.
 instance (Show k, Show a) => Show (SatMap k Trvrsbl a) where
@@ -203,8 +207,8 @@ newFromList = newMap . M.fromList
 -- | Register a per-element callback, then run an action in this context, and freeze
 -- when all (recursive) invocations of the callback are complete.  Returns the final
 -- value of the provided action.
-withCallbacksThenFreeze :: forall k v b s . Eq b =>
-                           SatMap k s v -> (k -> v -> QPar s ()) -> QPar s b -> QPar s b
+withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
+                           SatMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
     do hp  <- newPool 
        res <- IV.new 
@@ -215,7 +219,7 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (SatMapContents k v)) -> L.Par ()
+    initCB :: HandlerPool -> IV.IVar s b -> IORef (SatMapContents k v) -> L.Par ()
     initCB hp resIV ref = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
@@ -308,50 +312,18 @@ saturate (SatMap lv) = WrapPar $ do
 
 {-
 
--- | `SatMap`s containing other LVars have some additional capabilities compared to
--- those containing regular Haskell data.  In particular, it is possible to modify
--- existing entries (monotonically).  Further, this `modify` function implicitly
--- inserts a \"bottom\" element if there is no existing entry for the key.
--- 
--- Unfortunately, that means that this takes another computation for creating new
--- \"bottom\" elements for the nested LVars stored inside the `SatMap`.
 modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
           SatMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par d s b
-modify (SatMap lv) key newBottom fn = WrapPar $ do 
-  let ref = state lv      
-  mp  <- L.liftIO$ readIORef ref
-  case M.lookup key mp of
-    Just lv2 -> do L.logStrLn 3 $ " [Map.modify] key already present: "++show key++
-                                 " adding to inner "++show(unsafeName lv2)
-                   unWrapPar$ fn lv2
-    Nothing -> do 
-      bot <- unWrapPar newBottom :: L.Par (f s a)
-      L.logStrLn 3$ " [Map.modify] allocated new inner "++show(unsafeName bot)
-      let putter _ = L.liftIO$ atomicModifyIORef' ref $ \ mp2 ->
-            case M.lookup key mp2 of
-              Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
-              Nothing  -> (M.insert key bot mp2,
-                           (Just (key, bot), 
-                            do L.logStrLn 3$ " [Map.modify] key absent, adding the new one."
-                               unWrapPar$ fn bot))
-      act <- putLV_ (unWrapLVar lv) putter
-      act
 
-{-# INLINE gmodify #-}
--- | A generic version of `modify` that does not require a `newBottom` argument,
--- rather, it uses the generic version of that function.
 gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           SatMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par d s b
-gmodify map key fn = modify map key G.newBottom fn
-
-
 
 -- | Get the exact contents of the map.  As with any
 -- quasi-deterministic operation, using `freezeMap` may cause your
@@ -364,7 +336,7 @@ gmodify map key fn = modify map key G.newBottom fn
 -- nondeterminism leaking.  (This is because the internal order is
 -- fixed for the tree-based representation of maps that "Data.Map"
 -- uses.)
-freezeMap :: SatMap k s v -> QPar s (M.Map k v)
+freezeMap :: HasFreeze e => SatMap k s v -> Par e s (M.Map k v)
 freezeMap (SatMap (WrapLVar lv)) = WrapPar $
    do freezeLV lv
       getLV lv globalThresh deltaThresh
@@ -372,8 +344,17 @@ freezeMap (SatMap (WrapLVar lv)) = WrapPar $
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
-
 -}
+
+traverseMap = error "UNFINISHED"
+traverseMap_ = error "UNFINISHED"
+traverseMapHP = error "UNFINISHED"
+traverseMapHP_ = error "UNFINISHED"
+traverseFrzn_ = error "UNFINISHED"
+freezeMap = error "UNFINISHED"
+union = error "UNFINISHED"
+unionHP = error "UNFINISHED"
+copy = error "UNFINISHED"
 
 -- | /O(1)/: Convert from an `SatMap` to a plain `Data.Map`.
 --   This is only permitted when the `SatMap` has already been frozen.
@@ -382,8 +363,8 @@ fromIMap :: SatMap k Frzn a -> Maybe (M.Map k a)
 fromIMap (SatMap lv) = unsafeDupablePerformIO $ do 
   x <- readIORef (state lv)
   case x of 
-    Just (m,_) -> return $! Just m
-    Nothing    -> return $  Nothing
+    Just (m,_) -> return (Just m)
+    Nothing    -> return Nothing
 
 {-
 
@@ -466,8 +447,7 @@ unsafeName x = unsafePerformIO $ do
 --------------------------------------------------------------------------------
 -- Interfaces for generic programming with containers:
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
+
 instance PC.Generator (SatMap k Frzn a) where
   type ElemOf (SatMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -480,8 +460,6 @@ instance PC.Generator (SatMap k Frzn a) where
 -- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
 -- instance.  
 -- instance Show k => PC.ParFoldable (SatMap k Frzn a) where
-
-#endif  
 
 
 -}

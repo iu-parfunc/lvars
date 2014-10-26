@@ -110,10 +110,10 @@ msf3 EdgeGraph{edges,numVerts} = do
 forSpeculative :: (Ord b, Show b) =>
                   (Int,Int)             -- ^ Start and end (inclusive/exclusive)
                 -> st                   -- ^ Initial state
-                -> (Int -> st -> Par d s (Maybe b)) -- ^ Reserve function
-                -> (Int -> st -> b -> Par d s ())   -- ^ Commit function
-                -> (st -> Par d s st)    -- ^ State update function after each round of commits.
-                -> Par d s ()
+                -> (Int -> st -> Par e s (Maybe b)) -- ^ Reserve function
+                -> (Int -> st -> b -> Par e s ())   -- ^ Commit function
+                -> (st -> Par e s st)    -- ^ State update function after each round of commits.
+                -> Par e s ()
 forSpeculative (st,en) state0 reserve commit update = do 
   hp <- newPool
   mainloop hp 0 state0 S.empty 0 

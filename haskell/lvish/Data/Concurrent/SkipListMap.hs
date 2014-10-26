@@ -117,7 +117,7 @@ find_ (Index m slm) shortcut k = do
       
 data PutResult v = Added v | Found v
 
-{-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par d s v -> Par d s (PutResult v)  #-}
+{-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s (PutResult v)  #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
@@ -130,7 +130,7 @@ putIfAbsent (SLMap slm _) k vc =
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
 
 {-# SPECIALIZE  putIfAbsentToss :: (Ord k) => 
-     SLMap k v -> k -> Par d s v -> Par d s Bool -> Par d s (PutResult v)  #-}
+     SLMap k v -> k -> Par e s v -> Par e s Bool -> Par e s (PutResult v)  #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
@@ -332,7 +332,7 @@ debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
 debugShow (Slice (SLMap index lmbot) mstart mend) =
   do lns <- loop index
      let len = length lns
-     return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0..len-1] ]
+     return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0::Int ..len-1] ]
   where
     startCheck = case mstart of
                   Just start -> \ k -> k >= start

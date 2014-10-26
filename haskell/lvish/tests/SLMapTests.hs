@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds, TypeFamilies #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
@@ -14,6 +15,8 @@ import qualified Data.Concurrent.SkipListMap as SLM
 import qualified Data.LVar.SLMap as SM
 
 #include "CommonMapTests.hs"
+
+type TheMap k s v = IM.IMap k s v 
 
 --------------------------------------------------------------------------------
 
