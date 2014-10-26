@@ -56,8 +56,8 @@ import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.DeepFrz (runParThenFreeze)
 import           Control.LVish
 import           Control.LVish.Internal as LI
-import           Control.LVish.Sched (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
-import qualified Control.LVish.Sched as L
+import           Internal.Control.LVish.Sched (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
+import qualified Internal.Control.LVish.Sched as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
 -- import           Data.LVar.SatMap.Unsafe

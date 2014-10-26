@@ -18,7 +18,7 @@
 -- | This is an internal module that provides the core parallel scheduler.
 --   It is /not/ for end-users.
 
-module Control.LVish.Sched
+module Internal.Control.LVish.Sched
   (
     -- * Basic types and accessors
     LVar(..), state, HandlerPool(),

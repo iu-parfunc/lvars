@@ -34,8 +34,8 @@ import Control.LVish
 import Control.LVish.DeepFrz.Internal
 import Control.LVish.Internal
 import Data.IORef
-import Data.Set as S
-import qualified Control.LVish.Sched as LI 
+import qualified Data.Set as S
+import qualified Internal.Control.LVish.Sched as LI 
 import Algebra.Lattice
 import GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)

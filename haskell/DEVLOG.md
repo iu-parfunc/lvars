@@ -705,3 +705,38 @@ default, and I got this:
     ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
 
 
+
+
+[2014.10.26] {Debugging nonidem branch}
+----------------------------------------
+
+On the main (2.0) branch we're having some trouble with duplicated
+gets inspite of `-fgetonce`.  I wanted to try (finally) merging the
+nonidem branch instead.  I've done most of the merges to bring it up
+to speed.  However, not only does it still have errors like this:
+
+  "Bad test outcome--exception: Final continuation of Par computation
+   was duplicated, in spite of GET_ONCE!"
+
+But, it also has some divergences.  Timeouts on the following:
+
+      v3b: [Failed]
+    ERROR: <<timeout>>
+
+      i3c: [Failed]
+    Got the wrong exception, expected one of the strings: ["Attempt to change a frozen LVar"]
+    Instead got this exception:
+      "<<timeout>>"
+
+      v3d: [Failed]
+    ERROR: <<timeout>>
+
+      v3e: [Failed]
+    ERROR: <<timeout>>
+
+      v8a: [Failed]
+    ERROR: <<timeout>>
+
+      v8b: [Failed]
+    ERROR: <<timeout>>
+

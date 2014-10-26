@@ -17,7 +17,7 @@ import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import Control.Concurrent (threadDelay)
 import Test.HUnit as HU
 
--- import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+-- import Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 import Control.LVish (runParDetailed, Par, OutDest(..), DbgCfg(..))
 import Control.Par.EffectSigs 
 import Debug.Trace

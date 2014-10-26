@@ -43,7 +43,8 @@ import           Data.List (intersperse)
 import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
+import           Control.Par.EffectSigs
+import           Internal.Control.LVish.Sched (newLV, putLV, getLV, freezeLV,
                                                 freezeLVAfter, liftIO)
 import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)

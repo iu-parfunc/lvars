@@ -11,8 +11,8 @@ import Data.IORef
 import Control.Exception (throw)
 import Control.LVish
 import Control.LVish.Internal
-import Control.LVish.Sched (newLV, putLV, getLV)
-import qualified Control.LVish.Sched as L
+import Internal.Control.LVish.Sched (newLV, putLV, getLV)
+import qualified Internal.Control.LVish.Sched as L
 import           Data.LVar.Generic
 
 ------------------------------------------------------------------------------

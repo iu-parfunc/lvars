@@ -34,7 +34,7 @@ module Control.LVish.Internal
 
 import           Control.LVish.MonadToss
 import           Control.Applicative
-import qualified Control.LVish.Sched as L
+import qualified Internal.Control.LVish.Sched as L
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import           Control.Par.EffectSigs
 

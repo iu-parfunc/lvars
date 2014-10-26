@@ -119,7 +119,7 @@ import           Control.LVish.Types
 import           Control.LVish.Internal as I
 import           Control.LVish.Basics as B
 import           Control.LVish.Logical
-import qualified Control.LVish.Sched as L
+import qualified Internal.Control.LVish.Sched as L
 import           Control.LVish.SchedQueue (State)
 
 import           Control.Par.EffectSigs

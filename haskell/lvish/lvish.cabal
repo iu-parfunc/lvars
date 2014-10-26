@@ -71,8 +71,9 @@ flag debug
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
+  manual: True
 
-flag dedup
+flag getonce
   description: Ensure that both handlers and continuations of get run at most once
                (by using extra synchronization)
   default: True
@@ -128,12 +129,15 @@ library
                     -- New / Experimental:
                     Data.LVar.CycGraph
 
-  -- These are in "beta" and aren't exposed yet:
-  other-modules:
+  -- These are in "beta" and shouldn't be released yet:
                     -- Not quite ready for prime-time yet:
                     Data.LVar.AddRemoveSet
                     Data.LVar.PNCounter
                     -------------------------------------------
+
+  -- Package-internal and should not be exposed:
+                    Internal.Data.Concurrent.LinkedMap
+                    Internal.Control.LVish.Sched
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -142,10 +146,8 @@ library
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
-                    Data.Concurrent.LinkedMap
                     Data.Concurrent.AlignedIORef
                     Control.Reagent
-                    Control.LVish.Sched
                     Control.LVish.SchedQueue
                     Control.LVish.MonadToss
                     Control.LVish.Types
@@ -180,7 +182,7 @@ library
   if flag(chaselev)
      build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
-  if flag(dedup)
+  if flag(getonce)
      cpp-options: -DLVISH_DEDUP
 
 
@@ -192,44 +194,33 @@ test-suite test-lvish
     -- This test-suite rebuilds the LVish sources rather than depending 
     -- on the package externally... reason is that it needs to access unexported modules.
     -- TODO: Move all such modules under an Internal namespace.  (Issue #73)
-    hs-source-dirs: tests/ ./
+    hs-source-dirs: tests/ 
     other-modules:  TestHelpers, 
                     LVishAndIVar,
                     ArrayTests,
                     MemoTests,
                     LogicalTests,
                     PureMapTests,
+                    SatMapTests,
+                    LayeredSatMapTests,
                     SLMapTests,
                     SetTests,
                     MaxPosIntTests,
-                    AddRemoveSetTests
+                    AddRemoveSetTests,
+                    GenericTests
                     
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 
-    -- DUPLICATED: from above
-    build-depends: base    >= 4.6 && <= 4.8, 
-                   deepseq >= 1.3, 
-                   containers >= 0.5, 
-                   lattices   >= 1.2, 
-                   vector >=0.10,
-                   atomic-primops >= 0.6, 
-                   random, 
-                   transformers,
-                   ghc-prim,
-                   async,
-                   -- Used in NatArray:
-                   bits-atomic, missing-foreign
-
+    build-depends: lvish 
+    build-depends: base >= 4.6 && <= 4.8
+                   , containers >= 0.5
+                   , vector >=0.10
+                   , random
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
-    -- END DUPLICATED
-    other-modules:  GenericTests
-
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2, QuickCheck,
                    HUnit, time, text
--- TODO: Add the self-dependency, WHEN there are no internal modules tested:
---    build-depends:   lvish
 
 -- For now we instead duplicate these flag-dependent options:
     if flag(debug)
@@ -240,7 +231,7 @@ test-suite test-lvish
     if flag(chaselev)
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
-    if flag(dedup)
+    if flag(getonce)
        cpp-options: -DLVISH_DEDUP
 
     -- Atomic-primops fails when used by template-haskell/ghci on linux:

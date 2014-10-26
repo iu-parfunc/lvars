@@ -44,7 +44,7 @@ import Debug.Trace
 -- LVish:
 import Control.LVish
 import qualified Control.LVish.Internal as LV
-import qualified Control.LVish.Sched as LI
+import qualified Internal.Control.LVish.Sched as LI
 import Data.LVar.PureSet as IS
 import Data.LVar.IVar as IV
 import qualified Data.Concurrent.SkipListMap as SLM

@@ -28,7 +28,7 @@ import           Control.LVish
 import           Control.LVish.Internal
 import qualified Data.Atomics.Counter.Reference as AC
 -- LK: FIXME: it can't be okay to use SchedIdempotent if we're using bump, can it?!
--- import           Control.LVish.SchedIdempotent (newLV)
+-- import           Internal.Control.LVish.Sched (newLV)
 import           Data.IORef
 
 

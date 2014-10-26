@@ -59,8 +59,8 @@ import           Control.Monad
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.Sched (newLV, putLV, getLV, freezeLV)
-import qualified Control.LVish.Sched as L
+import           Internal.Control.LVish.Sched (newLV, putLV, getLV, freezeLV)
+import qualified Internal.Control.LVish.Sched as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (insert)
 
