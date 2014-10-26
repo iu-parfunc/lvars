@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.1.1.4
+version:             1.1.4
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -21,6 +21,10 @@ version:             1.1.1.4
 -- 1.1.0.2 -- add verifyFiniteJoin
 -- 1.1.0.3 -- expose BulkRetry prototype
 -- 1.1.1.0 -- expose logging routines
+-- 1.1.1.5 -- various bugfixes
+-- 1.1.2   -- bugfixes and small additions, work-around for -fbeta problems
+-- 1.1.3   -- add fromPureLVar
+-- 1.1.4   -- add SatMap 
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
@@ -28,11 +32,13 @@ description:
   .
   A programming model based on monotonically-growing concurrent data structures.
   .
-  As a starting point, look at "Control.LVish", as well as one of these papers:
+  As a starting point, look at the main module, "Control.LVish", as well as one of these papers:
   .
     * FHPC 2013: /LVars: lattice-based data structures for deterministic parallelism/ (<http://dl.acm.org/citation.cfm?id=2502326>).
   .
     * POPL 2014: /Freeze after writing: quasi-deterministic parallel programming with LVars/ (<http://www.cs.indiana.edu/~lkuper/papers/2013-lvish-draft.pdf>).
+  . 
+    * PLDI 2014: /Taming the Parallel Effect Zoo: Extensible Deterministic Parallelism with LVish/ (<http://www.cs.indiana.edu/~rrnewton/papers/effectzoo-draft.pdf>).
   . 
   If the haddocks are not building, here is a mirror:
   <http://www.cs.indiana.edu/~rrnewton/haddock/lvish/>
@@ -40,6 +46,8 @@ description:
   Change Log: 
   .
   * 1.0.0.6 - tighten up dependencies; remove unused flags; very minor doc fixes.
+  . 
+  * 1.1.2  - many bugfixes, plus a new logging infrastructure, and verification of finite lattices
 
 license:             BSD3
 license-file:        LICENSE
@@ -55,36 +63,36 @@ flag debug
   description: Activate additional debug assertions, and printed output.
 --               if DEBUGLVL env var is set to 1 or higher.
   default: False
+  manual: True
 
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
   default: False
 
-flag newcontainers
-  description: Use a pre-release version of containers to enable splitting.
-  default: False
-
 flag dedup
-  description: Ensure that both handlers and continuations of get run at most once 
+  description: Ensure that both handlers and continuations of get run at most once
                (by using extra synchronization)
   default: False
+  manual: True
 
 -- We won't really support this until LVish 2.0:
 flag generic
   description: Use (forthcoming) generic interfaces for Par monads.
   default: True
+  manual: True 
 
-flag beta
-  description: These features are in beta and not fully supported yet.
-  default: True
+-- flag beta
+--   description: These features are in beta and not fully supported yet.
+--   default: True
+
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/lvish
+--    tag:      release-lvish-1.0.0.6
 
 --------------------------------------------------------------------------------
 library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/lvish
---    tag:      release-lvish-1.0.0.6
 
   -- Modules exported by the library.
   exposed-modules:
@@ -96,6 +104,8 @@ library
                     Data.LVar.IStructure 
                     Data.LVar.PureSet
                     Data.LVar.PureMap
+                    Data.LVar.SatMap
+                    Data.LVar.LayeredSatMap
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     -------------------------------------------
@@ -112,22 +122,22 @@ library
                     Control.LVish.DeepFrz.Internal
                     -- This is also not recommended for general use yet.
                     Data.Concurrent.SkipListMap
-  if flag(beta)
-    exposed-modules: 
-                      -- Not quite ready for prime-time yet:
-                      Data.LVar.NatArray
-                      Data.LVar.NatArray.Unsafe
-                      Data.LVar.MaxCounter
-                      Data.LVar.AddRemoveSet
-                      Data.LVar.PNCounter
-                      -------------------------------------------
-                      -- New / Experimental:
-                      Data.LVar.Memo                    
-                      Data.LVar.CycGraph
 
-  if flag(beta) && flag(newcontainers)
-    exposed-modules: 
-                      Control.LVish.BulkRetry
+                    Data.LVar.CycGraph
+
+  -- TEMP: using a flag to control exports doesn't really work with Hackage currently:
+  -- if flag(beta)
+  --   exposed-modules: 
+  --                     -- Not quite ready for prime-time yet:
+  --                     Data.LVar.NatArray
+  --                     Data.LVar.NatArray.Unsafe
+  --                     Data.LVar.MaxPosInt
+  --                     Data.LVar.Counter
+  --                     Data.LVar.AddRemoveSet
+  --                     Data.LVar.PNCounter
+  --                     -------------------------------------------
+  --                     -- New / Experimental:
+  --                     Data.LVar.Memo                    
 
   -- Modules included in this library but not exported.
   other-modules:
@@ -152,28 +162,30 @@ library
                  deepseq >= 1.3, 
                  lattices   >= 1.2, 
                  vector >=0.10,
-                 atomic-primops >= 0.4, 
+                 atomic-primops >= 0.6, 
                  random, 
                  transformers,
                  ghc-prim,
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign
-  if flag(newcontainers) { build-depends: containers >= 0.5.3.2 } 
-   else { build-depends: containers >= 0.5 }
   if flag(generic)
     cpp-options: -DGENERIC_PAR
+--    build-depends: containers >= 0.5.4.0
+    build-depends: containers >= 0.5
     build-depends: par-classes     >= 1.0 && < 2.0,
                    par-collections >= 1.0 && < 2.0
 --                   par-transformers <= 2.0
+  else     
+    build-depends: containers >= 0.5
 
   ghc-options: -O2 -rtsopts
 
   if flag(debug)
      -- TEMP: depending on these for visualzing MemoCyc DAGs:
-     build-depends: fgl, graphviz, text
+--     build-depends: fgl, graphviz, text
      cpp-options: -DDEBUG_LVAR
-     cpp-options: -DDEBUG_MEMO
+--     cpp-options: -DDEBUG_MEMO
   if flag(chaselev)
      build-depends: chaselev-deque
      cpp-options: -DCHASE_LEV
@@ -195,7 +207,7 @@ test-suite test-lvish
                     PureMapTests,
                     SLMapTests,
                     SetTests,
-                    MaxCounterTests,
+                    MaxPosIntTests,
                     AddRemoveSetTests
                     
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
@@ -206,7 +218,7 @@ test-suite test-lvish
                    containers >= 0.5, 
                    lattices   >= 1.2, 
                    vector >=0.10,
-                   atomic-primops >= 0.4, 
+                   atomic-primops >= 0.6, 
                    random, 
                    transformers,
                    ghc-prim,
@@ -229,11 +241,16 @@ test-suite test-lvish
     build-depends:   lvish
     if flag(debug)
        -- TEMP: depending on these for visualzing MemoCyc DAGs:
-       build-depends: fgl, graphviz, text
+--       build-depends: fgl, graphviz, text
        cpp-options: -DDEBUG_LVAR
-       cpp-options: -DDEBUG_MEMO
+--       cpp-options: -DDEBUG_MEMO
     if flag(chaselev)
        build-depends: chaselev-deque
        cpp-options: -DCHASE_LEV
     if flag(dedup)
        cpp-options: -DLVISH_DEDUP
+
+    -- Atomic-primops fails when used by template-haskell/ghci on linux:
+    if impl(ghc < 7.7) && os(linux) {
+      buildable: False
+    }

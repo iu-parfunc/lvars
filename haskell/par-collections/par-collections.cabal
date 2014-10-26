@@ -23,16 +23,12 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
-flag newcontainers
-  description: Use (forthcoming) new version of containers.
-  default: False
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-collections
 
 Library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/par-collections
-
   Exposed-modules:
      Data.Par
      Data.Par.Splittable
@@ -55,12 +51,12 @@ Library
                , primitive    >= 0.5  && < 0.6
                , vector       >= 0.10 && < 0.11
 
-  if flag(newcontainers)
+  if impl(ghc < 7.7) {
+    build-depends: containers >= 0.5
+  } else {
     cpp-options: -DNEWCONTAINERS
-    build-depends: containers >= 0.5.3.2
-  else 
-    build-depends: containers >= 0.5 && < 0.5.3.2
-
+    build-depends: containers >= 0.5.4.0
+  }
   ghc-options: -O2 -rtsopts
   Other-modules:
 
@@ -76,12 +72,17 @@ Test-suite test-par-collections
   Build-depends: base >= 4 && < 5
                , time >= 1.4 
                , par-classes >= 1.0 && < 2.0
-               , monad-par >= 0.3.4.6
-               , atomic-primops >= 0.4
+               , monad-par >= 0.3.4.7
+               , atomic-primops >= 0.6
   --              , mtl    >= 2.0
   --              , transformers >= 0.2
   --              , vector >= 0.9
   --              , ghc-prim 
+
+  -- Atomic-primops fails when used by template-haskell/ghci on linux:
+  if impl(ghc < 7.7) && os(linux) {
+    buildable: False
+  }
 
   -- (3) Additional depends to test concrete instances:
   -- Build-depends: lvish  >= 1.1.1.0
@@ -90,7 +91,7 @@ Test-suite test-par-collections
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
   ghc-options: -O2 -threaded -rtsopts
-  ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
-  ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
+--  ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
+--  ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
 
 

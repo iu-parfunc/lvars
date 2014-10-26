@@ -22,7 +22,7 @@ import GHC.Conc
 
 import Data.Word
 import Data.Maybe
-import Data.LVar.MaxCounter as C
+import Data.LVar.MaxPosInt as C
 import Data.Time.Clock
 import qualified Data.Traversable as T
 import qualified Data.Vector as V
@@ -59,26 +59,26 @@ import Data.LVar.NatArray as NArr
 -- A simple FOLD operation.
 ------------------------------------------------------------------------------------------  
 
-maxDegreeS :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxCounter s)
+maxDegreeS :: AdjacencyGraph -> (ISet s NodeID) -> Par d s (MaxPosInt s)
 maxDegreeS gr component = do
-  mc <- newMaxCounter 0 
+  mc <- newMaxPosInt 0 
   S.forEach component $ \ nd ->
     C.put mc (U.length$ nbrs gr nd)
   return mc
 
 
-maxDegreeN :: AdjacencyGraph -> (NatArray s Word8) -> Par d s (MaxCounter s)
+maxDegreeN :: AdjacencyGraph -> (NatArray s Word8) -> Par d s (MaxPosInt s)
 maxDegreeN gr component = do
-  mc <- newMaxCounter 0 
+  mc <- newMaxPosInt 0 
   NArr.forEach component $ \ nd flg ->
     when (flg == 1) $
       C.put mc (U.length$ nbrs gr (fromIntegral nd))
   return mc
 
 
-maxDegreeI :: AdjacencyGraph -> (IStructure s Word8) -> Par d s (MaxCounter s)
+maxDegreeI :: AdjacencyGraph -> (IStructure s Word8) -> Par d s (MaxPosInt s)
 maxDegreeI gr component = do
-  mc <- newMaxCounter 0
+  mc <- newMaxPosInt 0
   -- INEFFICIENT: this attaches a handler to ALL ivars:
   ISt.forEachHP Nothing component $ \ nd flg -> do
     when (flg == 1) $ do
@@ -99,7 +99,7 @@ maxDegreeI gr component = do
 -- A dummy per-node operation
 ------------------------------------------------------------------------------------------  
 
--- workEachNode :: (NatArray s Word8) -> (Word8 -> Par d s ()) -> Par d s (MaxCounter s)
+-- workEachNode :: (NatArray s Word8) -> (Word8 -> Par d s ()) -> Par d s (MaxPosInt s)
 workEachNode :: Word64 -> (NatArray s Word8) -> Par d s ()
 workEachNode clocks component = do
   NArr.forEach component $ \ nd flg ->

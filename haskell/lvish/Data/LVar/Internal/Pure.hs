@@ -23,7 +23,7 @@ module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar,
 
-         waitPureLVar, freezePureLVar,
+         waitPureLVar, freezePureLVar, fromPureLVar, 
          getPureLVar, unsafeGetPureLVar,
 
          -- * Verifying lattice structure
@@ -37,7 +37,7 @@ import Data.IORef
 import qualified Control.LVish.Sched as LI 
 import Algebra.Lattice
 import GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
@@ -180,6 +180,12 @@ freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
     globalThresh _  False = return Nothing
     deltaThresh  _        = return Nothing
 
+-- | Read the exact contents of an already frozen PureLVar.
+fromPureLVar :: PureLVar Frzn t -> t
+fromPureLVar (PureLVar lv) =
+  unsafeDupablePerformIO $ readIORef $ state lv
+
+
 ------------------------------------------------------------
 
 -- | Physical identity, just as with `IORef`s.
@@ -196,4 +202,5 @@ instance DeepFrz a => DeepFrz (PureLVar s a) where
   frz = unsafeCoerce#
 
 -- FIXME: need an efficient way to extract the logger and capture it in the callbacks:
+logDbgLn_ :: Int -> String -> IO ()
 logDbgLn_ _ _ = return ()

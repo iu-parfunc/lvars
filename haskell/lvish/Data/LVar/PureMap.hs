@@ -146,7 +146,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- 
 -- Unfortunately, that means that this takes another computation for creating new
 -- \"bottom\" elements for the nested LVars stored inside the `IMap`.
-modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
+modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
@@ -175,7 +175,7 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
-gmodify :: forall f a b d s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+gmodify :: forall f a b d s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par d s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
@@ -227,7 +227,7 @@ waitSize !sz (IMap (WrapLVar lv)) = WrapPar $
         True  -> return (Just ())
         False -> return (Nothing)
     -- Here's an example of a situation where we CANNOT TELL if a delta puts it over
-    -- the threshold.a
+    -- the threshold.
     deltaThresh _ = globalThresh (L.state lv) False
 
 -- | Get the exact contents of the map.  As with any

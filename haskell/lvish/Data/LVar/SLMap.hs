@@ -239,7 +239,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a \"bottom\" element if there is no existing entry for the key.
 --
-modify :: forall f a b d s key . (Ord key, LVarData1 f, Show key, Ord a) =>
+modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (Par d s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.

@@ -19,12 +19,12 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
-Library
-  Source-repository head
-    type:     git
-    location: https://github.com/iu-parfunc/lvars
-    subdir:   haskell/par-transformers
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-transformers
 
+Library
   Exposed-modules: 
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
@@ -54,7 +54,7 @@ Library
                , transformers >= 0.2
                , vector       >= 0.9
                , ghc-prim 
-               , atomic-primops >= 0.4 
+               , atomic-primops >= 0.6 
   ghc-options: -O2
 
 
@@ -81,10 +81,14 @@ Test-suite test-par-transformers
                , ghc-prim 
 
   -- (1C) Additional depends to test concrete instances:
-  Build-depends: lvish        >= 1.0.0.4
+  Build-depends: lvish        >= 1.0.0.4 && < 2.0
 
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
   ghc-options: -threaded
 
+  -- Atomic-primops fails when used by template-haskell/ghci on linux:
+  if impl(ghc < 7.7) && os(linux) {
+    buildable: False
+  }
