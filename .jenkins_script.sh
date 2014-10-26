@@ -58,20 +58,20 @@ fi
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
 $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests  $*
 
-TESTOPTS="-j1 --jxml=test-results.xml --jxml-nested"
+TARGS="-j1 --jxml=test-results.xml --jxml-nested"
 
 # Here's a new strategy, just do them all manually:
-./lvish/dist/build/test-lvish/test-lvish $TESTOPTS
-
-# ./par-collections/tests/dist/build/test-par-collections/test-par-collections  $TESTOPTS
+# ./lvish/dist/build/test-lvish/test-lvish $TARGS
+# ./par-collections/tests/dist/build/test-par-collections/test-par-collections  $TARGS
 # ./par-transformers/dist/build/test-par-transformers/test-par-transformers
 
-# Avoding the atomic-primops related bug on linux / GHC 7.6:
-# if ! [ `uname` == "Linux" ]; then  
-#   for path in $PKGS; do 
-#     echo "Test package in path $path."
-#     cd $TOP/$path
-#     # Assume cabal 1.20+:
-#     $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
-#   done
-# # fi
+# ./lvish/dist/dist-sandbox-*/build/test-lvish/test-lvish $TARGS
+
+for path in $PKGS; do 
+  echo "Test package in path $path."
+  cd $TOP/$path
+  # Assume cabal 1.20+:
+  echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
+  $CABAL configure $CABAL_FLAGS
+  $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
+done
