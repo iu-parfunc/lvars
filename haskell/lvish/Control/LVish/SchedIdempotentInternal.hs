@@ -182,7 +182,8 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
       -- Atomically count how many workers are currently registered as idle:
       countIdle = do ls <- readIORef idle
                      return $! length ls
-  logger <- if L.dbgLvl > 0 
+  -- Fastpath: if we're not in debug mode don't create the logger at all:
+  logger <- if maxLvl > 0 
             then fmap Just $ mkLogger
             else return Nothing
   let mkState states i = do 

@@ -229,7 +229,7 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
               x <- tryReadSmplChan checkPoint
               case x of
                 Just wr -> do printAll (formatMessage "" wr)
-                              flushLoop
+                              flushLoop -- No wakeups needed here...
                 Nothing -> return ()
 
           -- | In the steady state: 
@@ -238,7 +238,7 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
             case x of
               Just h  -> case msg h of 
                           StrMsg {}       -> flushChan (h:acc)
-                          OffTheRecord {} -> do printAll (formatMessage "" h)
+                          OffTheRecord {} -> do unless silenceOffTheRecord $ printAll (formatMessage "" h)
                                                 putMVar (continue h) () -- Wake immediately...
                                                 flushChan acc
               Nothing -> return acc
@@ -300,6 +300,17 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
 isOffTheRecord (OffTheRecord{}) = True
 isOffTheRecord _ = False
 
+-- | [Undocumented, internal functionality] Suppress echo'ing of
+-- messages that don't actually count for the schedule fuzz testing.
+silenceOffTheRecord :: Bool
+silenceOffTheRecord = case lookup "SILENCEOTR" theEnv of
+       Nothing  -> False
+       Just "0" -> False
+       Just "False" -> False
+       Just "false" -> False
+       Just _ -> True
+
+                   
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
 -- chatter = printf "%s\n"
