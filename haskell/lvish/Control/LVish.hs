@@ -110,7 +110,7 @@ module Control.LVish
 
      -- * Debug facilities and internal bits
      logDbgLn, runParLogged, runParDetailed,
-     OutDest(..), DbgCfg (..),
+     OutDest(..), DbgCfg (..), defaultMemDbgRange,
      LVar()
    ) where
 
@@ -122,7 +122,7 @@ import           Control.LVish.Logical
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
-import           Control.LVish.Logging (OutDest(..))
+import           Control.LVish.Logging (OutDest(..), defaultMemDbgRange)
 import           Data.LVar.IVar 
 import           Data.Proxy
 import           Data.Coerce (coerce)

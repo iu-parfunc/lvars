@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
 
 -- | Tests for the Data.LVar.PureSet and Data.LVar.SLSet modules.
 
@@ -97,12 +98,12 @@ v3a = runParNonDet $
           IS.waitSize 10 s2
           IS.freezeSet s2
 
-case_v3b :: Assertion
-case_v3b = (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
-          
+case_v3b_once :: Assertion
+case_v3b_once = (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
+
 case_v3b_stress :: Assertion
 case_v3b_stress = stressTest stressTestReps 15 v3b (== v3b_ans)
-
+                  
 v3b_sz :: Int
 v3b_sz = 10
          
@@ -112,7 +113,8 @@ v3b_ans = S.fromList (map (*10) [1..v3b_sz])
 -- v3b :: IO (S.Set Int)
 v3b :: Par (Ef P G F B I) s  (S.Set Int) 
 v3b = 
-     do s1 <- IS.newEmptySet
+     do logDbgLn 1 "Begin test v3b: allocating sets."
+        s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do

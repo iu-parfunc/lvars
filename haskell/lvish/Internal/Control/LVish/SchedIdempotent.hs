@@ -629,12 +629,21 @@ instance NFData (LVar a d) where
 --   This version of runPar catches ALL exceptions that occur within the runPar, and
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
---   
+--
+--  WARNING: if LVish was installed without `-fdebug`, then the only
+--  log messages generated will be those explictly created by the user
+--  with `logDbgLn`.  All messages from the runtime system and core
+--  LVar data structures will be absent.
+-- 
 runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Int           -- ^ How many worker threads to use. 
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
 runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
+-- #ifndef DEBUG_LVAR
+--   when (dbgScheduling /= True) $ -- || dbgRange /= Nothing  
+--     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
+-- #endif
   (lgr,queues) <- Sched.new cfg numWrkrs noName 
     
   -- We create a thread on each CPU with forkOn.  The CPU on which
@@ -677,7 +686,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do tid <- myThreadId
-                          mlog $ " [dbg-lvish] (tid "++show tid++") Wait on at least one async to complete.."
+                          mlog $ " [dbg-lvish] (main tid "++show tid++") Wait on at least one async to complete.."
                           (_,x) <- A.waitAnyCatch asyncs
                           -- We could do a binary tree of waitBoth here, but this should work for now:
                           case x of
@@ -731,8 +740,17 @@ runParIO = defaultRun
 
 -- | Debugging aid.  Return debugging logs, in realtime order, in addition to the
 -- final result.  This is like `runParDetailed` but uses the default settings.
+--
+--  WARNING: if LVish was installed without `-fdebug`, then the only
+--  log messages generated will be those explictly created by the user
+--  with `logDbgLn`.  All messages from the runtime system and core
+--  LVar data structures will be absent.
+-- 
 runParLogged :: Par a -> IO ([String],a)
-runParLogged comp = do 
+runParLogged comp = do
+-- #ifndef DEBUG_LVAR
+--   error "runParLogged: this function is disabled when LVish is compiled without debugging support."
+-- #endif
   (logs,ans) <- runParDetailed 
                    DbgCfg { dbgRange = (Just (0,dbgLvl))
                           , dbgDests = [L.OutputEvents, L.OutputInMemory]

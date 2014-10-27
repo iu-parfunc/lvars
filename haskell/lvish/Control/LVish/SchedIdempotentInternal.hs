@@ -124,18 +124,18 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
                r <- atomicModifyIORef idle $ \is -> (m:is, is)
                if length r == numWorkers - 1
                   then do
-                     chatter logger $ printf "!cpu %d initiating shutdown\n" my_no
+                     chatter logger $ printf "!cpu %d initiating shutdown" my_no
                      mapM_ (\m -> putMVar m True) r -- Signal to all but us.
                      return Nothing
                   else do
-                    chatter logger $ printf "!cpu %d going idle...\n" my_no
+                    chatter logger $ printf "!cpu %d going idle..." my_no
                     done <- takeMVar m
                     if done
                        then do
-                         chatter logger $ printf "!cpu %d shutting down\n" my_no
+                         chatter logger $ printf "!cpu %d shutting down" my_no
                          return Nothing
                        else do
-                         chatter logger $ printf "!cpu %d woken up\n" my_no
+                         chatter logger $ printf "!cpu %d woken up" my_no
                          go states
     go (x:xs)
       | no x == my_no = go xs
@@ -143,13 +143,13 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
          r <- popOther (workpool x)
          case r of
            Just t  -> do
-             chatter logger $ printf "cpu %d got work from cpu %d\n" my_no (no x)
+             chatter logger $ printf "cpu %d got work from cpu %d" my_no (no x)
              return r
            Nothing -> go xs
 
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: State a s -> a -> IO ()
--- TODO: If we're really going to do wakeup on every push we could consider giving
+-- TODO: If we're really going to do wakeup on *every* push we could consider giving
 -- the formerly-idle worker the work item directly and thus avoid touching the deque.
 pushWork State { workpool, idle, logger, no } t = do
   chatter logger $ "Starting pushWork on worker "++show no
@@ -237,11 +237,10 @@ currentCPU =
 
 -- | Local chatter function for this module
 chatter :: Maybe L.Logger -> String -> IO ()
--- chatter s = putStrLn s
+-- chatter _ s = putStrLn s -- TEMP...
 -- chatter _ s = printf "%s\n" s
 -- chatter _ _ = return ()
 
--- We should NOT do this if dbgScheduling is on.
 chatter mlg s = do 
   case mlg of 
     Nothing -> return ()
