@@ -120,18 +120,17 @@ lotsaRunPar = loop iters
 --     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
 -- Aborted (core dumped)
 
-case_v0_once :: HU.Assertion
-case_v0_once = do res <- runParNonDet v0
-                  HU.assertEqual "useless fork" (4::Int) res
+v0 :: Par (Ef P G F B I) s Int
 v0 = do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
-case_v0_stress :: HU.Assertion
-case_v0_stress = stressTest T.stressTestReps 15 v0 (== 4)
+case_v0 :: HU.Assertion
+case_v0 = stressTest T.stressTestReps 2 v0 (== 4)
                             
 case_v1a :: Assertion
-case_v1a = assertEqual "fork put" (4::Int) =<< v1a
-v1a :: IO Int
-v1a = runParNonDet $ do i<-IV.new; fork (IV.put i 4); IV.get i
+case_v1a = stressTest T.stressTestReps 2 v1a (== (4::Int))
+
+v1a :: Par (Ef P G F B I) s Int
+v1a = do i<-IV.new; fork (IV.put i 4); IV.get i
 
 case_v1b :: Assertion
 case_v1b = do ls <- v1b
