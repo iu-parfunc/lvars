@@ -444,7 +444,8 @@ dbgLvl = 0
 -- `dbgRange` in the `DbgCfg` to this value should give you only the
 -- messages necessary for stress testing schedules.
 defaultMemDbgRange :: (Int, Int)
-defaultMemDbgRange = (4,10)
+-- defaultMemDbgRange = (4,10)
+defaultMemDbgRange = (0,10)
 
 defaultDbg :: Int
 defaultDbg = 0
