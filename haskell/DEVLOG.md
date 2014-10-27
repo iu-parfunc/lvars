@@ -903,4 +903,31 @@ sceond run begins at "34.":
 
 
 So this looks like a failure to get the work published properly the
-second time.  
+second time.  Here's a little more detail on a hanging run:
+
+    \1|  [dbg-lvish] Initialized Logger...
+    \1|  [dbg-lvish] New logger & scheds created... entering main loop.
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \3| wrkr0  [dbg-lvish] Auxillary worker #0 starting.
+    \3| wrkr1  [dbg-lvish] Auxillary worker #1 starting.
+    \3| wrkr2  [dbg-lvish] Auxillary worker #2 starting.
+    \7| !cpu 1 stealing
+    \7| !cpu 0 stealing
+    \7| !cpu 2 stealing
+    \7| !cpu 1 going idle...
+    \7| !cpu 0 going idle...
+    \7| !cpu 2 initiating shutdown
+    \3| wrkr2  [dbg-lvish] Auxillary worker #2 exitting.
+    \7| !cpu 1 shutting down
+    \3| wrkr1  [dbg-lvish] Auxillary worker #1 exitting.
+    \7| !cpu 0 shutting down
+    \4|  [dbg-lvish] Waiting for one async.. 3 remaining
+    \3| wrkr0  [dbg-lvish] Auxillary worker #0 exitting.
+    \4|  [dbg-lvish] Waiting for one async.. 2 remaining
+    \4|  [dbg-lvish] Waiting for one async.. 1 remaining
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+
+(I just changed defaultMemDbgRange from (4,10) to (0,10))
+Still no sign of that "newLV" call which should be the first thing the
+program realy does.
+

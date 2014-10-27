@@ -177,7 +177,7 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
                    (if dbgScheduling 
                     then L.WaitNum numWorkers countIdle 
                     else L.DontWait)
-         -- L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initialized Logger... ")
+         L.logOn lgr (L.OffTheRecord 1 " [dbg-lvish] Initialized Logger... ")
          return lgr
       -- Atomically count how many workers are currently registered as idle:
       countIdle = do ls <- readIORef idle

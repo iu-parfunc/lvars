@@ -646,7 +646,11 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 --     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
 -- #endif
   (lgr,queues) <- Sched.new cfg numWrkrs noName 
-    
+
+  case lgr of
+    Nothing -> return ()
+    Just l  -> L.logOn l (L.OffTheRecord 1 " [dbg-lvi6sh] New logger & scheds created... entering main loop.")
+   
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
@@ -668,7 +672,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
       runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
-           then do logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting."
+           then do logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting (main cpu "++show main_cpu++")."
                    sched q
                    logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
            else let k x = ClosedPar $ \q -> do                       
@@ -708,7 +712,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   ----------------------------------------
   -- (1) There was a BUG in 'loop' at some point:
   --    "thread blocked indefinitely in an STM transaction"
-  ans <- loop (zip [0..] queues) []
+  ans <- loop (zip (main_cpu : filter (/= main_cpu) [0..]) queues) []
   ----------------------------------------
   -- (2) This has the same problem as 'loop':
   --  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
