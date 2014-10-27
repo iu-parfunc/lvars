@@ -15,14 +15,13 @@ module Data.LVar.LayeredSatMap
     , forEach
     , insert
     , pushLayer
-    , whenSat
-    , saturate
     , fromIMap
     , test0
     )
     where
 
 import Data.LVar.SatMap(PartialJoinSemiLattice(..))
+import Data.LVar.FiltSet (SaturatingLVar(..))
 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.DeepFrz (runParThenFreeze)
@@ -166,32 +165,31 @@ pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
   ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
   WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
 
-whenSat :: LayeredSatMap k s v -> Par d s () -> Par d s ()
-whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
-    L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
-    let LSMContents (mpRef:mps) = state lv
-    x <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case x of
-      Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
-      Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
-    where
-      fn n@(Nothing, _) = (n, Just newact)
-      fn (Just m, onsat) = let onsat' = onsat >> newact in
-        ((Just m, onsat'), Nothing)
+instance SaturatingLVar (LayeredSatMap k s) where
+  whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
+      L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
+      let LSMContents (mpRef:mps) = state lv
+      x <- L.liftIO $ atomicModifyIORef' mpRef fn
+      case x of
+        Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
+        Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
+      where
+        fn n@(Nothing, _) = (n, Just newact)
+        fn (Just m, onsat) = let onsat' = onsat >> newact in
+          ((Just m, onsat'), Nothing)
 
-saturate :: LayeredSatMap k s v -> Par d s ()
-saturate (LayeredSatMap lv) = WrapPar $ do
-    let lvid = L.lvarDbgName $ unWrapLVar lv
-        LSMContents (mpRef:mps) = state lv
-    L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
-    act <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case act of
-      Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
-      Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
-    where
-      fn n@(Nothing, _) = (n, Nothing)
-      -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
-      fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
+  saturate (LayeredSatMap lv) = WrapPar $ do
+      let lvid = L.lvarDbgName $ unWrapLVar lv
+          LSMContents (mpRef:mps) = state lv
+      L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
+      act <- L.liftIO $ atomicModifyIORef' mpRef fn
+      case act of
+        Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
+        Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
+      where
+        fn n@(Nothing, _) = (n, Nothing)
+        -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
+        fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.
