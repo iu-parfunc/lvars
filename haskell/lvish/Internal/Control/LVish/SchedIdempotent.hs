@@ -195,21 +195,22 @@ isFrozen (LVar {status}) = do
 logStrLn  :: Int -> String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
-logStrLn lvl str = when (dbgLvl >= 1) $ do
+logStrLn lvl str = do
   lgr <- getLogger
-  num <- getWorkerNum
-  if lvl < 0
-   then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
-   else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
+  when (lvl >= L.minLvl lgr && lvl <= L.maxLvl lgr) $ do
+    num <- getWorkerNum
+    if lvl < 0
+     then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
+     else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
 #else
 logStrLn _ _  = return ()
 #endif
 
 logHelper :: Maybe Logger -> Int -> LogMsg -> IO ()
-logHelper lgr num msg = when (dbgLvl >= 1) $ do
+logHelper lgr num msg = do
   let msg' = L.mapMsg (("wrkr"++show num++" ")++) msg
   case lgr of 
-    Just lgr -> L.logOn lgr msg'
+    Just lgr -> L.logOn lgr msg' -- logOn will do the lvl check
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
 
 logWith      :: Sched.State a s -> Int -> String -> IO ()
@@ -697,9 +698,9 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       (\a -> loop tl (a:asyncs))
       waitloop [] = do 
                        mlog " [dbg-lvish] All asyncs complete, read final answer MVar."
-                       fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
+                       fmap Right (dbgTakeMVar [] "retrieve final runPar answer, after workers complete" answerMV)
 --                       fmap Right (takeMVar answerMV)
-      waitloop (hd:tl) = do mlog " [dbg-lvish] Waiting for one async.."
+      waitloop (hd:tl) = do mlog (" [dbg-lvish] Waiting for one async.. "++show(1+length tl)++" remaining")
                             me <- A.waitCatch hd
                             case me of 
                               Left e    -> return $! Left e

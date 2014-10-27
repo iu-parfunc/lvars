@@ -829,3 +829,78 @@ because this is a loop IN the par monad rather than the IO monad....
 	    True -> lvl1_rcQD `cast` ...
 	  }; }
 
+
+[2014.10.27] {Debugging logging / fuzz testing system}
+------------------------------------------------------
+
+Here's an example of v1a screwing up ONLY when it is run more than
+once in a batch.  That is, if I run the whole command N times (with
+STRESSTESTS=1), it seems fine.  But STRESSTESTS=2 screws it up.  The
+sceond run begins at "34.":
+
+    $ DEBUG=1 STRESSTESTS=2 SILENCEOTR=0 ./dist/build/test-lvish/test-lvish -t v1a
+     [*] Default test harness...
+     [*] Using Just 1 testing threads.
+    LVishAndIVar:
+     [!] responding to env Var: STRESSTESTS=2
+     [!] LVish responding to env Var: DEBUG=1
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \7| !cpu 1 stealing
+    \7| !cpu 2 stealing
+    \7| wrkr0  [dbg-lvish] newLV: allocating...
+    \7| !cpu 2 going idle...
+    \7| Starting pushWork on worker 0
+    \7| cpu 1 got work from cpu 0
+    \7| !cpu 2 woken up
+    \7| !cpu 2 going idle...
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: initial lvar status read, lv 1 on worker 0
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV: first readIORef , lv 1 on worker 1
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): check globalThresh, lv 1 on worker 1
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: setStatus,, lv 1 on worker 0
+    |5| #1 of 2: wrkr0  [dbg-lvish] putLV: about to mutate lvar, lv 1 on worker 0
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: read final status before unsetting, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV 2: blocking on LVar, registering listeners...
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: UN-setStatus, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second frozen check, lv 1 on worker 1
+    |9| #1 of 2: wrkr0  [dbg-lvish] putLV: calling each listener's onUpdate, lv 1 on worker 0
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second globalThresh check, lv 1 on worker 1
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 1 on worker 1
+    |7| #1 of 2: wrkr0  [dbg-lvish] getLV (active): callback: check thresh, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV 2 on worker 1: winner check? True, counter val 1
+    \7| !cpu 1 stealing
+    \7| !cpu 1 going idle...
+    |8| #1 of 1: wrkr0  [dbg-lvish] getLV 2 on worker 0: winner check? False, counter val 2
+    \7| !cpu 0 stealing
+    \7| !cpu 0 initiating shutdown
+    \7| !cpu 1 shutting down
+    \7| !cpu 2 shutting down
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+    34.
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \7| !cpu 0 stealing
+    \7| !cpu 2 stealing
+    \7| !cpu 1 stealing
+    \7| !cpu 2 going idle...
+    \7| !cpu 0 going idle...
+    \7| !cpu 1 initiating shutdown
+    \4|  [dbg-lvish] Waiting for one async..
+    \7| !cpu 0 shutting down
+    \7| !cpu 2 shutting down
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ....
+
+
+So this looks like a failure to get the work published properly the
+second time.  

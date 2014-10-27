@@ -27,7 +27,7 @@ module Control.LVish.Logging
          dbgLvl, defaultMemDbgRange,
 
          -- * New logger interface
-         newLogger, logOn, Logger(closeIt, flushLogs),
+         newLogger, logOn, Logger(closeIt, flushLogs, minLvl, maxLvl),
          WaitMode(..), LogMsg(..), mapMsg, OutDest(..),
 
          -- * General utilities

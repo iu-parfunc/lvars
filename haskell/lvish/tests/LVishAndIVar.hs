@@ -124,10 +124,10 @@ v0 :: Par (Ef P G F B I) s Int
 v0 = do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
 case_v0 :: HU.Assertion
-case_v0 = stressTest T.stressTestReps 2 v0 (== 4)
+case_v0 = stressTest T.stressTestReps 3 v0 (== 4)
                             
 case_v1a :: Assertion
-case_v1a = stressTest T.stressTestReps 2 v1a (== (4::Int))
+case_v1a = stressTest T.stressTestReps 3 v1a (== (4::Int))
 
 v1a :: Par (Ef P G F B I) s Int
 v1a = do i<-IV.new; fork (IV.put i 4); IV.get i

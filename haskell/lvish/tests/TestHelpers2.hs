@@ -19,7 +19,7 @@ import System.Random (randomRIO)
 import Control.Concurrent (threadDelay)
 import Test.HUnit as HU
 
--- import Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import Internal.Control.LVish.SchedIdempotent (dbgLvl)
 import Control.LVish (runParNonDet, runParDetailed, Par, OutDest(..), DbgCfg(..), defaultMemDbgRange)
 import Control.Par.EffectSigs 
 import Debug.Trace
@@ -49,12 +49,18 @@ stressTest reps workers comp oracle = do
   rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
               putStr "!"
               checkRes x
-              
+
+  -- We take the global debug level being raised up as an indiction
+  -- that the user wants to see a bunch of chatter on the screen:
+  echoScreen = if dbgLvl >= 1
+               then [OutputTo stdout]
+               else []
+                       
   reploop 0 = return ()
   reploop i = do
     -- putStrLn$  "Running computation in debug mode, logging messages in range: "++show defaultMemDbgRange
     (logs,ans) <- runParDetailed (DbgCfg (Just defaultMemDbgRange)
-                                  [OutputInMemory, OutputEvents, OutputTo stdout]
+                                  ([OutputInMemory, OutputEvents] ++ echoScreen)
                                   True) workers comp
 -- This will cause problems because some of the messages from lvls 1-3 are sent before the workers are UP:
 --    (logs,ans) <- runParDetailed (DbgCfg (Just(0,10)) [OutputInMemory, OutputEvents] True) workers comp

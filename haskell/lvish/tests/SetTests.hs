@@ -3,6 +3,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Tests for the Data.LVar.PureSet and Data.LVar.SLSet modules.
 
@@ -28,12 +29,33 @@ import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFr
 
 --------------------------------------------------------------------------------
 
-tests :: Test
-tests = $(testGroupGenerator)
+tests_old :: Test
+tests_old = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMainSeqTests [tests]
 
+makeCommonSetTests :: (forall s . Par Full s (c s Int))
+                   -> (forall s . Int -> c s Int -> Par Full s ())
+                   -> (forall s . [Int] -> Par Full s (c s Int))
+                   -> [Test]
+makeCommonSetTests mknew insert frmList =
+  [
+    testCase "v3bOnce" $ (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
+  , testCase "v3bStress" $ stressTest stressTestReps 15 v3b (== v3b_ans) 
+  ]
+
+-- type Det = Ef P G NF B NI
+type Full = Ef P G F B I 
+
+tests :: Test
+tests =
+  testGroup "AllSetTests"
+  [ testGroup "PureSet" (makeCommonSetTests IS.newEmptySet IS.insert IS.newFromList)
+--  , testGroup "SLSet"   (makeCommonSetTests SS.newEmptySet SS.insert SS.newFromList)
+  ]
+    
+           
 --------------------------------------------------------------------------------
 
 case_v2a :: Assertion
@@ -97,12 +119,6 @@ v3a = runParNonDet $
           -- ten elements are written to s2.
           IS.waitSize 10 s2
           IS.freezeSet s2
-
-case_v3b_once :: Assertion
-case_v3b_once = (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
-
-case_v3b_stress :: Assertion
-case_v3b_stress = stressTest stressTestReps 15 v3b (== v3b_ans)
                   
 v3b_sz :: Int
 v3b_sz = 10
@@ -111,7 +127,7 @@ v3b_ans :: S.Set Int
 v3b_ans = S.fromList (map (*10) [1..v3b_sz])
                   
 -- v3b :: IO (S.Set Int)
-v3b :: Par (Ef P G F B I) s  (S.Set Int) 
+v3b :: Par (Full) s  (S.Set Int) 
 v3b = 
      do logDbgLn 1 "Begin test v3b: allocating sets."
         s1 <- IS.newEmptySet
