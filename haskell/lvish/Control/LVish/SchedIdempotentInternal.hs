@@ -85,13 +85,13 @@ popOther = popMine
 -- All the state relevant to a single worker thread
 data State a s = State
     { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
-      numWorkers :: Int,               -- ^ Total number of workers in this runPar
-      prng     :: IORef StdGen,        -- ^ core-local random number generation
-      status   :: IORef s,             -- ^ A thread-local flag
-      workpool :: Deque a,             -- ^ The thread-local work deque
-      idle     :: IORef [MVar Bool],   -- ^ global list of idle workers
-      states   :: [State a s],         -- ^ global list of all worker states.
-      logger   :: Maybe L.Logger
+      numWorkers :: !Int,               -- ^ Total number of workers in this runPar
+      prng     :: !(IORef StdGen),        -- ^ core-local random number generation
+      status   :: !(IORef s),             -- ^ A thread-local flag
+      workpool :: !(Deque a),             -- ^ The thread-local work deque
+      idle     :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
+      states   :: ![State a s],         -- ^ global list of all worker states.
+      logger   :: !(Maybe L.Logger)
         -- ^ The Logger object used by the current Par session, if debugging is activated.
     }
     
