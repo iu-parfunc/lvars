@@ -13,6 +13,7 @@ import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Test.Framework.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import           TestHelpers as T
+import           TestHelpers2 (stressTest, stressTestReps)
 
 import qualified Data.Set as S
 
@@ -76,6 +77,9 @@ v2c = -- IS.fromISet $
         mapM_ IV.get ivs -- Join point.
         return s
 
+case_v3a :: Assertion
+case_v3a = v3a >>= assertEqual "withCallbacksThenFreeze / waitSize then freeze" v3b_ans
+               
 -- [2013.06.27] This is failing just occasionally with a multiple-put:
 v3a :: IO (S.Set Int)          
 v3a = runParNonDet $
@@ -83,7 +87,9 @@ v3a = runParNonDet $
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
         IS.withCallbacksThenFreeze s1 fn $ do
-          -- Populate the first set:
+          -- Populate the first set, except do it in parallel.
+          -- Unless we wait on a handler here, withCallbacksThenFreeze doesn't care
+          -- whether these extra forks are complete when it returns.
           mapM_ (\n -> fork $ IS.insert n s1) [1..10]        
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
@@ -92,11 +98,20 @@ v3a = runParNonDet $
           IS.freezeSet s2
 
 case_v3b :: Assertion
-case_v3b = v3b >>= assertEqual "simple callback test"
-          (S.fromList [10,20,30,40,50,60,70,80,90,100] :: S.Set Int)
+case_v3b = (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
           
-v3b :: IO (S.Set Int)          
-v3b = runParNonDet $
+case_v3b_stress :: Assertion
+case_v3b_stress = stressTest stressTestReps 15 v3b (== v3b_ans)
+
+v3b_sz :: Int
+v3b_sz = 10
+         
+v3b_ans :: S.Set Int
+v3b_ans = S.fromList (map (*10) [1..v3b_sz])
+                  
+-- v3b :: IO (S.Set Int)
+v3b :: Par (Ef P G F B I) s  (S.Set Int) 
+v3b = 
      do s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2

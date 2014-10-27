@@ -23,7 +23,9 @@ import GHC.Conc(numCapabilities)
 main :: IO ()
 main = defaultMain $ insideOut [
   bgroup "basics"
-    [ bench "NOOP" $ benchPar (return ())
+    [
+      bench "runPar" $ whnf runPar (return 3)
+    , bench "NOOP" $ benchPar (return ())
     , bench "fork" $ benchPar (fork (return ()))
     , bench "new"  $ benchPar  (do _ <- new; return ())
 --    , bench "newFull"     $ benchPar (do iv <- newFull (3::Int); return ())

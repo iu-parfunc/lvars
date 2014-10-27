@@ -27,7 +27,7 @@ data OutDest = -- NoOutput -- ^ Drop them entirely.
              | OutputTo Handle -- ^ Printed human-readable output to a handle.
              | OutputInMemory  -- ^ Accumulate output in memory and flush when appropriate.
 
--- DebugConfig
+-- | DebugConfig: what level of debugging support is activated?
 data DbgCfg = 
      DbgCfg { dbgRange :: Maybe (Int,Int) 
                 -- ^ Inclusive range of debug messages to accept

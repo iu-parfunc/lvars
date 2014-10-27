@@ -14,6 +14,7 @@ import TestHelpers
 import Control.Monad(forM_)
 import Data.Word
 import System.IO (hFlush, stdout, stderr, hPutStrLn)
+import System.Random (randomRIO)
 import Control.Concurrent (threadDelay)
 import Test.HUnit as HU
 
@@ -30,13 +31,13 @@ import Debug.Trace
 stressTest :: Show a =>
               Word -- ^ Number of repetitions 
            -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
-                   -- number of tasks that can run in parallel; otherwise this will deadlock.
+                   --   number of tasks that can run in parallel; otherwise this will deadlock.
            -> (forall s . Par (Ef P G F B I) s a)   -- ^ Computation to run
            -> (a -> Bool) -- ^ Test oracle
            -> IO ()
 stressTest reps workers comp oracle = 
- do forM_ [1..reps] (\_ -> rawRun)
-    -- reploop reps
+-- do forM_ [1..reps] (\_ -> rawRun)
+    reploop reps
  where 
   rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
               putStr "!"
@@ -65,14 +66,17 @@ stressTest reps workers comp oracle =
       hPutStrLn stderr "-----------------------------------"
       mapM_ (hPutStrLn stderr) logs
       hPutStrLn stderr "-----------------------------------"
-      writeFile "failing_sched.log" (unlines logs)
-      hPutStrLn stderr "Wrote to file: failing_sched.log"
+      num <- randomRIO (0,10000::Int)
+      let name = "failing_sched"++ show num ++".log"
+      writeFile name (unlines logs)
+      hPutStrLn stderr $ "Wrote to file: "++name
       HU.assertFailure s
 
 
 defaultNST :: Word
 defaultNST = 100
 
+-- | Default number of reps.  Controlled by environment var `STRESSTESTS`.
 stressTestReps :: Word
 {-# NOINLINE stressTestReps #-}
 stressTestReps = case lookup "STRESSTESTS" theEnv of
@@ -82,5 +86,3 @@ stressTestReps = case lookup "STRESSTESTS" theEnv of
          case reads s of
            ((n,_):_) -> trace (" [!] responding to env Var: STRESSTESTS="++show n) n
            [] -> error$"Attempt to parse STRESSTESTS env var as Int failed: "++show s
-
-

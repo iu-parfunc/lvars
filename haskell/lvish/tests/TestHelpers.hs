@@ -371,7 +371,7 @@ defaultMainSeqTests tests = do
                                                       , ropt_test_options = Just (mempty{ 
                                                           topt_timeout=(Just$ Just defaultTestTimeout)})})
                                                `mappend` opts)
-                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " worker threads for testing."
+                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " testing threads."
                                   defaultMainWithOpts tests opts'
                                )
   case res of
