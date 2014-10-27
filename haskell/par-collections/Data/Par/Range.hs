@@ -162,24 +162,8 @@ num_procs = unsafePerformIO getNumProcessors
 
 --------------------------------------------------------------------------------
 
--- | Computes a binary map\/reduce over a finite range.  The range is recursively
--- split into two, the result for each half is computed in parallel, and then the two
--- results are combined.  The thresholding behavior for the range is obeyed, and a
--- sequential loop is used if the splitting bottoms out.
---
--- For example, the following is a parallel implementation of
---
--- >  foldl (+) 0 (map (^2) [1..10^6])
---
--- > parMapReduce (irange 1 (10^6))
--- >        (\x -> return (x^2))
--- >        (\x y -> return (x+y))
--- >        0
---
--- If an automatic threshold is being used in the underlying ranges, answers may vary
--- on different machines.  But note that this function does NOT require a commutative
--- combining function.  Commutativity, however, is not required.  This will always
--- combine lower iteration results on the left and higher on the right.
+-- | For convenience: A variant of `Data.Par.Splittable.pmapReduce`
+-- specialized to operating on `Range` data.
 pmapReduce
    :: (NFData a, ParFuture p, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
@@ -192,6 +176,9 @@ pmapReduce = mkMapReduce spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
+--
+-- Also, like `pmapReduce`, this is merely a specialized version of
+-- `Data.Par.Splittable.pmapReduce_`.
 pmapReduce_
    :: (ParFuture p, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
@@ -201,6 +188,9 @@ pmapReduce_
       -> p a
 pmapReduce_ = mkMapReduce spawn_
 
+
+
+              
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
 mkMapReduce :: (ParFuture m, FutContents m t) => (m t -> m (Future m t)) ->
