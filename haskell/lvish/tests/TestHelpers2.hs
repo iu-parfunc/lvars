@@ -50,9 +50,9 @@ stressTest reps workers comp oracle = do
               putStr "!"
               checkRes x
 
-  -- We take the global debug level being raised up as an indiction
+  -- We take the global debug level being raised high as an indiction
   -- that the user wants to see a bunch of chatter on the screen:
-  echoScreen = if dbgLvl >= 1
+  echoScreen = if dbgLvl >= 10
                then [OutputTo stdout]
                else []
                        

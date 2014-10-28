@@ -162,11 +162,14 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     do
        hp  <- newPool 
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (1/3) pool & result ivar created, now freezeLVAfter..."
        WrapPar$ 
          freezeLVAfter lv (initCB hp res) deltCB
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (2/3) further, quiesce our extra HP..."
        quiesce hp
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (3/3) finally do a get"
        IV.get res
   where
     deltCB x = return$ Just$ unWrapPar$ callback x
@@ -191,9 +194,11 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- fixed for the tree-based representation of sets that "Data.Set"
 -- uses.)
 freezeSet :: HasFreeze e => ISet s a -> Par e s (S.Set a)
-freezeSet (ISet (WrapLVar lv)) = WrapPar $ 
-   do freezeLV lv
-      getLV lv globalThresh deltaThresh
+freezeSet (ISet (WrapLVar lv)) = 
+   do dbgChatterOnly (2) "PureSet.freezeSet: (1/2) call freezeLV"
+      WrapPar $ freezeLV lv
+      dbgChatterOnly (2) "PureSet.freezeSet: (2/2) call getLV"
+      WrapPar $ getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
@@ -261,7 +266,7 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
 -- | Wait on the /size/ of the set, not its contents.
 waitSize :: HasGet e => Int -> ISet s a -> Par e s ()
 waitSize !sz (ISet lv) = do
-    logDbgLn (-2) "PureSet.waitSize: about to (potentially) block:"
+    dbgChatterOnly (1) "PureSet.waitSize: about to (potentially) block:"
     WrapPar$ getLV (unWrapLVar lv) globalThresh deltaThresh
   where
     globalThresh ref _frzn = do

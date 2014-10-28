@@ -17,8 +17,8 @@ import qualified Test.HUnit as HU
 import           TestHelpers as T
 import           TestHelpers2 (stressTest, stressTestReps)
 
+import           Control.Monad (forM_)
 import qualified Data.Set as S
-
 import qualified Data.LVar.Generic as G
 import Data.LVar.PureSet as IS
 import qualified Data.LVar.SLSet as SS
@@ -26,11 +26,10 @@ import qualified Data.LVar.IVar as IV
 
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-
+import qualified Control.LVish.Logging as L
+import           Control.LVish.Internal (liftIO)
+    
 --------------------------------------------------------------------------------
-
-tests_old :: Test
-tests_old = $(testGroupGenerator)
 
 runTests :: IO ()
 runTests = defaultMainSeqTests [tests]
@@ -42,7 +41,9 @@ makeCommonSetTests :: (forall s . Par Full s (c s Int))
 makeCommonSetTests mknew insert frmList =
   [
     testCase "v3bOnce" $ (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
-  , testCase "v3bStress" $ stressTest stressTestReps 15 v3b (== v3b_ans) 
+  , testCase "v3bStress" $ stressTest stressTestReps (v3b_sz+1) v3b (== v3b_ans)
+  -- Migrating AWAY from test-framework-th here, but in the meantime, include the extra tests:
+  , $(testGroupGenerator)
   ]
 
 -- type Det = Ef P G NF B NI
@@ -113,7 +114,7 @@ v3a = runParNonDet $
           -- Populate the first set, except do it in parallel.
           -- Unless we wait on a handler here, withCallbacksThenFreeze doesn't care
           -- whether these extra forks are complete when it returns.
-          mapM_ (\n -> fork $ IS.insert n s1) [1..10]        
+          mapM_ (\n -> fork $ IS.insert n s1) [1.. v3b_sz]        
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
           -- ten elements are written to s2.
@@ -121,7 +122,7 @@ v3a = runParNonDet $
           IS.freezeSet s2
                   
 v3b_sz :: Int
-v3b_sz = 10
+v3b_sz = 1
          
 v3b_ans :: S.Set Int
 v3b_ans = S.fromList (map (*10) [1..v3b_sz])
@@ -129,19 +130,28 @@ v3b_ans = S.fromList (map (*10) [1..v3b_sz])
 -- v3b :: IO (S.Set Int)
 v3b :: Par (Full) s  (S.Set Int) 
 v3b = 
-     do logDbgLn 1 "Begin test v3b: allocating sets."
+     do chatterOTR " [v3b] Begin test: allocating sets."
         s1 <- IS.newEmptySet
         s2 <- IS.newEmptySet
         let fn e = IS.insert (e*10) s2
+        chatterOTR " [v3b] Sets allocated, now withCallbacksThenFreeze."
         IS.withCallbacksThenFreeze s1 fn $ do
+          chatterOTR " [v3b] Inside withCallbacksThenFreeze block"
           -- Populate the first set:
-          mapM_ (\n -> IS.insert n s1) [1..10]
+          forM_ [1.. v3b_sz] $ \n -> do
+            chatterOTR $ " [v3b] Doing insert #"++show n
+            IS.insert n s1
+          chatterOTR " [v3b] Insertions complete."
           -- Because we filled s1 sequentially, we know it is full at this point.
           -- (If the above were forked we would need a finish/asnyc style construct)
-          
-        -- After all of s1's callbacks are finished executing, s2 is full:
-        IS.freezeSet s2
 
+        chatterOTR " [v3b] AFTER withCallbacksThenFreeze.."                     
+        -- After all of s1's callbacks are finished executing, s2 is full:
+        x <- IS.freezeSet s2
+        chatterOTR " [v3b] set frozen.. now return"          
+        return x
+
+chatterOTR = dbgChatterOnly 1 
 
 -- | An under-synchronized test.  This should always return the same
 -- result OR throw an exception.  In this case it should always return

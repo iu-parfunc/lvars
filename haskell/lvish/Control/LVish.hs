@@ -109,7 +109,7 @@ module Control.LVish
      module Data.LVar.IVar,
 
      -- * Debug facilities and internal bits
-     logDbgLn, runParLogged, runParDetailed,
+     logDbgLn, dbgChatterOnly, getLogger, runParLogged, runParDetailed,
      OutDest(..), DbgCfg (..), defaultMemDbgRange,
      LVar()
    ) where
@@ -122,7 +122,7 @@ import           Control.LVish.Logical
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
-import           Control.LVish.Logging (OutDest(..), defaultMemDbgRange)
+import           Control.LVish.Logging (LogMsg(..), OutDest(..), defaultMemDbgRange, logOn)
 import           Data.LVar.IVar 
 import           Data.Proxy
 import           Data.Coerce (coerce)
@@ -132,7 +132,8 @@ import Data.IORef
 
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
-
+--------------------------------------------------------------------------------                
+    
 instance (Deterministic e1, e2 ~ SetF F e1) => 
          PC.ParQuasi (Par e1 s) (Par e2 s) where
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
@@ -176,7 +177,16 @@ instance PU.ParWEffects (Par e s) where
 parIO :: HasIO e => IO a -> Par e s a
 parIO = I.liftIO
 
-
+-- | Exactly like `logDbgLn` except used for informational chatter
+-- only, NOT to signal that a given thread is about to read or modify
+-- a memory address.
+dbgChatterOnly :: Int -> String -> Par e s ()
+dbgChatterOnly lvl msg = do
+  x <- getLogger
+  case x of
+    Nothing  -> logDbgLn lvl msg
+    Just lgr -> liftIO $ logOn lgr (OffTheRecord lvl msg)
+        
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a

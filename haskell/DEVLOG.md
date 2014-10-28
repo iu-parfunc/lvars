@@ -931,3 +931,28 @@ second time.  Here's a little more detail on a hanging run:
 Still no sign of that "newLV" call which should be the first thing the
 program realy does.
 
+This was issue #97.  Now it's fixed.
+
+
+[2014.10.27] {Back to working on getonce failures}
+--------------------------------------------------
+
+After closing #97, now the stresstests run ok, but with some failures.
+These are the tests that failed in Jenkins build 295 on
+LVish-implementation-2.0:
+
+    ["v8d","v8c","v3bStress","v3","v4","runParStress","v3bOnce"]
+
+Also, there are some issues with how and when the logger is used while
+running tests.  When we set DEBUG=0 we get messed up concurrent output
+(because without the logger it goes straight to stdout).  Currently
+the jenkins builds set DEBUG=1.  Right now in TestHelpers2 we chatter
+the scheduler log output whenever DEBUG>=1, but we could up that
+threshold.
+
+(Ok, I upped it to 10... that's much nicer for debugging these things
+because then at DEBUG=1 everything works fine but it only prints the
+*failing* schedules.)
+
+
+

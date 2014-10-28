@@ -196,7 +196,7 @@ logStrLn  :: Int -> String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
 logStrLn lvl str = do
-  lgr <- getLogger
+  Just lgr <- getLogger
   when (lvl >= L.minLvl lgr && lvl <= L.maxLvl lgr) $ do
     num <- getWorkerNum
     if lvl < 0
@@ -330,11 +330,11 @@ newDedupCheck = newIORef False -- True means someone has already won.
 winnerCheck execFlag q tru fal = do                
   ticket <- readForCAS execFlag
   if (peekTicket ticket) 
-    then do logWith q 8 $ " [dbg-lvish] getLV winnerCheck failed.."
+    then do logWith q 8 $ " [dbg-lvish] dedup winnerCheck failed.."
             fal
     else do
       (winner, _) <- casIORef execFlag ticket True
-      logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+      logWith q 8 $ " [dbg-lvish] dedup "++show(unsafeName execFlag)
                  ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
                  ++ ", ticks " ++ show (ticket, peekTicket ticket)
       if winner then tru else fal
@@ -344,7 +344,7 @@ type DedupCell = C2.AtomicCounter
 newDedupCheck = C2.newCounter 0 
 winnerCheck execFlag q tru fal = do
   cnt <- C2.incrCounter 1 execFlag
-  logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+  logWith q 8 $ " [dbg-lvish] dedup "++show(unsafeName execFlag)
              ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show (cnt==1)
              ++ ", counter val " ++ show cnt
   if cnt==1 then tru else fal
@@ -356,9 +356,11 @@ newDedupCheck = return ()
 winnerCheck _ _ tr _ = tr
 #endif
 
-
-
-
+-- | A version of the winner check that either lets the current thread
+-- through, or kills it and returns to the scheduler.
+winnerCheckPar :: DedupCell -> Par ()
+winnerCheckPar execFlag = mkPar $ \k q ->
+  undefined
 
 
 
@@ -522,15 +524,21 @@ addHandler hp LVar {state, status} globalCB updateThresh =
 quiesce :: HandlerPool -> Par ()
 quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
   hpMsg q " [dbg-lvish] Begin quiescing pool, identity= " hp
+
+  flg <- newDedupCheck
+  -- Wrap the continuation with a dedup Check:
+  -- TODO: Issue #99 addresses whether this could be combined with the B.remove step:
+  let k' = ClosedPar$ \q -> winnerCheck flg q
+                               (exec (k ()) q) (sched q)
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
-  tok <- B.put bag (k ())
+  tok <- B.put bag k'
   hpMsg q " [dbg-lvish] quiesce: poll count" hp
   quiescent <- C.poll cnt
   if quiescent then do
     hpMsg q " [dbg-lvish] already quiesced, remove token from bag" hp
     B.remove tok
-    exec (k ()) q 
+    exec k' q 
   else do 
     logOffRecord q 4 " [dbg-lvish] -> Not quiescent yet, back to sched"
     sched q
@@ -555,10 +563,8 @@ freezeLVAfter lv globalCB updateCB = do
       updateCB' = updateCB
   hp <- newPool
   addHandler (Just hp) lv globalCB' updateCB'
-  quiesce hp
+  quiesce hp  
   freezeLV lv
-  
-  
 
 ------------------------------------------------------------------------------
 -- Par monad operations
@@ -583,11 +589,11 @@ liftIO io = mkPar $ \k q -> do
   exec (k r) q
 
 -- | IF compiled with debugging support, this will return the Logger used by the
--- current Par session, otherwise it will simply throw an exception.
-getLogger :: Par L.Logger
+-- current Par session, otherwise it will return Nothing.
+getLogger :: Par (Maybe L.Logger)
 getLogger = mkPar $ \k q -> 
-  let Just lgr = Sched.logger q in
-  exec (k lgr) q
+  let mlgr = Sched.logger q in
+  exec (k mlgr) q
 
 -- | Return the worker that we happen to be running on.  (NONDETERMINISTIC.)
 getWorkerNum :: Par Int

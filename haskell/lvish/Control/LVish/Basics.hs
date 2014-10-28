@@ -23,6 +23,7 @@ module Control.LVish.Basics
     runPar, runParQuasiDet, runParNonDet,
     runParPoly, runParPolyIO, 
     runParLogged, runParDetailed,
+    getLogger,
 
     liftQD,
     LVishException(..), L.HandlerPool(), 
@@ -205,8 +206,8 @@ logDbgLn _ _  = return ()
 #endif
 
 -- | IF compiled with debugging support, this will return the Logger used by the
--- current Par session, otherwise it will simply throw an exception.
-getLogger :: Par e s Lg.Logger
+-- current Par session, otherwise it will return Nothing.
+getLogger :: Par e s (Maybe Lg.Logger)
 getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------

@@ -149,6 +149,7 @@ library
   -- Package-internal and should not be exposed:
                     Internal.Data.Concurrent.LinkedMap
                     Internal.Control.LVish.SchedIdempotent
+                    Control.LVish.Logging
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -164,7 +165,7 @@ library
                     Control.LVish.Types
                     Control.LVish.Basics
                     Control.LVish.Logical
-                    Control.LVish.Logging
+
 
   -- Other library packages from which modules are imported.
   build-depends: base    >= 4.6 && <= 4.8, 
