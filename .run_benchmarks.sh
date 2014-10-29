@@ -4,23 +4,44 @@ echo "Running benchmarks remotely on server `hostname`"
 set -e
 set -x
 
-# git submodule update
-
 # The working directory is passed as the first argument.
 CHECKOUT=$1
 cd "$CHECKOUT/"
 
 pwd -P
-rm -rf pbbs/ 
-git clone git@github.com:iu-parfunc/pbbs.git
 
-cd "./haskell-prototype"
+# (1) Build everything
+# ================================================================================
+
+NOTEST=1 ./.jenkins_script.sh $*
+
+# (2) Perform micro benchmarking
+# ================================================================================
+cd $CHECKOUT/haskell/lvish
+
+HOST=`shell hostname -s`
+REGRESS="--regress=allocated:iters --regress=bytesCopied:iters --regress=cycles:iters --regress=numGcs:iters \
+    --regress=mutatorWallSeconds:iters --regress=gcWallSeconds:iters --regress=cpuTime:iters "
+
+NAME=report_lvish_"$HOST"
+OUTS= --raw "$NAME".criterion -o "$NAME".html
+
+$CABAL bench --benchmark-options=" $WHICHBENCH --template=./report_format.tpl $REGRESS $OUTS +RTS -T -s -RTS"
+# For performance debugging of benchmarks we include these:
+# --ghc-options="-ddump-simpl -ddump-to-file"
 
 
-cabal install
-cd apps
-make fullrun
+# (3) Run larger benchmarks:
+# ================================================================================
 
+cd $CHECKOUT/haskell/lvish-apps
+
+# TODO: FINISHME
+
+
+# Old/scrap:
+# ================================================================================
+	
 # NUMCPUS=`ls -d /sys/devices/system/cpu/cpu? /sys/devices/system/cpu/cpu?? 2> /dev/null | wc -l`
 # if [ $NUMCPUS -lt 17 ]; then 
 #   export THREADS=`seq 1 $NUMCPUS`
@@ -37,5 +58,8 @@ make fullrun
 # Enable upload of benchmarking data to a Google Fusion Table:
 # hsbencher --fusion-upload --name monad-par-test --clientid=$CID --clientsecret=$SEC
 
-echo "Printing out final .dat file:"
-cat result*.dat
+# echo "Printing out final .dat file:"
+# cat result*.dat
+
+
+
