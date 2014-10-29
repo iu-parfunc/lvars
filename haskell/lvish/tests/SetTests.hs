@@ -102,7 +102,7 @@ v2c = -- IS.fromISet $
         return s
 
 case_v3a :: Assertion
-case_v3a = v3a >>= assertEqual "withCallbacksThenFreeze / waitSize then freeze" v3b_ans
+case_v3a = (v3a >>= assertEqual "withCallbacksThenFreeze / waitSize then freeze" v3b_ans)
                
 -- [2013.06.27] This is failing just occasionally with a multiple-put:
 v3a :: IO (S.Set Int)          
@@ -118,11 +118,11 @@ v3a = runParNonDet $
           -- We never read out of s1 directly.  Instead, writes to s1 trigger the
           -- callback 'fn' to run, with the element written to s2.  So eventually,
           -- ten elements are written to s2.
-          IS.waitSize 10 s2
+          IS.waitSize v3b_sz s2
           IS.freezeSet s2
                   
 v3b_sz :: Int
-v3b_sz = 1
+v3b_sz = 10
          
 v3b_ans :: S.Set Int
 v3b_ans = S.fromList (map (*10) [1..v3b_sz])
