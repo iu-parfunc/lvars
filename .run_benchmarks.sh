@@ -9,11 +9,13 @@ CHECKOUT=$1
 cd "$CHECKOUT/"
 
 pwd -P
+# These are the arguments to the HSBencher harness...
+export BENCHARGS=$*
 
 # (1) Build everything
 # ================================================================================
 
-NOTEST=1 ./.jenkins_script.sh $*
+NOTEST=1 ./.jenkins_script.sh -j
 
 # (2) Perform micro benchmarking
 # ================================================================================
