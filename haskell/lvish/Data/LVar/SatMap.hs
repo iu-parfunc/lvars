@@ -68,6 +68,7 @@ import           Control.Exception (throw)
 import           Data.List (intersperse, intercalate)
 import           Data.IORef
 import qualified Data.Map.Strict as M
+import           Data.Maybe (isJust)
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
@@ -118,6 +119,12 @@ type OnSat = L.Par ()
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (SatMap k s v) where
   SatMap lv1 == SatMap lv2 = state lv1 == state lv2 
+
+-- instance (Ord k, Ord v) => Ord (SatMap k Frzn v) where
+--   compare (SatMap lv1) (SatMap lv2) = unsafeDupablePerformIO $ do
+--     s1 <- readIORef $ state lv1
+--     s2 <- readIORef $ state lv2
+--     return $ compare (fmap fst s1) (fmap fst s2)
 
 -- | An `SatMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
@@ -277,7 +284,7 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
                 Nothing -> -- Here we SATURATE!
                            (Nothing, (Nothing, Just onsat))
 
-instance SaturatingLVar (SatMap k s) where
+instance SaturatingLVar (SatMap k) where
   whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
     L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
     x <- L.liftIO $ atomicModifyIORef' (state lv) fn
@@ -305,7 +312,9 @@ instance SaturatingLVar (SatMap k s) where
     fn (Just (mp,onsat)) = (Nothing, Just onsat)
     fn Nothing           = (Nothing,Nothing)
 
-
+  isSat (SatMap lv) = unsafeDupablePerformIO $ do
+    contents <- readIORef $ state lv
+    return $ not $ isJust contents
 {-
 
 modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
