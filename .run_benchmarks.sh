@@ -30,7 +30,7 @@ NOTEST=1 ./.jenkins_script.sh $PARARG
 # ================================================================================
 cd $CHECKOUT/haskell/lvish
 
-HOST=`shell hostname -s`
+HOST=`hostname -s`
 REGRESS="--regress=allocated:iters --regress=bytesCopied:iters --regress=cycles:iters --regress=numGcs:iters \
     --regress=mutatorWallSeconds:iters --regress=gcWallSeconds:iters --regress=cpuTime:iters "
 
