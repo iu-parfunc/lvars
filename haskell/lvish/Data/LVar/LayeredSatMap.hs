@@ -15,14 +15,14 @@ module Data.LVar.LayeredSatMap
     , forEach
     , insert
     , pushLayer
-    , whenSat
-    , saturate
     , fromIMap
     , test0
+    , test1
     )
     where
 
 import Data.LVar.SatMap(PartialJoinSemiLattice(..))
+import qualified Data.LVar.FiltSet as FS
 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.DeepFrz (runParThenFreeze)
@@ -38,6 +38,7 @@ import Control.LVish
 
 import Data.IORef
 import qualified Data.Map as M
+import Data.Maybe (isJust)
 import qualified Data.Foldable as F
 import           GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -49,6 +50,14 @@ data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
 
 instance Eq (LayeredSatMap k s v) where
   LayeredSatMap lv1 == LayeredSatMap lv2 = state lv1 == state lv2
+
+instance (Ord k, Ord v) => Ord (LayeredSatMap k Frzn v) where
+  compare (LayeredSatMap lv1) (LayeredSatMap lv2) = unsafeDupablePerformIO $ do
+    let LSMContents (mpRef1:_) = state lv1
+        LSMContents (mpRef2:_) = state lv2
+    m1 <- readIORef mpRef1
+    m2 <- readIORef mpRef2
+    return $ compare (fst m1) (fst m2)
 
 type OnSat = L.Par ()
 
@@ -166,32 +175,36 @@ pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
   ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
   WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
 
-whenSat :: LayeredSatMap k s v -> Par d s () -> Par d s ()
-whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
-    L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
-    let LSMContents (mpRef:mps) = state lv
-    x <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case x of
-      Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
-      Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
-    where
-      fn n@(Nothing, _) = (n, Just newact)
-      fn (Just m, onsat) = let onsat' = onsat >> newact in
-        ((Just m, onsat'), Nothing)
+instance FS.SaturatingLVar (LayeredSatMap k) where
+  whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
+      L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
+      let LSMContents (mpRef:mps) = state lv
+      x <- L.liftIO $ atomicModifyIORef' mpRef fn
+      case x of
+        Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
+        Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
+      where
+        fn n@(Nothing, _) = (n, Just newact)
+        fn (Just m, onsat) = let onsat' = onsat >> newact in
+          ((Just m, onsat'), Nothing)
 
-saturate :: LayeredSatMap k s v -> Par d s ()
-saturate (LayeredSatMap lv) = WrapPar $ do
-    let lvid = L.lvarDbgName $ unWrapLVar lv
-        LSMContents (mpRef:mps) = state lv
-    L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
-    act <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case act of
-      Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
-      Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
-    where
-      fn n@(Nothing, _) = (n, Nothing)
-      -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
-      fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
+  saturate (LayeredSatMap lv) = WrapPar $ do
+      let lvid = L.lvarDbgName $ unWrapLVar lv
+          LSMContents (mpRef:mps) = state lv
+      L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
+      act <- L.liftIO $ atomicModifyIORef' mpRef fn
+      case act of
+        Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
+        Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
+      where
+        fn n@(Nothing, _) = (n, Nothing)
+        -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
+        fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
+
+  isSat (LayeredSatMap lv) = unsafeDupablePerformIO $ do
+    let LSMContents (mpRef:mps) = state lv
+    (mp, _) <- readIORef mpRef
+    return $ not $ isJust mp
 
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.
@@ -207,3 +220,8 @@ test0 = map fromIMap $ runParThenFreeze $ do
   insert "foo" 1 newLayer2 -- should fail
   insert "bar" 48 m
   return [m, newLayer1, newLayer2]
+
+test1 = runParThenFreeze $ do
+  m <- newMap $ M.fromList [("x", 0 :: Int)]
+  s <- FS.newFromList [m]
+  return s

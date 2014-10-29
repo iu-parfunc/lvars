@@ -60,6 +60,7 @@ import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, g
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
+import           Data.LVar.FiltSet (SaturatingLVar(..))
 -- import           Data.LVar.SatMap.Unsafe
 import           Data.UtilInternal (traverseWithKey_)
 
@@ -67,6 +68,7 @@ import           Control.Exception (throw)
 import           Data.List (intersperse, intercalate)
 import           Data.IORef
 import qualified Data.Map.Strict as M
+import           Data.Maybe (isJust)
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
@@ -117,6 +119,12 @@ type OnSat = L.Par ()
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (SatMap k s v) where
   SatMap lv1 == SatMap lv2 = state lv1 == state lv2 
+
+-- instance (Ord k, Ord v) => Ord (SatMap k Frzn v) where
+--   compare (SatMap lv1) (SatMap lv2) = unsafeDupablePerformIO $ do
+--     s1 <- readIORef $ state lv1
+--     s2 <- readIORef $ state lv2
+--     return $ compare (fmap fst s1) (fmap fst s2)
 
 -- | An `SatMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
@@ -276,40 +284,37 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
                 Nothing -> -- Here we SATURATE!
                            (Nothing, (Nothing, Just onsat))
 
--- | Register a callback that is only called if the SatMap LVar
--- becomes /saturated/.
-whenSat :: SatMap k s v -> Par d s () -> Par d s ()
-whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
-  L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
-  x <- L.liftIO $ atomicModifyIORef' (state lv) fn
-  case x of 
-    Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
-    Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
-                  a 
- where
-  fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
-  -- In this case we register newact to execute later:
-  fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
-                         (Just (mp,onsat'), Nothing)
-  -- In this case we execute newact right away:
-  fn Nothing = (Nothing, Just newact)
+instance SaturatingLVar (SatMap k) where
+  whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
+    L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
+    x <- L.liftIO $ atomicModifyIORef' (state lv) fn
+    case x of 
+      Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
+      Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
+                    a 
+   where
+    fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
+    -- In this case we register newact to execute later:
+    fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
+                           (Just (mp,onsat'), Nothing)
+    -- In this case we execute newact right away:
+    fn Nothing = (Nothing, Just newact)
 
--- | Drive the variable to top.  This is equivalent to an insert of a
--- conflicting binding.
-saturate :: SatMap k s v -> Par d s ()
-saturate (SatMap lv) = WrapPar $ do
-   let lvid = L.lvarDbgName $ unWrapLVar lv
-   L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
-   act <- L.liftIO $ atomicModifyIORef' (state lv) fn
-   case act of 
-     Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
-     Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
-                   a
- where
-  fn (Just (mp,onsat)) = (Nothing, Just onsat)
-  fn Nothing           = (Nothing,Nothing)
+  saturate (SatMap lv) = WrapPar $ do
+     let lvid = L.lvarDbgName $ unWrapLVar lv
+     L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
+     act <- L.liftIO $ atomicModifyIORef' (state lv) fn
+     case act of 
+       Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
+       Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
+                     a
+   where
+    fn (Just (mp,onsat)) = (Nothing, Just onsat)
+    fn Nothing           = (Nothing,Nothing)
 
-
+  isSat (SatMap lv) = unsafeDupablePerformIO $ do
+    contents <- readIORef $ state lv
+    return $ not $ isJust contents
 {-
 
 modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>
