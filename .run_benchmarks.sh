@@ -15,7 +15,16 @@ export BENCHARGS=$*
 # (1) Build everything
 # ================================================================================
 
-NOTEST=1 ./.jenkins_script.sh -j
+if [ "$MACHINECLASS" == cutter ]; then
+    echo "WARNING: on cutter for some STRANGE reason, building in parallel with cabal crashes."
+    echo "    It crashes with: 'libgcc_s.so.1 must be installed for pthread_cancel to work.'"
+    echo "    Thus we build sequentially..."
+    PARARG=""
+else
+    PARARG="-j"
+fi
+
+NOTEST=1 ./.jenkins_script.sh $PARARG
 
 # (2) Perform micro benchmarking
 # ================================================================================
