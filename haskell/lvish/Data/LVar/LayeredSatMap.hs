@@ -175,7 +175,8 @@ pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
   ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
   WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
 
-instance FS.SaturatingLVar (LayeredSatMap k) where
+instance Ord k => FS.SaturatingLVar (LayeredSatMap k) where
+  type Finalizer (LayeredSatMap k) v = PartialJoinSemiLattice v
   whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
       L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
       let LSMContents (mpRef:mps) = state lv
@@ -206,9 +207,18 @@ instance FS.SaturatingLVar (LayeredSatMap k) where
     (mp, _) <- readIORef mpRef
     return $ not $ isJust mp
 
+  finalizeOrd lsm = case fromIMap lsm of
+                      Nothing -> Nothing
+                      Just m -> Just $ FS.AFoldableOrd m
+
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.
  frz = unsafeCoerce# -- Can't use unsafeCoerceLVar due to LVarData1 constraint
+
+-- instance (Ord k, PartialJoinSemiLattice a) => F.Foldable (LayeredSatMap k Frzn) where
+--   foldr fn zero lsm = case fromIMap lsm of
+--                         Nothing -> zero
+--                         Just m -> F.foldr fn zero m
 
 test0 :: [Maybe (M.Map String Int)]
 test0 = map fromIMap $ runParThenFreeze $ do
@@ -221,7 +231,13 @@ test0 = map fromIMap $ runParThenFreeze $ do
   insert "bar" 48 m
   return [m, newLayer1, newLayer2]
 
+test1 :: FS.FiltSet Frzn (LayeredSatMap String) Int
 test1 = runParThenFreeze $ do
   m <- newMap $ M.fromList [("x", 0 :: Int)]
-  s <- FS.newFromList [m]
-  return s
+  m' <- pushLayer m
+  m'' <- pushLayer m
+  insert "x" 2 m
+  insert "x" 4 m'
+  insert "y" 0 m'
+  insert "x" 5 m''
+  FS.newFromList [m, m', m'']
