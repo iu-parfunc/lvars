@@ -58,15 +58,6 @@ fi
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
 $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests  $*
 
-TARGS="-j1 --jxml=test-results.xml --jxml-nested"
-
-# Here's a new strategy, just do them all manually:
-# ./lvish/dist/build/test-lvish/test-lvish $TARGS
-# ./par-collections/tests/dist/build/test-par-collections/test-par-collections  $TARGS
-# ./par-transformers/dist/build/test-par-transformers/test-par-transformers
-
-# ./lvish/dist/dist-sandbox-*/build/test-lvish/test-lvish $TARGS
-
 for path in $PKGS; do 
   echo "Test package in path $path."
   cd $TOP/$path
