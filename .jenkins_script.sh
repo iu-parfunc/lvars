@@ -49,9 +49,8 @@ if [ "$NOTEST" == "" ]; then
   CFG="$CFG --enable-tests"
 fi
 
-# Also install custom version of monad-par:
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS  $*
 
 if [ "$NOTEST" == "" ]; then 
   for path in $PKGS; do 

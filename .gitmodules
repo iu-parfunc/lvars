@@ -2,6 +2,3 @@
 	path = pbbs
 	url = git@github.com:iu-parfunc/pbbs.git
 	ignore = untracked
-[submodule "haskell/monad-par"]
-	path = haskell/monad-par
-	url = git@github.com:simonmar/monad-par.git
