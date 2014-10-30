@@ -52,6 +52,14 @@ $CABAL bench --benchmark-options=" $WHICHBENCH --template=./report_format.tpl $R
 # For performance debugging of benchmarks we include these:
 # --ghc-options="-ddump-simpl -ddump-to-file"
 
+# Use the LVish uploader project
+CID=820162629229-kp29aklebt6ucos5a71u8tu3hu8unres.apps.googleusercontent.com
+SEC=pSsMxVAJCFKyWsazuxZVRZwX
+# CID=905767673358.apps.googleusercontent.com
+# SEC=2a2H57dBggubW1_rqglC7jtK
+
+cabal exec fusion-upload-criterion -- --name=LVish_microbench_results --clientid=$CID --clientsecret=$SEC $NAME.criterion
+
 
 # (3) Run larger benchmarks:
 # ================================================================================
@@ -73,9 +81,6 @@ cd $CHECKOUT/haskell/lvish-apps
 #   export THREADS
 # fi
 
-
-# CID=905767673358.apps.googleusercontent.com
-# SEC=2a2H57dBggubW1_rqglC7jtK
 
 # Enable upload of benchmarking data to a Google Fusion Table:
 # hsbencher --fusion-upload --name monad-par-test --clientid=$CID --clientsecret=$SEC
