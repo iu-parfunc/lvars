@@ -32,6 +32,7 @@ else
     PARARG="-j"
 fi
 
+export EXTRAPKGS=" ./HSBencher/hsbencher ./HSBencher/hsbencher-fusion ./HSBencher/hsbencher-codespeed ./HSBencher/hgdata/ "
 NOTEST=1 ./.jenkins_script.sh $PARARG
 
 # (2) Perform micro benchmarking

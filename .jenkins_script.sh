@@ -1,7 +1,12 @@
 #!/bin/bash
 
-# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS[1-3], if available.
-#       Also passes through extra args to the major cabal install command.
+# NOTE: Passes through extra args to the major cabal install command.
+#       Also uses these environment vars, if available:
+#        * JENKINS_GHC
+#        * CABAL_FLAGS[1-3]
+#        * NOTEST
+#        * CABAL
+#        * EXTRAPKGS -- useful for including packages in the one-big-install
 
 set -e
 set -x
@@ -26,6 +31,7 @@ fi
 
 PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers "
 
+# We build the sandbox, not at the repo root, but at the root of the Haskell code dir.
 cd ./haskell/
 TOP=`pwd`
 $CABAL sandbox init
@@ -50,7 +56,7 @@ if [ "$NOTEST" == "" ]; then
 fi
 
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS  $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS $*
 
 if [ "$NOTEST" == "" ]; then 
   for path in $PKGS; do 
