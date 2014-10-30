@@ -1,20 +1,21 @@
 #!/bin/bash
 
-# NOTE: uses env vars JENKINS_GHC and CABAL_FLAGS[1-3], if available.
-#       Also passes through extra args to the major cabal install command.
+# NOTE: Passes through extra args to the major cabal install command.
+#       Also uses these environment vars, if available:
+#        * JENKINS_GHC
+#        * CABAL_FLAGS[1-3]
+#        * NOTEST
+#        * CABAL
+#        * EXTRAPKGS -- useful for including packages in the one-big-install
 
 set -e
 set -x
 
-# Temporarily staying off of 1.20 due to cabal issue #1811:
-# CABAL=cabal-1.18.0
-# That issue is passed, now requiring a recent version of cabal:
+# Now requiring a recent version of cabal:
 if [ "$CABAL" == "" ]; then 
   CABAL=cabal-1.20
-#  CABAL=cabal-1.21
 fi
 
-# SHOWDETAILS=always
 SHOWDETAILS=streaming
 
 if [ "$JENKINS_GHC" == "" ]; then 
@@ -28,8 +29,9 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers "
+PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers "
 
+# We build the sandbox, not at the repo root, but at the root of the Haskell code dir.
 cd ./haskell/
 TOP=`pwd`
 $CABAL sandbox init
@@ -40,7 +42,8 @@ for path in $PKGS; do
 done
 cd $TOP
 
-CFG=" --force-reinstalls "
+# Always make sure the benchmarks build, even if we don't run them:
+CFG=" --force-reinstalls --enable-benchmarks "
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then 
   CFG="$CFG --disable-library-profiling --disable-executable-profiling"
@@ -48,21 +51,20 @@ else
   CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
 
-# Simpler but not ideal:
-# $CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests --force-reinstalls $*
+if [ "$NOTEST" == "" ]; then 
+  CFG="$CFG --enable-tests"
+fi
 
-# # Temporary hack, install containers first or we run into problems with the sandbox:
-# # $CABAL install containers --constraint='containers>=0.5.5.1'
-
-# Also install custom version of monad-par:
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS ./monad-par/monad-par/ --enable-tests  $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS $*
 
-for path in $PKGS; do 
-  echo "Test package in path $path."
-  cd $TOP/$path
-  # Assume cabal 1.20+:
-  echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
-  $CABAL configure --with-ghc=$GHC --enable-tests $CABAL_FLAGS
-  $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
-done
+if [ "$NOTEST" == "" ]; then 
+  for path in $PKGS; do 
+    echo "Test package in path $path."
+    cd $TOP/$path
+    # Assume cabal 1.20+:
+    echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
+    $CABAL configure --with-ghc=$GHC --enable-tests $CABAL_FLAGS
+    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
+  done
+fi

@@ -1,8 +1,9 @@
 {-# LANGUAGE RankNTypes, BangPatterns, DataKinds #-}
--- {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE GADTs #-}
 
 import Control.LVish hiding (for_)
--- import Control.LVish.DeepFrz (NonFrzn)
+import Control.LVish.DeepFrz (runParThenFreeze, NonFrzn)
 import Control.Par.EffectSigs
 -- import Data.LVar.IVar
 import qualified Data.LVar.PureSet as PS
@@ -19,12 +20,27 @@ import qualified Data.LVar.LayeredSatMap as LSM
 import Criterion.Main
 import Criterion.Types
 import GHC.Conc(numCapabilities)
+
+-- data IntPar = forall s . IntPar (Par Det s Int)
+data IntPar = IntPar (forall s . Par Det s Int)
     
+whnf2 :: ((forall s . Par Det s Int) -> b) -> (forall s . Par Det s Int) -> Benchmarkable
+whnf2 = whnf  -- Eta expansion does not work here!!
+
+whnf' :: (IntPar -> b) -> IntPar -> Benchmarkable
+whnf' = whnf
+
+runIntPar :: IntPar -> Int
+runIntPar (IntPar p) = runPar p
+        
 main :: IO ()
-main = defaultMain $ insideOut [
+main = defaultMain $
+       -- insideOut  -- OPTIONALLY do this... it can make them easier to view in the report.
+ [
   bgroup "basics"
     [
-      bench "runPar" $ whnf runPar (return 3)
+      bench "runPar" $ whnf' runIntPar (IntPar $ return 3)
+    , bench "runParThenFreeze" $ whnf runParThenFreeze (return (3::Int))
     , bench "NOOP" $ benchPar (return ())
     , bench "fork" $ benchPar (fork (return ()))
     , bench "new"  $ benchPar  (do _ <- new; return ())
@@ -61,7 +77,7 @@ insideOut allbs = [ BenchGroup k bs
         | BenchGroup n1 ls <- allbs
         , Benchmark n2 b <- ls ]
             
--- type Det = Ef P G NF B NI
+type Det = Ef P G NF B NI
 type Full = Ef P G F B I 
     
 basicContainerBench :: (forall s . Par Full s (c s Int))

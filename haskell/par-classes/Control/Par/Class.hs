@@ -108,7 +108,8 @@ class ParMonad m => ParFuture m where
   -- what is allowable inside a Future.  For example, some
   -- implementations require an Eq Constraint.
   type FutContents m a :: Constraint
-
+  type FutContents m a = () -- By default, no constraints.
+      
   -- | Create a potentially-parallel computation, and return a /future/
   -- (or /promise/) that can be used to query the result of the forked
   -- computataion.
