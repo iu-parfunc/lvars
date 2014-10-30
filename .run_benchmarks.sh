@@ -58,7 +58,10 @@ SEC=pSsMxVAJCFKyWsazuxZVRZwX
 # CID=905767673358.apps.googleusercontent.com
 # SEC=2a2H57dBggubW1_rqglC7jtK
 
-cabal exec fusion-upload-criterion -- --name=LVish_microbench_results --clientid=$CID --clientsecret=$SEC $NAME.criterion
+export HSBENCHER_GOOGLE_CLIENTID=$CID
+export HSBENCHER_GOOGLE_CLIENTSECRET=$SEC
+cabal exec fusion-upload-criterion -- --name=LVish_microbench_results $NAME.criterion
+# cabal exec fusion-upload-criterion -- --name=LVish_microbench_results --clientid=$CID --clientsecret=$SEC $NAME.criterion
 
 
 # (3) Run larger benchmarks:
