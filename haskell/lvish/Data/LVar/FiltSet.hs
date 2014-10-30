@@ -37,8 +37,8 @@ newtype FiltSet s f a = FiltSet (LVar s (IORef [f s a]) (f s a))
 data AFoldableOrd a = forall f . (F.Foldable f, Ord (f a)) => AFoldableOrd (f a)
 
 class SaturatingLVar f where
-  type Finalizer f v :: Constraint
-  type Finalizer f v = ()
+  -- type Finalizer f v :: Constraint
+  -- type Finalizer f v = ()
   -- | Drive the variable to top.  This is equivalent to an insert of a
   -- conflicting binding.
   saturate :: f s a -> Par e s ()
@@ -47,7 +47,7 @@ class SaturatingLVar f where
   whenSat :: f s a -> Par e s () -> Par e s ()
   -- | Is the variable saturated?
   isSat :: f Frzn a -> Bool
-  finalizeOrd :: (Finalizer f a, Ord a) => f Frzn a -> Maybe (AFoldableOrd a)
+  finalizeOrd :: Ord a => f Frzn a -> Maybe (AFoldableOrd a)
 
 newEmptySet :: SaturatingLVar f => Par e s (FiltSet s f a)
 newEmptySet = newFromList []
@@ -60,7 +60,7 @@ insert !elm !fs@(FiltSet (WrapLVar lv)) = WrapPar (putLV lv putter)
   where putter ref = atomicModifyIORefCAS ref update
         update l = (elm:l, Just elm)
 
-fromFiltSet :: (Finalizer lv a, Ord a, Ord (AFoldableOrd a), SaturatingLVar lv) => FiltSet Frzn lv a -> S.Set (AFoldableOrd a)
+fromFiltSet :: (Ord a, Ord (AFoldableOrd a), SaturatingLVar lv) => FiltSet Frzn lv a -> S.Set (AFoldableOrd a)
 fromFiltSet (FiltSet lv) = unsafeDupablePerformIO $ do
                              lvs <- readIORef $ state lv
                              return $ S.fromList $ catMaybes $ map finalizeOrd lvs
