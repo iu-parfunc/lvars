@@ -6,11 +6,19 @@ set -x
 
 # The working directory is passed as the first argument.
 CHECKOUT=$1
+if [ "$CHECKOUT" == "" ]; then
+    echo "ERROR: must pass working copy absolute path as first arg."
+    exit 1
+fi
 cd "$CHECKOUT/"
 
 pwd -P
 # These are the arguments to the HSBencher harness...
 export BENCHARGS=$*
+
+if [ "$CABAL" == "" ]; then 
+  CABAL=cabal-1.20
+fi
 
 # (1) Build everything
 # ================================================================================
@@ -31,12 +39,14 @@ NOTEST=1 ./.jenkins_script.sh $PARARG
 cd $CHECKOUT/haskell/lvish
 
 HOST=`hostname -s`
-REGRESS="--regress=allocated:iters --regress=bytesCopied:iters --regress=cycles:iters --regress=numGcs:iters \
-    --regress=mutatorWallSeconds:iters --regress=gcWallSeconds:iters --regress=cpuTime:iters "
+REGRESS="--regress=allocated:iters --regress=bytesCopied:iters --regress=cycles:iters --regress=numGcs:iters
+      --regress=mutatorWallSeconds:iters --regress=gcWallSeconds:iters --regress=cpuTime:iters "
 
-NAME=report_lvish_"$HOST"
-OUTS= --raw "$NAME".criterion -o "$NAME".html
+NAME="report_lvish_$HOST"
+OUTS=" --raw $NAME.criterion -o $NAME.html"
 
+# Need to reconfigure because of cabal issue #2182:
+$CABAL configure --enable-benchmarks
 $CABAL bench --benchmark-options=" $WHICHBENCH --template=./report_format.tpl $REGRESS $OUTS +RTS -T -s -RTS"
 # For performance debugging of benchmarks we include these:
 # --ghc-options="-ddump-simpl -ddump-to-file"
