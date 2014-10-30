@@ -63,6 +63,15 @@ export HSBENCHER_GOOGLE_CLIENTSECRET=$SEC
 cabal exec fusion-upload-criterion -- --name=LVish_microbench_results $NAME.criterion
 # cabal exec fusion-upload-criterion -- --name=LVish_microbench_results --clientid=$CID --clientsecret=$SEC $NAME.criterion
 
+# Phone home and send the report
+function phone_home() {
+    STAMP=`date +"%Y_%M_%d_%H:%M:%S"`
+    ssh parfunc@tank.soic.indiana.edu mkdir -p collected_criterion_reports || echo ok
+    scp $NAME.html parfunc@tank.soic.indiana.edu:collected_criterion_reports/"$STAMP"_$NAME.html
+}
+
+phone_home || echo "ok if this fails."
+
 
 # (3) Run larger benchmarks:
 # ================================================================================
