@@ -44,8 +44,7 @@ REGRESS="--regress=allocated:iters --regress=bytesCopied:iters --regress=cycles:
       --regress=mutatorWallSeconds:iters --regress=gcWallSeconds:iters --regress=cpuTime:iters "
 
 NAME="report_lvish_$HOST"
-# OUTS=" --raw $NAME.criterion -o $NAME.html"
-OUTS=" "
+OUTS=" --raw $NAME.criterion -o $NAME.html"
 
 # Need to reconfigure because of cabal issue #2182:
 $CABAL configure --enable-benchmarks
