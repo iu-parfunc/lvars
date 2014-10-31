@@ -78,7 +78,7 @@ fromFiltSet (FiltSet lv) = unsafeDupablePerformIO $ do
                              lvs <- allTLS (state lv) >>= mapM readIORef
                              return $ S.fromList $ catMaybes $ map finalizeOrd $ conc lvs
                              where
-                               conc = foldl (\acc (r, l) -> (r ++ l)++acc) []
+                               conc = F.foldl' (\acc (r, l) -> (r ++ l)++acc) []
 
 instance DeepFrz a => DeepFrz (FiltSet s f a) where
   type FrzType (FiltSet s f a) = FiltSet Frzn f (FrzType a)
