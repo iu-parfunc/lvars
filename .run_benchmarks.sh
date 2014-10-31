@@ -66,8 +66,11 @@ cabal exec fusion-upload-criterion -- --name=LVish_microbench_results $NAME.crit
 # Phone home and send the report
 function phone_home() {
     STAMP=`date +"%Y_%M_%d_%H:%M:%S"`
-    ssh parfunc@tank.soic.indiana.edu mkdir -p collected_criterion_reports || echo ok
-    scp $NAME.html parfunc@tank.soic.indiana.edu:collected_criterion_reports/"$STAMP"_$NAME.html
+    mkdir -p $HOME/collected_criterion_reports 
+    # Copy locally first:
+    cp $NAME.html $HOME/collected_criterion_reports/"$STAMP"_$NAME.html    
+    ssh parfunc@tank.soic.indiana.edu mkdir -p collected_criterion_reports 
+    scp $NAME.html parfunc@tank.soic.indiana.edu:collected_criterion_reports/"$STAMP"_$NAME.html 
 }
 
 phone_home || echo "ok if this fails."
