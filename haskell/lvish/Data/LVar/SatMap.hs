@@ -60,7 +60,6 @@ import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, g
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
-import           Data.LVar.FiltSet (SaturatingLVar(..), AFoldableOrd(..))
 -- import           Data.LVar.SatMap.Unsafe
 import           Data.UtilInternal (traverseWithKey_)
 
@@ -284,41 +283,6 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
                 Nothing -> -- Here we SATURATE!
                            (Nothing, (Nothing, Just onsat))
 
-instance Ord k => SaturatingLVar (SatMap k) where
-  whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
-    L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
-    x <- L.liftIO $ atomicModifyIORef' (state lv) fn
-    case x of 
-      Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
-      Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
-                    a 
-   where
-    fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
-    -- In this case we register newact to execute later:
-    fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
-                           (Just (mp,onsat'), Nothing)
-    -- In this case we execute newact right away:
-    fn Nothing = (Nothing, Just newact)
-
-  saturate (SatMap lv) = WrapPar $ do
-     let lvid = L.lvarDbgName $ unWrapLVar lv
-     L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
-     act <- L.liftIO $ atomicModifyIORef' (state lv) fn
-     case act of 
-       Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
-       Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
-                     a
-   where
-    fn (Just (mp,onsat)) = (Nothing, Just onsat)
-    fn Nothing           = (Nothing,Nothing)
-
-  unsafeIsSat (SatMap lv) = unsafeDupablePerformIO $ do
-    contents <- readIORef $ state lv
-    return $ not $ isJust contents
-
-  finalizeOrd sm = case fromIMap sm of
-                     Nothing -> Nothing
-                     Just m -> Just $ AFoldableOrd m
 {-
 
 modify :: forall f a b d s key . (Ord key, Show key, Ord a) =>

@@ -7,7 +7,8 @@
 
 module Data.LVar.LayeredSatMap
     (
-      LayeredSatMap
+      LayeredSatMap(..)
+    , LSMContents(..)
     , forEachHP
     , newEmptyMap
     , newMap
@@ -18,12 +19,10 @@ module Data.LVar.LayeredSatMap
     , pushLayer
     , fromIMap
     , test0
-    , test1
     )
     where
 
 import Data.LVar.SatMap(PartialJoinSemiLattice(..))
-import qualified Data.LVar.FiltSet as FS
 
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.DeepFrz (runParThenFreeze)
@@ -177,50 +176,9 @@ pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
   ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
   WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
 
-instance Ord k => FS.SaturatingLVar (LayeredSatMap k) where
---  type Finalizer (LayeredSatMap k) v = PartialJoinSemiLattice v
-  whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
-      L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
-      let LSMContents (mpRef:mps) = state lv
-      x <- L.liftIO $ atomicModifyIORef' mpRef fn
-      case x of
-        Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
-        Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
-      where
-        fn n@(Nothing, _) = (n, Just newact)
-        fn (Just m, onsat) = let onsat' = onsat >> newact in
-          ((Just m, onsat'), Nothing)
-
-  saturate (LayeredSatMap lv) = WrapPar $ do
-      let lvid = L.lvarDbgName $ unWrapLVar lv
-          LSMContents (mpRef:mps) = state lv
-      L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
-      act <- L.liftIO $ atomicModifyIORef' mpRef fn
-      case act of
-        Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
-        Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
-      where
-        fn n@(Nothing, _) = (n, Nothing)
-        -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
-        fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
-
-  unsafeIsSat (LayeredSatMap lv) = unsafeDupablePerformIO $ do
-    let LSMContents (mpRef:mps) = state lv
-    (mp, _) <- readIORef mpRef
-    return $ not $ isJust mp
-
-  finalizeOrd lsm@(LayeredSatMap lv) = case fromIMap lsm of
-                                         Nothing -> Nothing
-                                         Just m -> Just $ FS.AFoldableOrd m
-
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.
  frz = unsafeCoerce# -- Can't use unsafeCoerceLVar due to LVarData1 constraint
-
--- instance (Ord k, PartialJoinSemiLattice a) => F.Foldable (LayeredSatMap k Frzn) where
---   foldr fn zero lsm = case fromIMap lsm of
---                         Nothing -> zero
---                         Just m -> F.foldr fn zero m
 
 test0 :: [Maybe (M.Map String Int)]
 test0 = map fromIMap $ runParThenFreeze $ do
@@ -232,14 +190,3 @@ test0 = map fromIMap $ runParThenFreeze $ do
   insert "foo" 1 newLayer2 -- should fail
   insert "bar" 48 m
   return [m, newLayer1, newLayer2]
-
-test1 :: FS.FiltSet Frzn (LayeredSatMap String) Int
-test1 = runParThenFreeze $ do
-  m <- newMap $ M.fromList [("x", 0 :: Int)]
-  m' <- pushLayer m
-  m'' <- pushLayer m
-  insert "x" 2 m
-  insert "x" 4 m'
-  insert "y" 0 m'
-  insert "x" 5 m''
-  FS.newFromList [m, m', m'']
