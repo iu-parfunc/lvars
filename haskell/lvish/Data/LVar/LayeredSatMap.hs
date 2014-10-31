@@ -204,7 +204,7 @@ instance Ord k => FS.SaturatingLVar (LayeredSatMap k) where
         -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
         fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
-  isSat (LayeredSatMap lv) = unsafeDupablePerformIO $ do
+  unsafeIsSat (LayeredSatMap lv) = unsafeDupablePerformIO $ do
     let LSMContents (mpRef:mps) = state lv
     (mp, _) <- readIORef mpRef
     return $ not $ isJust mp

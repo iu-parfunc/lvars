@@ -312,7 +312,7 @@ instance Ord k => SaturatingLVar (SatMap k) where
     fn (Just (mp,onsat)) = (Nothing, Just onsat)
     fn Nothing           = (Nothing,Nothing)
 
-  isSat (SatMap lv) = unsafeDupablePerformIO $ do
+  unsafeIsSat (SatMap lv) = unsafeDupablePerformIO $ do
     contents <- readIORef $ state lv
     return $ not $ isJust contents
 
