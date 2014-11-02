@@ -3,10 +3,12 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE GADTs #-}
 
 module Data.LVar.LayeredSatMap
     (
-      LayeredSatMap
+      LayeredSatMap(..)
+    , LSMContents(..)
     , forEachHP
     , newEmptyMap
     , newMap
@@ -15,8 +17,6 @@ module Data.LVar.LayeredSatMap
     , forEach
     , insert
     , pushLayer
-    , whenSat
-    , saturate
     , fromIMap
     , test0
     )
@@ -38,17 +38,27 @@ import Control.LVish
 
 import Data.IORef
 import qualified Data.Map as M
+import Data.Maybe (isJust)
 import qualified Data.Foldable as F
 import           GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-data LayeredSatMap k s v = LayeredSatMap (LVar s (LSMContents k v) (k, v))
+data LayeredSatMap k s v where
+    LayeredSatMap :: PartialJoinSemiLattice v => (LVar s (LSMContents k v) (k, v)) -> LayeredSatMap k s v
 
 data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
                        deriving (Eq)
 
 instance Eq (LayeredSatMap k s v) where
   LayeredSatMap lv1 == LayeredSatMap lv2 = state lv1 == state lv2
+
+instance (Ord k, Ord v) => Ord (LayeredSatMap k Frzn v) where
+  compare (LayeredSatMap lv1) (LayeredSatMap lv2) = unsafeDupablePerformIO $ do
+    let LSMContents (mpRef1:_) = state lv1
+        LSMContents (mpRef2:_) = state lv2
+    m1 <- readIORef mpRef1
+    m2 <- readIORef mpRef2
+    return $ compare (fst m1) (fst m2)
 
 type OnSat = L.Par ()
 
@@ -67,15 +77,15 @@ forEachHP mh (LayeredSatMap (WrapLVar lv)) callback = WrapPar $ do
           Nothing -> return ()
           Just m -> unWrapPar $ traverseWithKey_ (\k v -> forkHP mh $ callback k v) m
 
-newEmptyMap :: Par d s (LayeredSatMap k s v)
+newEmptyMap :: PartialJoinSemiLattice v => Par d s (LayeredSatMap k s v)
 newEmptyMap = newMap M.empty
 
-newMap :: M.Map k v -> Par d s (LayeredSatMap k s v)
+newMap :: PartialJoinSemiLattice v => M.Map k v -> Par d s (LayeredSatMap k s v)
 newMap m = WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ do
   ref <- newIORef (Just m, return ())
   return $ LSMContents [ref]
 
-newFromList :: (Ord k, Eq v) =>
+newFromList :: (Ord k, Eq v, PartialJoinSemiLattice v) =>
                [(k,v)] -> Par d s (LayeredSatMap k s v)
 newFromList = newMap . M.fromList
 
@@ -165,33 +175,6 @@ pushLayer orig@(LayeredSatMap (WrapLVar lv)) = do
   let LSMContents mps = L.state lv
   ref <- WrapPar $ L.liftIO $ newIORef (Just M.empty, return ())
   WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ return $ LSMContents $ ref:mps
-
-whenSat :: LayeredSatMap k s v -> Par d s () -> Par d s ()
-whenSat (LayeredSatMap lv) (WrapPar newact) = WrapPar $ do
-    L.logStrLn 5 " [LayeredSatMap] whenSat issuing atomicModifyIORef on state"
-    let LSMContents (mpRef:mps) = state lv
-    x <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case x of
-      Nothing -> L.logStrLn 5 " [LayeredSatMap] whenSat: not yet saturated, registered only."
-      Just a -> L.logStrLn 5 " [LayeredSatMap] whenSat invoking saturation callback" >> a
-    where
-      fn n@(Nothing, _) = (n, Just newact)
-      fn (Just m, onsat) = let onsat' = onsat >> newact in
-        ((Just m, onsat'), Nothing)
-
-saturate :: LayeredSatMap k s v -> Par d s ()
-saturate (LayeredSatMap lv) = WrapPar $ do
-    let lvid = L.lvarDbgName $ unWrapLVar lv
-        LSMContents (mpRef:mps) = state lv
-    L.logStrLn 5 $ " [LayeredSatMap] saturate: explicity saturating lvar " ++ lvid
-    act <- L.liftIO $ atomicModifyIORef' mpRef fn
-    case act of
-      Nothing -> L.logStrLn 5 $ " [LayeredSatMap] saturate: done saturating lvar " ++ lvid ++ ", no callbacks to invoke."
-      Just a -> L.logStrLn 5 (" [SatMap] saturate: done saturating lvar " ++ lvid ++ ".  Now invoking callback.") >> a
-    where
-      fn n@(Nothing, _) = (n, Nothing)
-      -- Should this be returning (Nothing, return ()) or something? We don't need the callback anymore
-      fn (Just m, onsat) = ((Nothing, onsat), Just onsat)
 
 instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  type FrzType (LayeredSatMap k s a) = LayeredSatMap k Frzn a -- No need to recur deeper.

@@ -116,6 +116,7 @@ library
                     Data.LVar.PureMap
                     Data.LVar.SatMap
                     Data.LVar.LayeredSatMap
+                    Data.LVar.FiltSet
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     Data.LVar.Counter
@@ -179,7 +180,8 @@ library
                  ghc-prim,
                  async,
                  -- Used in NatArray:
-                 bits-atomic, missing-foreign
+                 bits-atomic, missing-foreign,
+                 thread-local-storage >= 0.1.0.2
   build-depends: containers >= 0.5.4.0
 
   build-depends: par-classes     >= 1.1 && < 2.0,

@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes, BangPatterns, DataKinds #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.LVish hiding (for_)
 import Control.LVish.DeepFrz (runParThenFreeze, NonFrzn)
@@ -17,6 +18,8 @@ import qualified Data.LVar.SLMap   as SM
 import qualified Data.LVar.SatMap  as Sat
 import qualified Data.LVar.LayeredSatMap as LSM
     
+import qualified Data.LVar.FiltSet as FS
+
 import Criterion.Main
 import Criterion.Types
 import GHC.Conc(numCapabilities)
@@ -61,7 +64,8 @@ main = defaultMain $
   bgroup "slmap"   (copyContainerBench SM.newEmptyMap (\n -> SM.insert n n) (SM.newFromList . pairit) (SM.copy)),
 
   bgroup "satmap"   (basicContainerBench Sat.newEmptyMap (\n -> Sat.insert n n) (Sat.newFromList . pairit)),
-  bgroup "layermap" (copyContainerBench LSM.newEmptyMap (\n -> LSM.insert n n) (LSM.newFromList . pairit) LSM.pushLayer)
+  bgroup "layermap" (copyContainerBench LSM.newEmptyMap (\n -> LSM.insert n n) (LSM.newFromList . pairit) LSM.pushLayer),
+  bgroup "filtset" filtSetBench
   ]
  where
    pairit = map (\n->(n,n))
@@ -119,6 +123,34 @@ copyContainerBench mknew insert frmList copy =
                                           copyLoop 10 s) ]
 {-# INLINE copyContainerBench #-}
   
+filtSetBench :: [Benchmark]
+filtSetBench = [
+  bench "new" $ benchPar (FS.newEmptySet >> return ())
+  , bench "insert" $ benchPar $ do
+     s <- FS.newEmptySet
+     (m :: LSM.LayeredSatMap Int s Int) <- LSM.newEmptyMap
+     FS.insert m s
+  , bench "fromList10" $ benchPar $ do
+     let ms = map (LSM.newMap . M.fromList) $ zipWith (\x y -> [(x, y)]) [1..10 :: Int] [1..10 :: Int]
+     s <- FS.newFromList ms
+     return ()
+  , bench "fill10" $ benchPar $ do
+     s <- FS.newEmptySet
+     for_ 1 10 $ \n -> do
+       m <- LSM.newMap $ M.fromList [(n, n)]
+       FS.insert m s
+  , bench "fill100" $ benchPar $ do
+     s <- FS.newEmptySet
+     for_ 1 100 $ \n -> do
+       m <- LSM.newMap $ M.fromList [(n, n)]
+       FS.insert m s
+  , bench "fillN" $ Benchmarkable $ \num -> runParNonDet $ do
+     s <- FS.newEmptySet
+     for_ 1 (fromIntegral num) $ \n -> do
+       m <- LSM.newMap $ M.fromList [(n, n)]
+       FS.insert m s
+  ]
+
 ----------------------------------------------------------------------------------------------------
   
 -- | Helper for benchmarking par-monad actions:
