@@ -28,9 +28,6 @@ module Data.LVar.SatMap
          newEmptyMap, newMap, newFromList,
          insert, saturate,
 
-         -- * A new class for join that can fail
-         PartialJoinSemiLattice(..),
-
 -- NOT sure about how handlers might work for saturating LVars yet...
 -- It's possible that they can operate only with idempotent callbacks
 -- and be nondeterministic in whether they guarantee duplicate-suppression.
@@ -53,6 +50,7 @@ import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
 -- import           Data.LVar.SatMap.Unsafe
+import           Data.LVar.FiltSet(SaturatingLVar(..), AFoldableOrd(..))
 import           Data.UtilInternal (traverseWithKey_)
 
 import           Control.Exception (throw)
@@ -74,19 +72,6 @@ import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-
--- | A partial version of "Algebra.Lattice.JoinSemiLattice", this
--- could be made into a complete lattice by the addition of a top
--- element.
-class PartialJoinSemiLattice a where
-  joinMaybe :: a -> a -> Maybe a
-
--- -- | Adding a top element makes the partial join total:
--- instance PartialJoinSemiLattice a => JoinSemiLattice (Dropped a) where
---   join a b =
---     case joinMaybe a b of
---       Nothing -> Top
---       Just x  -> Drop x
 
 ------------------------------------------------------------------------------
 -- DUPLICATED from PureMap:
@@ -261,7 +246,7 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
 -- 
 --   If a key is inserted multiple times, the values had
 --   better be compatible @joinMaybe@, or the map becomes "Saturated".
-insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
+insert :: (Ord k, G.PartialJoinSemiLattice v, Eq v) =>
           k -> v -> SatMap k s v -> Par d s () 
 insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do 
     -- OPTIONAL: Take the fast path if it is saturated:
@@ -296,6 +281,42 @@ insert !key !elm (SatMap (WrapLVar lv)) = WrapPar$ do
                                      delt (Just (key,newVal)))
                 Nothing -> -- Here we SATURATE!
                            (Nothing, (Nothing, Just onsat))
+
+instance Ord k => SaturatingLVar (SatMap k) where
+  whenSat (SatMap lv) (WrapPar newact) = WrapPar $ do 
+    L.logStrLn 5 " [SatMap] whenSat issuing atomicModifyIORef on state"
+    x <- L.liftIO $ atomicModifyIORef' (state lv) fn
+    case x of 
+      Nothing -> L.logStrLn 5 " [SatMap] whenSat: not yet saturated, registered only."
+      Just a  -> do L.logStrLn 5 " [SatMap] whenSat invoking saturation callback..."
+                    a 
+   where
+    fn :: SatMapContents k v -> (SatMapContents k v, Maybe (L.Par ()))
+    -- In this case we register newact to execute later:
+    fn (Just (mp,onsat)) = let onsat' = onsat >> newact in
+                           (Just (mp,onsat'), Nothing)
+    -- In this case we execute newact right away:
+    fn Nothing = (Nothing, Just newact)
+
+  saturate (SatMap lv) = WrapPar $ do
+     let lvid = L.lvarDbgName $ unWrapLVar lv
+     L.logStrLn 5 $ " [SatMap] saturate: explicity saturating lvar "++lvid
+     act <- L.liftIO $ atomicModifyIORef' (state lv) fn
+     case act of 
+       Nothing -> L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++", no callbacks to invoke."
+       Just a  -> do L.logStrLn 5 $" [SatMap] saturate: done saturating lvar "++lvid++".  Now invoking callback."
+                     a
+   where
+    fn (Just (mp,onsat)) = (Nothing, Just onsat)
+    fn Nothing           = (Nothing,Nothing)
+
+  unsafeIsSat (SatMap lv) = unsafeDupablePerformIO $ do
+    contents <- readIORef $ state lv
+    return $ not $ isJust contents
+
+  finalizeOrd sm = case fromIMap sm of
+                     Nothing -> Nothing
+                     Just m -> Just $ AFoldableOrd m
 
 {-
 
@@ -346,7 +367,7 @@ fromIMap (SatMap lv) = unsafeDupablePerformIO $ do
 -- | Return a fresh map which will contain at least as much data as
 -- the input map.  That is, things put in the former go in the latter,
 -- but not vice versa.
-copy :: (PartialJoinSemiLattice v, Ord k, Eq v)
+copy :: (G.PartialJoinSemiLattice v, Ord k, Eq v)
      => SatMap k s v -> Par d s (SatMap k s v)
 copy sm = do
   nm <- newEmptyMap
@@ -482,9 +503,3 @@ t1 = runParThenFreeze $ do
   insert "hi" (32::Int) m
   insert "hi" (33::Int) m
   return m
-
-instance PartialJoinSemiLattice Int where
-  joinMaybe a b 
-    | even a && even b = Just (max a b)
-    | odd  a && odd  b = Just (max a b)
-    | otherwise        = Nothing

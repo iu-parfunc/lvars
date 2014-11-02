@@ -22,8 +22,6 @@ module Data.LVar.LayeredSatMap
     )
     where
 
-import Data.LVar.SatMap(PartialJoinSemiLattice(..))
-
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.DeepFrz (runParThenFreeze)
 import           Control.LVish.Internal as LI
@@ -44,7 +42,7 @@ import           GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 data LayeredSatMap k s v where
-    LayeredSatMap :: PartialJoinSemiLattice v => (LVar s (LSMContents k v) (k, v)) -> LayeredSatMap k s v
+    LayeredSatMap :: G.PartialJoinSemiLattice v => (LVar s (LSMContents k v) (k, v)) -> LayeredSatMap k s v
 
 data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
                        deriving (Eq)
@@ -77,15 +75,15 @@ forEachHP mh (LayeredSatMap (WrapLVar lv)) callback = WrapPar $ do
           Nothing -> return ()
           Just m -> unWrapPar $ traverseWithKey_ (\k v -> forkHP mh $ callback k v) m
 
-newEmptyMap :: PartialJoinSemiLattice v => Par d s (LayeredSatMap k s v)
+newEmptyMap :: G.PartialJoinSemiLattice v => Par d s (LayeredSatMap k s v)
 newEmptyMap = newMap M.empty
 
-newMap :: PartialJoinSemiLattice v => M.Map k v -> Par d s (LayeredSatMap k s v)
+newMap :: G.PartialJoinSemiLattice v => M.Map k v -> Par d s (LayeredSatMap k s v)
 newMap m = WrapPar $ fmap (LayeredSatMap . WrapLVar) $ newLV $ do
   ref <- newIORef (Just m, return ())
   return $ LSMContents [ref]
 
-newFromList :: (Ord k, Eq v, PartialJoinSemiLattice v) =>
+newFromList :: (Ord k, Eq v, G.PartialJoinSemiLattice v) =>
                [(k,v)] -> Par d s (LayeredSatMap k s v)
 newFromList = newMap . M.fromList
 
@@ -111,7 +109,7 @@ withCallbacksThenFreeze (LayeredSatMap (WrapLVar lv)) callback action = do
 -- | Flatten this stack of LVars, merging all layers together
 -- according the the insert operation, and return the aggregated
 -- result map.
-fromIMap :: (PartialJoinSemiLattice v, Ord k) => LayeredSatMap k Frzn v -> Maybe (M.Map k v)
+fromIMap :: (G.PartialJoinSemiLattice v, Ord k) => LayeredSatMap k Frzn v -> Maybe (M.Map k v)
 fromIMap lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
   let LSMContents (mpRef:mps) = state lv
   (mp, onsat) <- readIORef mpRef
@@ -140,7 +138,7 @@ fromIMap lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
 forEach :: LayeredSatMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
 
-insert :: (Ord k, PartialJoinSemiLattice v, Eq v) =>
+insert :: (Ord k, G.PartialJoinSemiLattice v, Eq v) =>
           k -> v -> LayeredSatMap k s v -> Par d s ()
 insert !key !elm (LayeredSatMap (WrapLVar lv)) = WrapPar $ do
     let LSMContents (mpRef:mps) = L.state lv

@@ -23,8 +23,8 @@ import Control.LVish
 import Control.LVish.DeepFrz (runParThenFreeze)
 import Control.LVish.DeepFrz.Internal
 import Control.LVish.Internal
+import Data.LVar.Generic(PartialJoinSemiLattice(..))
 import Data.LVar.LayeredSatMap (LayeredSatMap)
-import Data.LVar.SatMap(PartialJoinSemiLattice(..))
 import Data.LVar.LayeredSatMap (LayeredSatMap(..), LSMContents(..))
 import qualified Data.LVar.LayeredSatMap as LSM
 import qualified Internal.Control.LVish.SchedIdempotent as L
