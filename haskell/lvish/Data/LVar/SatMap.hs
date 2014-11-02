@@ -26,7 +26,7 @@ module Data.LVar.SatMap
          -- * Basic operations
          SatMap(..), 
          newEmptyMap, newMap, newFromList,
-         insert, 
+         insert, saturate,
 
          -- * A new class for join that can fail
          PartialJoinSemiLattice(..),
@@ -35,19 +35,11 @@ module Data.LVar.SatMap
 -- It's possible that they can operate only with idempotent callbacks
 -- and be nondeterministic in whether they guarantee duplicate-suppression.
 
-         -- * Iteration and callbacks
-         -- forEach, forEachHP,
-         -- withCallbacksThenFreeze,
+         -- * Deterministic operations
+         copy, 
 
          -- * Quasi-deterministic operations
-         freezeMap, fromIMap,
-         -- traverseFrzn_,
-
-         -- * Higher-level derived operations
-         -- copy, traverseMap, union,
-         
-         -- * Alternate versions of derived ops that expose @HandlerPool@s they create
-         -- traverseMapHP, traverseMapHP_, unionHP                                        
+         forEachHP, fromIMap -- , freezeMap
        ) where
 
 -- import           Algebra.Lattice
@@ -64,11 +56,10 @@ import           Data.LVar.Generic as G
 import           Data.UtilInternal (traverseWithKey_)
 
 import           Control.Exception (throw)
-import           Data.List (intersperse, intercalate)
+import           Data.List (intercalate)
 import           Data.IORef
 import qualified Data.Map.Strict as M
-import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
-import           System.Mem.StableName (makeStableName, hashStableName)
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 import           Control.Applicative ((<$>))
 import qualified Data.Foldable as F
@@ -123,7 +114,7 @@ instance Eq (SatMap k s v) where
 instance LVarData1 (SatMap k) where
   freeze orig@(SatMap (WrapLVar lv)) = WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
   -- Unlike the Map-specific forEach variants, this takes only values, not keys.
-  addHandler mh mp fn = forEachHP mh mp (\ _k v -> fn v)
+  addHandler mh mp fn = (unsafeForEachHP mh mp (\ _k v -> fn v)) -- WARNING!  NOT VALID
   sortFrzn (SatMap lv) = 
     case unsafeDupablePerformIO (readIORef (state lv)) of 
       Nothing -> AFoldable [] -- Map saturated, contents are empty.
@@ -172,11 +163,33 @@ instance (Show k, Show a) => Show (SatMap k Trvrsbl a) where
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
 -- the map, optionally enrolled in a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
+--
+-- This function must be called BEFORE the LVar saturates.  Note, it
+-- is QUASIDETERMINISTIC, because there could be a race between a
+-- saturating put and registering the handler.
+forEachHP :: (HasFreeze e) =>
+             Maybe HandlerPool           -- ^ optional pool to enroll in 
+          -> SatMap k s v                  -- ^ Map to listen to
+          -> (k -> v -> Par e s ())      -- ^ callback
+          -> Par e s ()
+forEachHP mh sm@(SatMap lv) callb = do
+  unsafeForEachHP mh sm callb
+  x <- liftIO $ readIORef (state lv)
+  case x of
+    Nothing -> throw (PutAfterFreezeExn "SatMap: forEachHP may have raced with saturating Put")
+    Just _  -> return ()
+
+
+-- | Add an (asynchronous) callback that listens for all new key/value pairs added to
+-- the map, optionally enrolled in a handler pool.
+--
+-- WARNING! When the LVar saturates, this becomes useless.  This must
+-- be called at a time definitively BEFORE the LVar saturates.
+unsafeForEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
           -> SatMap k s v                  -- ^ Map to listen to
           -> (k -> v -> Par d s ())      -- ^ callback
           -> Par d s ()
-forEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
+unsafeForEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler mh lv globalCB deltaCB
     return ()
   where
@@ -187,6 +200,9 @@ forEachHP mh (SatMap (WrapLVar lv)) callb = WrapPar $ do
         Nothing -> return () -- Already saturated, nothing to do.
         Just (m,_) -> unWrapPar $ 
                       traverseWithKey_ (\ k v -> forkHP mh$ callb k v) m
+
+-- TODO: forEachNeverSat -- make forEach deterministic when you are
+-- willing to bet that a particular SatMap will NEVER saturate.
 
 --------------------------------------------------------------------------------
 
@@ -209,6 +225,8 @@ newFromList = newMap . M.fromList
 -- value of the provided action.
 withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
                            SatMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
+-- FIXME: needs to follow the same policy as forEach -- ERROR if it
+-- saturates before this is finished.
 withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
     do hp  <- newPool 
        res <- IV.new 
@@ -231,11 +249,6 @@ withCallbacksThenFreeze (SatMap (WrapLVar lv)) callback action =
                     res <- action -- Any additional puts here trigger the callback.
                     IV.put_ resIV res
         
--- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
--- the map.
-forEach :: SatMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
-forEach = forEachHP Nothing 
-
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
 -- 
 --   If a key is inserted multiple times, the values had
@@ -346,16 +359,6 @@ freezeMap (SatMap (WrapLVar lv)) = WrapPar $
     deltaThresh _ = return Nothing
 -}
 
-traverseMap = error "UNFINISHED"
-traverseMap_ = error "UNFINISHED"
-traverseMapHP = error "UNFINISHED"
-traverseMapHP_ = error "UNFINISHED"
-traverseFrzn_ = error "UNFINISHED"
-freezeMap = error "UNFINISHED"
-union = error "UNFINISHED"
-unionHP = error "UNFINISHED"
-copy = error "UNFINISHED"
-
 -- | /O(1)/: Convert from an `SatMap` to a plain `Data.Map`.
 --   This is only permitted when the `SatMap` has already been frozen.
 --   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
@@ -365,6 +368,29 @@ fromIMap (SatMap lv) = unsafeDupablePerformIO $ do
   case x of 
     Just (m,_) -> return (Just m)
     Nothing    -> return Nothing
+
+-- | Return a fresh map which will contain at least as much data as
+-- the input map.  That is, things put in the former go in the latter,
+-- but not vice versa.
+copy :: (PartialJoinSemiLattice v, Ord k, Eq v)
+     => SatMap k s v -> Par d s (SatMap k s v)
+copy sm = do
+  nm <- newEmptyMap
+  whenSat sm (saturate nm)
+  unsafeForEachHP Nothing sm $ \ k x ->
+    insert k x nm
+  return nm
+
+  -- IM.forEach cmapContents $ \ key (CVar newCV) -> do
+  --   dbgMsg ("Registering handler on CVar: "++show (unsafeName newCV)++", for var "++show key)
+  --   unsafeMonotonicHandlerHP Nothing newCV $ \ newVal -> 
+  --     IM.gmodify mp2 key $ \ (CVar lv) -> do
+  --       dbgMsg ("  ~~> propagating change to var "++show key++" from wrld "++
+  --               show (cmapID orig)++" to "++show wid++"\n"++
+  --               "      newval: " ++show newVal)
+  --       putPureLVar lv newVal
+
+
 
 {-
 

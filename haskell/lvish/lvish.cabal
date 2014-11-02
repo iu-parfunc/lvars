@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             2.0.1
+version:             2.0.2
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -28,6 +28,7 @@ version:             2.0.1
 
 -- 2.0     -- Major changes to all types to track effect signatures
 -- 2.0.1   -- add Data.LVar.Internal.Pure.unsafeMonotonicHandlerHP
+-- 2.0.2   -- add/expose SatMap copy, saturate, and forEachHP
 
 synopsis:  Parallel scheduler, LVar data structures, and infrastructure to build more.
 
