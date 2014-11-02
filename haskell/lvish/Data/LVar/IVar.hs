@@ -172,6 +172,7 @@ whenFull mh (IVar (WrapLVar lv)) fn =
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
     -- The threshold is ALWAYS met when a put occurs:
+    -- FIXME: That doesn't mean we should always return Just however...
     fn' x = return (Just (I.unWrapPar (fn x)))
     globalCB ref = do
       mx <- LI.liftIO $ readIORef ref -- Snapshot

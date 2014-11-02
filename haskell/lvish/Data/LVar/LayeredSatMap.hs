@@ -135,6 +135,9 @@ fromIMap lsm@(LayeredSatMap lv) = unsafeDupablePerformIO $ do
         Nothing -> Nothing
         Just newVal -> Just $ M.insert k newVal m
 
+instance (Show k, Show v, G.PartialJoinSemiLattice v, Ord k) => Show (LayeredSatMap k Frzn v) where
+  show = show . fromIMap
+
 forEach :: LayeredSatMap k s v -> (k -> v -> Par d s ()) -> Par d s ()
 forEach = forEachHP Nothing
 

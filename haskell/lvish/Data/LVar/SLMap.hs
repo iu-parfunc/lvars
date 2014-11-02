@@ -210,7 +210,9 @@ forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> (k -> v -> Par e s ())      -- ^ callback
           -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
-    L.addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
+    L.addHandler mh lv globalCB
+       -- FIXME: this is bad, it schedules REPEAT callbacks on the same key:
+       (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
     gcallb k v = do
       logDbgLn 5 " [SLMap] callback from global traversal "
