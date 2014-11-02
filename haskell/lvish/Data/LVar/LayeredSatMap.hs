@@ -50,11 +50,6 @@ data LSMContents k v = LSMContents [IORef (Maybe (M.Map k v), OnSat)]
 instance Eq (LayeredSatMap k s v) where
   LayeredSatMap lv1 == LayeredSatMap lv2 = state lv1 == state lv2
 
-instance (Ord k, Show k, Show v, G.PartialJoinSemiLattice v) => Show (LayeredSatMap k Frzn v) where
-  show lsm = case fromIMap lsm of
-    Nothing -> "saturated"
-    Just m -> show m
-
 instance (Ord k, Ord v) => Ord (LayeredSatMap k Frzn v) where
   compare (LayeredSatMap lv1) (LayeredSatMap lv2) = unsafeDupablePerformIO $ do
     let LSMContents (mpRef1:_) = state lv1
