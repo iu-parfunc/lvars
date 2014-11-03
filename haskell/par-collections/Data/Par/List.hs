@@ -24,7 +24,7 @@ instance Generator [a] where
 -- | WARNING: this instance is inefficient, because lists are NOT good
 -- splittable structures.  Nevertheless, lists are ubiquitous, so it's
 -- better to have this than not.
-instance (Eq a) => Split [a] where
+instance Split [a] where
   {-# INLINABLE split #-}
   split ls =
     let len = length ls 
