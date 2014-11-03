@@ -28,8 +28,8 @@ where
   
 import Data.IORef
 import Data.Atomics  
-import Control.Reagent -- AT: not yet using this, but would be nice to refactor
-                       -- to use it.
+import Control.Reagent ()  -- AT: not yet using this, but would be nice to refactor
+                           -- to use it.
 import Control.Monad.IO.Class
 import Control.Exception (assert)
 import Prelude hiding (reverse, map, head)

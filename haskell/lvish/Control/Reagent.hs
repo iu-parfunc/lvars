@@ -15,13 +15,14 @@ type Reagent a = forall b. (a -> IO b) -> IO b -> IO b
 -- | Execute a Reagent.
 {-# INLINE react #-}
 react :: Reagent a -> IO a
-react r = try where 
+react r = try where
+  -- RRN: If we retry indefinitely, where is the guarantee of
+  -- progress?  
   try      = r finish try
   finish x = return x
   
 -- | Like atomicModifyIORef, but uses CAS and permits the update action to force
--- a retry by returning Nothing  
-  
+-- a retry by returning Nothing    
 {-# INLINE atomicUpdate #-}
 atomicUpdate :: IORef a -> (a -> Maybe (a, b)) -> Reagent b  
 atomicUpdate r f succ fail = do
@@ -29,9 +30,13 @@ atomicUpdate r f succ fail = do
   let cur = peekTicket curTicket
   case f cur of
     Just (new, out) -> do
+      -- RRN: I note that this does not evaluate 'new' to WHNF.  It
+      -- could be a thunk still, is that ok?  (This can result in
+      -- blackholes in the IORef... under contention.)
       (done, _) <- casIORef r curTicket new
       if done then succ out else fail
     Nothing -> fail
+
 atomicUpdate_ :: IORef a -> (a -> a) -> Reagent ()
 atomicUpdate_ r f = atomicUpdate r (\x -> Just (f x, ()))
     
@@ -39,4 +44,4 @@ postCommit :: Reagent a -> (a -> IO b) -> Reagent b
 postCommit r f succ fail = r (\x -> f x >>= succ) fail
 
 choice :: Reagent a -> Reagent a -> Reagent a
-choice = error "TODO"
+choice = error "FINISHME: Reagent.choice"
