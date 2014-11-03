@@ -1,10 +1,11 @@
 Name:                par-collections
-Version:             1.1
+Version:             1.1.1
 Synopsis:            Generic parallel combinators for data and iteration spaces.
 
 -- Version history:
 --  1.0      : This library introduced to replace the deprecated monad-par-extras.
 --  1.1      : Add LVish-2.0 style effect signatures
+--  1.1.1    : Add Split instance for list
 
 Description:
   These modules provide means to traverse and consume
