@@ -5,14 +5,15 @@
 module Data.BitList 
   ( BitList
   , cons, head, tail, empty, null
-  , pack, unpack, length, drop
+  , pack, unpack, length, drop, reverse
+  , fromString
   )
 where
 
 import Data.Int
 import Data.Bits
 import Data.Word
-import Prelude as P hiding (head,tail,drop,length, null, (>>))
+import Prelude as P hiding (head,tail,drop,length,reverse,null, (>>))
 import qualified Data.List as L
 
 #ifdef TESTING
@@ -22,8 +23,8 @@ import Test.QuickCheck.Gen
 #endif
 
 -- | An immutable list of bits.
-data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Int64
-             | More {-# UNPACK #-} !Word8 {-# UNPACK #-} !Int64 BitList
+data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word64
+             | More {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word64 BitList
   -- ^ The Word8 stores how many bits are used within the current chunk.
   --   The Int64 is the chunk payload.
 --  deriving (Ord, Show)
@@ -36,6 +37,14 @@ data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Int64
 instance Show BitList where 
  show bl = "BitList " ++ show (map (\b -> case b of True -> '1'; False -> '0') (unpack bl))
 -- show bl = "pack " ++ show (unpack bl)
+
+-- | Convert from a human-readable string of '0' and '1' characters,
+-- i.e. "1101".
+fromString :: String -> BitList
+fromString []       = empty
+fromString ('1':tl) = cons True  (fromString tl)
+fromString ('0':tl) = cons False (fromString tl)
+fromString str      = error $ "BitList.fromString: Not a string of zeros and ones: "++str
 
 -- TODO: Read instance.
 
@@ -128,8 +137,14 @@ length (More i _ r) = toI i + length r
 -- a time.  However, it is still costly because reversing the order of
 -- bits is not a native operation.
 reverse :: BitList -> BitList
-reverse (One ix bv) = undefined
+reverse (One  ix bv)    =          One ix (flp ix bv)
+reverse (More ix bv tl) = loop tl (One ix (flp ix bv))
+ where
+   loop (More ix bv tl) acc = loop tl (More ix (flp ix bv) acc)
+   loop (One  ix bv   ) acc = More ix (flp ix bv) acc
 
+flp :: Word8 -> Word64 -> Word64
+flp ix bv = rev64 (bv << (64 - toI ix))
 
 bar :: Integral a => a -> BitList
 bar w = One 64 (fromIntegral w)
@@ -288,6 +303,8 @@ q2 = quickCheck prop_ord
 
 q3 = quickCheck (\w -> rev64 (rev64 w) == w)
 q4 = quickCheck (\w -> rev32 (rev32 w) == w)
+
+q5 = quickCheck (\b -> reverse (reverse b) == b)
 
 instance Arbitrary BitList where
   arbitrary = MkGen $ \ rng n -> 
