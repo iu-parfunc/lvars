@@ -4,7 +4,7 @@
 
 module Data.BitList 
   ( BitList
-  , cons, head, tail, empty 
+  , cons, head, tail, empty, null
   , pack, unpack, length, drop
   )
 where
@@ -12,7 +12,7 @@ where
 import Data.Int
 import Data.Bits
 import Data.Word
-import Prelude as P hiding (head,tail,drop,length)
+import Prelude as P hiding (head,tail,drop,length, null)
 import qualified Data.List as L
 
 #ifdef TESTING
@@ -26,21 +26,29 @@ data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Int64
              | More {-# UNPACK #-} !Word8 {-# UNPACK #-} !Int64 BitList
   -- ^ The Word8 stores how many bits are used within the current chunk.
   --   The Int64 is the chunk payload.
-  deriving (Ord, Show)
+--  deriving (Ord, Show)
 
 {-# INLINABLE cons #-}
 {-# INLINABLE head #-}
 {-# INLINABLE tail #-}
+{-# INLINABLE null #-}
 
--- instance Show BitList where 
---  show bl = "BitList " ++ show (map (\b -> case b of True -> '1'; False -> '0') (unpack bl))
--- -- show bl = "pack " ++ show (unpack bl)
+instance Show BitList where 
+ show bl = "BitList " ++ show (map (\b -> case b of True -> '1'; False -> '0') (unpack bl))
+-- show bl = "pack " ++ show (unpack bl)
 
 -- TODO: Read instance.
 
+-- | An empty list containing no bits.
 empty :: BitList
 empty = One 0 0
 
+-- | Is the list empty?
+null :: BitList -> Bool
+null (One 0 _) = True
+null _         = False
+
+-- | Add a single bit to the front of the list.
 cons :: Bool -> BitList -> BitList
 cons True  x@(One  64 _ )   = More 1 1 x
 cons False x@(One  64 _ )   = More 1 0 x
@@ -57,22 +65,26 @@ toI = fromIntegral
 -- TODO: May consider (More 0 _ _) representation to reduce extra
 -- allocation when size of the BitList is fluctuating back and forth.
 
+-- | Return the first bit, or an error if the list is null.
 head :: BitList -> Bool
 head (One  0 _   ) = error "tried to take head of an empty BitList"
 head (More 0 _  _) = error "BitList: data structure invariant failure!"
 head (One  i bv  ) = bv `testBit` (toI i-1)
 head (More i bv _) = bv `testBit` (toI i-1)
 
+-- | Drop the first bit.
 tail :: BitList -> BitList
 tail (One  0 _   ) = error "tried to take the tail of an empty BitList"
 tail (One  i bv  ) = One  (i-1) bv
 tail (More 1 _  r) = r
 tail (More i bv r) = More (i-1) bv r
 
+-- | Switch to the more dense (but isomprophic) memory representation.
 pack :: [Bool] -> BitList
 pack  []   = One 0 0
 pack (h:t) = cons h (pack t)
 
+-- | Switch to the more sparse (but isomprophic) memory representation.
 unpack :: BitList -> [Bool] 
 unpack (One 0 _)     = []
 unpack (One i bv)    = (bv `testBit` (toI i-1)) : unpack (One (i-1) bv)
@@ -88,6 +100,7 @@ unpack (More i bv r) = (bv `testBit` (toI i-1)) : unpack (More (i-1) bv r)
 -- 	      One i  bv   -> One  (i-n) bv
 -- 	      More i bv r -> More (i-n) bv r
 
+-- | Drop the first `n` bits.
 drop :: Int -> BitList -> BitList
 drop n (One i bv)
    | n >= toI i = empty
@@ -96,6 +109,7 @@ drop n (More i bv r)
    | n >= toI i = drop (n - toI i) r
    | otherwise = More (i - fromIntegral n) bv r
 
+-- | How many bits are in the BitList?
 length :: BitList -> Int
 length (One  i _)   = toI i
 length (More i _ r) = toI i + length r
@@ -116,7 +130,41 @@ instance Eq BitList where
    (tl1 == tl2)
 
   _ == _ = False
+
+-- | This lexiographic Ord instance makes it suitable for using for pedigree:
+instance Ord BitList where
+  {-# INLINABLE compare #-}
   
+  -- False < True
+  compare a b =
+    if null a
+    then if null b
+         then EQ
+         else LT
+    else if null b
+         then GT
+         else case compare (head a) (head b) of
+                LT -> LT
+                GT -> GT
+                EQ -> compare (tail a) (tail b)
+
+{-  
+  compare a b = cmp a b
+    where 
+     cmp (One  i1 v1)    (One  i2 v2)    = go i1 v1 i2 v2
+     cmp (More i1 v1 tl1) (More i2 v2 tl2) =
+       case go i1 v1 i2 v2 of
+         LT -> LT
+         GT -> GT
+         EQ -> compare tl1 tl2
+     {-# INLINE go #-}
+     go i1 v1 i2 v2 = 
+       case compare i1 i2 of
+         LT -> LT
+         GT -> GT
+         EQ -> compare (mask i1 v1) (mask i2 v2)
+-}
+
 mask :: Bits a => Word8 -> a -> a
 mask i x = shiftR (shiftL x n) n
   where n = 64 - toI i
@@ -163,6 +211,12 @@ prop_droptail xs =
   (length xs == 0) ||
   (drop 1 xs == tail xs)
 
+prop_ord :: BitList -> BitList -> Bool
+prop_ord xs ys =
+  (compare xs ys ==
+   compare (unpack xs) (unpack ys))
+
+
 #ifdef TESTING
 tests :: Test
 tests = 
@@ -181,7 +235,9 @@ tests =
 
 -- \s -> length (take 5 s) == 5
 
-q1 = quickCheck (prop_droptail :: BitList -> Bool)
+q1 = quickCheck prop_droptail
+
+q2 = quickCheck prop_ord
 
 instance Arbitrary BitList where
   arbitrary = MkGen $ \ rng n -> 
