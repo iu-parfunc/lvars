@@ -47,29 +47,25 @@ module Internal.Control.LVish.SchedIdempotent
 
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
-import qualified Control.Concurrent as Conc
 import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
 import           Control.LVish.Logging as L
-import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
 import qualified Data.Atomics.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
-import qualified GHC.Conc 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.Environment(getEnvironment)
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
 import           System.Random (random)
-import           Text.Printf (printf, hPrintf)
+import           Text.Printf (hPrintf)
 
 -- import Control.Compose ((:.), unO)
 import           Data.Traversable  hiding (forM)
@@ -573,8 +569,7 @@ freezeLVAfter lv globalCB updateCB = do
 forkHP :: Maybe HandlerPool -> Par () -> Par ()
 forkHP mh child = mkPar $ \k q -> do
   closed <- closeInPool mh child
-  Sched.pushWork q (k ()) -- "Work-first" policy.
---  hpMsg q " [dbg-lvish] incremented and pushed work in forkInPool, now running cont" hp   
+  Sched.pushWork q (k ()) -- "Work-first" policy, enqueue continuation.
   exec closed q  
   
 -- | Fork a child thread.
@@ -622,7 +617,7 @@ sched q = do
     Just t  -> exec t q
     Nothing -> return ()
 
--- Forcing evaluation of a LVar is fruitless.
+-- Forcing evaluation of an LVar is fruitless.
 instance NFData (LVar a d) where
   rnf _ = ()
 

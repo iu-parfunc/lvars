@@ -86,14 +86,35 @@ popOther = popMine
 -- A scheduling framework
 ------------------------------------------------------------------------------
 
+newtype Pedigree = Pedigree BL.BitList
+  deriving (Show, Eq)
+
+-- | Go down an additional fork branch in the pedigree.  This happens
+-- logically EARLIER.
+pushFork :: Pedigree -> Pedigree
+pushFork (Pedigree b) = Pedigree $ BL.cons False b
+
+-- | Take the continuation of the fork, this happens logicalyl LATER.
+pushContOfFork :: Pedigree -> Pedigree
+pushContOfFork (Pedigree b) = Pedigree $ BL.cons True b
+
+-- | Comparison on pedigrees is somewhat expensive because it must
+-- reverse them.
+instance (Ord Pedigree) where
+  compare (Pedigree b1) (Pedigree b2) =
+    compare (BL.reverse b1) (BL.reverse b2)
+
 -- All the state relevant to a single worker thread
 data State a s = State
     { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
-      numWorkers :: !Int,               -- ^ Total number of workers in this runPar
-      prng     :: !(IORef StdGen),        -- ^ core-local random number generation
-      status   :: !(IORef s),             -- ^ A thread-local flag
-      workpool :: !(Deque a),             -- ^ The thread-local work deque
-      idle     :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
+      numWorkers :: !Int,              -- ^ Total number of workers in this runPar
+      prng     :: !(IORef StdGen),     -- ^ core-local random number generation
+      status   :: !(IORef s),          -- ^ A thread-local flag
+      workpool :: !(Deque a),          -- ^ The thread-local work deque
+      lastPedigree :: IORef Pedigree,  -- ^ The last pedigree this thread was seen
+                                       -- working on.  (It may have moved on since.)
+      
+      idle     :: !(IORef [MVar Bool]), -- ^ global list of idle workers
       states   :: ![State a s],         -- ^ global list of all worker states.
       logger   :: !(Maybe L.Logger)
         -- ^ The Logger object used by the current Par session, if debugging is activated.
@@ -119,7 +140,7 @@ next state@State{ workpool } = do
 --   This function does NOT return until the complete runPar session is complete (all
 --   workers idle).
 steal :: State a s -> IO (Maybe a)
-steal State{ idle, states, no=my_no, numWorkers, logger } = do
+steal State{ idle, states, no=my_no, numWorkers, logger, lastPedigree } = do
   chatter logger $ "!cpu "++show my_no++" stealing" 
   go states
   where
@@ -148,6 +169,7 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
          case r of
            Just _t -> do
              chatter logger $ printf "cpu %d got work from cpu %d" my_no (no x)
+             writeIORef lastPedigree (error "find pedigree of stolen task")
              return r
            Nothing -> go xs
 
@@ -194,7 +216,8 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
         workpool <- newDeque
         status   <- newIORef s
         prng     <- newIORef $ mkStdGen i
-        return State { no = i, workpool, idle, status, states, prng, logger, numWorkers }
+        lastPedigree <- newIORef (Pedigree BL.empty)
+        return State { no = i, lastPedigree, workpool, idle, status, states, prng, logger, numWorkers }
   rec states <- forM [0..(numWorkers-1)] $ mkState states
   return (logger,states)
 
