@@ -6,7 +6,10 @@ module Data.BitList
   ( BitList
   , cons, head, tail, empty, null
   , pack, unpack, length, drop, reverse
-  , fromString, popCount 
+  , fromString, popCount
+
+   -- * Debugging only:
+  , showRep
   )
 where
 
@@ -17,6 +20,8 @@ import Data.Word
 import Prelude hiding (head,tail,drop,length,reverse,null, (>>))
 import qualified Prelude as P
 import qualified Data.List as L
+
+import Debug.Trace
 
 #ifdef TESTING
 import Test.HUnit
@@ -39,6 +44,11 @@ data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word64
 instance Show BitList where 
  show bl = "BitList " ++ show (map (\b -> case b of True -> '1'; False -> '0') (unpack bl))
 -- show bl = "pack " ++ show (unpack bl)
+
+-- | Show the internal representation, for debugging purposes.
+showRep :: BitList -> String
+showRep (One i b)    = "One "++show i++" "++show b++""
+showRep (More i b t) = "More "++show i++" "++show b++" ("++showRep t++")"
 
 -- | Convert from a human-readable string of '0' and '1' characters,
 -- i.e. "1101".
@@ -169,6 +179,17 @@ instance Eq BitList where
 
   _ == _ = False
 
+-- Mask off the high order (unused) bits.
+mask :: (Show a, Bits a, Num a) => Word8 -> a -> a
+mask 0 x = 0
+mask i x = (x << n) >> n
+-- mask i x =
+-- trace ("SHIFT left "++show n++" yielding "++show (x `unsafeShiftL` n)++
+--        " unsafe, "++show (x `shiftL` n)++" safe.") $ 
+--   (x `unsafeShiftL` n) >> n
+  where n = 64 - toI i
+
+
 -- | This lexiographic Ord instance makes it suitable for using for pedigree:
 instance Ord BitList where
   {-# INLINABLE compare #-}
@@ -203,9 +224,6 @@ instance Ord BitList where
          EQ -> compare (mask i1 v1) (mask i2 v2)
 -}
 
-mask :: Bits a => Word8 -> a -> a
-mask i x = shiftR (shiftL x n) n
-  where n = 64 - toI i
 
 ---------------------------------------------------------------------------
 -- Bit reversal tricks from the wonderful site:
@@ -234,10 +252,11 @@ rev64 x0 = (x5 >> 32) .|. (x5 << 32)
    x5 = (((x4 .&. 0xffff0000ffff0000) >> 16) .|. ((x4 .&. 0x0000ffff0000ffff) << 16));
 
 (>>) :: Bits a => a -> Int -> a
-(>>) = shiftR
-
 (<<) :: Bits a => a -> Int -> a
-(<<) = shiftL
+-- (>>) = shiftR
+-- (<<) = shiftL
+(>>) = unsafeShiftR
+(<<) = unsafeShiftL
 
 --------------------------------------------------------------------------------
 -- Testing:
@@ -276,6 +295,18 @@ t6 = drop 5 (More 1 0 (One 64 0))
 t7 :: Bool
 t7 = prop_droptail (pack [True])
 
+t8a :: Bool
+t8a = tail oo == drop 1 oo
+
+t8b :: Bool
+t8b = null (tail oo)
+
+t8c :: Bool
+t8c = null (drop 1 oo)
+
+oo :: BitList
+oo = One 1 1
+
 prop_droptail :: BitList -> Bool
 prop_droptail xs =
   (length xs == 0) ||
@@ -299,7 +330,13 @@ tests =
     , p3  ~=? True
     , p4  ~=? True
     , length t6 ~=? 60
+    , t7  ~=? True
+    , t8a ~=? True
+    , t8b ~=? True
+    , t8c ~=? True
     ]
+
+main = do runTestTT tests ; all_props
 
 -- TODO: QuickCheck
 
