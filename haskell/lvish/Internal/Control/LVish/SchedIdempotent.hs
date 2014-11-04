@@ -411,7 +411,7 @@ freezeLV :: LVar a d -> Par ()
 freezeLV lv@(LVar {name, status}) = mkPar $ \k q -> do
   let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
   logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status to Freezing"++uniqsuf
-  oldStatus <- atomicModifyIORef status $ \s -> (Freezing, s)    
+  oldStatus <- atomicModifyIORef' status $ \s -> (Freezing, s)    
   case oldStatus of
     Frozen   -> return ()
     Freezing -> return ()

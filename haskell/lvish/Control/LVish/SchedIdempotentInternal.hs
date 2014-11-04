@@ -13,6 +13,7 @@ import Prelude
 import Control.Monad
 import Control.Concurrent
 import Data.IORef
+import Data.Atomics (atomicModifyIORefCAS)
 import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
@@ -45,15 +46,21 @@ type Deque a = IORef [a]
 newDeque :: IO (Deque a)
 newDeque = newIORef []
 
+-- The version of atomic modify used in several places in this file:
+atomicMod :: IORef a -> (a -> (a, b)) -> IO b
+{-# INLINE atomicMod #-}
+-- atomicMod = atomicModifyIORef
+atomicMod = atomicModifyIORefCAS
+
 -- | Add work to a thread's own work deque
 pushMine :: Deque a -> a -> IO ()
 pushMine deque t = 
-  atomicModifyIORef deque $ \ts -> (t:ts, ())
+  atomicMod deque $ \ts -> (t:ts, ())
                                    
 -- | Take work from a thread's own work deque
 popMine :: Deque a -> IO (Maybe a)
 popMine deque = do
-  atomicModifyIORef deque $ \ts ->
+  atomicMod deque $ \ts ->
     case ts of
       []      -> ([], Nothing)
       (t:ts') -> (ts', Just t)
@@ -67,7 +74,7 @@ nullQ deque = do
 -- | Add low-priority work to a thread's own work deque
 pushYield :: Deque a -> a -> IO ()
 pushYield deque t = 
-  atomicModifyIORef deque $ \ts -> (ts++[t], ()) 
+  atomicMod deque $ \ts -> (ts++[t], ()) 
 
 -- | Take work from a different thread's work deque
 popOther :: Deque a -> IO (Maybe a)
@@ -118,7 +125,7 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
   where
     -- After a failed sweep, go idle:
     go [] = do m <- newEmptyMVar
-               r <- atomicModifyIORef idle $ \is -> (m:is, is)
+               r <- atomicMod idle $ \is -> (m:is, is)
                if length r == numWorkers - 1
                   then do
                      chatter logger $ printf "!cpu %d initiating shutdown" my_no
@@ -153,9 +160,9 @@ pushWork State { workpool, idle, logger, no } t = do
   pushMine workpool t
   idles <- readIORef idle
   when (not (null idles)) $ do
-    r <- atomicModifyIORef idle (\is -> case is of
-                                          [] -> ([], return ())
-                                          (i:is') -> (is', putMVar i False))
+    r <- atomicMod idle (\is -> case is of
+                                 [] -> ([], return ())
+                                 (i:is') -> (is', putMVar i False))
     r -- wake one up
         
 yieldWork :: State a s -> a -> IO ()

@@ -138,7 +138,7 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 -- This function is always at least strict up to WHNF in the element put.
 put_ :: (HasPut e, Eq a) => IVar s a -> a -> Par e s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
-  where putter ref      = atomicModifyIORef ref update
+  where putter ref      = atomicModifyIORef' ref update
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
