@@ -58,8 +58,7 @@ import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
-import qualified Data.Atomics.Counter as C2
-import qualified Data.Concurrent.Counter as C
+import qualified Data.Atomics.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
 import qualified GHC.Conc 
@@ -139,7 +138,7 @@ data Listener d = Listener {
 -- are affiliated with the pool.  It detects the condition where all such threads
 -- have completed.
 data HandlerPool = HandlerPool {
-  numHandlers      :: C.Counter,   -- How many handler callbacks are currently
+  numHandlers      :: C.AtomicCounter,   -- How many handler callbacks are currently
                                    -- running?
   blockedOnQuiesce :: B.Bag ClosedPar
 }
@@ -340,10 +339,10 @@ winnerCheck execFlag q tru fal = do
       if winner then tru else fal
 #  else
 
-type DedupCell = C2.AtomicCounter
-newDedupCheck = C2.newCounter 0 
+type DedupCell = C.AtomicCounter
+newDedupCheck = C.newCounter 0 
 winnerCheck execFlag q tru fal = do
-  cnt <- C2.incrCounter 1 execFlag
+  cnt <- C.incrCounter 1 execFlag
   logWith q 8 $ " [dbg-lvish] dedup "++show(unsafeName execFlag)
              ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show (cnt==1)
              ++ ", counter val " ++ show cnt
@@ -432,7 +431,7 @@ freezeLV lv@(LVar {name, status}) = mkPar $ \k q -> do
 -- | Create a handler pool.
 newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
-  cnt <- C.new
+  cnt <- C.newCounter 0
   bag <- B.new
   let hp = HandlerPool cnt bag
   hpMsg q " [dbg-lvish] Created new pool" hp
@@ -476,16 +475,16 @@ closeInPool (Just hp) c = do
         shouldDec <- tryDecRef      -- are we the first copy of the thread to
                                     -- terminate?
         when shouldDec $ do
-          C.dec cnt                 -- record handler completion in pool
-          quiescent <- C.poll cnt   -- check for (transient) quiescence
-          when quiescent $ do       -- wake any threads waiting on quiescence
+          C.incrCounter (-1) cnt                 -- record handler completion in pool
+          quiescent <- C.readCounter cnt   -- check for (transient) quiescence
+          when (quiescent==0) $ do       -- wake any threads waiting on quiescence
             hpMsg q " [dbg-lvish] -> Quiescent now.. waking conts" hp 
             let invoke t tok = do
                   B.remove tok
                   Sched.pushWork q t                
             B.foreach (blockedOnQuiesce hp) invoke
         sched q
-  C.inc $ numHandlers hp            -- record handler invocation in pool
+  C.incrCounter 1 $ numHandlers hp            -- record handler invocation in pool
   return $ close c onFinishHandler  -- close the task with a special "done"
                                     -- continuation that clears it from the
                                     -- handler pool
@@ -534,8 +533,8 @@ quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
   -- a blocked thread prior to checking for quiescence
   tok <- B.put bag k'
   hpMsg q " [dbg-lvish] quiesce: poll count" hp
-  quiescent <- C.poll cnt
-  if quiescent then do
+  quiescent <- C.readCounter cnt
+  if (quiescent==0) then do
     hpMsg q " [dbg-lvish] already quiesced, remove token from bag" hp
     B.remove tok
     exec k' q 
@@ -803,7 +802,7 @@ hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
   sn1 <- makeStableName cnt
   sn2 <- makeStableName bag
-  c   <- readIORef cnt
+  c   <- C.readCounter cnt
   return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
            " transient cnt "++show c
 
