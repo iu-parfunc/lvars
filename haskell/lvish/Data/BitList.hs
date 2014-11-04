@@ -44,7 +44,7 @@ empty = One 0 0
 cons :: Bool -> BitList -> BitList
 cons True  x@(One  64 _ )   = More 1 1 x
 cons False x@(One  64 _ )   = More 1 0 x
-cons True  x@(More 64 _ _)  = More 1 1 x
+cons True  x@(More 64 _ _)  = More 1 1 x -- We waste the Word8, but we don't reallocate the object.
 cons False x@(More 64 _ _)  = More 1 0 x
 cons True    (One   i bv)   = One  (i+1) (bv `setBit` toI i)
 cons False   (One   i bv)   = One  (i+1) (bv               )
