@@ -6,14 +6,16 @@ module Data.BitList
   ( BitList
   , cons, head, tail, empty, null
   , pack, unpack, length, drop, reverse
-  , fromString
+  , fromString, popCount 
   )
 where
 
 import Data.Int
-import Data.Bits
+import Data.Bits hiding (popCount)
+import qualified Data.Bits as B
 import Data.Word
-import Prelude as P hiding (head,tail,drop,length,reverse,null, (>>))
+import Prelude hiding (head,tail,drop,length,reverse,null, (>>))
+import qualified Prelude as P
 import qualified Data.List as L
 
 #ifdef TESTING
@@ -123,6 +125,11 @@ length :: BitList -> Int
 length (One  i _)   = toI i
 length (More i _ r) = toI i + length r
 
+-- | How many `True`s are in the list?
+popCount :: BitList -> Int
+popCount (One ix bv)     = B.popCount (flp ix bv)
+popCount (More ix bv tl) = B.popCount (flp ix bv) + popCount tl
+
 
 -- TODO: index, take, etc
 
@@ -143,6 +150,7 @@ reverse (More ix bv tl) = loop tl (One ix (flp ix bv))
    loop (More ix bv tl) acc = loop tl (More ix (flp ix bv) acc)
    loop (One  ix bv   ) acc = More ix (flp ix bv) acc
 
+{-# INLINE flp #-}
 flp :: Word8 -> Word64 -> Word64
 flp ix bv = rev64 (bv << (64 - toI ix))
 
@@ -305,6 +313,10 @@ q3 = quickCheck (\w -> rev64 (rev64 w) == w)
 q4 = quickCheck (\w -> rev32 (rev32 w) == w)
 
 q5 = quickCheck (\b -> reverse (reverse b) == b)
+
+q6 = quickCheck (\b -> popCount b == P.length (filter id (unpack b)))
+
+all_props = do q1; q2; q3; q4; q5; q6
 
 instance Arbitrary BitList where
   arbitrary = MkGen $ \ rng n -> 
