@@ -12,12 +12,9 @@ module Control.LVish.SchedIdempotentInternal (
 import Prelude
 import Control.Monad
 import Control.Concurrent
-import Control.DeepSeq
-import Control.Applicative
-import Data.IORef 
-import GHC.Conc
+import Data.IORef
+import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
-import System.IO (stdout)
 import Text.Printf
 
 import qualified Control.LVish.Logging as L
@@ -103,7 +100,7 @@ next state@State{ workpool } = do
   e <- popMine workpool
   case e of
     Nothing -> steal state
-    Just t  -> return e
+    Just _t -> return e
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
 -- Cilk time/space bounds if one is running strictly nested (series
@@ -125,7 +122,7 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
                if length r == numWorkers - 1
                   then do
                      chatter logger $ printf "!cpu %d initiating shutdown" my_no
-                     mapM_ (\m -> putMVar m True) r -- Signal to all but us.
+                     mapM_ (\mv -> putMVar mv True) r -- Signal to all but us.
                      return Nothing
                   else do
                     chatter logger $ printf "!cpu %d going idle..." my_no
@@ -142,7 +139,7 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
       | otherwise     = do
          r <- popOther (workpool x)
          case r of
-           Just t  -> do
+           Just _t -> do
              chatter logger $ printf "cpu %d got work from cpu %d" my_no (no x)
              return r
            Nothing -> go xs
@@ -158,7 +155,7 @@ pushWork State { workpool, idle, logger, no } t = do
   when (not (null idles)) $ do
     r <- atomicModifyIORef idle (\is -> case is of
                                           [] -> ([], return ())
-                                          (i:is) -> (is, putMVar i False))
+                                          (i:is') -> (is', putMVar i False))
     r -- wake one up
         
 yieldWork :: State a s -> a -> IO ()
