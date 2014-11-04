@@ -12,12 +12,12 @@ where
 import Data.Int
 import Data.Bits
 import Data.Word
-import Prelude as P hiding (head,tail,drop,length, null)
+import Prelude as P hiding (head,tail,drop,length, null, (>>))
 import qualified Data.List as L
 
 #ifdef TESTING
 import Test.HUnit
-import Test.QuickCheck
+import Test.QuickCheck hiding ((.&.))
 import Test.QuickCheck.Gen
 #endif
 
@@ -119,6 +119,21 @@ length (More i _ r) = toI i + length r
 
 -- TODO: functor instance, etc.
 
+-- TODO: Reverse.. reverse CAN be efficient if we allow chunks that are NOT full.
+
+-- | Reverse a bitlist, O(N) time and space.
+-- 
+-- NOTE: This is somewhat more efficient than reversing a regular list
+-- because bitwise operations can be used to reverse 64 bit chunks at
+-- a time.  However, it is still costly because reversing the order of
+-- bits is not a native operation.
+reverse :: BitList -> BitList
+reverse (One ix bv) = undefined
+
+
+bar :: Integral a => a -> BitList
+bar w = One 64 (fromIntegral w)
+
 instance Eq BitList where
   -- Here we specifically ignore upper bits in the representation:
   One i1 bv1 == One i2 bv2 
@@ -168,6 +183,38 @@ instance Ord BitList where
 mask :: Bits a => Word8 -> a -> a
 mask i x = shiftR (shiftL x n) n
   where n = 64 - toI i
+
+---------------------------------------------------------------------------
+-- Bit reversal tricks from the wonderful site:
+--   http://graphics.stanford.edu/~seander/bithacks.html#BitReverseObvious
+---------------------------------------------------------------------------
+
+-- | Reverse the low byte of a Word64
+rev8 :: Word64 -> Word64
+rev8 b = (((b * 0x80200802) .&. 0x0884422110) * 0x0101010101) >> 32;
+
+rev32 :: Word32 -> Word32
+rev32 x0 =  (x4 >> 16) .|. (x4 << 16)
+  where
+   x1 = (((x0 .&. 0xaaaaaaaa) >> 1) .|. ((x0 .&. 0x55555555) << 1))
+   x2 = (((x1 .&. 0xcccccccc) >> 2) .|. ((x1 .&. 0x33333333) << 2))
+   x3 = (((x2 .&. 0xf0f0f0f0) >> 4) .|. ((x2 .&. 0x0f0f0f0f) << 4))
+   x4 = (((x3 .&. 0xff00ff00) >> 8) .|. ((x3 .&. 0x00ff00ff) << 8));
+
+rev64 :: Word64 -> Word64
+rev64 x0 = (x5 >> 32) .|. (x5 << 32)
+  where
+   x1 = (((x0 .&. 0xaaaaaaaaaaaaaaaa) >> 1)  .|. ((x0 .&. 0x5555555555555555) << 1))
+   x2 = (((x1 .&. 0xcccccccccccccccc) >> 2)  .|. ((x1 .&. 0x3333333333333333) << 2))
+   x3 = (((x2 .&. 0xf0f0f0f0f0f0f0f0) >> 4)  .|. ((x2 .&. 0x0f0f0f0f0f0f0f0f) << 4))
+   x4 = (((x3 .&. 0xff00ff00ff00ff00) >> 8)  .|. ((x3 .&. 0x00ff00ff00ff00ff) << 8));
+   x5 = (((x4 .&. 0xffff0000ffff0000) >> 16) .|. ((x4 .&. 0x0000ffff0000ffff) << 16));
+
+(>>) :: Bits a => a -> Int -> a
+(>>) = shiftR
+
+(<<) :: Bits a => a -> Int -> a
+(<<) = shiftL
 
 --------------------------------------------------------------------------------
 -- Testing:
@@ -238,6 +285,9 @@ tests =
 q1 = quickCheck prop_droptail
 
 q2 = quickCheck prop_ord
+
+q3 = quickCheck (\w -> rev64 (rev64 w) == w)
+q4 = quickCheck (\w -> rev32 (rev32 w) == w)
 
 instance Arbitrary BitList where
   arbitrary = MkGen $ \ rng n -> 
