@@ -46,12 +46,6 @@ type Deque a = IORef [a]
 newDeque :: IO (Deque a)
 newDeque = newIORef []
 
--- The version of atomic modify used in several places in this file:
-atomicMod :: IORef a -> (a -> (a, b)) -> IO b
-{-# INLINE atomicMod #-}
--- atomicMod = atomicModifyIORef
-atomicMod = atomicModifyIORefCAS
-
 -- | Add work to a thread's own work deque
 pushMine :: Deque a -> a -> IO ()
 pushMine deque t = 
@@ -81,6 +75,14 @@ popOther :: Deque a -> IO (Maybe a)
 popOther = popMine
 
 #endif
+-- END: ifdef CHASE_LEV
+
+-- The version of atomic modify used in several places in this file:
+atomicMod :: IORef a -> (a -> (a, b)) -> IO b
+{-# INLINE atomicMod #-}
+-- atomicMod = atomicModifyIORef'
+atomicMod = atomicModifyIORefCAS
+
 
 ------------------------------------------------------------------------------
 -- A scheduling framework
