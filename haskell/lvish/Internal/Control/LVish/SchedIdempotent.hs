@@ -454,6 +454,7 @@ data DecStatus = HasDec | HasNotDec
 closeInPool :: Maybe HandlerPool -> Par () -> IO ClosedPar
 closeInPool Nothing c = return $ close c $ const (ClosedPar sched)
 closeInPool (Just hp) c = do
+  -- RRN: Is this redundant with the extra synchronization performed for GET_ONCE?
   decRef <- newIORef HasNotDec      -- in case the thread is duplicated, ensure
                                     -- that the counter is decremented only once
                                     -- on termination
@@ -570,8 +571,18 @@ forkHP :: Maybe HandlerPool -> Par () -> Par ()
 forkHP mh child = mkPar $ \k q -> do
   closed <- closeInPool mh child
   Sched.pushWork q (k ()) -- "Work-first" policy, enqueue continuation.
+  pedFork q
   exec closed q  
+
+pedFork :: Sched.State a s -> IO ()
+pedFork q = do
+  let ped = Sched.lastPedigree q
+  oldPed <- readIORef ped
+  let newPed = Sched.pushFork oldPed
+  logWith q 1 $  " [dbg-lvish] Pushing fork, setting pedigree to: "++show newPed
+  writeIORef ped newPed
   
+
 -- | Fork a child thread.
 fork :: Par () -> Par ()
 fork f = forkHP Nothing f

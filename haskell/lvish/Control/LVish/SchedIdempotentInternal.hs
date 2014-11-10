@@ -4,8 +4,10 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Control.LVish.SchedIdempotentInternal (
-  State(logger, no), 
-  new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
+  State(logger, no, lastPedigree), 
+  new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng,
+
+  Pedigree, pushFork, pushContOfFork
   ) where
 
 
@@ -20,6 +22,7 @@ import Text.Printf
 
 import qualified Control.LVish.Logging as L
 import Control.LVish.Types (DbgCfg(..))
+
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
@@ -45,12 +48,6 @@ type Deque a = IORef [a]
 -- | Create a new local work deque
 newDeque :: IO (Deque a)
 newDeque = newIORef []
-
--- The version of atomic modify used in several places in this file:
-atomicMod :: IORef a -> (a -> (a, b)) -> IO b
-{-# INLINE atomicMod #-}
--- atomicMod = atomicModifyIORef
-atomicMod = atomicModifyIORefCAS
 
 -- | Add work to a thread's own work deque
 pushMine :: Deque a -> a -> IO ()
@@ -81,6 +78,13 @@ popOther :: Deque a -> IO (Maybe a)
 popOther = popMine
 
 #endif
+-- END: ifdef CHASE_LEV
+
+-- The version of atomic modify used in several places in this file:
+atomicMod :: IORef a -> (a -> (a, b)) -> IO b
+{-# INLINE atomicMod #-}
+-- atomicMod = atomicModifyIORef'
+atomicMod = atomicModifyIORefCAS
 
 ------------------------------------------------------------------------------
 -- A scheduling framework
@@ -126,6 +130,7 @@ data State a s = State
 next :: State a s -> IO (Maybe a)
 next state@State{ workpool } = do
   e <- popMine workpool
+-- FINISHME: update lastPedigree according to what we popped...
   case e of
     Nothing -> steal state
     Just _t -> return e
