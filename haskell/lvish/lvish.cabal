@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             2.0.2
+version:             2.0.2.1
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
