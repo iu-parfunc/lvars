@@ -71,7 +71,7 @@ flag debug
 
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
-  default: False
+  default: True
   manual: True
   
 flag getonce
