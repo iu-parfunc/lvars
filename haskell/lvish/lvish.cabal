@@ -267,6 +267,7 @@ benchmark bench-lvish
                    , containers >= 0.5
                    , vector >=0.10
                    , random
+                 , atomic-primops >= 0.6
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0

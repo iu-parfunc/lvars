@@ -2,10 +2,15 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
+
 
 import Control.LVish hiding (for_)
+import qualified Control.LVish.Internal as L
 import Control.LVish.DeepFrz (runParThenFreeze, NonFrzn)
 import Control.Par.EffectSigs
+import Data.LVar.Generic (PartialJoinSemiLattice(..))
 -- import Data.LVar.IVar
 import qualified Data.LVar.PureSet as PS
 import qualified Data.LVar.SLSet   as SS
@@ -20,6 +25,7 @@ import qualified Data.LVar.LayeredSatMap as LSM
     
 import qualified Data.LVar.FiltSet as FS
 
+import Data.Atomics.Counter
 import Criterion.Main
 import Criterion.Types
 import GHC.Conc(numCapabilities)
@@ -65,7 +71,8 @@ main = defaultMain $
 
   bgroup "satmap"   (basicContainerBench Sat.newEmptyMap (\n -> Sat.insert n n) (Sat.newFromList . pairit)),
   bgroup "layermap" (copyContainerBench LSM.newEmptyMap (\n -> LSM.insert n n) (LSM.newFromList . pairit) LSM.pushLayer),
-  bgroup "filtset" filtSetBench
+  bgroup "filtset" filtSetBench,
+  bgroup "satBenches" [pureSetSatBench, filtSetSatBench]
   ]
  where
    pairit = map (\n->(n,n))
@@ -150,6 +157,54 @@ filtSetBench = [
        m <- LSM.newMap $ M.fromList [(n, n)]
        FS.insert m s
   ]
+
+newtype SatTuple k s v = SatTuple (Int, Sat.SatMap k s v)
+
+instance Ord k => FS.SaturatingLVar (SatTuple k) where
+  whenSat (SatTuple (_, sm)) act = FS.whenSat sm act
+  saturate (SatTuple (_, sm)) = FS.saturate sm
+  unsafeIsSat (SatTuple (_, sm)) = FS.unsafeIsSat sm
+  finalizeOrd (SatTuple (_, sm)) = FS.finalizeOrd sm
+
+instance Ord (Int, Sat.SatMap k s v) where
+  compare (i1, _) (i2, _) = compare i1 i2
+
+instance PartialJoinSemiLattice () where
+  joinMaybe _ _ = Just ()
+
+pureSetSatBench :: Benchmark
+pureSetSatBench = bench "pureSetSatBench" $ Benchmarkable $ \num -> runParNonDet $ do
+  set <- PS.newEmptySet
+  c <- L.liftIO $ newCounter 0
+  initMap <- Sat.newEmptyMap
+  for_ 1 10 $ \i -> Sat.insert i () initMap
+  val <- L.liftIO $ incrCounter 1 c
+  PS.insert (val, initMap) set
+  for_ 1 (fromIntegral num) $ \i -> do
+    newMap <- Sat.newEmptyMap
+    for_ 1 10 $ \i -> Sat.insert i () newMap
+    val <- L.liftIO $ incrCounter 1 c
+    PS.insert (val, newMap) set
+    FS.saturate newMap
+  return ()
+
+filtSetSatBench :: Benchmark
+filtSetSatBench = bench "filtSetSatBench" $ Benchmarkable $ \num -> runParNonDet $ do
+  set <- FS.newEmptySet
+  c <- L.liftIO $ newCounter 0
+  initMap <- Sat.newEmptyMap
+  for_ 1 10 $ \i -> Sat.insert i () initMap
+  val <- L.liftIO $ incrCounter 1 c
+  let tup = (SatTuple (val, initMap))
+  FS.insert tup set
+  for_ 1 (fromIntegral num) $ \i -> do
+    newMap <- Sat.newEmptyMap
+    for_ 1 10 $ \i -> Sat.insert i () newMap
+    val <- L.liftIO $ incrCounter 1 c
+    let tup = (SatTuple (val, newMap))
+    FS.insert tup set
+    FS.saturate tup
+  return ()
 
 ----------------------------------------------------------------------------------------------------
   
