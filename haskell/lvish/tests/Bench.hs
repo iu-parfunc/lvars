@@ -176,10 +176,6 @@ pureSetSatBench :: Benchmark
 pureSetSatBench = bench "pureSetSatBench" $ Benchmarkable $ \num -> runParNonDet $ do
   set <- PS.newEmptySet
   c <- L.liftIO $ newCounter 0
-  initMap <- Sat.newEmptyMap
-  for_ 1 10 $ \i -> Sat.insert i () initMap
-  val <- L.liftIO $ incrCounter 1 c
-  PS.insert (val, initMap) set
   for_ 1 (fromIntegral num) $ \i -> do
     newMap <- Sat.newEmptyMap
     for_ 1 10 $ \i -> Sat.insert i () newMap
@@ -192,11 +188,6 @@ filtSetSatBench :: Benchmark
 filtSetSatBench = bench "filtSetSatBench" $ Benchmarkable $ \num -> runParNonDet $ do
   set <- FS.newEmptySet
   c <- L.liftIO $ newCounter 0
-  initMap <- Sat.newEmptyMap
-  for_ 1 10 $ \i -> Sat.insert i () initMap
-  val <- L.liftIO $ incrCounter 1 c
-  let tup = (SatTuple (val, initMap))
-  FS.insert tup set
   for_ 1 (fromIntegral num) $ \i -> do
     newMap <- Sat.newEmptyMap
     for_ 1 10 $ \i -> Sat.insert i () newMap
