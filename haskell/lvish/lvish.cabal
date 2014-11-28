@@ -10,7 +10,7 @@ name:                lvish
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             2.0.2
+version:             2.0.2.1
 
 -- Changelog:
 -- 0.2     -- switch SLMap over to O(1) freeze
@@ -71,7 +71,7 @@ flag debug
 
 flag chaselev
   description: Use the Chase-Lev work-stealing deque
-  default: False
+  default: True
   manual: True
   
 flag getonce
@@ -267,6 +267,7 @@ benchmark bench-lvish
                    , containers >= 0.5
                    , vector >=0.10
                    , random
+                 , atomic-primops >= 0.6
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0
