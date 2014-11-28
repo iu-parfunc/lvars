@@ -99,7 +99,7 @@ import qualified Control.LVish.SchedIdempotentInternal as Sched
 --     entire LVar state, but for, e.g., collection data structures, delta will
 --     generally represent a single insertion.
 data LVar a d = LVar {
-  state  :: a,                -- the current, "global" state of the LVar
+  state  :: !a,                -- the current, "global" state of the LVar
   status :: {-# UNPACK #-} !(IORef (Status d)), -- is the LVar active or frozen?  
   name   :: {-# UNPACK #-} !LVarID            -- a unique identifier for this LVar
 }

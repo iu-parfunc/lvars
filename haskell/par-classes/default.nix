@@ -7,7 +7,9 @@ with haskellPackages;
 cabal.mkDerivation (self: {
   pname = "par-classes";
   version = "1.1";
-  src = ./.;
+  src = builtins.filterSource
+    (path: (type:  baseNameOf path != ".git"))
+    ./.;
   sha256 = "1yjqhym8n2ycavzhcqvywwav3r2hsjadidkwyvz4pdhn5q138aap";
   buildDepends = [ deepseq ];
   meta = {
