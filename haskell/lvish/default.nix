@@ -13,8 +13,9 @@ cabal.mkDerivation (self: {
   configureFlags = "--ghc-option=-j4";
   noHaddock = true;
   sha256 = "";
+#  doCheck= false;
   buildDepends = [
-    async atomicPrimops bitsAtomic deepseq lattices missingForeign
+    async atomicPrimops bitsAtomic chaselevDeque deepseq lattices missingForeign
     parClasses parCollections random threadLocalStorage transformers
     vector
   ];
