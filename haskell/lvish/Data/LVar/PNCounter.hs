@@ -26,7 +26,7 @@ module Data.LVar.PNCounter
        ) where
 import           Control.LVish
 import           Control.LVish.Internal
-import qualified Data.Atomics.Counter.Reference as AC
+import qualified Data.Atomics.Counter as AC
 -- LK: FIXME: it can't be okay to use SchedIdempotent if we're using bump, can it?!
 import           Internal.Control.LVish.SchedIdempotent (newLV)
 import           Data.IORef

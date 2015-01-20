@@ -19,7 +19,8 @@ import Control.LVish hiding (freeze, put)
 import Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), state, liftIO)
 import Control.LVish.DeepFrz.Internal
 import qualified Internal.Control.LVish.SchedIdempotent as LI 
-import qualified Data.Atomics.Counter.Reference as AC
+-- import qualified Data.Atomics.Counter.Reference as AC
+import qualified Data.Atomics.Counter as AC
 import           Data.Word
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
