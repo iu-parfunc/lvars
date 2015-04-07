@@ -8,14 +8,9 @@ env:
  - GHCVER=7.8.2
  - GHCVER=7.8.3
  - GHCVER=7.8.4
- - GHCVER=7.10.1
- - GHCVER=head  # see section about GHC HEAD snapshots
-
-matrix:
-  allow_failures:
   # We're broken in 7.10.1 right now, because of https://ghc.haskell.org/trac/ghc/wiki/Migration/7.10#GHCsaysNoinstanceforApplicative... , it looks like.
-    - env: GHCVER=7.10.1
-    - env: GHCVER=head
+# - GHCVER=7.10.1
+# - GHCVER=head  # see section about GHC HEAD snapshots
 
 # Handle git submodules yourself
 git:
