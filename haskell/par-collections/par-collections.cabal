@@ -51,7 +51,7 @@ Library
                , par-classes  >= 1.1
 
                -- These are so we can provide instances for existing collections:
-               , primitive    >= 0.5  && < 0.6
+               , primitive    >= 0.6 && < 0.7
                , vector       >= 0.10 && < 0.11
 
   if impl(ghc < 7.7) {
