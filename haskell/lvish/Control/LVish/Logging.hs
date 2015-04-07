@@ -33,7 +33,9 @@ module Control.LVish.Logging
          -- * General utilities
          forkWithExceptions,
 
-         Backoff(totalWait), newBackoff, backoff
+         Backoff(totalWait), newBackoff, backoff,
+
+         DbgCfg(..)
        )
        where
 
@@ -52,10 +54,28 @@ import           System.Random
 import           Text.Printf (printf, hPrintf)
 import           Debug.Trace (trace, traceEventIO)
 
-import Control.LVish.Types
 -- import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 ----------------------------------------------------------------------------------------------------
+
+-- | A destination for log messages
+data OutDest = -- NoOutput -- ^ Drop them entirely.
+               OutputEvents    -- ^ Output via GHC's `traceEvent` runtime events.
+             | OutputTo Handle -- ^ Printed human-readable output to a handle.
+             | OutputInMemory  -- ^ Accumulate output in memory and flush when appropriate.
+
+-- | DebugConfig: what level of debugging support is activated?
+data DbgCfg = 
+     DbgCfg { dbgRange :: Maybe (Int,Int) 
+                -- ^ Inclusive range of debug messages to accept
+                --   (i.e. filter on priority level).  If Nothing, use the default level,
+                --   which is (0,N) where N is controlled by the DEBUG environment variable.
+                --   The convention is to use Just (0,0) to disable logging.
+            , dbgDests :: [OutDest] -- ^ Destinations for debug log messages.
+            , dbgScheduling :: Bool
+                -- ^ In additional to logging debug messages, control
+                --   thread interleaving at these points when this is True.
+           }
 
 -- | A Logger coordinates a set of threads that print debug logging messages.
 --

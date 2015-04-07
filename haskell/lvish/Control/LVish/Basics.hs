@@ -163,7 +163,7 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
 --   
-runParDetailed :: DbgCfg        -- ^ Debugging configuration
+runParDetailed :: Lg.DbgCfg        -- ^ Debugging configuration
                -> Int           -- ^ How many worker threads to use. 
                -> (forall s . Par e s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)

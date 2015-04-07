@@ -122,7 +122,7 @@ import           Control.LVish.Logical
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
-import           Control.LVish.Logging (LogMsg(..), OutDest(..), defaultMemDbgRange, logOn)
+import           Control.LVish.Logging (LogMsg(..), OutDest(..), DbgCfg(..), defaultMemDbgRange, logOn)
 import           Data.LVar.IVar 
 import           Data.Proxy
 import           Data.Coerce (coerce)
