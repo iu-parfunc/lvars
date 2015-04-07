@@ -46,7 +46,7 @@ Library
            Data.Splittable.Class
 
   -- This needs to stay low-dependencies!!  Interfaces only.
-  Build-depends: base >= 4 && < 5
+  Build-depends: base >= 4.7 && < 5
                , deepseq >= 1.1
                , ghc-prim >= 0.3
 
