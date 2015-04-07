@@ -1,6 +1,8 @@
 lvars
 =====
 
+[![Build Status](https://travis-ci.org/iu-parfunc/lvars.svg?branch=master)](https://travis-ci.org/iu-parfunc/lvars)
+
 #### A collection of prototype LVar implementations, tools, and mechanized semantics.
 
 This is an umbrella repository for work related to LVars.
