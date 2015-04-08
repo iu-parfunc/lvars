@@ -19,7 +19,6 @@ import GHC.Conc (numCapabilities)
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import           Control.LVish.BulkRetry
-import qualified Control.LVish.Logging as L
 import qualified Data.LVar.Generic as G
 import           Data.LVar.PureSet as IS
 import qualified Data.LVar.SLSet as SS
@@ -28,6 +27,8 @@ import           Data.LVar.NatArray as NA
 
 import Data.Par.Splittable (pforEach)
 import Data.Par.Range (range, fullpar)
+
+import qualified System.Log.TSLogger as L
 
 --------------------------------------------------------------------------------
 
