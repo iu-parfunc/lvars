@@ -151,7 +151,6 @@ library
   -- Package-internal and should not be exposed:
                     Internal.Data.Concurrent.LinkedMap
                     Internal.Control.LVish.SchedIdempotent
-                    Control.LVish.Logging
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -186,6 +185,8 @@ library
 
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0
+
+  build-depends: tslogger >= 0.1
 
   ghc-options: -rtsopts
   if flag(useopt)
@@ -233,6 +234,8 @@ test-suite test-lvish
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2 > 0.2.4, QuickCheck,
                    HUnit, time, text
+
+    build-depends: tslogger >= 0.1
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)

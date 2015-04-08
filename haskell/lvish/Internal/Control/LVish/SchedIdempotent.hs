@@ -53,7 +53,6 @@ import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.MonadToss
-import           Control.LVish.Logging as L
 import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
@@ -69,6 +68,7 @@ import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
 import           System.Random (random)
+import           System.Log.TSLogger as L
 import           Text.Printf (printf, hPrintf)
 
 -- import Control.Compose ((:.), unO)

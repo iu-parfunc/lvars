@@ -18,8 +18,8 @@ import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
 
-import Control.LVish.Logging (DbgCfg(..))
-import qualified Control.LVish.Logging as L
+import System.Log.TSLogger (DbgCfg(..))
+import qualified System.Log.TSLogger as L
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"
