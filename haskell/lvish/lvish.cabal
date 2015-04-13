@@ -224,7 +224,7 @@ test-suite test-lvish
                     GenericTests
                     
     build-depends: lvish 
-    build-depends: base >= 4.6 && <= 4.8
+    build-depends: base >= 4.6
                    , containers >= 0.5
                    , vector >=0.10
                    , random
@@ -263,7 +263,7 @@ benchmark bench-lvish
     hs-source-dirs: tests/ 
                     
     build-depends: lvish 
-    build-depends: base >= 4.6 && <= 4.8
+    build-depends: base >= 4.6
                    , containers >= 0.5
                    , vector >=0.10
                    , random
