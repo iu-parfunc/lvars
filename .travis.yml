@@ -46,7 +46,7 @@ script:
     cabal test;
     cabal bench;
     cabal sdist;
-    cd ../../;
+    cd -;
    done;
 
  # There's no Setup.hs for lvish.  Perhaps there should be?
