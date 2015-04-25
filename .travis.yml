@@ -23,6 +23,7 @@ before_install:
  # Use sed to replace the SSH URL with the public URL, then initialize submodules
  - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
  - git submodule update --init
+ - git clone https://github.com/osa1/concurrent-skiplist -b refactoring ./haskell/concurrent-skiplist
 
  - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
  - travis_retry sudo apt-get update
@@ -33,7 +34,7 @@ install:
  - cabal --version
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - cabal install -j ./haskell/par-classes/ ./haskell/par-collections/ ./haskell/par-transformers/ happy alex
+ - cabal install -j ./haskell/par-classes/ ./haskell/par-collections/ ./haskell/par-transformers/ ./haskell/concurrent-skiplist/ happy alex
  - cabal install --only-dependencies --enable-tests --enable-benchmarks ./haskell/lvish/
 
 # Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
