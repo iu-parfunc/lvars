@@ -165,11 +165,11 @@ library
 
 
   -- Other library packages from which modules are imported.
-  build-depends: base    >= 4.6,
+  build-depends: base    >= 4.6 && < 4.9,
                  deepseq >= 1.3, 
                  lattices   >= 1.2, 
                  vector >=0.10,
-                 atomic-primops >= 0.7 && < 0.8,
+                 atomic-primops >= 0.7 && < 0.9,
                  random, 
                  transformers,
                  ghc-prim,
@@ -221,12 +221,13 @@ test-suite test-lvish
                     GenericTests
                     
     build-depends: lvish 
-    build-depends: base >= 4.6
+    build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10
                    , random
     build-depends: par-classes     >= 1.1 && < 2.0,
-                   par-collections >= 1.1 && < 2.0
+                   par-collections >= 1.1 && < 2.0,
+                   concurrent-skiplist >= 0.1 && < 0.2
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2 > 0.2.4, QuickCheck,
                    HUnit, time, text
@@ -260,11 +261,11 @@ benchmark bench-lvish
     hs-source-dirs: tests/ 
                     
     build-depends: lvish 
-    build-depends: base >= 4.6
+    build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10
                    , random
-                 , atomic-primops >= 0.6
+                   , atomic-primops >= 0.7 && < 0.9
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0
@@ -275,10 +276,10 @@ benchmark bench-lvish
     if flag(threaded)
       ghc-options: -threaded -rtsopts -with-rtsopts=-N4
     if flag(debug)
-       cpp-options: -DDEBUG_LVAR
+      cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
-       build-depends: chaselev-deque
-       cpp-options: -DCHASE_LEV
+      build-depends: chaselev-deque
+      cpp-options: -DCHASE_LEV
     if flag(getonce)
-       cpp-options: -DGET_ONCE
+      cpp-options: -DGET_ONCE
 
