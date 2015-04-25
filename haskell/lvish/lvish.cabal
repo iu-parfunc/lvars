@@ -136,8 +136,6 @@ library
                     Data.LVar.SLMap.Unsafe
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
-                    -- This is also not recommended for general use yet.
-                    Data.Concurrent.SkipListMap
 
                     -- New / Experimental:
                     Data.LVar.CycGraph
@@ -149,7 +147,6 @@ library
                     -------------------------------------------
 
   -- Package-internal and should not be exposed:
-                    Internal.Data.Concurrent.LinkedMap
                     Internal.Control.LVish.SchedIdempotent
                     Control.LVish.Logging
 
@@ -161,9 +158,7 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Data.Concurrent.AlignedIORef
-                    Control.Reagent
                     Control.LVish.SchedIdempotentInternal 
-                    Control.LVish.MonadToss
                     Control.LVish.Types
                     Control.LVish.Basics
                     Control.LVish.Logical
@@ -181,7 +176,9 @@ library
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign,
-                 thread-local-storage >= 0.1.0.2
+                 thread-local-storage >= 0.1.0.2,
+                 -- Used in SLSet and SLMap
+                 concurrent-skiplist >= 0.1 && < 0.2
   build-depends: containers >= 0.5.4.0
 
   build-depends: par-classes     >= 1.1 && < 2.0,

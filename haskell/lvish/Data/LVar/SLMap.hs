@@ -80,6 +80,7 @@ import           Prelude
 
 import Debug.Trace
 
+import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 import qualified Data.Splittable.Class as Sp

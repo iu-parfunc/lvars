@@ -32,11 +32,11 @@ module Control.LVish.Internal
   )
   where
 
-import           Control.LVish.MonadToss
 import           Control.Applicative
 import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import           Control.Par.EffectSigs
+import           Data.Concurrent.Internal.MonadToss
 
 import qualified Data.Foldable    as F
 import           Data.List (sort)
