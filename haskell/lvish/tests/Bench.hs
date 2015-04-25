@@ -32,9 +32,6 @@ import GHC.Conc(numCapabilities)
 
 -- data IntPar = forall s . IntPar (Par Det s Int)
 data IntPar = IntPar (forall s . Par Det s Int)
-    
-whnf2 :: ((forall s . Par Det s Int) -> b) -> (forall s . Par Det s Int) -> Benchmarkable
-whnf2 = whnf  -- Eta expansion does not work here!!
 
 whnf' :: (IntPar -> b) -> IntPar -> Benchmarkable
 whnf' = whnf
