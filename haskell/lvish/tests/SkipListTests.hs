@@ -24,7 +24,7 @@ import Data.IORef
 import System.Random (random, mkStdGen)
 import Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
 -- import Control.LVish  (logDbgLn_)
-import qualified Internal.Data.Concurrent.LinkedMap as LM
+import qualified Data.Concurrent.LinkedMap as LM
 import qualified Data.Concurrent.SkipListMap as SLM
 
 import Debug.Trace

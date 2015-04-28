@@ -52,9 +52,9 @@ import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
-import           Control.LVish.MonadToss
 import           Control.LVish.Logging as L
 import           Debug.Trace(trace)
+import           Data.Concurrent.Internal.MonadToss
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable

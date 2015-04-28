@@ -8,3 +8,6 @@
 [submodule "nixpkgs"]
 	path = haskell/nixpkgs
 	url = git@github.com:iu-parfunc/nixpkgs.git
+[submodule "haskell/concurrent-skiplist"]
+	path = haskell/concurrent-skiplist
+	url = git@github.com:rrnewton/concurrent-skiplist.git

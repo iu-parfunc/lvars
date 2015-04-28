@@ -136,8 +136,6 @@ library
                     Data.LVar.SLMap.Unsafe
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
-                    -- This is also not recommended for general use yet.
-                    Data.Concurrent.SkipListMap
 
                     -- New / Experimental:
                     Data.LVar.CycGraph
@@ -149,7 +147,6 @@ library
                     -------------------------------------------
 
   -- Package-internal and should not be exposed:
-                    Internal.Data.Concurrent.LinkedMap
                     Internal.Control.LVish.SchedIdempotent
                     Control.LVish.Logging
 
@@ -161,27 +158,27 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Data.Concurrent.AlignedIORef
-                    Control.Reagent
                     Control.LVish.SchedIdempotentInternal 
-                    Control.LVish.MonadToss
                     Control.LVish.Types
                     Control.LVish.Basics
                     Control.LVish.Logical
 
 
   -- Other library packages from which modules are imported.
-  build-depends: base    >= 4.6,
+  build-depends: base    >= 4.6 && < 4.9,
                  deepseq >= 1.3, 
                  lattices   >= 1.2, 
                  vector >=0.10,
-                 atomic-primops >= 0.7 && < 0.8,
+                 atomic-primops >= 0.7 && < 0.9,
                  random, 
                  transformers,
                  ghc-prim,
                  async,
                  -- Used in NatArray:
                  bits-atomic, missing-foreign,
-                 thread-local-storage >= 0.1.0.2
+                 thread-local-storage >= 0.1.0.2,
+                 -- Used in SLSet and SLMap
+                 concurrent-skiplist >= 0.1 && < 0.2
   build-depends: containers >= 0.5.4.0
 
   build-depends: par-classes     >= 1.1 && < 2.0,
@@ -224,12 +221,13 @@ test-suite test-lvish
                     GenericTests
                     
     build-depends: lvish 
-    build-depends: base >= 4.6
+    build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10
                    , random
     build-depends: par-classes     >= 1.1 && < 2.0,
-                   par-collections >= 1.1 && < 2.0
+                   par-collections >= 1.1 && < 2.0,
+                   concurrent-skiplist >= 0.1 && < 0.2
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2 > 0.2.4, QuickCheck,
                    HUnit, time, text
@@ -263,11 +261,11 @@ benchmark bench-lvish
     hs-source-dirs: tests/ 
                     
     build-depends: lvish 
-    build-depends: base >= 4.6
+    build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10
                    , random
-                 , atomic-primops >= 0.6
+                   , atomic-primops >= 0.7 && < 0.9
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0
@@ -278,10 +276,10 @@ benchmark bench-lvish
     if flag(threaded)
       ghc-options: -threaded -rtsopts -with-rtsopts=-N4
     if flag(debug)
-       cpp-options: -DDEBUG_LVAR
+      cpp-options: -DDEBUG_LVAR
     if flag(chaselev)
-       build-depends: chaselev-deque
-       cpp-options: -DCHASE_LEV
+      build-depends: chaselev-deque
+      cpp-options: -DCHASE_LEV
     if flag(getonce)
-       cpp-options: -DGET_ONCE
+      cpp-options: -DGET_ONCE
 
