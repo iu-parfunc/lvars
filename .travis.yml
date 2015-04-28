@@ -44,7 +44,6 @@ script:
     cabal configure --enable-tests --enable-benchmarks -v2;
     cabal build;
     cabal test;
-    cabal bench;
     cabal sdist;
     cd -;
    done;
