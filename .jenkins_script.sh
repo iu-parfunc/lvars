@@ -29,7 +29,7 @@ else
   GHC=ghc-$JENKINS_GHC
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers "
+PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers ./concurrent-skiplist "
 
 # We build the sandbox, not at the repo root, but at the root of the Haskell code dir.
 cd ./haskell/
