@@ -26,10 +26,14 @@ fi
 
 # Now requiring a recent version of cabal:
 if [ "$CABAL" == "" ]; then
-  if [ $GHC == "ghc-7.10.1" ]; then
+  if [ "$GHC" == "ghc-7.10.1" ]; then
       CABAL=cabal-1.22
+      DISABLE_EXEC_PROF="--disable-profiling"
+      ENABLE_EXEC_PROF="--enable-profiling"
   else
       CABAL=cabal-1.20
+      DISABLE_EXEC_PROF="--disable-executable-profiling"
+      ENABLE_EXEC_PROF="--enable-executable-profiling"
   fi
 fi
 
@@ -50,9 +54,9 @@ cd $TOP
 CFG=" --force-reinstalls --enable-benchmarks "
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
-  CFG="$CFG --disable-library-profiling --disable-executable-profiling"
+  CFG="$CFG --disable-library-profiling $DISABLE_EXEC_PROF"
 else
-  CFG="$CFG --enable-library-profiling --enable-executable-profiling"
+  CFG="$CFG --enable-library-profiling $ENABLE_EXEC_PROF"
 fi
 
 if [ "$NOTEST" == "" ]; then
