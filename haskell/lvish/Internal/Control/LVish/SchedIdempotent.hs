@@ -18,7 +18,7 @@
 -- | This is an internal module that provides the core parallel scheduler.
 --   It is /not/ for end-users.
 
-module Control.LVish.SchedIdempotent
+module Internal.Control.LVish.SchedIdempotent
   (
     -- * Basic types and accessors
     LVar(..), state, HandlerPool(),
@@ -42,7 +42,7 @@ module Control.LVish.SchedIdempotent
     addHandler, liftIO, toss,
 
     -- * Internal, private bits.
-    mkPar, Status(..), sched, Listener(..)
+    mkPar, Status(..), sched, Listener(..), lvarDbgName
   ) where
 
 import           Control.Monad hiding (sequence, join)
@@ -52,14 +52,13 @@ import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
-import           Control.LVish.MonadToss
 import           Control.LVish.Logging as L
 import           Debug.Trace(trace)
+import           Data.Concurrent.Internal.MonadToss
 import           Data.IORef
 import           Data.Atomics
 import           Data.Typeable
-import qualified Data.Atomics.Counter as C2
-import qualified Data.Concurrent.Counter as C
+import qualified Data.Atomics.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
 import qualified GHC.Conc 
@@ -100,7 +99,7 @@ import qualified Control.LVish.SchedIdempotentInternal as Sched
 --     entire LVar state, but for, e.g., collection data structures, delta will
 --     generally represent a single insertion.
 data LVar a d = LVar {
-  state  :: a,                -- the current, "global" state of the LVar
+  state  :: !a,                -- the current, "global" state of the LVar
   status :: {-# UNPACK #-} !(IORef (Status d)), -- is the LVar active or frozen?  
   name   :: {-# UNPACK #-} !LVarID            -- a unique identifier for this LVar
 }
@@ -139,7 +138,7 @@ data Listener d = Listener {
 -- are affiliated with the pool.  It detects the condition where all such threads
 -- have completed.
 data HandlerPool = HandlerPool {
-  numHandlers      :: C.Counter,   -- How many handler callbacks are currently
+  numHandlers      :: C.AtomicCounter,   -- How many handler callbacks are currently
                                    -- running?
   blockedOnQuiesce :: B.Bag ClosedPar
 }
@@ -195,21 +194,22 @@ isFrozen (LVar {status}) = do
 logStrLn  :: Int -> String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
-logStrLn lvl str = when (dbgLvl >= 1) $ do
-  lgr <- getLogger
-  num <- getWorkerNum
-  if lvl < 0
-   then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
-   else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
+logStrLn lvl str = do
+  Just lgr <- getLogger
+  when (lvl >= L.minLvl lgr && lvl <= L.maxLvl lgr) $ do
+    num <- getWorkerNum
+    if lvl < 0
+     then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
+     else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
 #else
 logStrLn _ _  = return ()
 #endif
 
 logHelper :: Maybe Logger -> Int -> LogMsg -> IO ()
-logHelper lgr num msg = when (dbgLvl >= 1) $ do
+logHelper lgr num msg = do
   let msg' = L.mapMsg (("wrkr"++show num++" ")++) msg
   case lgr of 
-    Just lgr -> L.logOn lgr msg'
+    Just lgr -> L.logOn lgr msg' -- logOn will do the lvl check
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
 
 logWith      :: Sched.State a s -> Int -> String -> IO ()
@@ -226,6 +226,11 @@ logOffRecord  _ _ _  = return ()
 ------------------------------------------------------------------------------
 -- LVar operations
 ------------------------------------------------------------------------------
+
+-- | Debugging only -- create some kind of printable identifier for
+-- the LVar (uses StableName).
+lvarDbgName :: LVar a d -> String
+lvarDbgName (LVar {state, status}) = (show$ unsafeName state)
     
 -- | Create an LVar.
 newLV :: IO a -> Par (LVar a d)
@@ -249,7 +254,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
   -- that, if we are not currently above the threshhold, we will have to poll
   -- /again/ after enrolling the callback.  This race may also result in the
   -- continuation being executed twice, which is permitted by idempotence.
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+  let uniqsuf = ", lv "++lvarDbgName lv++" on worker "++(show$ Sched.no q)
   
   logWith q 7$ " [dbg-lvish] getLV: first readIORef "++uniqsuf
   curStatus <- readIORef status
@@ -268,7 +273,7 @@ getLV lv@(LVar {state, status}) globalThresh deltaThresh = mkPar $ \k q -> do
               onFreeze   = unblockWhen $ globalThresh state True
               {-# INLINE unblockWhen #-}
               unblockWhen thresh tok q = do
-                let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+                let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
                 logWith q 7$ " [dbg-lvish] getLV (active): callback: check thresh"++uniqsuf
                 tripped <- thresh
                 whenJust tripped $ \b -> do        
@@ -324,21 +329,21 @@ newDedupCheck = newIORef False -- True means someone has already won.
 winnerCheck execFlag q tru fal = do                
   ticket <- readForCAS execFlag
   if (peekTicket ticket) 
-    then do logWith q 8 $ " [dbg-lvish] getLV winnerCheck failed.."
+    then do logWith q 8 $ " [dbg-lvish] dedup winnerCheck failed.."
             fal
     else do
       (winner, _) <- casIORef execFlag ticket True
-      logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+      logWith q 8 $ " [dbg-lvish] dedup "++show(unsafeName execFlag)
                  ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show winner
                  ++ ", ticks " ++ show (ticket, peekTicket ticket)
       if winner then tru else fal
 #  else
 
-type DedupCell = C2.AtomicCounter
-newDedupCheck = C2.newCounter 0 
+type DedupCell = C.AtomicCounter
+newDedupCheck = C.newCounter 0 
 winnerCheck execFlag q tru fal = do
-  cnt <- C2.incrCounter 1 execFlag
-  logWith q 8 $ " [dbg-lvish] getLV "++show(unsafeName execFlag)
+  cnt <- C.incrCounter 1 execFlag
+  logWith q 8 $ " [dbg-lvish] dedup "++show(unsafeName execFlag)
              ++" on worker "++ (show$ Sched.no q) ++": winner check? " ++show (cnt==1)
              ++ ", counter val " ++ show cnt
   if cnt==1 then tru else fal
@@ -350,9 +355,11 @@ newDedupCheck = return ()
 winnerCheck _ _ tr _ = tr
 #endif
 
-
-
-
+-- | A version of the winner check that either lets the current thread
+-- through, or kills it and returns to the scheduler.
+winnerCheckPar :: DedupCell -> Par ()
+winnerCheckPar execFlag = mkPar $ \k q ->
+  undefined
 
 
 
@@ -361,8 +368,8 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
-putLV_ LVar {state, status, name} doPut = mkPar $ \k q -> do
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+putLV_ lv@(LVar {state, status, name}) doPut = mkPar $ \k q -> do
+  let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
       putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
   logWith q 8 $ " [dbg-lvish] putLV: initial lvar status read"++uniqsuf
   fstStatus <- readIORef status
@@ -400,10 +407,10 @@ putLV lv doPut = putLV_ lv doPut'
 -- | Freeze an LVar (introducing quasi-determinism).
 --   It is the data structure implementor's responsibility to expose this as quasi-deterministc.
 freezeLV :: LVar a d -> Par ()
-freezeLV LVar {name, status} = mkPar $ \k q -> do
-  let uniqsuf = ", lv "++(show$ unsafeName state)++" on worker "++(show$ Sched.no q)
+freezeLV lv@(LVar {name, status}) = mkPar $ \k q -> do
+  let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
   logWith q 5 $ " [dbg-lvish] freezeLV: atomic modify status to Freezing"++uniqsuf
-  oldStatus <- atomicModifyIORef status $ \s -> (Freezing, s)    
+  oldStatus <- atomicModifyIORef' status $ \s -> (Freezing, s)    
   case oldStatus of
     Frozen   -> return ()
     Freezing -> return ()
@@ -424,7 +431,7 @@ freezeLV LVar {name, status} = mkPar $ \k q -> do
 -- | Create a handler pool.
 newPool :: Par HandlerPool
 newPool = mkPar $ \k q -> do
-  cnt <- C.new
+  cnt <- C.newCounter 0
   bag <- B.new
   let hp = HandlerPool cnt bag
   hpMsg q " [dbg-lvish] Created new pool" hp
@@ -468,16 +475,16 @@ closeInPool (Just hp) c = do
         shouldDec <- tryDecRef      -- are we the first copy of the thread to
                                     -- terminate?
         when shouldDec $ do
-          C.dec cnt                 -- record handler completion in pool
-          quiescent <- C.poll cnt   -- check for (transient) quiescence
-          when quiescent $ do       -- wake any threads waiting on quiescence
+          C.incrCounter (-1) cnt                 -- record handler completion in pool
+          quiescent <- C.readCounter cnt   -- check for (transient) quiescence
+          when (quiescent==0) $ do       -- wake any threads waiting on quiescence
             hpMsg q " [dbg-lvish] -> Quiescent now.. waking conts" hp 
             let invoke t tok = do
                   B.remove tok
                   Sched.pushWork q t                
             B.foreach (blockedOnQuiesce hp) invoke
         sched q
-  C.inc $ numHandlers hp            -- record handler invocation in pool
+  C.incrCounter 1 $ numHandlers hp            -- record handler invocation in pool
   return $ close c onFinishHandler  -- close the task with a special "done"
                                     -- continuation that clears it from the
                                     -- handler pool
@@ -516,15 +523,21 @@ addHandler hp LVar {state, status} globalCB updateThresh =
 quiesce :: HandlerPool -> Par ()
 quiesce hp@(HandlerPool cnt bag) = mkPar $ \k q -> do
   hpMsg q " [dbg-lvish] Begin quiescing pool, identity= " hp
+
+  flg <- newDedupCheck
+  -- Wrap the continuation with a dedup Check:
+  -- TODO: Issue #99 addresses whether this could be combined with the B.remove step:
+  let k' = ClosedPar$ \q -> winnerCheck flg q
+                               (exec (k ()) q) (sched q)
   -- tradeoff: we assume that the pool is not yet quiescent, and thus enroll as
   -- a blocked thread prior to checking for quiescence
-  tok <- B.put bag (k ())
+  tok <- B.put bag k'
   hpMsg q " [dbg-lvish] quiesce: poll count" hp
-  quiescent <- C.poll cnt
-  if quiescent then do
+  quiescent <- C.readCounter cnt
+  if (quiescent==0) then do
     hpMsg q " [dbg-lvish] already quiesced, remove token from bag" hp
     B.remove tok
-    exec (k ()) q 
+    exec k' q 
   else do 
     logOffRecord q 4 " [dbg-lvish] -> Not quiescent yet, back to sched"
     sched q
@@ -549,10 +562,8 @@ freezeLVAfter lv globalCB updateCB = do
       updateCB' = updateCB
   hp <- newPool
   addHandler (Just hp) lv globalCB' updateCB'
-  quiesce hp
+  quiesce hp  
   freezeLV lv
-  
-  
 
 ------------------------------------------------------------------------------
 -- Par monad operations
@@ -577,11 +588,11 @@ liftIO io = mkPar $ \k q -> do
   exec (k r) q
 
 -- | IF compiled with debugging support, this will return the Logger used by the
--- current Par session, otherwise it will simply throw an exception.
-getLogger :: Par L.Logger
+-- current Par session, otherwise it will return Nothing.
+getLogger :: Par (Maybe L.Logger)
 getLogger = mkPar $ \k q -> 
-  let Just lgr = Sched.logger q in
-  exec (k lgr) q
+  let mlgr = Sched.logger q in
+  exec (k mlgr) q
 
 -- | Return the worker that we happen to be running on.  (NONDETERMINISTIC.)
 getWorkerNum :: Par Int
@@ -624,14 +635,27 @@ instance NFData (LVar a d) where
 --   This version of runPar catches ALL exceptions that occur within the runPar, and
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
---   
+--
+--  WARNING: if LVish was installed without `-fdebug`, then the only
+--  log messages generated will be those explictly created by the user
+--  with `logDbgLn`.  All messages from the runtime system and core
+--  LVar data structures will be absent.
+-- 
 runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Int           -- ^ How many worker threads to use. 
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
 runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
+-- #ifndef DEBUG_LVAR
+--   when (dbgScheduling /= True) $ -- || dbgRange /= Nothing  
+--     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
+-- #endif
   (lgr,queues) <- Sched.new cfg numWrkrs noName 
-    
+
+  case lgr of
+    Nothing -> return ()
+    Just l  -> L.logOn l (L.OffTheRecord 1 " [dbg-lvi6sh] New logger & scheds created... entering main loop.")
+   
   -- We create a thread on each CPU with forkOn.  The CPU on which
   -- the current thread is running will host the main thread; the
   -- other CPUs will host worker threads.
@@ -653,7 +677,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   let runWorker :: (Int,Sched.State ClosedPar LVarID) -> IO ()
       runWorker (cpu, q) = do 
         if (cpu /= main_cpu)
-           then do logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting."
+           then do logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" starting (main cpu "++show main_cpu++")."
                    sched q
                    logOffRecord q 3 $  " [dbg-lvish] Auxillary worker #"++show cpu++" exitting."
            else let k x = ClosedPar $ \q -> do                       
@@ -672,7 +696,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling:
   let loop [] asyncs = do tid <- myThreadId
-                          mlog $ " [dbg-lvish] (tid "++show tid++") Wait on at least one async to complete.."
+                          mlog $ " [dbg-lvish] (main tid "++show tid++") Wait on at least one async to complete.."
                           (_,x) <- A.waitAnyCatch asyncs
                           -- We could do a binary tree of waitBoth here, but this should work for now:
                           case x of
@@ -683,9 +707,9 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       (\a -> loop tl (a:asyncs))
       waitloop [] = do 
                        mlog " [dbg-lvish] All asyncs complete, read final answer MVar."
-                       fmap Right (dbgTakeMVar [] "runPar/final answer" answerMV)
+                       fmap Right (dbgTakeMVar [] "retrieve final runPar answer, after workers complete" answerMV)
 --                       fmap Right (takeMVar answerMV)
-      waitloop (hd:tl) = do mlog " [dbg-lvish] Waiting for one async.."
+      waitloop (hd:tl) = do mlog (" [dbg-lvish] Waiting for one async.. "++show(1+length tl)++" remaining")
                             me <- A.waitCatch hd
                             case me of 
                               Left e    -> return $! Left e
@@ -693,7 +717,7 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   ----------------------------------------
   -- (1) There was a BUG in 'loop' at some point:
   --    "thread blocked indefinitely in an STM transaction"
-  ans <- loop (zip [0..] queues) []
+  ans <- loop (zip (main_cpu : filter (/= main_cpu) [0..]) queues) []
   ----------------------------------------
   -- (2) This has the same problem as 'loop':
   --  ls <- mapM (\ pr@(cpu,_) -> Async.asyncOn cpu (runWorker pr)) (zip [0..] queues)
@@ -726,8 +750,17 @@ runParIO = defaultRun
 
 -- | Debugging aid.  Return debugging logs, in realtime order, in addition to the
 -- final result.  This is like `runParDetailed` but uses the default settings.
+--
+--  WARNING: if LVish was installed without `-fdebug`, then the only
+--  log messages generated will be those explictly created by the user
+--  with `logDbgLn`.  All messages from the runtime system and core
+--  LVar data structures will be absent.
+-- 
 runParLogged :: Par a -> IO ([String],a)
-runParLogged comp = do 
+runParLogged comp = do
+-- #ifndef DEBUG_LVAR
+--   error "runParLogged: this function is disabled when LVish is compiled without debugging support."
+-- #endif
   (logs,ans) <- runParDetailed 
                    DbgCfg { dbgRange = (Just (0,dbgLvl))
                           , dbgDests = [L.OutputEvents, L.OutputInMemory]
@@ -769,7 +802,7 @@ hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
   sn1 <- makeStableName cnt
   sn2 <- makeStableName bag
-  c   <- readIORef cnt
+  c   <- C.readCounter cnt
   return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
            " transient cnt "++show c
 
@@ -784,7 +817,7 @@ busyTakeMVar tids msg mv =
  maxWait = 10000 -- nanoseconds
  timeOut = (3 * 1000 * 1000) -- three seconds, only for debugging.
  try bkoff | totalWait bkoff >= timeOut = do
-     error "SchedIdempotent: [debugging] busyTakeMVar exceeded wait.  Deadlocked?"
+--     error "busyTakeMVar (debugging): time-out expired for waiting on MVar"
    -- when dbg $ do
      tid <- myThreadId
      -- After we've failed enough times, start complaining:

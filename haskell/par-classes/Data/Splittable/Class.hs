@@ -18,7 +18,8 @@ import System.IO.Unsafe (unsafePerformIO)
 
 -- | Data that can be split into balanced pieces.  The main application of this is
 -- parallel consumption of the data.
-class Eq a => Split a where
+class Split a where
+-- class Eq a => Split a where
 
   -- | Split the data value into pieces.  An empty data structure may return an empty
   -- list.

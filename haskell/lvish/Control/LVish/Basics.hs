@@ -23,6 +23,7 @@ module Control.LVish.Basics
     runPar, runParQuasiDet, runParNonDet,
     runParPoly, runParPolyIO, 
     runParLogged, runParDetailed,
+    getLogger,
 
     liftQD,
     LVishException(..), L.HandlerPool(), 
@@ -33,9 +34,7 @@ module Control.LVish.Basics
 
     parForL, parForSimple, parForTree, parForTiled, for_
 
-#ifdef GENERIC_PAR
     , asyncForEachHP
-#endif
   )
   where
 
@@ -44,18 +43,16 @@ import qualified Data.Foldable    as F
 import           Control.Exception (Exception, SomeException)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Control.LVish.Logging as Lg
 import           Control.LVish.Types
 import           Control.Par.EffectSigs
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class.Unsafe as PU
 import qualified Control.Par.Class     as PC
 import qualified Data.Splittable.Class as SC
-#endif
 
 {-# DEPRECATED parForL, parForSimple, parForTree, parForTiled
     "These will be removed in a future release in favor of a more general approach to loops."  #-}
@@ -205,8 +202,8 @@ logDbgLn _ _  = return ()
 #endif
 
 -- | IF compiled with debugging support, this will return the Logger used by the
--- current Par session, otherwise it will simply throw an exception.
-getLogger :: Par e s Lg.Logger
+-- current Par session, otherwise it will return Nothing.
+getLogger :: Par e s (Maybe Lg.Logger)
 getLogger = WrapPar $ L.getLogger
 
 --------------------------------------------------------------------------------
@@ -280,7 +277,6 @@ for_ (start, end) fn = loop start
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
 
-#ifdef GENERIC_PAR
 -- | Non-blocking version of pforEach.  
 asyncForEachHP :: (SC.Split c, PC.Generator c)
       => Maybe L.HandlerPool    -- ^ Optional pool to synchronize forked tasks
@@ -293,4 +289,3 @@ asyncForEachHP mh gen fn =
     ls -> forM_ ls $ \ gen_i -> 
             forkHP mh $
               PC.forM_ gen_i fn 
-#endif

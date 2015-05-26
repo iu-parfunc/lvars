@@ -46,8 +46,8 @@ import qualified Data.LVar.IVar as IV
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
-import           Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 
 import           TestHelpers2 as T
 
@@ -120,16 +120,17 @@ lotsaRunPar = loop iters
 --     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
 -- Aborted (core dumped)
 
+v0 :: Par (Ef P G F B I) s Int
+v0 = do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
+
 case_v0 :: HU.Assertion
-case_v0 = do res <- v0
-             HU.assertEqual "useless fork" (4::Int) res
-v0 = runParNonDet $ do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
-
-
+case_v0 = stressTest T.stressTestReps 3 v0 (== 4)
+                            
 case_v1a :: Assertion
-case_v1a = assertEqual "fork put" (4::Int) =<< v1a
-v1a :: IO Int
-v1a = runParNonDet $ do i<-IV.new; fork (IV.put i 4); IV.get i
+case_v1a = stressTest T.stressTestReps 3 v1a (== (4::Int))
+
+v1a :: Par (Ef P G F B I) s Int
+v1a = do i<-IV.new; fork (IV.put i 4); IV.get i
 
 case_v1b :: Assertion
 case_v1b = do ls <- v1b

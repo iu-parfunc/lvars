@@ -11,8 +11,8 @@ import Data.IORef
 import Control.Exception (throw)
 import Control.LVish
 import Control.LVish.Internal
-import Control.LVish.SchedIdempotent (newLV, putLV, getLV)
-import qualified Control.LVish.SchedIdempotent as L
+import Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Data.LVar.Generic
 
 ------------------------------------------------------------------------------
@@ -31,13 +31,13 @@ newPair = WrapPar $ fmap WrapLVar $ newLV $ do
   
 putFst :: HasPut e => IPair s a b -> a -> Par e s ()
 putFst (WrapLVar lv) !elt = WrapPar $ putLV lv putter
-  where putter (r1, _)  = atomicModifyIORef r1 update
+  where putter (r1, _)  = atomicModifyIORef' r1 update
         update (Just _) = throw$ ConflictingPutExn$ "Multiple puts to first element of an IPair!"
         update Nothing  = (Just elt, Just $ Left elt)
         
 putSnd :: HasPut e => IPair s a b -> b -> Par e s ()
 putSnd (WrapLVar lv) !elt = WrapPar $ putLV lv putter
-  where putter (_, r2)  = atomicModifyIORef r2 update
+  where putter (_, r2)  = atomicModifyIORef' r2 update
         update (Just _) = throw$ ConflictingPutExn$ "Multiple puts to second element of an IPair!"
         update Nothing  = (Just elt, Just $ Right elt) 
         

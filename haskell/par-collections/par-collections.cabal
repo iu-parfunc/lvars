@@ -1,10 +1,12 @@
 Name:                par-collections
-Version:             1.1
+Version:             1.2
 Synopsis:            Generic parallel combinators for data and iteration spaces.
 
 -- Version history:
 --  1.0      : This library introduced to replace the deprecated monad-par-extras.
 --  1.1      : Add LVish-2.0 style effect signatures
+--  1.1.1    : Add Split instance for list
+--  1.2      : Remove Eq superclass of Split.  Seems unjustified.
 
 Description:
   These modules provide means to traverse and consume
@@ -49,11 +51,15 @@ Library
                , par-classes  >= 1.1
 
                -- These are so we can provide instances for existing collections:
-               , primitive    >= 0.5  && < 0.6
+               , primitive    >= 0.6 && < 0.7
                , vector       >= 0.10 && < 0.11
 
-  cpp-options: -DNEWCONTAINERS
-  build-depends: containers >= 0.5.4.0
+  if impl(ghc < 7.7) {
+    build-depends: containers >= 0.5
+  } else {
+    cpp-options: -DNEWCONTAINERS
+    build-depends: containers >= 0.5.4.0
+  }
   ghc-options: -O2 -rtsopts
   Other-modules:
 

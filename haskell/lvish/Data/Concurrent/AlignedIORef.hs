@@ -15,10 +15,11 @@ data AlignedIORef a = AlignedIORef {
   ref :: {-# UNPACK #-} !(IORef a)
 }
 
+newAlignedIORef :: a -> IO (AlignedIORef a)
 newAlignedIORef v = do
   ref <- newIORef v
 --  padding <- replicateM 15 $ newIORef v
-  return AlignedIORef {
+  return $! AlignedIORef {
 --    padding,
     ref
   }

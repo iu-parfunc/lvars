@@ -57,16 +57,14 @@ import qualified Control.LVish.Basics as LV
 import           Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal as I
 import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar))
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
-import qualified Control.LVish.SchedIdempotent as LI 
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
+import qualified Internal.Control.LVish.SchedIdempotent as LI 
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           GHC.Prim (unsafeCoerce#)
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PC
-#endif
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
@@ -140,7 +138,7 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 -- This function is always at least strict up to WHNF in the element put.
 put_ :: (HasPut e, Eq a) => IVar s a -> a -> Par e s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
-  where putter ref      = atomicModifyIORef ref update
+  where putter ref      = atomicModifyIORef' ref update
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
@@ -174,6 +172,7 @@ whenFull mh (IVar (WrapLVar lv)) fn =
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
     -- The threshold is ALWAYS met when a put occurs:
+    -- FIXME: That doesn't mean we should always return Just however...
     fn' x = return (Just (I.unWrapPar (fn x)))
     globalCB ref = do
       mx <- LI.liftIO $ readIORef ref -- Snapshot
@@ -213,7 +212,6 @@ spawnP a = spawn (return a)
 put :: (HasPut e, Eq a, NFData a) => IVar s a -> a -> Par e s ()
 put v a = deepseq a (put_ v a)
 
-#ifdef GENERIC_PAR
 -- instance PC.ParFuture (Par (Ef P G f b i) s) where
 --   type Future (Par (Ef P G f b i) s) = IVar s
 --   type FutContents (Par (Ef P G f b i) s) a = (Eq a)
@@ -227,6 +225,4 @@ instance PC.ParFuture Par where
 instance PC.ParIVar Par where
   put_ = put_
   new = new
-
-#endif
 

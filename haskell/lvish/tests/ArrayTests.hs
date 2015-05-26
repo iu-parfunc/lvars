@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE GADTs #-}
 
 module ArrayTests where
 
@@ -30,8 +31,8 @@ import qualified Data.LVar.IStructure as ISt
 
 import Control.LVish
 import Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import System.IO (hFlush, stdout, stderr, hPutStrLn)
+import Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import System.IO (hPutStrLn, stderr)
 import Debug.Trace
 import TestHelpers as T
 

@@ -39,16 +39,15 @@
 -- this is needed (the paper uses a more complex, lock-free protocol).  Such a
 -- protocol is *not* needed for @depart@, however.
 
-module Data.Concurrent.SNZI
-where
+module Data.Concurrent.SNZI where
   
-import System.IO.Unsafe
-import Control.Reagent  
 import Control.Monad
-import GHC.Conc
-import Data.IORef
 import Data.Atomics
 import Data.Concurrent.AlignedIORef
+import Data.Concurrent.Internal.Reagent  
+import Data.IORef
+import GHC.Conc
+import System.IO.Unsafe
   
 -- | An entry point for a shared SNZI value
 data SNZI = 

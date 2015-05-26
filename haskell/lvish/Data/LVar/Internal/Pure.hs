@@ -23,8 +23,8 @@ module Data.LVar.Internal.Pure
        ( PureLVar(..),
          newPureLVar, putPureLVar,
 
-         waitPureLVar, freezePureLVar,
-         getPureLVar, getPureLVarSets, unsafeGetPureLVar,
+         waitPureLVar, freezePureLVar, fromPureLVar, 
+         getPureLVar, unsafeGetPureLVar, unsafeMonotonicHandlerHP,
 
          -- * Verifying lattice structure
          verifyFiniteJoin, verifyFiniteGet
@@ -35,10 +35,10 @@ import Control.LVish.DeepFrz.Internal
 import Control.LVish.Internal
 import Data.IORef
 import qualified Data.Set as S
-import qualified Control.LVish.SchedIdempotent as LI 
+import qualified Internal.Control.LVish.SchedIdempotent as LI
 import Algebra.Lattice
 import GHC.Prim (unsafeCoerce#)
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 --------------------------------------------------------------------------------
 
 -- | An LVar which consists merely of an immutable, pure value inside a mutable box.
@@ -210,6 +210,31 @@ putPureLVar (PureLVar (WrapLVar iv)) !new =
       -- We still publish the change for delta-thresh's to respond to:
       return $! Just $! new
 
+-- | Register a handler that is notified of every change to a
+--   PureLVar's state, that is, every call to `putPureLVar`.
+--
+--   This version is unsafe because it *assumes* the handler is
+--   monotonic.  Thus in some situations the handler may not be called
+--   for every update, but only for the most recent version in the
+--   `PureLVar`.
+--
+--   This requirement also implies that the callback function is idempotent.
+unsafeMonotonicHandlerHP :: Maybe HandlerPool
+             -> PureLVar s t
+             -> (t -> Par e s ())
+             -> Par e s ()
+unsafeMonotonicHandlerHP mh (PureLVar (WrapLVar lv)) callb = WrapPar $ do
+    LI.addHandler mh lv globalCB deltaCB
+    return ()
+  where
+--    deltaCB = undefined
+    deltaCB v = return$ Just$ unWrapPar $ callb v    
+    globalCB ref = LI.liftIO $ do
+       x <- readIORef ref -- Snapshot
+       _ <- deltaCB x
+       return ()
+
+
 -- | Freeze the pure LVar, returning its exact value.
 --   Subsequent @put@s will raise an error.
 freezePureLVar :: HasFreeze e => PureLVar s t -> Par e s t
@@ -220,6 +245,12 @@ freezePureLVar (PureLVar (WrapLVar lv)) = WrapPar$
     globalThresh ref True = fmap Just $ readIORef ref
     globalThresh _  False = return Nothing
     deltaThresh  _        = return Nothing
+
+-- | Read the exact contents of an already frozen PureLVar.
+fromPureLVar :: PureLVar Frzn t -> t
+fromPureLVar (PureLVar lv) =
+  unsafeDupablePerformIO $ readIORef $ state lv
+
 
 ------------------------------------------------------------
 

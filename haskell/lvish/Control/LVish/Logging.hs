@@ -24,10 +24,10 @@ module Control.LVish.Logging
        (
 
          -- * Global variables
-         dbgLvl, 
+         dbgLvl, defaultMemDbgRange,
 
          -- * New logger interface
-         newLogger, logOn, Logger(closeIt, flushLogs),
+         newLogger, logOn, Logger(closeIt, flushLogs, minLvl, maxLvl),
          WaitMode(..), LogMsg(..), mapMsg, OutDest(..),
 
          -- * General utilities
@@ -94,8 +94,8 @@ data WaitMode = WaitDynamic -- ^ UNFINISHED: Dynamically track tasks/workers.  T
                             -- with `incrTasks` and `decrTasks`.
               | WaitNum {
                 numThreads  :: Int,   -- ^ How many threads total must check in?
-                downThreads :: IO Int -- ^ Poll how many threads won't participate this round.
-                                      --   After all productive threads have checked in 
+                downThreads :: IO Int -- ^ Poll how many threads WON'T participate this round.
+                                      --   After all *productive* threads have checked in 
                                       --   this number must grow to eventually include all other threads.
                 } -- ^ A fixed set of threads must check-in each round before proceeding.
               | DontWait -- ^ In this mode, logging calls are non-blocking and return
@@ -154,8 +154,9 @@ catchAll parent exn =
 -- | Create a new logger, which includes forking a coordinator thread.
 --   Takes as argument the number of worker threads participating in the computation.
 newLogger :: (Int,Int) -- ^ What inclusive range of messages do we accept?  Defaults to `(0,dbgLvl)`.
-          -> [OutDest]
-          -> WaitMode
+          -> [OutDest] -- ^ Where do we write debugging messages?
+          -> WaitMode  -- ^ Do we wait for workers before proceeding sequentially but randomly (fuzz
+                       --   testing event interleavings)?
           -> IO Logger
 newLogger (minLvl, maxLvl) loutDests waitWorkers = do
   logged      <- newIORef []  
@@ -177,8 +178,15 @@ newLogger (minLvl, maxLvl) loutDests waitWorkers = do
 
 --------------------------------------------------------------------------------
 
--- | Run a logging coordinator thread until completion/shutdown.
-runCoordinator :: WaitMode -> IORef Bool -> IORef (Seq.Seq Writer) -> IORef [String] -> [OutDest] -> IO ()
+-- | Run a logging coordinator thread until completion/shutdown.  This
+-- coordinator manages the interleaving of events that 
+runCoordinator :: WaitMode   -- ^ By which method do we wait for all workers to quiesce?
+               -> IORef Bool -- ^ Set to True (by someone other than the coordinator) when the
+                             --   system should shutdown.
+               -> SmplChan Writer -- ^ Input queue where the coordinator recvs dbg messages 
+               -> IORef [String]  -- ^ Output queue where the coordinator writes out messages
+               -> [OutDest]       -- ^ Where to write log messages
+               -> IO ()
 runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests = 
        case waitWorkers of
          DontWait -> printLoop =<< newBackoff maxWait
@@ -190,14 +198,10 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
                     -> [Writer]   -- ^ Waiting threads, reverse chronological (newest first)
                     -> Backoff -> IO ()
           schedloop !iters !waiting !bkoff = do
-            when (iters > 0 && iters `mod` 500 == 0) $
-              putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++show (length waiting)++" are waiting."
             hFlush stdout
             fl <- readIORef shutdownFlag
             if fl then flushLoop
              else do 
-              let keepWaiting w = do b <- backoff bkoff
-                                     schedloop (iters+1) w b
               case waitWorkers of
                 DontWait -> error "newLogger: internal invariant broken."
                 WaitNum target extra -> do
@@ -206,26 +210,36 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
                   n <- extra -- Atomically check how many extra workers are blocked.
                   -- putStrLn $ "TEMP: schedloop/WaitNum: polled for waiting/extra workers: "
                   --            ++show (numWait,n)++" target "++show target
+                  let keepWaiting w = do
+                           when (iters > 0 && iters `mod` 500 == 0) $
+                             putStrLn $ "Warning: logger has spun for "++show iters++" iterations, "++
+                                        show (length waiting)++" are checked-in & blocked, "++show n ++" are idling."
+                           b <- backoff bkoff
+                           schedloop (iters+1) w b
+--                           schedloop (iters+1) w bkoff
+
                   if (numWait + n >= target)
                     then if numWait > 0 
                          then pickAndProceed waiting2
                          else keepWaiting waiting2 -- This sounds like a shutdown is happening, all are idle.
                     else keepWaiting waiting2 -- We don't know if we're waiting for idles to arrive or blocked waiters.
 
-          -- | Keep printing messages until there is (transiently) nothing left.
+          -- | At shutdown: Keep printing messages until there is (transiently) nothing left.
           flushLoop = do 
               x <- tryReadSmplChan checkPoint
               case x of
                 Just wr -> do printAll (formatMessage "" wr)
-                              flushLoop
+                              flushLoop -- No wakeups needed here...
                 Nothing -> return ()
 
+          -- | In the steady state: 
           flushChan !acc = do
             x <- tryReadSmplChan checkPoint
             case x of
               Just h  -> case msg h of 
                           StrMsg {}       -> flushChan (h:acc)
-                          OffTheRecord {} -> do printAll (formatMessage "" h) 
+                          OffTheRecord {} -> do unless silenceOffTheRecord $ printAll (formatMessage "" h)
+                                                putMVar (continue h) () -- Wake immediately...
                                                 flushChan acc
               Nothing -> return acc
 
@@ -269,7 +283,9 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
             putMVar continue () -- Signal that the thread may continue.
 
           -- This is the format we use for debugging messages
-          formatMessage extra Writer{msg} = "|"++show (lvl msg)++ "| "++extra++ toString msg
+          formatMessage extra Writer{msg} =
+               let leadchar = if isOffTheRecord msg then "\\" else "|" in
+               leadchar++show (lvl msg)++ "| "++extra++ toString msg
           -- One of these message reports how many tasks are in parallel with it:
           messageInContext pos len wr = formatMessage ("#"++show (1+pos)++" of "++show len ++": ") wr
           printOne str (OutputTo h)   = hPrintf h "%s\n" str
@@ -281,8 +297,20 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
           printAll str = mapM_ (printOne str) loutDests
 
 
+isOffTheRecord (OffTheRecord{}) = True
+isOffTheRecord _ = False
 
+-- | [Undocumented, internal functionality] Suppress echo'ing of
+-- messages that don't actually count for the schedule fuzz testing.
+silenceOffTheRecord :: Bool
+silenceOffTheRecord = case lookup "SILENCEOTR" theEnv of
+       Nothing  -> False
+       Just "0" -> False
+       Just "False" -> False
+       Just "false" -> False
+       Just _ -> True
 
+                   
 chatter :: String -> IO ()
 -- chatter = hPrintf stderr
 -- chatter = printf "%s\n"
@@ -409,6 +437,15 @@ dbgLvl = case lookup "DEBUG" theEnv of
 {-# INLINE dbgLvl #-}
 dbgLvl = 0
 #endif
+
+-- | This codifies the convention of keeping fine-grained
+-- pre-each-memory-modification messages at higher debug levels.
+-- These are used for fuzz testing concurrent interleavings.  Setting
+-- `dbgRange` in the `DbgCfg` to this value should give you only the
+-- messages necessary for stress testing schedules.
+defaultMemDbgRange :: (Int, Int)
+-- defaultMemDbgRange = (4,10)
+defaultMemDbgRange = (0,10)
 
 defaultDbg :: Int
 defaultDbg = 0

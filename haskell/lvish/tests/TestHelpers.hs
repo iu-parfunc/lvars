@@ -21,7 +21,7 @@ module TestHelpers
    theEnv,
    
    -- timeOutPure, 
-   exceptionOrTimeOut, allowSomeExceptions, assertException
+   exceptionOrTimeOut, allowSomeExceptions, assertException, knownFailure
  )
  where 
 
@@ -230,19 +230,33 @@ assertException msgs action = do
 -- | For testing quasi-deterministic programs: programs that always
 -- either raise a particular exception or produce a particular answer.
 allowSomeExceptions :: [String] -> IO a -> IO (Either SomeException a)
-allowSomeExceptions msgs action = do
+allowSomeExceptions msgs =
+    allowSomeExceptions' (\ e -> do let estr = show e 
+                                    return $ any (`isInfixOf` estr) msgs)
+                         ("Got the wrong exception, expected one of the strings: "++ show msgs)
+
+-- | WARNING: DANGER, DANGER!  This marks that a test represents a known issue and MUST BE FIXED.
+knownFailure :: IO () -> IO ()
+knownFailure act =
+  do _ <- allowSomeExceptions'
+                  (\_ -> do putStrLn "WARNING: letting through knownFailure!!!"
+                            return True)
+                  "" act
+     return ()
+            
+allowSomeExceptions' :: (SomeException -> IO Bool) -> String -> IO a -> IO (Either SomeException a)
+allowSomeExceptions' test failmsg action = do 
  catch (do a <- action; evaluate a; return (Right a))
        (\e ->
-         let estr = show e in
-         if  any (`isInfixOf` estr) msgs
-          then do when True $ -- (dbgLvl>=1) $
-                    putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
-                  return (Left e)
-          else do HU.assertFailure $ "Got the wrong exception, expected one of the strings: "++ show msgs
-                    ++ "\nInstead got this exception:\n  " ++ show estr
-                  error "Should not reach this..."
-       )
+        do b <- test e
+           if b
+              then do when True $ -- (dbgLvl>=1) $
+                        putStrLn $ "Caught allowed exception: " ++ show (e :: SomeException)
+                      return (Left e)
+              else do HU.assertFailure $ failmsg++ "\nInstead got this exception:\n  " ++ show e
+                      error "Should not reach this error...")
 
+                        
 exceptionOrTimeOut :: Show a => Double -> [String] -> IO a -> IO ()
 exceptionOrTimeOut time msgs action = do
   x <- timeOut time $
@@ -371,7 +385,7 @@ defaultMainSeqTests tests = do
                                                       , ropt_test_options = Just (mempty{ 
                                                           topt_timeout=(Just$ Just defaultTestTimeout)})})
                                                `mappend` opts)
-                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " worker threads for testing."
+                                  putStrLn $ " [*] Using "++ show (ropt_threads opts')++ " testing threads."
                                   defaultMainWithOpts tests opts'
                                )
   case res of

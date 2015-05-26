@@ -12,12 +12,10 @@ module Control.LVish.SchedIdempotentInternal (
 import Prelude
 import Control.Monad
 import Control.Concurrent
-import Control.DeepSeq
-import Control.Applicative
-import Data.IORef 
-import GHC.Conc
+import Data.IORef
+import Data.Atomics (atomicModifyIORefCAS)
+import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
-import System.IO (stdout)
 import Text.Printf
 
 import qualified Control.LVish.Logging as L
@@ -51,12 +49,12 @@ newDeque = newIORef []
 -- | Add work to a thread's own work deque
 pushMine :: Deque a -> a -> IO ()
 pushMine deque t = 
-  atomicModifyIORef deque $ \ts -> (t:ts, ())
+  atomicMod deque $ \ts -> (t:ts, ())
                                    
 -- | Take work from a thread's own work deque
 popMine :: Deque a -> IO (Maybe a)
 popMine deque = do
-  atomicModifyIORef deque $ \ts ->
+  atomicMod deque $ \ts ->
     case ts of
       []      -> ([], Nothing)
       (t:ts') -> (ts', Just t)
@@ -70,13 +68,21 @@ nullQ deque = do
 -- | Add low-priority work to a thread's own work deque
 pushYield :: Deque a -> a -> IO ()
 pushYield deque t = 
-  atomicModifyIORef deque $ \ts -> (ts++[t], ()) 
+  atomicMod deque $ \ts -> (ts++[t], ()) 
 
 -- | Take work from a different thread's work deque
 popOther :: Deque a -> IO (Maybe a)
 popOther = popMine
 
 #endif
+-- END: ifdef CHASE_LEV
+
+-- The version of atomic modify used in several places in this file:
+atomicMod :: IORef a -> (a -> (a, b)) -> IO b
+{-# INLINE atomicMod #-}
+-- atomicMod = atomicModifyIORef'
+atomicMod = atomicModifyIORefCAS
+
 
 ------------------------------------------------------------------------------
 -- A scheduling framework
@@ -85,13 +91,13 @@ popOther = popMine
 -- All the state relevant to a single worker thread
 data State a s = State
     { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
-      numWorkers :: Int,               -- ^ Total number of workers in this runPar
-      prng     :: IORef StdGen,        -- ^ core-local random number generation
-      status   :: IORef s,             -- ^ A thread-local flag
-      workpool :: Deque a,             -- ^ The thread-local work deque
-      idle     :: IORef [MVar Bool],   -- ^ global list of idle workers
-      states   :: [State a s],         -- ^ global list of all worker states.
-      logger   :: Maybe L.Logger
+      numWorkers :: !Int,               -- ^ Total number of workers in this runPar
+      prng     :: !(IORef StdGen),        -- ^ core-local random number generation
+      status   :: !(IORef s),             -- ^ A thread-local flag
+      workpool :: !(Deque a),             -- ^ The thread-local work deque
+      idle     :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
+      states   :: ![State a s],         -- ^ global list of all worker states.
+      logger   :: !(Maybe L.Logger)
         -- ^ The Logger object used by the current Par session, if debugging is activated.
     }
     
@@ -103,7 +109,7 @@ next state@State{ workpool } = do
   e <- popMine workpool
   case e of
     Nothing -> steal state
-    Just t  -> return e
+    Just _t -> return e
 
 -- RRN: Note -- NOT doing random work stealing breaks the traditional
 -- Cilk time/space bounds if one is running strictly nested (series
@@ -121,44 +127,44 @@ steal State{ idle, states, no=my_no, numWorkers, logger } = do
   where
     -- After a failed sweep, go idle:
     go [] = do m <- newEmptyMVar
-               r <- atomicModifyIORef idle $ \is -> (m:is, is)
+               r <- atomicMod idle $ \is -> (m:is, is)
                if length r == numWorkers - 1
                   then do
-                     chatter logger $ printf "!cpu %d initiating shutdown\n" my_no
-                     mapM_ (\m -> putMVar m True) r -- Signal to all but us.
+                     chatter logger $ printf "!cpu %d initiating shutdown" my_no
+                     mapM_ (\mv -> putMVar mv True) r -- Signal to all but us.
                      return Nothing
                   else do
-                    chatter logger $ printf "!cpu %d going idle...\n" my_no
+                    chatter logger $ printf "!cpu %d going idle..." my_no
                     done <- takeMVar m
                     if done
                        then do
-                         chatter logger $ printf "!cpu %d shutting down\n" my_no
+                         chatter logger $ printf "!cpu %d shutting down" my_no
                          return Nothing
                        else do
-                         chatter logger $ printf "!cpu %d woken up\n" my_no
+                         chatter logger $ printf "!cpu %d woken up" my_no
                          go states
     go (x:xs)
       | no x == my_no = go xs
       | otherwise     = do
          r <- popOther (workpool x)
          case r of
-           Just t  -> do
-             chatter logger $ printf "cpu %d got work from cpu %d\n" my_no (no x)
+           Just _t -> do
+             chatter logger $ printf "cpu %d got work from cpu %d" my_no (no x)
              return r
            Nothing -> go xs
 
 -- | If any worker is idle, wake one up and give it work to do.
 pushWork :: State a s -> a -> IO ()
--- TODO: If we're really going to do wakeup on every push we could consider giving
+-- TODO: If we're really going to do wakeup on *every* push we could consider giving
 -- the formerly-idle worker the work item directly and thus avoid touching the deque.
 pushWork State { workpool, idle, logger, no } t = do
   chatter logger $ "Starting pushWork on worker "++show no
   pushMine workpool t
   idles <- readIORef idle
   when (not (null idles)) $ do
-    r <- atomicModifyIORef idle (\is -> case is of
-                                          [] -> ([], return ())
-                                          (i:is) -> (is, putMVar i False))
+    r <- atomicMod idle (\is -> case is of
+                                 [] -> ([], return ())
+                                 (i:is') -> (is', putMVar i False))
     r -- wake one up
         
 yieldWork :: State a s -> a -> IO ()
@@ -177,12 +183,13 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
                    (if dbgScheduling 
                     then L.WaitNum numWorkers countIdle 
                     else L.DontWait)
-         -- L.logOn lgr (L.StrMsg 1 " [dbg-lvish] Initialized Logger... ")
+         L.logOn lgr (L.OffTheRecord 1 " [dbg-lvish] Initialized Logger... ")
          return lgr
       -- Atomically count how many workers are currently registered as idle:
       countIdle = do ls <- readIORef idle
                      return $! length ls
-  logger <- if L.dbgLvl > 0 
+  -- Fastpath: if we're not in debug mode don't create the logger at all:
+  logger <- if maxLvl > 0 
             then fmap Just $ mkLogger
             else return Nothing
   let mkState states i = do 
@@ -237,11 +244,10 @@ currentCPU =
 
 -- | Local chatter function for this module
 chatter :: Maybe L.Logger -> String -> IO ()
--- chatter s = putStrLn s
+-- chatter _ s = putStrLn s -- TEMP...
 -- chatter _ s = printf "%s\n" s
 -- chatter _ _ = return ()
 
--- We should NOT do this if dbgScheduling is on.
 chatter mlg s = do 
   case mlg of 
     Nothing -> return ()

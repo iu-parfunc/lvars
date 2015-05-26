@@ -19,8 +19,8 @@ module Data.LVar.PureMap.Unsafe
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish hiding (parIO)
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (freezeLV)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (freezeLV)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Data.UtilInternal (traverseWithKey_)
@@ -104,6 +104,8 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler mh lv globalCB deltaCB
     return ()
   where
+    -- FIXME: require idempotence or make sure this does NOT launch
+    -- repeated callbacks for the same key:
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
     globalCB ref = do
       mp <- L.liftIO $ readIORef ref -- Snapshot

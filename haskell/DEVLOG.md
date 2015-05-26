@@ -643,3 +643,316 @@ Rather than debug this, it may be better to test whether the non-idem branch doe
 [2014.05.01] {Still seeing problems with lotsaPar test}
 --------------------------------------------------------
 
+[2014.10.22] {Debugging unit tests}
+----------------------------------------
+
+I'm trying to reactivat the SLMap tests.  Now "-fgetonce" is the
+default, so that should fix some problems with duplication.  But what
+is the deal with these exceptions?  Work dupliction does not seem
+sufficient to explain them.
+
+      Common:
+	SLMapTests:
+	  traverse: [Failed]
+    *** Failed! Exception: 'ConflictingPutExn "Multiple puts to one entry in an IMap!"' (after 2 tests):
+
+      v8d: [Failed]
+     ERROR: ConflictingPutExn "Multiple puts to one entry in an IMap!"
+
+Argh, and I just turned on -fdebug, in addition to making -fgetonce
+default, and I got this:
+
+      v3e: [Failed]
+    ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
+      v8a: [OK]
+      v8b: [Failed]
+    ERROR: Final continuation of Par computation was duplicated, in spite of GET_ONCE!
+
+
+[2014.10.24] {Criterion Microbenchmarking}
+------------------------------------------
+
+Each pureset insert is doing A LOT of allocation.  When inserting
+between 1-260K Ints, the average is 781ns/insert with 1835 bytes.
+
+newFromList on 10 elements does WAY less allocation than 10 inserts...
+
+SLSet microbenchmarks are WAY slower than PureSet.
+PureSet might benefit from atomicModifyIORefCAS_ ...
+
+SLSet fillN seems to have a non-linear uptick around 41.6K inserts.
+(Cache?  Hmm, L3 cache could have blown before that...)
+
+----------------------------------------
+
+Here's an example of the inner loop when benchmarking PureSet/new.
+Honestly, it looks as good as it could be.  Each LVar currently
+allocates several mutable locations.  (But I thought it would be
+3.. how'd it get to 4?)
+
+It's taking 17.25ns / 128-bytes currently.  It's the 128 bytes of
+allocation that seems excessive.
+
+    (\ (w_scwM :: () -> ClosedPar) ->
+		       letrec {
+			 $wa_scwR :: Int# -> (() -> ClosedPar) -> ClosedPar
+			 $wa_scwR =
+			   \ (ww_scwP :: Int#) (w1_Xcxf :: () -> ClosedPar) ->
+			     case tagToEnum# (># ww_scwP x#_a9Y7) of _ {
+			       False ->
+				 let {
+				   a_scut :: Int#
+				   a_scut = +# ww_scwP 1 } in
+				 (\ (eta1_B2 :: SchedState) (eta2_XB :: State# RealWorld) ->
+				    case newMutVar# (Nothing) eta2_XB
+				    of _ { (# ipv_aaNi, ipv1_aaNj #) ->
+				    case newMutVar# (Nil) ipv_aaNi of _ { (# ipv2_aaMP, ipv3_aaMQ #) ->
+				    case newMutVar# (Active ((STRef ipv3_aaMQ) `cast` ...)) ipv2_aaMP
+				    of _ { (# ipv4_aaMU, ipv5_aaMV #) ->
+				    case newMutVar# () ipv4_aaMU of _ { (# ipv6_aaMZ, ipv7_aaN0 #) ->
+				    (((($wa_scwR a_scut w1_Xcxf) `cast` ...) eta1_B2) `cast` ...)
+				      ipv6_aaMZ
+				    }
+				    }
+				    }
+				    })
+				 `cast` ...;
+			       True -> w1_Xcxf ()
+			     }; } in
+		       $wa_scwR 1 w_scwM)
+
+If we proceed to STG, where let=allocation and case=evaluation, then
+we see three let's in the loop.  The first is for the (SchedState ->
+...) function, and then the other two are:
+
+	 let {
+	   sat_scyg
+	     :: Bag
+		  (Listener
+		     Any) =
+	       NO_CCS STRef! [ipv3_scyf]; } in
+	 let {
+	   sat_scyh
+	     :: Status
+		  Any =
+	       NO_CCS Active! [sat_scyg];
+
+How about if we look at the "fill10" example instead?  It posts up a
+whopping 8700 bytes of allocation (and ~2 microseconds / 5.6K cycles).
+(A regular Data.Set.fromList on [1..10] takes 600 cycles and does 700
+bytes alloc.  Huh, it looks like that version is specializing on
+[Int]... )
+
+This one clearly only does the 4 newMutVar calls once, and then goes
+into "$wloop_".  Our "insert" inlined but the Data.Set insert did not,
+requiring us to box the Int on the way off to that library function.
+
+One immediate difference from the above is that "Par" did not go away
+in exposing the "ClosedPar" underneath in this one.  Presumably
+because this is a loop IN the par monad rather than the IO monad....
+
+    letrec {
+      $wloop_scNC :: Int# -> Par Full Any ()
+      $wloop_scNC =
+	\ (ww1_scNA :: Int#) ->
+	  let {
+	    i_X9jQ :: Int
+	    i_X9jQ = I# ww1_scNA } in
+	  let {
+	    lvl6_scP1 :: Maybe Int
+	    lvl6_scP1 = Just i_X9jQ } in
+	  case tagToEnum# (># ww1_scNA 10) of _ {
+	    False ->
+	      let {
+		a1_sawc :: Par Full Any ()
+		a1_sawc = $wloop_scNC (+# ww1_scNA 1) } in
+	      let {
+		m1_aasA :: Par ()
+		m1_aasA =
+		  let {
+		    lvl7_scP4 :: (Set Int, Maybe Int)
+		    lvl7_scP4 = (Tip, lvl6_scP1) } in
+		  let {
+		    lvl8_scP6 :: Set Int -> (Set Int, Maybe Int)
+		    lvl8_scP6 =
+		      \ (set_aach :: Set Int) ->
+			case insert $fOrdInt i_X9jQ set_aach
+			of wild4_aacG {
+			  Bin dt_aacI ds4_aacJ ds5_aacK ds6_aacL ->
+			    case set_aach of wild5_aacn {
+			      Bin dt1_aacp ds7_aacq ds8_aacr ds9_aacs ->
+				case tagToEnum# (># dt_aacI dt1_aacp)
+				of _ {
+				  False -> (wild5_aacn, Nothing);
+				  True -> (wild4_aacG, lvl6_scP1)
+				};
+			      Tip ->
+				case tagToEnum# (># dt_aacI 0) of _ {
+				  False -> lvl_rcGu;
+				  True -> (wild4_aacG, lvl6_scP1)
+				}
+			    };
+			  Tip ->
+			    case set_aach of wild5_aacn {
+			      Bin dt_aacp ds4_aacq ds5_aacr ds6_aacs ->
+				case tagToEnum# (># 0 dt_aacp) of _ {
+				  False -> (wild5_aacn, Nothing);
+				  True -> lvl7_scP4
+				};
+			      Tip -> lvl_rcGu
+			    }
+			} } in
+		  $wputLV_
+		    (a_scvn `cast` ...)
+		    ipv5_aaPg
+		    ipv7_aaPl
+		    ((\ (a3_acwW :: IORef (Set Int))
+			(eta3_B3 :: (Maybe Int, ()) -> ClosedPar)
+			(eta4_XY :: SchedState)
+			(eta5_X1V :: State# RealWorld) ->
+			case a3_acwW `cast` ... of _ { STRef ww3_aavD ->
+			case $wa ww3_aavD lvl8_scP6 eta5_X1V
+			of _ { (# ipv8_acx3, ipv9_acx4 #) ->
+			((((eta3_B3 (ipv9_acx4, ())) `cast` ...)
+			    eta4_XY)
+			 `cast` ...)
+			  ipv8_acx3
+			}
+			})
+		     `cast` ...) } in
+	      (\ (eta3_Xato :: () -> ClosedPar) ->
+		 let {
+		   lvl7_scP7 :: ClosedPar
+		   lvl7_scP7 = (a1_sawc `cast` ...) eta3_Xato } in
+		 (m1_aasA `cast` ...) (\ _ -> lvl7_scP7))
+	      `cast` ...;
+	    True -> lvl1_rcQD `cast` ...
+	  }; }
+
+
+[2014.10.27] {Debugging logging / fuzz testing system}
+------------------------------------------------------
+
+Here's an example of v1a screwing up ONLY when it is run more than
+once in a batch.  That is, if I run the whole command N times (with
+STRESSTESTS=1), it seems fine.  But STRESSTESTS=2 screws it up.  The
+sceond run begins at "34.":
+
+    $ DEBUG=1 STRESSTESTS=2 SILENCEOTR=0 ./dist/build/test-lvish/test-lvish -t v1a
+     [*] Default test harness...
+     [*] Using Just 1 testing threads.
+    LVishAndIVar:
+     [!] responding to env Var: STRESSTESTS=2
+     [!] LVish responding to env Var: DEBUG=1
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \7| !cpu 1 stealing
+    \7| !cpu 2 stealing
+    \7| wrkr0  [dbg-lvish] newLV: allocating...
+    \7| !cpu 2 going idle...
+    \7| Starting pushWork on worker 0
+    \7| cpu 1 got work from cpu 0
+    \7| !cpu 2 woken up
+    \7| !cpu 2 going idle...
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: initial lvar status read, lv 1 on worker 0
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV: first readIORef , lv 1 on worker 1
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): check globalThresh, lv 1 on worker 1
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: setStatus,, lv 1 on worker 0
+    |5| #1 of 2: wrkr0  [dbg-lvish] putLV: about to mutate lvar, lv 1 on worker 0
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: read final status before unsetting, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV 2: blocking on LVar, registering listeners...
+    |8| #1 of 2: wrkr0  [dbg-lvish] putLV: UN-setStatus, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second frozen check, lv 1 on worker 1
+    |9| #1 of 2: wrkr0  [dbg-lvish] putLV: calling each listener's onUpdate, lv 1 on worker 0
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second globalThresh check, lv 1 on worker 1
+    |7| #2 of 2: wrkr1  [dbg-lvish] getLV (active): second globalThresh tripped, remove tok, lv 1 on worker 1
+    |7| #1 of 2: wrkr0  [dbg-lvish] getLV (active): callback: check thresh, lv 1 on worker 0
+    |8| #2 of 2: wrkr1  [dbg-lvish] getLV 2 on worker 1: winner check? True, counter val 1
+    \7| !cpu 1 stealing
+    \7| !cpu 1 going idle...
+    |8| #1 of 1: wrkr0  [dbg-lvish] getLV 2 on worker 0: winner check? False, counter val 2
+    \7| !cpu 0 stealing
+    \7| !cpu 0 initiating shutdown
+    \7| !cpu 1 shutting down
+    \7| !cpu 2 shutting down
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+    34.
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \7| !cpu 0 stealing
+    \7| !cpu 2 stealing
+    \7| !cpu 1 stealing
+    \7| !cpu 2 going idle...
+    \7| !cpu 0 going idle...
+    \7| !cpu 1 initiating shutdown
+    \4|  [dbg-lvish] Waiting for one async..
+    \7| !cpu 0 shutting down
+    \7| !cpu 2 shutting down
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] Waiting for one async..
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ThreadId 9 not unblocked yet, for: retrieve final runPar answer, after workers complete
+    Worker statuses: []
+    ....
+
+
+So this looks like a failure to get the work published properly the
+second time.  Here's a little more detail on a hanging run:
+
+    \1|  [dbg-lvish] Initialized Logger...
+    \1|  [dbg-lvish] New logger & scheds created... entering main loop.
+    \4|  [dbg-lvish] (main tid ThreadId 9) Wait on at least one async to complete..
+    \3| wrkr0  [dbg-lvish] Auxillary worker #0 starting.
+    \3| wrkr1  [dbg-lvish] Auxillary worker #1 starting.
+    \3| wrkr2  [dbg-lvish] Auxillary worker #2 starting.
+    \7| !cpu 1 stealing
+    \7| !cpu 0 stealing
+    \7| !cpu 2 stealing
+    \7| !cpu 1 going idle...
+    \7| !cpu 0 going idle...
+    \7| !cpu 2 initiating shutdown
+    \3| wrkr2  [dbg-lvish] Auxillary worker #2 exitting.
+    \7| !cpu 1 shutting down
+    \3| wrkr1  [dbg-lvish] Auxillary worker #1 exitting.
+    \7| !cpu 0 shutting down
+    \4|  [dbg-lvish] Waiting for one async.. 3 remaining
+    \3| wrkr0  [dbg-lvish] Auxillary worker #0 exitting.
+    \4|  [dbg-lvish] Waiting for one async.. 2 remaining
+    \4|  [dbg-lvish] Waiting for one async.. 1 remaining
+    \4|  [dbg-lvish] All asyncs complete, read final answer MVar.
+
+(I just changed defaultMemDbgRange from (4,10) to (0,10))
+Still no sign of that "newLV" call which should be the first thing the
+program realy does.
+
+This was issue #97.  Now it's fixed.
+
+
+[2014.10.27] {Back to working on getonce failures}
+--------------------------------------------------
+
+After closing #97, now the stresstests run ok, but with some failures.
+These are the tests that failed in Jenkins build 295 on
+LVish-implementation-2.0:
+
+    ["v8d","v8c","v3bStress","v3","v4","runParStress","v3bOnce"]
+
+Also, there are some issues with how and when the logger is used while
+running tests.  When we set DEBUG=0 we get messed up concurrent output
+(because without the logger it goes straight to stdout).  Currently
+the jenkins builds set DEBUG=1.  Right now in TestHelpers2 we chatter
+the scheduler log output whenever DEBUG>=1, but we could up that
+threshold.
+
+(Ok, I upped it to 10... that's much nicer for debugging these things
+because then at DEBUG=1 everything works fine but it only prints the
+*failing* schedules.)
+
+
+

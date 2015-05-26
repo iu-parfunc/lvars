@@ -1,23 +1,11 @@
 lvars
 =====
 
-#### A collection of prototype LVar implementations, tools, and mechanized semantics.
+Build Status:
 
-This is an umbrella repository for work related to LVars.
-Subdirectories include:
+ * Travis: [![Build Status](https://travis-ci.org/iu-parfunc/lvars.svg?branch=master)](https://travis-ci.org/iu-parfunc/lvars)
+ * Jenkins: [![Build Status](http://tester-lin.soic.indiana.edu:8080/buildStatus/icon?job=LVish-implementation-2.0)](http://tester-lin.soic.indiana.edu:8080/job/LVish-implementation-2.0/)
 
-  * [redex]: PLT Redex models of LVar calculi ([see
-    README](https://github.com/iu-parfunc/lvars/tree/master/redex#readme)).
+This repository is the home of the [LVish](http://hackage.haskell.org/package/lvish) Haskell library for programming with monotonically-growing concurrent data structures, also known as LVars.  More information can be found along with the main library, which is found under [haskell/lvish](haskell/lvish).
 
-  * [race-detector-interps]: an implementation of lambdaLVar extended
-     with a destructive `consume` operation and a data-race detector
-     for lambdaLVar + `consume`.
-
-  * [haskell]: LVar libraries for Haskell, based on the
-    [monad-par](http://hackage.haskell.org/package/monad-par) library.
-
-[redex]: https://github.com/iu-parfunc/lvars/tree/master/redex
-[race-detector-interps]: https://github.com/iu-parfunc/lvars/tree/master/race-detector-interps
-[haskell]: https://github.com/iu-parfunc/lvars/tree/master/haskell
-
-
+<span style="font-size: 0.8em;">(Looking for the data-race detector that accompanied our FHPC '13 paper?  It's [here](https://github.com/lkuper/lvar-race-detector).  Looking for PLT Redex models of LVar calculi?  They're [here](https://github.com/lkuper/lvar-semantics).)</span>

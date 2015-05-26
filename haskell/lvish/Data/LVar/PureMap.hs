@@ -50,8 +50,8 @@ module Data.LVar.PureMap
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Data.LVar.IVar as IV
 import           Data.LVar.Generic as G
 import           Data.LVar.PureMap.Unsafe
@@ -63,7 +63,6 @@ import qualified Data.Map.Strict as M
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 
-#ifdef GENERIC_PAR
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
 
@@ -71,7 +70,6 @@ import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 --------------------------------------------------------------------------------
 
@@ -175,7 +173,7 @@ modify (IMap lv) key newBottom fn = WrapPar $ do
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
-gmodify :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+gmodify :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
@@ -186,7 +184,7 @@ gmodify map key fn = modify map key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 -- 
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
@@ -335,8 +333,6 @@ unsafeName x = unsafePerformIO $ do
 --------------------------------------------------------------------------------
 -- Interfaces for generic programming with containers:
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -349,7 +345,5 @@ instance PC.Generator (IMap k Frzn a) where
 -- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
 -- instance.  
 -- instance Show k => PC.ParFoldable (IMap k Frzn a) where
-
-#endif  
 
 

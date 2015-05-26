@@ -47,6 +47,7 @@ module Data.LVar.PureSet
 import           Control.Monad (void)
 import           Control.Applicative ((<$>))
 import           Data.IORef
+import           Data.Atomics (atomicModifyIORefCAS)
 import           Data.List (intersperse)
 import qualified Data.Set as S
 import qualified Data.LVar.IVar as IV
@@ -56,8 +57,8 @@ import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Control.LVish as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (insert)
 
@@ -124,6 +125,7 @@ instance (Show a) => Show (ISet Frzn a) where
 instance Show a => Show (ISet Trvrsbl a) where
   show = show . castFrzn
 
+{-# INLINE newEmptySet #-}
 -- | Create a new, empty, monotonically growing set.
 newEmptySet :: Par e s (ISet s a)
 newEmptySet = newSet S.empty
@@ -160,11 +162,14 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
     do
        hp  <- newPool 
        res <- IV.new -- TODO, specialize to skip this when the init action returns ()
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (1/3) pool & result ivar created, now freezeLVAfter..."
        WrapPar$ 
          freezeLVAfter lv (initCB hp res) deltCB
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (2/3) further, quiesce our extra HP..."
        quiesce hp
+       dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: (3/3) finally do a get"
        IV.get res
   where
     deltCB x = return$ Just$ unWrapPar$ callback x
@@ -189,9 +194,11 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
 -- fixed for the tree-based representation of sets that "Data.Set"
 -- uses.)
 freezeSet :: HasFreeze e => ISet s a -> Par e s (S.Set a)
-freezeSet (ISet (WrapLVar lv)) = WrapPar $ 
-   do freezeLV lv
-      getLV lv globalThresh deltaThresh
+freezeSet (ISet (WrapLVar lv)) = 
+   do dbgChatterOnly (2) "PureSet.freezeSet: (1/2) call freezeLV"
+      WrapPar $ freezeLV lv
+      dbgChatterOnly (2) "PureSet.freezeSet: (2/2) call getLV"
+      WrapPar $ getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
@@ -227,11 +234,12 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
 forEach :: ISet s a -> (a -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 
+{-# INLINE insert #-}
 -- | Put a single element in the set.  (WHNF) Strict in the element being put in the
 -- set.     
 insert :: HasPut e => Ord a => a -> ISet s a -> Par e s ()
 insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
-  where putter ref  = atomicModifyIORef ref update
+  where putter ref  = atomicModifyIORefCAS ref update
         update set =
           let set' = S.insert elm set in
           -- Here we do a constant time check to see if we actually changed anything:
@@ -258,7 +266,7 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
 -- | Wait on the /size/ of the set, not its contents.
 waitSize :: HasGet e => Int -> ISet s a -> Par e s ()
 waitSize !sz (ISet lv) = do
-    logDbgLn (-2) "PureSet.waitSize: about to (potentially) block:"
+    dbgChatterOnly (1) "PureSet.waitSize: about to (potentially) block:"
     WrapPar$ getLV (unWrapLVar lv) globalThresh deltaThresh
   where
     globalThresh ref _frzn = do

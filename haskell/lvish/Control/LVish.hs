@@ -91,10 +91,7 @@ module Control.LVish
      -- * Various loop constructs
      parForL, parForSimple, parForTree, parForTiled, for_,
 
--- This is not fully ready yet till LVish 2.0:
-#ifdef GENERIC_PAR
      asyncForEachHP,
-#endif
 
      -- * Logical control flow operators
      module Control.LVish.Logical,
@@ -112,8 +109,8 @@ module Control.LVish
      module Data.LVar.IVar,
 
      -- * Debug facilities and internal bits
-     logDbgLn, runParLogged, runParDetailed,
-     OutDest(..), DbgCfg (..),
+     logDbgLn, dbgChatterOnly, getLogger, runParLogged, runParDetailed,
+     OutDest(..), DbgCfg (..), defaultMemDbgRange,
      LVar()
    ) where
 
@@ -122,10 +119,10 @@ import           Control.LVish.Types
 import           Control.LVish.Internal as I
 import           Control.LVish.Basics as B
 import           Control.LVish.Logical
-import qualified Control.LVish.SchedIdempotent as L
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
-import           Control.LVish.Logging (OutDest(..))
+import           Control.LVish.Logging (LogMsg(..), OutDest(..), defaultMemDbgRange, logOn)
 import           Data.LVar.IVar 
 import           Data.Proxy
 import           Data.Coerce (coerce)
@@ -133,8 +130,6 @@ import           Data.Coerce (coerce)
 import Data.IORef
 --------------------------------------------------------------------------------
 
-
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
     
@@ -160,7 +155,16 @@ instance PU.ParThreadSafe Par where
 parIO :: HasIO e => IO a -> Par e s a
 parIO = I.liftIO
 
-#endif
+-- | Exactly like `logDbgLn` except used for informational chatter
+-- only, NOT to signal that a given thread is about to read or modify
+-- a memory address.
+dbgChatterOnly :: Int -> String -> Par e s ()
+dbgChatterOnly lvl msg = do
+  x <- getLogger
+  case x of
+    Nothing  -> logDbgLn lvl msg
+    Just lgr -> liftIO $ logOn lgr (OffTheRecord lvl msg)
+        
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a

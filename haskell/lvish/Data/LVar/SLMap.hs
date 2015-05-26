@@ -72,20 +72,19 @@ import           Control.Monad.IO.Class
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
-import qualified Control.LVish.SchedIdempotent as L
+import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 import           System.IO.Unsafe  (unsafeDupablePerformIO)
 import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
 
 import Debug.Trace
 
-#ifdef GENERIC_PAR
+import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 import qualified Data.Splittable.Class as Sp
 import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
-#endif
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -212,7 +211,9 @@ forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> (k -> v -> Par e s ())      -- ^ callback
           -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
-    L.addHandler mh lv globalCB (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
+    L.addHandler mh lv globalCB
+       -- FIXME: this is bad, it schedules REPEAT callbacks on the same key:
+       (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
     gcallb k v = do
       logDbgLn 5 " [SLMap] callback from global traversal "
@@ -431,8 +432,6 @@ instance F.Foldable (IMap k Frzn) where
 instance F.Foldable (IMap k Trvrsbl) where
   foldr fn zer mp = F.foldr fn zer (castFrzn mp)
 
-#ifdef GENERIC_PAR
-#warning "Creating instances for generic programming with IMaps"
 instance PC.Generator (IMap k Frzn a) where
   type ElemOf (IMap k Frzn a) = (k,a)
   {-# INLINE fold #-}
@@ -473,7 +472,6 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
 
 -- UNSAFE!  It is naughty if this instance escapes to the outside world, which it can...
 instance F.Foldable (SLMapSlice k) where
-#endif  
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
@@ -491,7 +489,6 @@ instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
 
 --------------------------------------------------------------------------------
   
--- #ifdef GENERIC_PAR
 -- Not exported yet: 
 #if 0  
 instance PC.ParIMap (Par e s) where

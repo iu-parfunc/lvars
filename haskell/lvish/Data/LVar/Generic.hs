@@ -16,7 +16,8 @@ module Data.LVar.Generic
          
          -- * Supporting types and utilities
          AFoldable(..),
-         castFrzn, forFrzn
+         castFrzn, forFrzn,
+         PartialJoinSemiLattice(..)
        )
        where
 
@@ -54,6 +55,17 @@ class LVarData0 (t :: *) where
   newBottom0 :: Par e s t
 -}
 
+-- | A partial version of "Algebra.Lattice.JoinSemiLattice", this
+-- could be made into a complete lattice by the addition of a top
+-- element.
+class PartialJoinSemiLattice a where
+  joinMaybe :: a -> a -> Maybe a
+
+instance PartialJoinSemiLattice Int where
+  joinMaybe a b 
+    | even a && even b = Just (max a b)
+    | odd  a && odd  b = Just (max a b)
+    | otherwise        = Nothing
 
 ------------------------------------------------------------------------------
 -- Dealing with frozen LVars.

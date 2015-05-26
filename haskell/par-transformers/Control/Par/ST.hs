@@ -48,6 +48,7 @@ module Control.Par.ST
        where
 
 import Control.Monad
+import Control.Applicative
 import Control.Monad.IO.Class
 
 -- Transformers:
@@ -175,7 +176,7 @@ instance STSplittable (SVectorFlp a) where
 -- which the vector is no longer accessible.
 newtype ParST stState parM ans =
         ParST ((S.StateT stState parM) ans)
- deriving (Monad, Functor)
+ deriving (Monad, Functor, Applicative)
 
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
