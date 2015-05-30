@@ -42,7 +42,6 @@ import           Data.Concurrent.Internal.MonadToss
 import qualified Data.Foldable    as F
 import           Data.List (sort)
 
-#ifdef GENERIC_PAR
 import qualified Control.Par.Class.Unsafe as PU
 import qualified Control.Par.Class     as PC
 import qualified Data.Splittable.Class as SC
@@ -57,7 +56,6 @@ instance PU.ParMonad Par where
     where
       fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
   preturn x = WrapPar (return x)
-#endif
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}
