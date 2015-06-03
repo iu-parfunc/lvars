@@ -21,14 +21,14 @@ type TheMap k s v = IM.IMap k s v
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = testGroup "" [tests_here, tests_common ]
 
-tests_here :: Test
+tests_here :: TestTree
 tests_here = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 --------------------------------------------------------------------------------
 

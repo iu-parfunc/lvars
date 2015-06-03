@@ -1,0 +1,11 @@
+<?xml version='1.0' ?>
+<testsuite errors="0" failures="0" skipped="" hostname="ali" name="test-framework tests" tests="6" time="0.0" timestamp="Mon June  1 17:10:35 EDT 2015" id="" package="">
+  <testsuite name="Main">
+    <testcase name="seqfold" classname="" time="" />
+    <testcase name="seqfoldM" classname="" time="" />
+    <testcase name="seqfoldMP" classname="" time="" />
+    <testcase name="seqfor1" classname="" time="" />
+    <testcase name="seqforMP1" classname="" time="" />
+    <testcase name="seqforMP2" classname="" time="" />
+  </testsuite>
+</testsuite>

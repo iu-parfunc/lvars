@@ -5,13 +5,13 @@ module LogicalTests where
 import Control.LVish
 import Data.LVar.IVar as IV
 
-import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
+--import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
 -- import Test.QuickCheck ()
-import Test.Framework.Providers.HUnit
+import Test.Tasty.HUnit
 -- import Test.Framework.Providers.QuickCheck2
-import Test.Framework -- (Test, defaultMain, testGroup)
-import Test.Framework.TH (testGroupGenerator)
-import TestHelpers (defaultMainSeqTests)
+import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Tasty.TH (testGroupGenerator)
+-- import TestHelpers (defaultMainSeqTests)
 
 --------------------------------------------------------------------------------
 -- TESTS:
@@ -77,8 +77,8 @@ case_orMap01 = assertEqual "" True $ runPar $
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests

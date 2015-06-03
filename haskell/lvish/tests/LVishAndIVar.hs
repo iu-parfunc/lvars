@@ -10,13 +10,13 @@
 
 module LVishAndIVar(tests,runTests, runParStress, lotsaRunPar) where
 
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.TH (testGroupGenerator)
 
-import Test.HUnit (Assertion, assertEqual, assertBool)
+--import Test.HUnit (Assertion, assertEqual, assertBool)
 import qualified Test.HUnit as HU
 import Control.Applicative
 import Control.Monad
@@ -54,11 +54,11 @@ import           TestHelpers2 as T
 --------------------------------------------------------------------------------
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMain tests
 
 -- SADLY, this use of template-Haskell, together with the atomic-primops dependency,
 -- triggers a GHC linking bug:
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 --------------------------------------------------------------------------------

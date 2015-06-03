@@ -23,14 +23,14 @@ type TheMap k s v = IM.SatMap k s v
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = testGroup "" [testsHere, tests_writeOnly ]
 
-testsHere :: Test
+testsHere :: TestTree
 testsHere = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 ------------------------------------------------------------------------------------------
 -- Show instances

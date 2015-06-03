@@ -9,10 +9,10 @@
 
 module SetTests(tests, runTests) where
 
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain, testGroup)
+-- import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import           TestHelpers as T
 import           TestHelpers2 (stressTest, stressTestReps)
@@ -32,12 +32,12 @@ import           Control.LVish.Internal (liftIO)
 --------------------------------------------------------------------------------
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 makeCommonSetTests :: (forall s . Par Full s (c s Int))
                    -> (forall s . Int -> c s Int -> Par Full s ())
                    -> (forall s . [Int] -> Par Full s (c s Int))
-                   -> [Test]
+                   -> [TestTree]
 makeCommonSetTests mknew insert frmList =
   [
     testCase "v3bOnce" $ (runParNonDet v3b) >>= assertEqual "callback test / withCallbacksThenFreeze" v3b_ans
@@ -49,7 +49,7 @@ makeCommonSetTests mknew insert frmList =
 -- type Det = Ef P G NF B NI
 type Full = Ef P G F B I 
 
-tests :: Test
+tests :: TestTree
 tests =
   testGroup "AllSetTests"
   [ testGroup "PureSet" (makeCommonSetTests IS.newEmptySet IS.insert IS.newFromList)

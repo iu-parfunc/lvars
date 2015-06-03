@@ -7,10 +7,10 @@
 module AddRemoveSetTests(tests, runTests) where
 
 import Control.Concurrent
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain, testGroup)
+--import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import           TestHelpers2 as T
 
@@ -24,11 +24,11 @@ import           Control.LVish.Internal (liftIO)
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = T.defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 --------------------------------------------------------------------------------
 

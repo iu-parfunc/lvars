@@ -8,10 +8,10 @@ import Control.Monad
 import Control.Exception
 import qualified Data.Set as S
 import System.IO (stderr)
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain, testGroup)
+--import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import           TestHelpers as T
 import GHC.Conc (numCapabilities)
@@ -31,11 +31,11 @@ import Data.Par.Range (range, fullpar)
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 --------------------------------------------------------------------------------
 

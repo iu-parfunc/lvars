@@ -37,6 +37,7 @@ if [ "$CABAL" == "" ]; then
   fi
 fi
 
+#PKGS=" ./lvish "
 PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers ./concurrent-skiplist "
 
 # We build the sandbox, not at the repo root, but at the root of the Haskell code dir.
@@ -73,6 +74,7 @@ if [ "$NOTEST" == "" ]; then
     # Assume cabal 1.20+:
     echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
     $CABAL configure --with-ghc=$GHC --enable-tests $CABAL_FLAGS
-    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
+#   $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
+    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1'
   done
 fi

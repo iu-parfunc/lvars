@@ -1,0 +1,117 @@
+<?xml version='1.0' ?>
+<testsuite errors="0" failures="0" skipped="" hostname="ali" name="test-framework tests" tests="76" time="0.0" timestamp="Mon June  1 17:10:10 EDT 2015" id="" package="">
+  <testsuite name="LVishAndIVar">
+    <testcase name="runParStress" classname="" time="" />
+    <testcase name="lotsaRunPar" classname="" time="" />
+    <testcase name="v0" classname="" time="" />
+    <testcase name="v1a" classname="" time="" />
+    <testcase name="v1b" classname="" time="" />
+    <testcase name="i3f" classname="" time="" />
+    <testcase name="i3g" classname="" time="" />
+    <testcase name="lp01" classname="" time="" />
+    <testcase name="lp02" classname="" time="" />
+    <testcase name="lp03" classname="" time="" />
+    <testcase name="lp04" classname="" time="" />
+    <testcase name="dftest0" classname="" time="" />
+    <testcase name="dftest1" classname="" time="" />
+    <testcase name="dftest3" classname="" time="" />
+    <testcase name="show01" classname="" time="" />
+  </testsuite>
+  <testsuite name="ArrayTests">
+    <testcase name="v9a" classname="" time="" />
+    <testcase name="i9c" classname="" time="" />
+    <testcase name="v9d" classname="" time="" />
+    <testcase name="v9e NatArr" classname="" time="" />
+    <testcase name="i9h" classname="" time="" />
+    <testcase name="v9f1 fillIvarArr" classname="" time="" />
+    <testcase name="v9f2 seq fillIvarArray" classname="" time="" />
+    <testcase name="v9g istruct" classname="" time="" />
+    <testcase name="show04" classname="" time="" />
+  </testsuite>
+  <testsuite name="MemoTests">
+    <testcase name="02seq" classname="" time="" />
+    <testcase name="03seq" classname="" time="" />
+    <testcase name="04seq" classname="" time="" />
+  </testsuite>
+  <testsuite name="LogicalTests">
+    <testcase name="and1" classname="" time="" />
+    <testcase name="and2" classname="" time="" />
+    <testcase name="and3" classname="" time="" />
+    <testcase name="and4" classname="" time="" />
+    <testcase name="or1" classname="" time="" />
+    <testcase name="or2" classname="" time="" />
+    <testcase name="or3" classname="" time="" />
+    <testcase name="or4" classname="" time="" />
+    <testcase name="andMap01" classname="" time="" />
+    <testcase name="orMap01" classname="" time="" />
+  </testsuite>
+  <testsuite name="MaxPosIntTests">
+    <testcase name="mc1" classname="" time="" />
+    <testcase name="mc2" classname="" time="" />
+  </testsuite>
+  <testsuite name="AllSetTests">
+    <testsuite name="PureSet">
+      <testcase name="v3bOnce" classname="" time="" />
+      <testcase name="v3bStress" classname="" time="" />
+      <testsuite name="SetTests">
+        <testcase name="v2a" classname="" time="" />
+        <testcase name="v2b" classname="" time="" />
+        <testcase name="v2c" classname="" time="" />
+        <testcase name="v3a" classname="" time="" />
+        <testcase name="i3c" classname="" time="" />
+        <testcase name="v3d" classname="" time="" />
+        <testcase name="v3e" classname="" time="" />
+        <testcase name="v8a" classname="" time="" />
+        <testcase name="v8b" classname="" time="" />
+        <testcase name="show05" classname="" time="" />
+        <testcase name="show06" classname="" time="" />
+        <testcase name="show05B" classname="" time="" />
+        <testcase name="show06B" classname="" time="" />
+      </testsuite>
+    </testsuite>
+  </testsuite>
+  <testsuite name="">
+    <testsuite name="PureMapTests">
+      <testcase name="i7b" classname="" time="" />
+      <testcase name="v7c" classname="" time="" />
+      <testcase name="show03" classname="" time="" />
+    </testsuite>
+    <testsuite name="Common">
+      <testsuite name="PureMapTests">
+        <testcase name="traverse" classname="" time="" />
+        <testcase name="getKey" classname="" time="" />
+        <testcase name="waitSize" classname="" time="" />
+        <testcase name="waitVal" classname="" time="" />
+        <testcase name="v7a" classname="" time="" />
+        <testcase name="v8c" classname="" time="" />
+        <testcase name="v8d" classname="" time="" />
+        <testcase name="v9a" classname="" time="" />
+        <testcase name="handlrDup" classname="" time="" />
+      </testsuite>
+      <testsuite name="Common">
+        <testsuite name="PureMapTests">
+          <testcase name="tofrom" classname="" time="" />
+          <testcase name="fillFreeze1K" classname="" time="" />
+        </testsuite>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+  <testsuite name="">
+    <testsuite name="SatMapTests">
+      <testcase name="show03" classname="" time="" />
+    </testsuite>
+    <testsuite name="Common">
+      <testsuite name="SatMapTests">
+        <testcase name="tofrom" classname="" time="" />
+        <testcase name="fillFreeze1K" classname="" time="" />
+      </testsuite>
+    </testsuite>
+  </testsuite>
+  <testsuite name="AddRemoveSetTests">
+    <testcase name="v1" classname="" time="" />
+    <testcase name="v2" classname="" time="" />
+    <testcase name="v3" classname="" time="" />
+    <testcase name="v4" classname="" time="" />
+    <testcase name="i1" classname="" time="" />
+  </testsuite>
+</testsuite>

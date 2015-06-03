@@ -10,11 +10,11 @@ import Data.LVar.CycGraph
 
 import qualified Data.LVar.IVar as IV
 import Data.Set as S
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
-import Test.Framework    (defaultMain, Test)
-import Test.Framework.Providers.HUnit (testCase) -- For macro-expansion.
-import TestHelpers (defaultMainSeqTests)
+--import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
+import Test.Tasty    (defaultMain, TestTree)
+import Test.Tasty.HUnit (Assertion, assertEqual, assertBool, testCase) -- For macro-expansion.
+-- import TestHelpers (defaultMainSeqTests)
 
 import Prelude as P
 
@@ -93,8 +93,8 @@ cyc05seq = runPar $ exploreGraph_seq fn (\k -> return ("cycle-"++show k)) 33
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests

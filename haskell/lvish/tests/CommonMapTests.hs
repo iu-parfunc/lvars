@@ -233,5 +233,5 @@ insertionTest chunks = do
 
 --------------------------------------------------------------------------------
 
-tests_common :: Test
+tests_common :: TestTree
 tests_common = testGroup "Common" [ $(testGroupGenerator) , tests_writeOnly ]

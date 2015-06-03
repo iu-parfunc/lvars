@@ -8,13 +8,13 @@ module TestHelpers
    numElems, getNumAgents, producerRatio,
 
    -- * Utility for controlling the number of threads used by generated tests.
-   setTestThreads,
+   --setTestThreads,
 
    -- * Test initialization, reading common configs
    stdTestHarness, 
    
    -- * A replacement for defaultMain that uses a 1-thread worker pool 
-   defaultMainSeqTests,
+   --defaultMainSeqTests,
 
    -- * Misc utilities
    nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit,
@@ -43,13 +43,16 @@ import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Mem (performGC)
 import System.Exit
-import qualified Test.Framework as TF
-import Test.Framework.Providers.HUnit  (hUnitTestToTests)
+--import qualified Test.Framework as TF
+--import Test.Framework.Providers.HUnit  (hUnitTestToTests)
 
 import Data.Monoid (mappend, mempty)
-import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
-import Test.Framework.Runners.Options (RunnerOptions'(..))
-import Test.Framework.Options (TestOptions'(..))
+--import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
+--import Test.Framework.Runners.Options (RunnerOptions'(..))
+--import Test.Framework.Options (TestOptions'(..))
+import qualified Test.Tasty as TST
+import qualified Test.Tasty.HUnit as TSTH
+import qualified Test.HUnit.Base as HUB
 import Test.HUnit as HU
 
 import Debug.Trace (trace)
@@ -117,7 +120,6 @@ producerRatio = case lookup "PRODUCERRATIO" theEnv of
 warnUsing :: String -> a -> a
 warnUsing str a = trace ("  [Warning]: Using environment variable "++str) a
 
-
 -- | Dig through the test constructors to find the leaf IO actions and bracket them
 --   with a thread-setting action.
 setTestThreads :: Int -> HU.Test -> HU.Test
@@ -172,8 +174,7 @@ stdTestHarness genTests = do
                           unless (cap == one) $ setNumCapabilities one
                           return all_tests
               _ -> return$ TestList [ setTestThreads n all_tests | n <- all_threads ]
-    TF.defaultMain$ hUnitTestToTests tests
-
+    TST.defaultMain$ (TST.testGroup "" $ hUnitTestToTests tests)
 
 ----------------------------------------------------------------------------------------------------
 -- DEBUGGING
@@ -374,7 +375,7 @@ timeit ioact = do
 
 -- | An alternate version of `defaultMain` which sets the number of test running
 --   threads to one by default, unless the user explicitly overrules it with "-j".
-defaultMainSeqTests :: [TF.Test] -> IO ()
+{-defaultMainSeqTests :: [TF.Test] -> IO ()
 defaultMainSeqTests tests = do
   putStrLn " [*] Default test harness..."
   args <- getArgs
@@ -396,9 +397,26 @@ defaultMainSeqTests tests = do
        threadDelay (30 * 1000)
        putStrLn " [*] Main thread exiting."
        exitWith e
-
+-}
 -- | In nanoseconds.
 defaultTestTimeout :: Int
 -- defaultTestTimeout = 3*1000*1000
 defaultTestTimeout = 10*1000*1000
 -- defaultTestTimeout = 100*1000*1000
+
+-- migrated from test-framework-hunit, beause tasty-hunit does not
+-- have this function
+hUnitTestToTests :: HUB.Test -> [TST.TestTree]
+hUnitTestToTests = go ""
+  where
+    go desc (HUB.TestCase a)    = [TSTH.testCase desc a]
+    go desc (HUB.TestLabel s t)
+      | null desc = go s t
+      | otherwise = go (desc ++ ":" ++ s) t
+    go desc (HUB.TestList ts)
+        -- If the list occurs at the top level (with no description above it),
+        -- just return that list straightforwardly
+      | null desc = concatMap (go desc) ts
+        -- If the list occurs with a description, turn that into a honest-to-god
+        -- test group. This is heuristic, but likely to give good results
+      | otherwise = [TST.testGroup desc (concatMap (go "") ts)]

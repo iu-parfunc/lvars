@@ -6,8 +6,8 @@
 
 module Main where
 
-import Test.Framework (Test)
-import TestHelpers (defaultMainSeqTests)
+import Test.Tasty (TestTree, testGroup, defaultMain)
+--import TestHelpers (defaultMainSeqTests)
 
 import qualified MemoTests
 import qualified LVishAndIVar
@@ -25,10 +25,11 @@ import qualified AddRemoveSetTests
 import qualified GenericTests
 
 main :: IO ()
-main = defaultMainSeqTests alltests
+main = defaultMain alltests
 
-alltests :: [Test]
-alltests = 
+--alltests :: [TestTree]
+alltests :: TestTree
+alltests = testGroup "allTests" 
        [ LVishAndIVar.tests
        , ArrayTests.tests
        , MemoTests.tests

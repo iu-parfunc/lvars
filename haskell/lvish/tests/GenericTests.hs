@@ -13,9 +13,9 @@ import Data.Word
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (internalLiftIO)
 import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
-import Test.Framework    (defaultMain, Test)
-import Test.Framework.Providers.HUnit (testCase) -- For macro-expansion.
+import Test.Tasty.TH (testGroupGenerator)
+import Test.Tasty    (defaultMain, TestTree)
+import Test.Tasty.HUnit (testCase) -- For macro-expansion.
 
 import TestHelpers as T
 import Control.LVish -- LVarSched instances...
@@ -74,8 +74,8 @@ case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ do
 
 --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests

@@ -11,12 +11,12 @@
 
 module ArrayTests where
 
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
-import Test.Framework.TH (testGroupGenerator)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
+--import Test.HUnit (Assertion, assertEqual, assertBool,Counts(..))
 import Control.Monad
 import qualified Data.Vector as V
 import Control.Exception (catch, evaluate, SomeException)
@@ -39,11 +39,11 @@ import TestHelpers as T
 --------------------------------------------------------------------------------
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+runTests = defaultMain tests
 
 -- SADLY, this use of template-Haskell, together with the atomic-primops dependency,
 -- triggers a GHC linking bug:
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 --------------------------------------------------------------------------------

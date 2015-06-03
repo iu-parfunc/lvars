@@ -38,7 +38,16 @@ Test-suite test-par-collections
   Build-depends: lvish  >= 2.0
 
   -- (4) Additional build depends for testing:
-  Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
+  Build-depends: HUnit
+               , tasty
+               , tasty-hunit
+               , tasty-th
+               , tasty-quickcheck > 0.2.4
+               , QuickCheck
+               , HUnit
+               , time
+               , text
+
 
   ghc-options: -O2 -threaded -rtsopts
 

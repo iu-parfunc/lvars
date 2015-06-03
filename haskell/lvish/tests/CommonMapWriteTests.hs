@@ -4,10 +4,10 @@
 
 -- This code is for testing write-only operations:
 
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, testGroup)
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, testGroup, defaultMain)
+--import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+import Test.Tasty.TH (testGroupGenerator)
 import qualified Test.HUnit as HU
 import TestHelpers2 as T
 import Control.Concurrent (threadDelay)
@@ -21,7 +21,7 @@ import Data.Word
 import Data.IORef
 import System.Random
 import Test.QuickCheck
-import Test.Framework.Providers.QuickCheck2 (testProperty)
+import Test.Tasty.QuickCheck (testProperty)
 
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, NonFrzn, Trvrsbl,
@@ -50,7 +50,7 @@ mkSimpleIdentityProp trans prs =
 prop_tofrom :: [Int] -> Bool 
 prop_tofrom ls = mkSimpleIdentityProp return (zip ls ls)
 
-tests_writeOnly :: Test
+tests_writeOnly :: TestTree
 tests_writeOnly = testGroup "Common" [ $(testGroupGenerator) ] 
 
 --------------------------------------------------------------------------------

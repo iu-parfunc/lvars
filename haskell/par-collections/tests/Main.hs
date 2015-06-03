@@ -22,10 +22,10 @@ import Data.IORef
 import qualified Data.Atomics.Counter as C
 
 -- import Data.List
-import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
-import Test.Framework.Providers.HUnit
-import Test.Framework -- (Test, defaultMain, testGroup)
-import Test.Framework.TH (testGroupGenerator)
+--import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
+import Test.Tasty.HUnit
+import Test.Tasty -- (Test, defaultMain, testGroup)
+import Test.Tasty.TH (testGroupGenerator)
 
 import TestHelpers (numElems, timeit)
 
@@ -119,9 +119,9 @@ case_seqforMP2 = do
 
 -- --------------------------------------------------------------------------------
 
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 main :: IO ()
-main = defaultMain [tests]
+main = defaultMain tests
 
