@@ -22,7 +22,7 @@
 -- the `Par` monad underneath.
 
 module Control.Par.ST
-       (
+       {-(
          -- * The monad: a dischargable effect
          ParST, runParST,
 
@@ -44,7 +44,7 @@ module Control.Par.ST
          -- * Annoying newtypes and wrappers to take the @s@ param last:
          MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
          STTup2(..), STUnit(..)
-       )
+       )-}
        where
 
 import Control.Monad
@@ -82,13 +82,25 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 {-# INLINE unsafeCastST #-}
 unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
-  
+
 --------------------------------------------------------------------------------
+
+
+data ParST s parM a = ParST
+
+runParST = undefined
+forkSTSplit = undefined
+liftST = undefined
+liftPar = undefined
+transmute = undefined
+         
+
 
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
 -- subcomputation.
 class STSplittable (ty :: * -> *) where
+{-  
   -- | Something of type `SplitIdx` describes where and how to split the data into two pieces.
   type SplitIdx ty :: *
   -- | `splitST` does the actual splitting.
@@ -355,3 +367,6 @@ for_ (start, end) fn = loop start
  where
   loop !i | i == end  = return ()
           | otherwise = do fn i; loop (i+1)
+-}
+
+  

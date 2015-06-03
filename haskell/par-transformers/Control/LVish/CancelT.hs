@@ -47,9 +47,11 @@ import Data.Coerce
 
 import Control.Par.Class as PC
 import Control.Par.EffectSigs as E
-import Control.Par.Class.Unsafe (ParMonad(..), ParWEffects(..), ReifyConstraint(..))
+import Control.Par.Class.Unsafe (ParMonad(..))
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
+
+{-
 
 -- | A Par-monad scheduler transformer that adds the cancellation capability.  To do
 -- this, it must track, and periodically poll, extra mutable state for each
@@ -67,38 +69,6 @@ newtype CState = CState (IORef CPair)
 
 instance MonadTrans CancelT where
   lift m = CancelT (lift m)
-
-instance ParWEffects m => ParWEffects (CancelT m) where  
-  type GetEffects (CancelT m)     = GetEffects m
-  type SetEffects efs (CancelT m) = CancelT (SetEffects efs m)
-
-  liftReadOnly comp = 
-    let prox = Proxy::Proxy (SetReadOnly (GetEffects (CancelT m)))
-    in unsafeCastEffects2 prox comp
-
-  unsafeCastEffects eprox comp = 
-    case coerceProp (Proxy::Proxy(m())) eprox of 
-      MkConstraint -> coerce comp
-    
-  unsafeCastEffects2 eprox comp = 
-    case coerceProp (Proxy::Proxy(m())) eprox of 
-      MkConstraint -> undefined
-  --     MkConstraint -> coerce comp
-
-  coerceProp Proxy eprox = 
-    let mprox = Proxy::Proxy (m()) in 
-    case (law1 mprox eprox, law2 mprox eprox) of 
-     (MkConstraint, MkConstraint) -> 
-      case (coerceProp (Proxy::Proxy(m())) eprox) of
-        MkConstraint -> MkConstraint
-  law1 _ eprox = 
-    let mprox = Proxy::Proxy (m()) in 
-    case law1 mprox eprox of 
-      MkConstraint -> MkConstraint
-  law2 _ eprox = 
-    let mprox = Proxy::Proxy (m()) in 
-    case (law1 mprox eprox, law2 mprox eprox) of 
-     (MkConstraint, MkConstraint) -> MkConstraint
 
 data CPair = CPair !Bool ![CState]
 
@@ -433,3 +403,4 @@ asyncAndCPS leftM rightM kont = do
   launch tid2 tid1 rightM
   return ()
 
+-}
