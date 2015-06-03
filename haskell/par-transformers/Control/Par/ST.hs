@@ -88,9 +88,7 @@ unsafeCastST = unsafeIOToST . unsafeSTToIO
 --------------------------------------------------------------------------------
 
 
-forkSTSplit = undefined
 liftST = undefined
-liftPar = undefined
 transmute = undefined
          
 
@@ -206,27 +204,41 @@ runParST initVal (ParST fn) = do
       xm = fn initVal
   xm >>= (return . fst)
 
-{-  
-
--- | We use the generic interface for `put` and `get` on the entire (mutable) state.
-instance ParThreadSafe parM =>
-         S.MonadState stts (ParST stts parM) where
-  {-# INLINE get #-}           
-  get = reify
-  {-# INLINE put #-}
-  put = install
-
 -- | A `ParST` computation that results in the current value of the state, which is
 -- typically some combination of `STRef` and `STVector`s.  These require `ST`
 -- computation to do anything with the state.
 {-# INLINE reify #-}
-reify :: ParThreadSafe parM => ParST stt parM stt
-reify = ParST S.get
+reify :: (Monad (p e s), ParThreadSafe p) => ParST stt p e s stt
+reify = ParST $ \s -> return (s, s)
 
 -- | Installs a new piece of ST-mutable state.
+--
+-- DEPRECATED: This is unsafe because it doesn't enforce alias freedom.
 {-# INLINE install #-}
-install :: ParThreadSafe parM => stt -> ParST stt parM ()
-install val = ParST (S.put val)
+install :: (Monad (p e s), ParThreadSafe p) => stt -> ParST stt p e s ()
+install val = ParST $ \_ -> return ((), val)
+
+instance ParMonad parM => ParMonad (ParST stt1 parM) where
+  {-# INLINE internalLiftIO #-}
+  internalLiftIO io = liftPar (internalLiftIO io)
+  {-# INLINE fork #-}
+  fork (ParST task) = liftPar $ PC.fork $ do
+      (res,_) <- task 
+                 (error "fork: This child thread does not have permission to touch the array!")
+      return res
+
+-- | Lift an ordinary `Par` computation into `ParST`.
+{-# INLINE liftPar #-}
+liftPar :: ParMonad parM => parM e s a -> (ParST stt1 parM) e s a 
+liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s))) 
+
+-- | We use the generic interface for `put` and `get` on the entire (mutable) state.
+instance (Monad (p e s), ParThreadSafe p) =>
+         S.MonadState stts (ParST stts p e s) where
+  {-# INLINE get #-}           
+  get = reify
+  {-# INLINE put #-}
+  put = install
 
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
 -- gets the state of the current computation, for example a vector, and
@@ -237,22 +249,22 @@ install val = ParST (S.put val)
 -- `fork`.  So the continuation of @forkWithVec@ will not run until both child
 -- computations return, and are thus done accessing the state.
 {-# INLINE forkSTSplit #-}
-forkSTSplit :: forall a b s0 parM stt.
+forkSTSplit :: forall a b sFull parM stt e sp .
                (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM a,
                 Eq a, STSplittable stt) =>
-               (SplitIdx stt)                      -- ^ Where to split the data.
-            -> (forall sl . ParST (stt sl) parM a) -- ^ Left child computation.
-            -> (forall sr . ParST (stt sr) parM b) -- ^ Right child computation.
-            -> ParST (stt s0) parM (a,b)
-forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ do
-  snap <- S.get
+               (SplitIdx stt)                            -- ^ Where to split the data.
+            -> (forall sl . ParST (stt sl) parM e sp a) -- ^ Left child computation.
+            -> (forall sr . ParST (stt sr) parM e sp b) -- ^ Right child computation.
+            -> ParST (stt sFull) parM e sp (a,b)
+forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   let slice1, slice2 :: stt s0
       (slice1,slice2) = splitST spltidx snap
-  lift$ do lv <- PC.spawn_$ S.evalStateT lef slice1
-           rx <- S.evalStateT rig slice2
+  lift$ do lv <- PC.spawn_$ fmap fst $ lef slice1
+           (rx,_) <- rig slice2
            lx <- PC.get lv  -- Wait for the forked thread to finish.
            return (lx,rx)
 
+{-  
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead. 
 {-# INLINE liftST #-}
@@ -260,11 +272,6 @@ liftST :: ParThreadSafe parM => ST s1 a -> ParST (stt s1) parM a
 liftST st = ParST (lift (unsafeParIO io))
  where
    io = unsafeSTToIO st 
-
--- | Lift an ordinary `Par` computation into `ParST`.
-{-# INLINE liftPar #-}
-liftPar :: ParThreadSafe parM => parM a -> ParST stt1 parM a 
-liftPar m = ParST (lift m)
 
 {-# INLINE transmute #-}
 transmute :: forall a b s parM ans . 
@@ -278,16 +285,6 @@ transmute fn (ParST comp) = ParST$ do
       newSt = fn orig
   (res,_) <- lift$ S.runStateT comp newSt
   return $! res
-  
-instance ParMonad parM => ParMonad (ParST stt1 parM) where
-  {-# INLINE internalLiftIO #-}
-  internalLiftIO io = ParST (lift (internalLiftIO io))
-  {-# INLINE fork #-}
-  fork (ParST task) = ParST $ 
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task
-                 (error "fork: This child thread does not have permission to touch the array!")
-      return res
 
 -- | A conditional instance which will only be usable if unsafe imports are made.
 -- instance MonadIO parM => MonadIO (ParST stt1 parM) where
