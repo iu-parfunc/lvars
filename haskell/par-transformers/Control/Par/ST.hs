@@ -6,7 +6,7 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE GADTs #-}
@@ -59,6 +59,8 @@ import Control.Monad.IO.Class
 import qualified Control.Monad.State.Strict as S
 -- import qualified Control.Monad.State.Class (MonadState(..))
 
+
+import Control.Par.EffectSigs 
 import Control.Monad.ST        (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO, unsafeIOToST)
 import Control.Monad.Trans (lift)
@@ -86,21 +88,16 @@ unsafeCastST = unsafeIOToST . unsafeSTToIO
 --------------------------------------------------------------------------------
 
 
-data ParST s parM a = ParST
-
-runParST = undefined
 forkSTSplit = undefined
 liftST = undefined
 liftPar = undefined
 transmute = undefined
          
 
-
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
 -- subcomputation.
 class STSplittable (ty :: * -> *) where
-{-  
   -- | Something of type `SplitIdx` describes where and how to split the data into two pieces.
   type SplitIdx ty :: *
   -- | `splitST` does the actual splitting.
@@ -122,7 +119,6 @@ instance STSplittable (MVectorFlp a) where
     let lvec = MV.slice 0 mid vec
         rvec = MV.slice mid (MV.length vec - mid) vec
     in (VFlp lvec, VFlp rvec)
-
 ------------------------------------------------------------
 
 -- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter
@@ -186,22 +182,31 @@ instance STSplittable (SVectorFlp a) where
 -- 
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
-newtype ParST stState parM ans =
-        ParST ((S.StateT stState parM) ans)
- deriving (Monad, Functor, Applicative)
+newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
+        ParST (stState -> p e s (a,stState))
+--        ParST ((ParStateT stState p) e s a)
+
+data ParStateT (state :: *) (p :: EffectSig -> * -> * -> *) e s a =
+  ParStateT (state -> p e s (a,state))
 
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
 -- runParST has a rank-2 type, with a phantom type @s1@.
+--
+-- `stt` is the type constructor for the state kept in the monad, e.g. `MVectorFlp`.
+-- 
 {-# INLINE runParST #-}
-runParST :: forall stt s0 parM ans . (ParThreadSafe parM) => 
+runParST :: forall stt s0 (parM :: EffectSig -> * -> * -> *) ef s2 ans .
+            (ParThreadSafe parM, Monad (parM ef s2)) => 
              stt s0
-             -> (forall s1 . ParST (stt s1) parM ans)
-             -> parM ans
-runParST initVal (ParST st) = do
-  let xm :: parM (ans, stt s0)
-      xm = S.runStateT st initVal
+             -> (forall s1 . ParST (stt s1) parM ef s2 ans)
+             -> parM ef s2 ans
+runParST initVal (ParST fn) = do
+  let xm :: parM ef s2 (ans, stt s0)
+      xm = fn initVal
   xm >>= (return . fst)
+
+{-  
 
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
 instance ParThreadSafe parM =>
