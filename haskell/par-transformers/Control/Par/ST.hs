@@ -1,15 +1,7 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns  #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
+             GADTs, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
+             Rank2Types, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances
+             #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -26,29 +18,29 @@ module Control.Par.ST
          -- * The monad: a dischargable effect
          ParST, runParST,
 
-         -- * An alternate fork operation 
+         -- * An alternate fork operation
          forkSTSplit,
 
          -- * Working with ST and other lifts
          liftST, liftPar,
-         
+
          -- * Convert between state types
          transmute,
 
          --  Useful utilities
---         vecParMap_, 
-         
+--         vecParMap_,
+
          -- * Type class for valid states.
          STSplittable(..),
-         
+
          -- * Annoying newtypes and wrappers to take the @s@ param last:
          MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
          STTup2(..), STUnit(..)
        )-}
        where
 
-import Control.Monad
 import Control.Applicative
+import Control.Monad
 import Control.Monad.IO.Class
 
 -- Transformers:
@@ -60,23 +52,23 @@ import qualified Control.Monad.State.Strict as S
 -- import qualified Control.Monad.State.Class (MonadState(..))
 
 
-import Control.Par.EffectSigs 
-import Control.Monad.ST        (ST)
-import Control.Monad.ST.Unsafe (unsafeSTToIO, unsafeIOToST)
+import Control.Monad.ST (ST)
+import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
 import Control.Monad.Trans (lift)
+import Control.Par.EffectSigs
 
 import Data.STRef
+import Data.Vector (freeze)
 import qualified Data.Vector.Mutable as MV
-import qualified Data.Vector.Unboxed.Mutable as MU
 import qualified Data.Vector.Storable.Mutable as MS
-import Data.Vector       (freeze)
-import Prelude hiding (read, length)
+import qualified Data.Vector.Unboxed.Mutable as MU
+import Prelude hiding (length, read)
 import System.IO.Unsafe (unsafePerformIO)
 
 import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO), ParMonad(..))
+import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe (unsafeParIO))
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -88,9 +80,8 @@ unsafeCastST = unsafeIOToST . unsafeSTToIO
 --------------------------------------------------------------------------------
 
 
-liftST = undefined
 transmute = undefined
-         
+
 
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
@@ -113,14 +104,14 @@ newtype MVectorFlp a s = VFlp (MV.MVector s a)
 instance STSplittable (MVectorFlp a) where
   type SplitIdx (MVectorFlp a) = Int
   {-# INLINE splitST #-}
-  splitST mid (VFlp vec) = 
+  splitST mid (VFlp vec) =
     let lvec = MV.slice 0 mid vec
         rvec = MV.slice mid (MV.length vec - mid) vec
     in (VFlp lvec, VFlp rvec)
 ------------------------------------------------------------
 
 -- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter
--- to be last.  
+-- to be last.
 data STTup2 (a :: * -> *) (b :: * -> *) (s :: *) =
      STTup2 !(a s) !(b s)
 -- I haven't figured out how to get this to work with raw, naked tuples yet.  So for
@@ -129,15 +120,15 @@ data STTup2 (a :: * -> *) (b :: * -> *) (s :: *) =
 instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
   type SplitIdx (STTup2 a b) = (SplitIdx a, SplitIdx b)
   {-# INLINE splitST #-}
-  splitST (spltA,spltB) (STTup2 a b) = 
-    let (a',a'') = splitST spltA a 
+  splitST (spltA,spltB) (STTup2 a b) =
+    let (a',a'') = splitST spltA a
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
 
 -- | A splittable type which contains no information.
 data STUnit s = STUnit
 -- newtype STUnit s = STUnit ()
-  
+
 
 instance STSplittable STUnit where
   type SplitIdx STUnit = ()
@@ -148,12 +139,12 @@ instance STSplittable STUnit where
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.  Also carries the `Unbox` constraint.
-data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)  
+data UVectorFlp a s = (MU.Unbox a) => UFlp (MU.MVector s a)
 
 instance STSplittable (UVectorFlp a) where
   type SplitIdx (UVectorFlp a) = Int
   {-# INLINE splitST #-}
-  splitST mid (UFlp vec) = 
+  splitST mid (UFlp vec) =
     let lvec = MU.slice 0 mid vec
         rvec = MU.slice mid (MU.length vec - mid) vec
     in (UFlp lvec, UFlp rvec)
@@ -165,7 +156,7 @@ data SVectorFlp a s = (MS.Storable a) => SFlp (MS.MVector s a)
 instance STSplittable (SVectorFlp a) where
   type SplitIdx (SVectorFlp a) = Int
   {-# INLINE splitST #-}
-  splitST mid (SFlp vec) = 
+  splitST mid (SFlp vec) =
     let lvec = MS.slice 0 mid vec
         rvec = MS.slice mid (MS.length vec - mid) vec
     in (SFlp lvec, SFlp rvec)
@@ -177,7 +168,7 @@ instance STSplittable (SVectorFlp a) where
 --
 -- The first type parameter determines the type of state held.  The parameters `det`
 -- and `s2` are for the underlying `Par` monad.
--- 
+--
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
 newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
@@ -192,10 +183,10 @@ data ParStateT (state :: *) (p :: EffectSig -> * -> * -> *) e s a =
 -- runParST has a rank-2 type, with a phantom type @s1@.
 --
 -- `stt` is the type constructor for the state kept in the monad, e.g. `MVectorFlp`.
--- 
+--
 {-# INLINE runParST #-}
 runParST :: forall stt s0 (parM :: EffectSig -> * -> * -> *) ef s2 ans .
-            (ParThreadSafe parM, Monad (parM ef s2)) => 
+            (ParThreadSafe parM, Monad (parM ef s2)) =>
              stt s0
              -> (forall s1 . ParST (stt s1) parM ef s2 ans)
              -> parM ef s2 ans
@@ -223,23 +214,32 @@ instance ParMonad parM => ParMonad (ParST stt1 parM) where
   internalLiftIO io = liftPar (internalLiftIO io)
   {-# INLINE fork #-}
   fork (ParST task) = liftPar $ PC.fork $ do
-      (res,_) <- task 
+      (res,_) <- task
                  (error "fork: This child thread does not have permission to touch the array!")
       return res
 
 -- | Lift an ordinary `Par` computation into `ParST`.
 {-# INLINE liftPar #-}
-liftPar :: ParMonad parM => parM e s a -> (ParST stt1 parM) e s a 
-liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s))) 
+liftPar :: ParMonad parM => parM e s a -> (ParST stt1 parM) e s a
+liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s)))
 
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
-instance (Monad (p e s), ParThreadSafe p) =>
+instance (ParMonad p, Monad (p e s), ParThreadSafe p) =>
          S.MonadState stts (ParST stts p e s) where
-  {-# INLINE get #-}           
+  {-# INLINE get #-}
   get = reify
   {-# INLINE put #-}
   put = install
 
+-- | Allow `ST` computations inside `ParST` computations.
+--   This operation has some overhead.
+{-# INLINE liftST #-}
+liftST :: (ParMonad p, ParThreadSafe p) => ST s a -> ParST (stt s1) p e s a
+liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
+ where
+   io = unsafeSTToIO st
+
+{-
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
 -- gets the state of the current computation, for example a vector, and
 -- then divides up that state between the two other computations.
@@ -252,32 +252,23 @@ instance (Monad (p e s), ParThreadSafe p) =>
 forkSTSplit :: forall a b sFull parM stt e sp .
                (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM a,
                 Eq a, STSplittable stt) =>
-               (SplitIdx stt)                            -- ^ Where to split the data.
+               (SplitIdx stt)                           -- ^ Where to split the data.
             -> (forall sl . ParST (stt sl) parM e sp a) -- ^ Left child computation.
             -> (forall sr . ParST (stt sr) parM e sp b) -- ^ Right child computation.
             -> ParST (stt sFull) parM e sp (a,b)
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
-  let slice1, slice2 :: stt s0
-      (slice1,slice2) = splitST spltidx snap
-  lift$ do lv <- PC.spawn_$ fmap fst $ lef slice1
-           (rx,_) <- rig slice2
-           lx <- PC.get lv  -- Wait for the forked thread to finish.
-           return (lx,rx)
-
-{-  
--- | Allow `ST` computations inside `ParST` computations.
---   This operation has some overhead. 
-{-# INLINE liftST #-}
-liftST :: ParThreadSafe parM => ST s1 a -> ParST (stt s1) parM a
-liftST st = ParST (lift (unsafeParIO io))
- where
-   io = unsafeSTToIO st 
+  let slice1, slice2 :: stt sFull
+      (slice1, slice2) = splitST spltidx snap
+  id $ do lv <- PC.spawn_ $ fmap fst $ lef slice1
+          (rx,_) <- rig slice2
+          lx <- PC.get lv  -- Wait for the forked thread to finish.
+          return ((lx, rx), undefined)
 
 {-# INLINE transmute #-}
-transmute :: forall a b s parM ans . 
-             (ParThreadSafe parM, 
+transmute :: forall a b s parM ans .
+             (ParThreadSafe parM,
               STSplittable a,
-              STSplittable b)              
+              STSplittable b)
               => (b s -> a s) -> ParST (a s) parM ans -> ParST (b s) parM ans
 transmute fn (ParST comp) = ParST$ do
   orig <- S.get
@@ -301,7 +292,7 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
      lift $ PC.spawn_ $ do
            (res,_) <- S.runStateT task
                       (error "spawn_: This child thread does not have permission to touch the array!")
-           return res     
+           return res
   {-# INLINE get #-}
   get iv = ParST $ lift $ PC.get iv
 
@@ -322,7 +313,7 @@ mkParMapM :: forall elt s1 stt parM .
              (STSplittable stt, ParThreadSafe parM,
               PC.ParFuture parM, PC.FutContents parM ()) =>
               (forall s4 . Int ->        ParST (stt s4) parM elt) -- ^ Reader
-           -> (forall s4 . Int -> elt -> ParST (stt s4) parM ())  -- ^ Writer 
+           -> (forall s4 . Int -> elt -> ParST (stt s4) parM ())  -- ^ Writer
            -> (forall s4 .               ParST (stt s4) parM Int) -- ^ Length
            -> (Int -> SplitIdx stt)                               -- ^ Split elements
            -> (elt -> parM elt)                                   -- ^ Fn to map over elmts.
@@ -330,18 +321,18 @@ mkParMapM :: forall elt s1 stt parM .
 {-# INLINE mkParMapM #-}
 mkParMapM reader writer getsize mksplit fn = do
   stt <- S.get
-  len <- getsize 
+  len <- getsize
   let share = max 1 (len `quot` (numProcs * overPartition))
       loopmpm :: Int -> (forall s3 . ParST (stt s3) parM ())
       loopmpm iters
-        | iters <= share = 
+        | iters <= share =
           -- Bottom out to a sequential loop:
-          for_ (0,iters) $ \ ind -> do  
+          for_ (0,iters) $ \ ind -> do
             x <- reader ind
             y <- liftPar$ fn x
             writer ind y
             return ()
-          
+
         | otherwise = do
             let (iters2,extra) = iters `quotRem` 2
                 iters1 = iters2+extra
@@ -371,4 +362,4 @@ for_ (start, end) fn = loop start
           | otherwise = do fn i; loop (i+1)
 -}
 
-  
+
