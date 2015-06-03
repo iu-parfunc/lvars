@@ -1,7 +1,7 @@
-{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             GADTs, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
-             Rank2Types, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances
-             #-}
+{-# LANGUAGE BangPatterns, ConstraintKinds, DataKinds, FlexibleContexts,
+             FlexibleInstances, GADTs, GeneralizedNewtypeDeriving,
+             MultiParamTypeClasses, Rank2Types, ScopedTypeVariables,
+             TypeFamilies, TypeSynonymInstances #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -51,7 +51,6 @@ import Control.Monad.IO.Class
 import qualified Control.Monad.State.Strict as S
 -- import qualified Control.Monad.State.Class (MonadState(..))
 
-
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
 import Control.Monad.Trans (lift)
@@ -78,11 +77,6 @@ unsafeCastST :: ST s1 a -> ST s2 a
 unsafeCastST = unsafeIOToST . unsafeSTToIO
 
 --------------------------------------------------------------------------------
-
-
-transmute = undefined
-
-
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
 -- subcomputation.
@@ -239,6 +233,24 @@ liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
  where
    io = unsafeSTToIO st
 
+{-# INLINE overPartition #-}
+overPartition :: Int
+overPartition = 8
+
+{-# INLINE numProcs #-}
+numProcs :: Int
+numProcs = unsafeDupablePerformIO getNumProcessors
+
+-- | A simple for loop for numeric ranges (not requiring deforestation
+-- optimizations like `forM`).  Inclusive start, exclusive end.
+{-# INLINE for_ #-}
+for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
+for_ (start, end) _fn | start > end = error "for_: start is greater than end"
+for_ (start, end) fn = loop start
+ where
+   loop !i | i == end  = return ()
+           | otherwise = do fn i; loop (i+1)
+
 {-
 -- | @forkWithVec@ takes a split point and two ParST computations.  It
 -- gets the state of the current computation, for example a vector, and
@@ -264,19 +276,20 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
           lx <- PC.get lv  -- Wait for the forked thread to finish.
           return ((lx, rx), undefined)
 
+
 {-# INLINE transmute #-}
-transmute :: forall a b s parM ans .
-             (ParThreadSafe parM,
+transmute :: forall a b s p e ans .
+             (ParMonad p,
+              ParThreadSafe p,
               STSplittable a,
               STSplittable b)
-              => (b s -> a s) -> ParST (a s) parM ans -> ParST (b s) parM ans
-transmute fn (ParST comp) = ParST$ do
+              => (b s -> a s) -> ParST (a s) p e s ans -> _ -- -> ParST (b s) p e s ans
+transmute fn (ParST comp) = do
   orig <- S.get
   let newSt :: a s
       newSt = fn orig
-  (res,_) <- lift$ S.runStateT comp newSt
+  (res, _) <- lift $ comp newSt
   return $! res
-
 -- | A conditional instance which will only be usable if unsafe imports are made.
 -- instance MonadIO parM => MonadIO (ParST stt1 parM) where
 --   liftIO io = ParST (liftIO io)
@@ -342,24 +355,4 @@ mkParMapM reader writer getsize mksplit fn = do
             return ()
   return ()
 
-{-# INLINE overPartition #-}
-overPartition :: Int
-overPartition = 8
-
-{-# INLINE numProcs #-}
-numProcs :: Int
-numProcs = unsafeDupablePerformIO getNumProcessors
-
-
--- | A simple for loop for numeric ranges (not requiring deforestation
--- optimizations like `forM`).  Inclusive start, exclusive end.
-{-# INLINE for_ #-}
-for_ :: Monad m => (Int, Int) -> (Int -> m ()) -> m ()
-for_ (start, end) _fn | start > end = error "for_: start is greater than end"
-for_ (start, end) fn = loop start
- where
-  loop !i | i == end  = return ()
-          | otherwise = do fn i; loop (i+1)
 -}
-
-
