@@ -116,7 +116,7 @@ createTid = CancelT $ do
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
 forkCancelableWithTid
-  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a {- m -} .
+  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
      (PC.ParIVar p, LVarSched p,
       FutContents p CFutFate, FutContents p a) =>
       ThreadId -> CancelT p (SetReadOnly e) s a ->
@@ -305,6 +305,79 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
   new       = CancelT $ S.lift PC.new
   put_ iv v = CancelT $ S.lift $ PC.put_ iv v
 
+-- | A continuation-passing-sytle version of `asyncAnd`.  This version is
+-- non-blocking, simply registering a call-back that receives the result of the AND
+-- computation.
+--
+-- This version may be more efficient because it saves the allocation of an
+-- additional data structure to synchronize on when waiting on the result.
+asyncAndCPS
+  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
+     (PC.ParMonad p, PC.ParIVar p, LVarSched p,
+      FutContents p CFutFate, FutContents p ()) =>
+     (CancelT p (SetReadOnly e) s Bool) ->
+     (CancelT p (SetReadOnly e) s Bool) ->
+     -- FIXME: Because of `SetReadOnly` here, we can't pass `PC.put _` as
+     -- continuation, as we try to do it in `asyncAnd`.
+     --
+     -- The problem is that we're calling continuation from a ReadOnly Par, so
+     -- it can only read.
+     (Bool -> CancelT p (SetReadOnly e) s ()) ->
+
+     CancelT p e s ()
+-- Similar to `Control.LVish.Logical.asyncAnd`
+asyncAndCPS leftM rightM kont = do
+  -- Atomic counter, if we are the second True we write the result:
+  cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
+  let launch :: ThreadId -> ThreadId ->
+                CancelT p (SetReadOnly e) s Bool ->
+                CancelT p e s (CFut p s ())
+      launch mine theirs m = forkCancelableWithTid mine $ do
+        -- Here are the possible states:
+        -- T?   -- 1
+        -- TT   -- 2
+        -- F?   -- 100
+        -- FT   -- 101
+        -- TF   -- 101
+        -- FF   -- 200
+        b <- m
+        case b of
+          True  -> do
+            n <- internalLiftIO$ C.incrCounter 1 cnt
+            if n==2
+              then kont True
+              else return ()
+          False -> do
+            -- We COULD assume idempotency and execute kont False twice,
+            -- but since we have the counter anyway let us dedup:
+            n <- internalLiftIO$ C.incrCounter 100 cnt
+            case n of
+              100 -> do
+                internal_cancel theirs
+                kont False
+              101 -> kont False
+              200 -> return ()
+  tid1 <- createTid
+  tid2 <- createTid
+  launch tid1 tid2 leftM
+  launch tid2 tid1 rightM
+  return ()
+
+-- FIXME: Isn't working because of the problem mentioned in FIXME in
+-- `asyncAndCPS`
+-- | A parallel AND operation that not only signals its output early when it receives
+-- a False input, but also attempts to cancel the other, unneeded computation.
+-- asyncAnd
+--   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
+--      (PC.ParIVar p, FutContents p CFutFate, FutContents p (), FutContents p Bool) =>
+--      (CancelT p (SetReadOnly e) s Bool) ->
+--      (CancelT p (SetReadOnly e) s Bool) ->
+--      CancelT p e s Bool
+-- asyncAnd lef rig = do
+--   res <- PC.new
+--   asyncAndCPS lef rig (PC.put res)
+--   PC.get res
+
 {-
 
 --------------------------------------------------------------------------------
@@ -333,76 +406,5 @@ instance (Functor qm, Monad qm, PC.ParMonad m, PC.ParIVar m,
 
 --------------------------------------------------------------------------------
 
--- | A parallel AND operation that not only signals its output early when it receives
--- a False input, but also attempts to cancel the other, unneeded computation.
-asyncAnd :: forall p . (PC.ParIVar p, PC.ParLVar p,
-                        PC.ParWEffects (CancelT p), -- TEMP
-                        FutContents p CFutFate, FutContents p (), FutContents p Bool)
-            => ((ReadOnlyOf (CancelT p)) Bool)
-            -> ((ReadOnlyOf (CancelT p)) Bool)
-            -> CancelT p Bool
-asyncAnd lef rig = do
-  res <- PC.new
-  asyncAndCPS lef rig (PC.put res)
-  PC.get res
-
-
--- | A continuation-passing-sytle version of `asyncAnd`.  This version is
--- non-blocking, simply registering a call-back that receives the result of the AND
--- computation.
---
--- This version may be more efficient because it saves the allocation of an
--- additional data structure to synchronize on when waiting on the result.
-asyncAndCPS
-  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
-     (PC.ParMonad p, PC.ParIVar p,
-      FutContents p CFutFate, FutContents p ()) =>
---            => ((CancelT p) Bool) -> (CancelT p Bool)
-     (CancelT p (SetReadOnly e) s Bool)
-     (CancelT p (SetReadOnly e) s Bool)
-     (Bool -> CancelT p ()) ->
-     CancelT p ()
--- Similar to `Control.LVish.Logical.asyncAnd`
-asyncAndCPS leftM rightM kont = do
-  -- Atomic counter, if we are the second True we write the result:
-  cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
-  let -- launch :: ThreadId -> ThreadId -> CancelT p Bool -> CancelT p (CFut p ())
-      launch :: ThreadId -> ThreadId ->
-                CancelT p (SetReadOnly e1) s Bool ->
-                CancelT p e1 s (CFut p s ())
-      launch mine theirs m =
-             forkCancelableWithTid mine $
-             -- Here are the possible states:
-             -- T?   -- 1
-             -- TT   -- 2
-             -- F?   -- 100
-             -- FT   -- 101
-             -- TF   -- 101
-             -- FF   -- 200
-                let roprox = (Proxy::Proxy (SetReadOnly (GetEffects (CancelT p)))) in
-                case law2 (Proxy::Proxy((CancelT p) ())) roprox of
-                  MkConstraint ->
-                   do b <- m
-                      let kont2 x = unsafeCastEffects roprox (kont x)
-                      case b of
-                        True  -> do n <- internalLiftIO$ C.incrCounter 1 cnt
-                                    if n==2
-                                      then kont2 True
-                                      else return ()
-                        False -> -- We COULD assume idempotency and execute kont False twice,
-                                 -- but since we have the counter anyway let us dedup:
-                                 do n <- internalLiftIO$ C.incrCounter 100 cnt
-                                    case n of
-                                      100 -> do
-                                                unsafeCastEffects roprox
-                                                  (internal_cancel theirs :: (CancelT p) ())
-                                                kont2 False
-                                      101 -> kont2 False
-                                      200 -> return ()
-  tid1 <- createTid
-  tid2 <- createTid
-  launch tid1 tid2 leftM
-  launch tid2 tid1 rightM
-  return ()
 
 -}
