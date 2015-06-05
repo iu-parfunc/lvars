@@ -1,13 +1,8 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, InstanceSigs #-}
+{-# LANGUAGE ConstraintKinds, GeneralizedNewtypeDeriving, InstanceSigs,
+             MultiParamTypeClasses, NamedFieldPuns, ScopedTypeVariables,
+             TypeFamilies, UndecidableInstances, Unsafe #-}
 
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-} -- TEMP,
+{-# LANGUAGE DataKinds, FlexibleContexts #-}
 
 -- | A module for adding the cancellation capability.
 --
@@ -39,15 +34,15 @@ module Control.LVish.CancelT
        )-}
        where
 
-import Control.Monad.State as S
 import Control.Applicative (Applicative)
-import Data.IORef
+import Control.Monad.State as S
 import Data.Coerce
+import Data.IORef
 -- import Data.LVar.IVar
 
 import Control.Par.Class as PC
+import Control.Par.Class.Unsafe (ParMonad (..))
 import Control.Par.EffectSigs as E
-import Control.Par.Class.Unsafe (ParMonad(..))
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
@@ -56,6 +51,15 @@ import qualified Data.Atomics.Counter as C
 -- cancellable computation in the fork-tree.
 
 newtype CancelT (p :: EffectSig -> * -> * -> *) e s a = CancelT ((StateT CState (p e s)) a)
+
+instance PC.ParMonad m => PC.ParMonad (CancelT m) where
+  fork (CancelT task) = CancelT $ do
+    s0 <- S.get
+    S.lift $ PC.fork $ do
+      (res,_) <- S.runStateT task s0
+      return res
+
+  internalLiftIO m = CancelT (S.lift (internalLiftIO m))
 
 -- | Each computation has a boolean flag that stays True while it is still live.
 --   Also, the state for one computation is linked to the state of children, so that
@@ -83,8 +87,7 @@ poll = CancelT $ do
 
 -- | Check with the scheduler to see if the current thread has been canceled, if so
 -- stop computing immediately.
--- TODO: Why do we need `PC.ParMonad (CancelT p)` ?
-pollForCancel :: (PC.ParMonad (CancelT p), PC.ParMonad p, LVarSched p) => CancelT p e s ()
+pollForCancel :: (PC.ParMonad p, LVarSched p) => CancelT p e s ()
 pollForCancel = do
   b <- poll
   unless b $ cancelMe
@@ -144,9 +147,7 @@ data CFutFate = Canceled | Completed
 -- into a non-read-only parent computation at some point.
 forkCancelable
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
-     (PC.ParIVar p, LVarSched p, ParMonad (CancelT p),
-     -- TODO: Why we can't use ParMonad p => ParMonad (CancelT p) here?
-     FutContents p CFutFate, FutContents p a) =>
+     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a) =>
      CancelT p (SetReadOnly e) s a ->
      CancelT p e s (ThreadId, CFut p s a)
 forkCancelable act = do
@@ -162,7 +163,6 @@ forkCancelable act = do
 forkCancelableND
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
      (PC.ParIVar p, LVarSched p, GetI e ~ 'I, GetP e ~ 'P,
-      ParMonad (CancelT p), -- TODO: Same issue ...
       FutContents p CFutFate, FutContents p a) =>
      CancelT p e s a -> CancelT p e s (ThreadId, CFut p s a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
@@ -179,6 +179,7 @@ forkCancelableNDWithTid
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
 
+-- Internal version -- no rules!
 forkInternal
   :: forall (p :: EffectSig -> * -> * -> *) e s a f .
      (PC.ParIVar p, LVarSched p, GetP e ~ 'P,
@@ -219,21 +220,12 @@ forkInternal (CState childRef) (CancelT act) = CancelT $ do
 cancelMe' :: LVarSched p => StateT CState (p e s) ()
 cancelMe' = unCancelT cancelMe
 
-{-
-
---------------------------------------------------------------------------------
-
-instance MonadTrans CancelT where
-  lift m = CancelT (S.lift m)
-
--- Internal version -- no rules!
-
 -- | Do a blocking read on the result of a cancelable-future.  This is an ERROR if
 --   the future has been cancelled.  (And for determinism, the reverse is also true.
 --   A cancellation after this read is an error.)
-readCFut :: (PC.ParIVar m, HasPut (GetEffects m),
-             FutContents m CFutFate, FutContents m a)
-         => CFut m a -> m a
+readCFut :: (PC.ParIVar p, GetP e ~ P, GetG e ~ G,
+             FutContents p CFutFate, FutContents p a)
+         => CFut p s a -> p e s a
 readCFut (CFut fate res) = do
   PC.put_ fate Completed -- Possible throw a multiple-put error.
   PC.get res
@@ -241,10 +233,13 @@ readCFut (CFut fate res) = do
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (PC.ParMonad m, Monad m, HasPut (GetEffects m)) => ThreadId -> CancelT m ()
+cancel :: (PC.ParMonad p, Monad (p e s), ParMonad (CancelT p), GetP e ~ P)
+       => ThreadId -> CancelT p e s ()
 cancel = internal_cancel
 
-internal_cancel :: (PC.ParMonad m, Monad m) => ThreadId -> CancelT m ()
+internal_cancel
+  :: (PC.ParMonad p, Monad (p e s), ParMonad (CancelT p))
+  => ThreadId -> CancelT p e s ()
 internal_cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
@@ -259,35 +254,49 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
+{- FIXME: Looks like ParSealed is gone. Make sure this is not needed and remove.
+
 instance (PC.ParSealed m) => PC.ParSealed (CancelT m) where
   type GetSession (CancelT m) = PC.GetSession m
 
-instance (PC.ParMonad m, PC.ParIVar m, PC.LVarSched m) =>
-         PC.LVarSched (CancelT m) where
-  type LVar (CancelT m) = LVar m
+-}
+
+instance forall p (e :: EffectSig) s .
+         (PC.ParMonad (CancelT p), PC.ParIVar p, PC.LVarSched p, ParMonadTrans CancelT) =>
+          PC.LVarSched (CancelT p) where
+  type LVar (CancelT p) = LVar p
 
 -- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
 --  forkLV act = do _ <- forkCancelable act; return ()
   forkLV act = PC.fork act
 
-  newLV act = lift$ newLV act
+  newLV act = PC.lift $ newLV act
 
   stateLV lvar =
-    let (_::Proxy (m ()), a) = stateLV lvar
-    in (Proxy::Proxy((CancelT m) ()), a)
+    let (_::Proxy (p e s ()), a) = stateLV lvar
+    in (Proxy, a)
 
   putLV lv putter = do
     pollForCancel
-    lift $ putLV lv putter
+    PC.lift $ putLV lv putter
 
   getLV lv globThresh deltThresh = do
      pollForCancel
-     x <- lift $ getLV lv globThresh deltThresh
+     x <- PC.lift $ getLV lv globThresh deltThresh
     -- FIXME: repoll after blocking ONLY:
      pollForCancel
      return x
 
-  returnToSched = lift returnToSched
+  returnToSched = PC.lift returnToSched
+
+{-
+
+--------------------------------------------------------------------------------
+
+instance MonadTrans CancelT where
+  lift m = CancelT (S.lift m)
+
+
 
 instance (PC.ParQuasi m qm) => PC.ParQuasi (CancelT m) (CancelT qm) where
   toQPar :: (CancelT m) a -> (CancelT qm) a
@@ -307,14 +316,6 @@ instance (Functor qm, Monad qm, PC.ParMonad m, PC.ParIVar m,
         frz x = freezeLV x
     CancelT (lift (snd (frz lvar2)))
     return ()))
-
-instance PC.ParMonad m => PC.ParMonad (CancelT m) where
-  fork (CancelT task) = CancelT $ do
-    s0 <- S.get
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task s0
-      return res
-  internalLiftIO m = CancelT (lift (internalLiftIO m))
 
 instance PC.ParFuture m => PC.ParFuture (CancelT m) where
   type Future (CancelT m) = Future m
