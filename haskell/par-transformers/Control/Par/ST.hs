@@ -251,45 +251,47 @@ for_ (start, end) fn = loop start
    loop !i | i == end  = return ()
            | otherwise = do fn i; loop (i+1)
 
-{-
--- | @forkWithVec@ takes a split point and two ParST computations.  It
--- gets the state of the current computation, for example a vector, and
--- then divides up that state between the two other computations.
---
--- Writes in those two computations may actually mutate the original vector.  But
--- @forkWithVec@ is a fork-join construct, rather than a one-sided fork such as
--- `fork`.  So the continuation of @forkWithVec@ will not run until both child
--- computations return, and are thus done accessing the state.
-{-# INLINE forkSTSplit #-}
-forkSTSplit :: forall a b sFull parM stt e sp .
-               (ParThreadSafe parM, PC.ParFuture parM, PC.FutContents parM a,
-                Eq a, STSplittable stt) =>
-               (SplitIdx stt)                           -- ^ Where to split the data.
-            -> (forall sl . ParST (stt sl) parM e sp a) -- ^ Left child computation.
-            -> (forall sr . ParST (stt sr) parM e sp b) -- ^ Right child computation.
-            -> ParST (stt sFull) parM e sp (a,b)
-forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
-  let slice1, slice2 :: stt sFull
-      (slice1, slice2) = splitST spltidx snap
-  id $ do lv <- PC.spawn_ $ fmap fst $ lef slice1
-          (rx,_) <- rig slice2
-          lx <- PC.get lv  -- Wait for the forked thread to finish.
-          return ((lx, rx), undefined)
-
-
 {-# INLINE transmute #-}
-transmute :: forall a b s p e ans .
-             (ParMonad p,
-              ParThreadSafe p,
-              STSplittable a,
-              STSplittable b)
-              => (b s -> a s) -> ParST (a s) p e s ans -> _ -- -> ParST (b s) p e s ans
+-- transmute :: forall a b s p e ans .
+--              (ParMonad p,
+--               ParThreadSafe p,
+--               STSplittable a,
+--               STSplittable b)
+--               => (b s -> a s) -> ParST (a s) p e s ans -> ParST (b s) p e s ans
 transmute fn (ParST comp) = do
   orig <- S.get
-  let newSt :: a s
+  let -- newSt :: a s
       newSt = fn orig
   (res, _) <- lift $ comp newSt
   return $! res
+
+-- | @forkSTSplit@ takes a split point and two ParST computations.  It gets the
+-- state of the current computation, for example a vector, and then divides up
+-- that state between the two other computations.
+--
+-- Writes in those two computations may actually mutate the original data
+-- structure.  But @forkSTSplit@ is a fork-join construct, rather than a
+-- one-sided fork such as `fork`.  So the continuation of @forkSTSplit@ will not
+-- run until both child computations return, and are thus done accessing the
+-- state.
+{-# INLINE forkSTSplit #-}
+forkSTSplit
+  :: forall p t stt sFull e s.
+     (PC.FutContents p (t, stt sFull), PC.ParFuture p, STSplittable stt,
+      GetP e ~ 'P, GetG e ~ 'G)
+     => SplitIdx stt                                  -- ^ Where to split the data.
+     -> (forall sl. ParST (stt sl) p e s t)           -- ^ Left child computation.
+     -> (forall sr. ParST (stt sr) p e s (stt sFull)) -- ^ Right child computation.
+     -> ParST (stt sFull) p e s t
+forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
+  let slice1, slice2 :: stt sFull
+      (slice1, slice2) = splitST spltidx snap
+  lv <- PC.spawn_ $ lef slice1
+  (rx, _) <- rig slice2
+  (lx, _) <- PC.get lv
+  return (lx, rx)
+
+{-
 -- | A conditional instance which will only be usable if unsafe imports are made.
 -- instance MonadIO parM => MonadIO (ParST stt1 parM) where
 --   liftIO io = ParST (liftIO io)
