@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns, ConstraintKinds, DataKinds, FlexibleContexts,
              FlexibleInstances, GADTs, GeneralizedNewtypeDeriving,
              MultiParamTypeClasses, Rank2Types, ScopedTypeVariables,
-             TypeFamilies, TypeSynonymInstances #-}
+             TupleSections, TypeFamilies, TypeSynonymInstances #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -167,7 +167,6 @@ instance STSplittable (SVectorFlp a) where
 -- which the vector is no longer accessible.
 newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
         ParST (stState -> p e s (a,stState))
---        ParST ((ParStateT stState p) e s a)
 
 data ParStateT (state :: *) (p :: EffectSig -> * -> * -> *) e s a =
   ParStateT (state -> p e s (a,state))
@@ -291,26 +290,31 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   (lx, _) <- PC.get lv
   return (lx, rx)
 
-{-
 -- | A conditional instance which will only be usable if unsafe imports are made.
--- instance MonadIO parM => MonadIO (ParST stt1 parM) where
+-- FIXME: Not conditional right now.
+-- FIXME: This won't work. We may need our own ParMonadIO typeclass.
+-- instance MonadIO p => MonadIO (ParST s p e s) where
 --   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
 instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
-  -- | The `Future` type and `FutContents` constraint are the same as the underlying `Par` monad.
+  -- | The `Future` type and `FutContents` constraint are the same as the
+  -- underlying `Par` monad.
   type Future      (ParST sttt parM)   = PC.Future      parM
   type FutContents (ParST sttt parM) a = PC.FutContents parM a
-  {-# INLINE spawn_ #-}
-  spawn_ (ParST task) = ParST $
-     lift $ PC.spawn_ $ do
-           (res,_) <- S.runStateT task
-                      (error "spawn_: This child thread does not have permission to touch the array!")
-           return res
-  {-# INLINE get #-}
-  get iv = ParST $ lift $ PC.get iv
 
+  {-# INLINE spawn_ #-}
+  spawn_ (ParST task) = ParST $ \st ->
+     fmap (,st) $ PC.spawn_ $ do
+       (res, _) <- task $
+         error "spawn_: This child thread does not have permission to touch the array!"
+       return res
+
+  {-# INLINE get #-}
+  get iv = ParST $ \st -> (,st) <$> PC.get iv
+
+{-
 
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
   {-# INLINE new #-}
