@@ -108,22 +108,21 @@ createTid = CancelT $ do
   return (CState newSt)
 
 
-{- FIXME: Disabling for now... `ReadOnlyOf` is not defined.
-
 -- | Add a new computation to an existing cancelable thread.
 --
 --   Forking multiple computations with the same Tid are permitted; all threads will
 --   be canceled as a group.
-forkCancelableWithTid :: (PC.ParIVar m, LVarSched m, -- ReadOnlyM m,
-                          FutContents m CFutFate, FutContents m a) =>
-                         ThreadId -> (ReadOnlyOf (CancelT m)) a -> CancelT m (CFut m a)
+forkCancelableWithTid
+  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a {- m -} .
+     (PC.ParIVar p, LVarSched p,
+      FutContents p CFutFate, FutContents p a) =>
+      ThreadId -> CancelT p (SetReadOnly e) s a ->
+      CancelT p e s a -- FIXME: Removed this (CFut m a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act =
   -- unsafeCastEffects2 (Proxy::Proxy(GetEffects (ReadOnlyOf (CancelT m))))
   --                    (forkInternal tid act)
   (error "FINISHME")
-
--}
 
 -- | Futures that may be canceled before the result is available.
 data CFut f m a = CFut (Future f m CFutFate) (Future f m a)
