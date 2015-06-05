@@ -41,7 +41,6 @@ module Control.Par.ST
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.IO.Class
 
 -- Transformers:
 -- import qualified Control.Monad.Trans as T
@@ -56,15 +55,10 @@ import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
 import Control.Monad.Trans (lift)
 import Control.Par.EffectSigs
 
-import Data.STRef
-import Data.Vector (freeze)
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Storable.Mutable as MS
 import qualified Data.Vector.Unboxed.Mutable as MU
 import Prelude hiding (length, read)
-import System.IO.Unsafe (unsafePerformIO)
-
-import GHC.Prim (RealWorld)
 
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe (unsafeParIO))
@@ -89,7 +83,7 @@ class STSplittable (ty :: * -> *) where
 -- | The ways to split a vector.  For now we only allow splitting into two pieces at a
 -- given index.  In the future, other ways of partitioning the set of elements may be
 -- possible.
--- newtype VecSplit = SplitAt Int
+newtype VecSplit = SplitAt Int
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
@@ -278,17 +272,17 @@ forkSTSplit
   :: forall p t stt sFull e s.
      (PC.FutContents p (t, stt sFull), PC.ParFuture p, STSplittable stt,
       GetP e ~ 'P, GetG e ~ 'G)
-     => SplitIdx stt                                  -- ^ Where to split the data.
-     -> (forall sl. ParST (stt sl) p e s t)           -- ^ Left child computation.
-     -> (forall sr. ParST (stt sr) p e s (stt sFull)) -- ^ Right child computation.
-     -> ParST (stt sFull) p e s t
+     => SplitIdx stt                        -- ^ Where to split the data.
+     -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
+     -> (forall sr. ParST (stt sr) p e s t) -- ^ Right child computation.
+     -> ParST (stt sFull) p e s (t, t)
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   let slice1, slice2 :: stt sFull
       (slice1, slice2) = splitST spltidx snap
   lv <- PC.spawn_ $ lef slice1
   (rx, _) <- rig slice2
   (lx, _) <- PC.get lv
-  return (lx, rx)
+  return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
 
 -- | A conditional instance which will only be usable if unsafe imports are made.
 -- FIXME: Not conditional right now.
@@ -305,7 +299,7 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
   type FutContents (ParST sttt parM) a = PC.FutContents parM a
 
   {-# INLINE spawn_ #-}
-  spawn_ (ParST task) = ParST $ \st ->
+  spawn_ (ParST task) = ParST $ \st -> -- TODO: Why can't I use `return` here?
      fmap (,st) $ PC.spawn_ $ do
        (res, _) <- task $
          error "spawn_: This child thread does not have permission to touch the array!"
@@ -314,41 +308,39 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
   {-# INLINE get #-}
   get iv = ParST $ \st -> (,st) <$> PC.get iv
 
-{-
-
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
   {-# INLINE new #-}
-  new       = ParST$ lift PC.new
+  new       = ParST $ \st -> (,st) <$> PC.new
   {-# INLINE put_ #-}
-  put_ iv v = ParST$ lift$ PC.put_ iv v
+  put_ iv v = ParST $ \st -> (,st) <$> PC.put_ iv v
+
+{-
 
 --------------------------------------------------------------------------------
-
-
 -- | Generic way to build an in-place map operation for a collection state.
 --
 --   This function reserves the right to sequentialize some iterations.
-mkParMapM :: forall elt s1 stt parM .
-             (STSplittable stt, ParThreadSafe parM,
-              PC.ParFuture parM, PC.FutContents parM ()) =>
-              (forall s4 . Int ->        ParST (stt s4) parM elt) -- ^ Reader
-           -> (forall s4 . Int -> elt -> ParST (stt s4) parM ())  -- ^ Writer
-           -> (forall s4 .               ParST (stt s4) parM Int) -- ^ Length
-           -> (Int -> SplitIdx stt)                               -- ^ Split elements
-           -> (elt -> parM elt)                                   -- ^ Fn to map over elmts.
-           -> ParST (stt s1) parM ()
+mkParMapM :: forall elt s1 stt p e s .
+             (STSplittable stt, ParThreadSafe p,
+              PC.ParFuture p, PC.FutContents p (), GetP e ~ 'P, GetG e ~ 'G) =>
+              (forall s2 . Int ->        ParST (stt s2) p e s elt) -- ^ Reader
+           -> (forall s2 . Int -> elt -> ParST (stt s2) p e s ())  -- ^ Writer
+           -> (forall s2 .               ParST (stt s2) p e s Int) -- ^ Length
+           -> (Int -> SplitIdx stt)                                -- ^ Split elements
+           -> (elt -> p e s elt)                                   -- ^ Fn to map over elmts.
+           -> ParST (stt s1) p e s ()
 {-# INLINE mkParMapM #-}
 mkParMapM reader writer getsize mksplit fn = do
   stt <- S.get
   len <- getsize
   let share = max 1 (len `quot` (numProcs * overPartition))
-      loopmpm :: Int -> (forall s3 . ParST (stt s3) parM ())
+      loopmpm :: Int -> (forall ls . ParST (stt ls) p e s ())
       loopmpm iters
         | iters <= share =
           -- Bottom out to a sequential loop:
           for_ (0,iters) $ \ ind -> do
             x <- reader ind
-            y <- liftPar$ fn x
+            y <- liftPar $ fn x
             writer ind y
             return ()
 
