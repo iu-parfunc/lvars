@@ -289,14 +289,28 @@ instance forall p (e :: EffectSig) s .
 
   returnToSched = PC.lift returnToSched
 
+instance PC.ParFuture m => PC.ParFuture (CancelT m) where
+  type Future (CancelT m) = Future m
+  type FutContents (CancelT m) a = PC.FutContents m a
+  spawn_ (CancelT task) = CancelT $ do
+     s0 <- S.get
+     S.lift $ PC.spawn_ $ do
+           -- This spawned computation is part of the same tree for purposes of
+           -- cancellation:
+           (res,_) <- S.runStateT task s0
+           return res
+  get iv = CancelT $ S.lift $ PC.get iv
+
+instance PC.ParIVar m => PC.ParIVar (CancelT m) where
+  new       = CancelT $ S.lift PC.new
+  put_ iv v = CancelT $ S.lift $ PC.put_ iv v
+
 {-
 
 --------------------------------------------------------------------------------
 
 instance MonadTrans CancelT where
   lift m = CancelT (S.lift m)
-
-
 
 instance (PC.ParQuasi m qm) => PC.ParQuasi (CancelT m) (CancelT qm) where
   toQPar :: (CancelT m) a -> (CancelT qm) a
@@ -317,27 +331,10 @@ instance (Functor qm, Monad qm, PC.ParMonad m, PC.ParIVar m,
     CancelT (lift (snd (frz lvar2)))
     return ()))
 
-instance PC.ParFuture m => PC.ParFuture (CancelT m) where
-  type Future (CancelT m) = Future m
-  type FutContents (CancelT m) a = PC.FutContents m a
-  spawn_ (CancelT task) = CancelT $ do
-     s0 <- S.get
-     lift $ PC.spawn_ $ do
-           -- This spawned computation is part of the same tree for purposes of
-           -- cancellation:
-           (res,_) <- S.runStateT task s0
-           return res
-  get iv = CancelT $ lift $ PC.get iv
-
-instance PC.ParIVar m => PC.ParIVar (CancelT m) where
-  new       = CancelT$ lift PC.new
-  put_ iv v = CancelT$ lift$ PC.put_ iv v
-
 --------------------------------------------------------------------------------
 
 -- | A parallel AND operation that not only signals its output early when it receives
 -- a False input, but also attempts to cancel the other, unneeded computation.
---
 asyncAnd :: forall p . (PC.ParIVar p, PC.ParLVar p,
                         PC.ParWEffects (CancelT p), -- TEMP
                         FutContents p CFutFate, FutContents p (), FutContents p Bool)
@@ -349,7 +346,6 @@ asyncAnd lef rig = do
   asyncAndCPS lef rig (PC.put res)
   PC.get res
 
-type SetReadOnly e = Ef NP (GetG e) NF NB NI
 
 -- | A continuation-passing-sytle version of `asyncAnd`.  This version is
 -- non-blocking, simply registering a call-back that receives the result of the AND
@@ -357,21 +353,23 @@ type SetReadOnly e = Ef NP (GetG e) NF NB NI
 --
 -- This version may be more efficient because it saves the allocation of an
 -- additional data structure to synchronize on when waiting on the result.
-asyncAndCPS :: forall p . (PC.ParMonad p, PC.ParIVar p, PC.ParLVar p,
-                           PC.ParWEffects (CancelT p),
-                           FutContents p CFutFate, FutContents p ())
+asyncAndCPS
+  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
+     (PC.ParMonad p, PC.ParIVar p,
+      FutContents p CFutFate, FutContents p ()) =>
 --            => ((CancelT p) Bool) -> (CancelT p Bool)
-            => ((ReadOnlyOf (CancelT p)) Bool)
-            -> ((ReadOnlyOf (CancelT p)) Bool)
-            -> (Bool -> CancelT p ()) -> CancelT p ()
+     (CancelT p (SetReadOnly e) s Bool)
+     (CancelT p (SetReadOnly e) s Bool)
+     (Bool -> CancelT p ()) ->
+     CancelT p ()
 -- Similar to `Control.LVish.Logical.asyncAnd`
 asyncAndCPS leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
   cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let -- launch :: ThreadId -> ThreadId -> CancelT p Bool -> CancelT p (CFut p ())
       launch :: ThreadId -> ThreadId ->
-                ((ReadOnlyOf (CancelT p)) Bool) ->
-                             (CancelT p) (CFut p ())
+                CancelT p (SetReadOnly e1) s Bool ->
+                CancelT p e1 s (CFut p s ())
       launch mine theirs m =
              forkCancelableWithTid mine $
              -- Here are the possible states:
@@ -381,7 +379,7 @@ asyncAndCPS leftM rightM kont = do
              -- FT   -- 101
              -- TF   -- 101
              -- FF   -- 200
-                let roprox = (Proxy::Proxy(SetReadOnly (GetEffects (CancelT p)))) in
+                let roprox = (Proxy::Proxy (SetReadOnly (GetEffects (CancelT p)))) in
                 case law2 (Proxy::Proxy((CancelT p) ())) roprox of
                   MkConstraint ->
                    do b <- m
