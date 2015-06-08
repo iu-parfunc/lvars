@@ -6,10 +6,10 @@
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
 -- | Unsafe operations that end users should NOT import.
--- 
+--
 --   This is here only for other trusted implementation components.
 
-module Control.Par.Class.Unsafe 
+module Control.Par.Class.Unsafe
   ( ParThreadSafe(unsafeParIO)
   , ParMonad(..)
   )
@@ -20,16 +20,16 @@ import Control.Par.EffectSigs
 import Control.Applicative
 import Data.Proxy as P
 
-import Data.Coerce
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
 -- care which thread they execute on.  Thus it is ok to inject additional parallelism.
 --
 -- Specifically, instances of ParThreadSafe must satisfy the law:
--- 
+--
 -- > do m1; m2 == do fork m1; m2
--- 
-class ParMonad p => ParThreadSafe (p :: EffectSig -> * -> * -> *) where 
+--
+class ParMonad p => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
   unsafeParIO :: IO a -> p e s a
@@ -43,12 +43,12 @@ class ParMonad p => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
 -- should not be able to access the `internalLiftIO` operation of this class from
 -- @Safe@ code.
-class ParMonad (p :: EffectSig -> * -> * -> *) 
+class ParMonad (p :: EffectSig -> * -> * -> *)
   where
   pbind :: p e s a -> (a -> p e s b) -> p e s b
-  preturn :: a -> p e s a 
+  preturn :: a -> p e s a
 
-  -- | Forks a computation to happen in parallel.  
+  -- | Forks a computation to happen in parallel.
   fork :: p e s () -> p e s ()
 
   -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
@@ -56,15 +56,20 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- of monad transformers or LVars.
   internalLiftIO :: IO a -> p e s a
 
+  -- | (Internal! Not exposed to the end user.) Unsafely cast effect signatures.
+  internalCastEffects :: p e1 s a -> p e2 s a
+  internalCastEffects = unsafeCoerce
+
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a
+  liftReadOnly = unsafeCoerce
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
--- (We cannot include Monad as a super-class of ParMonad, because it would 
+-- (We cannot include Monad as a super-class of ParMonad, because it would
 --  have to universally quantify over 'e' and 's', which is not allowed.)
 instance ParMonad p => Monad (p e s) where
-  (>>=) = pbind 
-  return = preturn 
+  (>>=) = pbind
+  return = preturn
 
 instance ParMonad p => Functor (p e s) where
   fmap f p = pbind p (return . f)

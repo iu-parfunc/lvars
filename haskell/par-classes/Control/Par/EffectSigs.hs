@@ -40,12 +40,8 @@ module Control.Par.EffectSigs
         SetP, SetG, SetF, SetB, SetI,       
        )
        where
+
 import GHC.Exts (Constraint)
--- import Control.Monad.Trans.Class
-
-import Unsafe.Coerce (unsafeCoerce) -- Nooooo....
-
--- import Control.LVish.Types
 
 --------------------------------------------------------------------------------
 
