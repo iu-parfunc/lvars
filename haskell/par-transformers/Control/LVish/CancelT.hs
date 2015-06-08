@@ -8,11 +8,15 @@
 --
 --   In its raw form, this is unsafe, because cancelating could cancel something that
 --   would have performed a visible side effect.
-
+--
+--   TODO: Clarify this, talk about why this is unsafe. We only allow reads so
+--   it should be safe in some cases?
 module Control.LVish.CancelT
          (
          -- * The transformer that adds the cancellation capability
          CancelT(), ThreadId, CFut, CFutFate(..),
+         -- FIXME: CFutFate is called "internal" in the docs, but still
+         -- exported.
 
          -- * Operations specific to CancelT
          runCancelT,
@@ -24,19 +28,14 @@ module Control.LVish.CancelT
          createTid, forkCancelableWithTid, forkCancelableNDWithTid,
 
          -- * Performing cancellation, or waiting for results
-         readCFut,
-         cancel,
-         pollForCancel,
-         cancelMe,
+         cancel, cancelMe, pollForCancel, readCFut,
 
          -- * Boolean operations with cancellation
-         -- asyncAnd, asyncAndCPS
+         asyncAnd, asyncAndCPS
        )
        where
 
-import Control.Applicative (Applicative)
 import Control.Monad.State as S
-import Data.Coerce
 import Data.IORef
 
 import Control.Par.Class as PC
@@ -45,11 +44,11 @@ import Control.Par.EffectSigs as E
 import qualified Data.Atomics.Counter as C
 --------------------------------------------------------------------------------
 
--- | A Par-monad scheduler transformer that adds the cancellation capability.  To do
--- this, it must track, and periodically poll, extra mutable state for each
--- cancellable computation in the fork-tree.
-
-newtype CancelT (p :: EffectSig -> * -> * -> *) e s a = CancelT (StateT CState (p e s) a)
+-- | A Par-monad scheduler transformer that adds the cancellation capability.
+-- To do this, it must track, and periodically poll, extra mutable state for
+-- each cancellable computation in the fork-tree.
+newtype CancelT (p :: EffectSig -> * -> * -> *) e s a =
+  CancelT { unCancelT :: StateT CState (p e s) a }
 
 instance PC.ParMonad m => PC.ParMonad (CancelT m) where
   fork (CancelT task) = CancelT $ do
@@ -61,14 +60,11 @@ instance PC.ParMonad m => PC.ParMonad (CancelT m) where
   internalLiftIO m = CancelT (S.lift (internalLiftIO m))
 
 -- | Each computation has a boolean flag that stays True while it is still live.
---   Also, the state for one computation is linked to the state of children, so that
---   cancellation may be propagated transitively.
+-- Also, the state for one computation is linked to the state of children, so
+-- that cancellation may be propagated transitively.
 newtype CState = CState (IORef CPair)
 
 data CPair = CPair !Bool ![CState]
-
-unCancelT :: CancelT p e s a -> StateT CState (p e s) a
-unCancelT (CancelT m) = m
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it
 -- is possible to cancel subtrees of computations.
@@ -112,8 +108,8 @@ createTid = CancelT $ do
 
 -- | Add a new computation to an existing cancelable thread.
 --
---   Forking multiple computations with the same Tid are permitted; all threads will
---   be canceled as a group.
+-- Forking multiple computations with the same Tid are permitted; all threads
+-- will be canceled as a group.
 forkCancelableWithTid
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
      (PC.ParIVar p, LVarSched p,
@@ -122,9 +118,9 @@ forkCancelableWithTid
       CancelT p e s (CFut p s a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act =
-  -- unsafeCastEffects2 (Proxy::Proxy(GetEffects (ReadOnlyOf (CancelT m))))
-  --                    (forkInternal tid act)
-  (error "FINISHME")
+    -- FIXME: forkInternal shouldn't require Put for forked thread!
+    -- forkInternal tid (internalCastEffects act)
+    undefined
 
 -- | Futures that may be canceled before the result is available.
 data CFut f m a = CFut (Future f m CFutFate) (Future f m a)
@@ -181,21 +177,12 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 -- Internal version -- no rules!
 forkInternal
   :: forall (p :: EffectSig -> * -> * -> *) e s a f .
-     (PC.ParIVar p, LVarSched p, GetP e ~ 'P,
+     (PC.ParIVar p, LVarSched p, GetP e ~ P,
       FutContents p CFutFate, FutContents p a) =>
+     -- FIXME: Forked thread doesn't have to have P!
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkInternal #-}
 forkInternal (CState childRef) (CancelT act) = CancelT $ do
-    -- The following line gives me this GHC panic:
-    -- ghc: panic! (the 'impossible' happened)
-    --   (GHC version 7.6.3 for x86_64-apple-darwin):
-    --         cgLookupPanic (probably invalid Core; try -dcore-lint)
-    --     cobox{v aQh} [lid]
-    --     static binds for:
-    --     local binds for:
-    --     main:Control.LVish.CancelT.$WCPair{v rM6} [gid[DataConWrapper]]
---    fate   <- lift (PC.new :: m CFutFate)
-
     fate   <- S.lift (PC.new :: p e s (Future p s CFutFate))
     result <- S.lift (PC.new :: p e s (Future p s a))
 
@@ -211,8 +198,8 @@ forkInternal (CState childRef) (CancelT act) = CancelT $ do
     let act' = do x <- act
                   S.lift $ PC.put_ result x
                   return ()
-    if live then
-       S.lift $ forkLV (evalStateT act' (CState childRef))
+    if live
+      then S.lift $ forkLV (evalStateT act' (CState childRef))
       else cancelMe'
     return $! CFut fate result
 
@@ -343,7 +330,6 @@ asyncAndCPS leftM rightM kont = do
           False -> do
             -- We COULD assume idempotency and execute kont False twice,
             -- but since we have the counter anyway let us dedup:
-            -- undefined :: CancelT p e s ()
             n <- internalLiftIO $ C.incrCounter 100 cnt
             case n of
               100 -> do
