@@ -10,7 +10,7 @@
 --   would have performed a visible side effect.
 
 module Control.LVish.CancelT
-{-       (
+         (
          -- * The transformer that adds the cancellation capability
          CancelT(), ThreadId, CFut, CFutFate(..),
 
@@ -30,15 +30,14 @@ module Control.LVish.CancelT
          cancelMe,
 
          -- * Boolean operations with cancellation
-         asyncAnd, asyncAndCPS
-       )-}
+         -- asyncAnd, asyncAndCPS
+       )
        where
 
 import Control.Applicative (Applicative)
 import Control.Monad.State as S
 import Data.Coerce
 import Data.IORef
--- import Data.LVar.IVar
 
 import Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad (..))
@@ -50,7 +49,7 @@ import qualified Data.Atomics.Counter as C
 -- this, it must track, and periodically poll, extra mutable state for each
 -- cancellable computation in the fork-tree.
 
-newtype CancelT (p :: EffectSig -> * -> * -> *) e s a = CancelT ((StateT CState (p e s)) a)
+newtype CancelT (p :: EffectSig -> * -> * -> *) e s a = CancelT (StateT CState (p e s) a)
 
 instance PC.ParMonad m => PC.ParMonad (CancelT m) where
   fork (CancelT task) = CancelT $ do
@@ -317,18 +316,12 @@ asyncAndCPS
       FutContents p CFutFate, FutContents p ()) =>
      (CancelT p (SetReadOnly e) s Bool) ->
      (CancelT p (SetReadOnly e) s Bool) ->
-     -- FIXME: Because of `SetReadOnly` here, we can't pass `PC.put _` as
-     -- continuation, as we try to do it in `asyncAnd`.
-     --
-     -- The problem is that we're calling continuation from a ReadOnly Par, so
-     -- it can only read.
-     (Bool -> CancelT p (SetReadOnly e) s ()) ->
-
+     (Bool -> CancelT p e s ()) ->
      CancelT p e s ()
 -- Similar to `Control.LVish.Logical.asyncAnd`
 asyncAndCPS leftM rightM kont = do
   -- Atomic counter, if we are the second True we write the result:
-  cnt <- internalLiftIO$ C.newCounter 0 -- TODO we could share this for 3+-way and.
+  cnt <- internalLiftIO $ C.newCounter 0 -- TODO we could share this for 3+-way and.
   let launch :: ThreadId -> ThreadId ->
                 CancelT p (SetReadOnly e) s Bool ->
                 CancelT p e s (CFut p s ())
@@ -343,19 +336,20 @@ asyncAndCPS leftM rightM kont = do
         b <- m
         case b of
           True  -> do
-            n <- internalLiftIO$ C.incrCounter 1 cnt
-            if n==2
-              then kont True
+            n <- internalLiftIO $ C.incrCounter 1 cnt
+            if n == 2
+              then internalCastEffects $ kont True
               else return ()
           False -> do
             -- We COULD assume idempotency and execute kont False twice,
             -- but since we have the counter anyway let us dedup:
-            n <- internalLiftIO$ C.incrCounter 100 cnt
+            -- undefined :: CancelT p e s ()
+            n <- internalLiftIO $ C.incrCounter 100 cnt
             case n of
               100 -> do
                 internal_cancel theirs
-                kont False
-              101 -> kont False
+                internalCastEffects $ kont False
+              101 -> internalCastEffects $ kont False
               200 -> return ()
   tid1 <- createTid
   tid2 <- createTid
@@ -363,48 +357,16 @@ asyncAndCPS leftM rightM kont = do
   launch tid2 tid1 rightM
   return ()
 
--- FIXME: Isn't working because of the problem mentioned in FIXME in
--- `asyncAndCPS`
 -- | A parallel AND operation that not only signals its output early when it receives
 -- a False input, but also attempts to cancel the other, unneeded computation.
--- asyncAnd
---   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
---      (PC.ParIVar p, FutContents p CFutFate, FutContents p (), FutContents p Bool) =>
---      (CancelT p (SetReadOnly e) s Bool) ->
---      (CancelT p (SetReadOnly e) s Bool) ->
---      CancelT p e s Bool
--- asyncAnd lef rig = do
---   res <- PC.new
---   asyncAndCPS lef rig (PC.put res)
---   PC.get res
-
-{-
-
---------------------------------------------------------------------------------
-
-instance MonadTrans CancelT where
-  lift m = CancelT (S.lift m)
-
-instance (PC.ParQuasi m qm) => PC.ParQuasi (CancelT m) (CancelT qm) where
-  toQPar :: (CancelT m) a -> (CancelT qm) a
-  toQPar (CancelT (S.StateT{runStateT})) =
-    CancelT $ S.StateT $ toQPar . runStateT
-
-instance (Functor qm, Monad qm, PC.ParMonad m, PC.ParIVar m,
-          LVarSched m, LVarSchedQ m qm, PC.ParQuasi (CancelT m) (CancelT qm) ) =>
-         PC.LVarSchedQ (CancelT m) (CancelT qm) where
-
-  freezeLV :: forall a d . LVar (CancelT m) a d -> (Proxy ((CancelT m) ()), (CancelT qm) ())
-  freezeLV lvar = (Proxy, (do
-    let lvar2 :: LVar m a d
-        lvar2 = lvar -- This works because of the specific def for "type LVar" in the instance above...
-    toQPar (pollForCancel :: CancelT m ())
-    let frz :: LVar m a d -> (Proxy (m()), qm ())
-        frz x = freezeLV x
-    CancelT (lift (snd (frz lvar2)))
-    return ()))
-
---------------------------------------------------------------------------------
-
-
--}
+asyncAnd
+  :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
+     (HasPut e, HasGet e, PC.ParIVar p, FutContents p CFutFate, FutContents p (),
+      FutContents p Bool, LVarSched p) =>
+     (CancelT p (SetReadOnly e) s Bool) ->
+     (CancelT p (SetReadOnly e) s Bool) ->
+     CancelT p e s Bool
+asyncAnd lef rig = do
+  res <- PC.new
+  asyncAndCPS lef rig (PC.put res)
+  PC.get res
