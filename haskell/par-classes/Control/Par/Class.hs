@@ -214,10 +214,12 @@ class (ParMonad m) => LVarSched (m :: EffectSig -> * -> * -> *)  where
 
    -- | Extract a handle on the raw, mutable state within an LVar.
    stateLV :: (LVar m a d) -> (Proxy (m e s ()), a)
+   -- TODO: Audit to see if we still need this proxy return value.
 
    -- addHandler
 
-   -- | Fork a child thread.   
+   -- | Fork a child thread.  DEPRECATED!  This is not needed because
+   -- the superclass ParMonad gives a `fork` method.
    forkLV :: m e s () -> m e s ()
 
    -- | Put ourselves at the bottom of the work-pile for the current thread, allowing

@@ -1,5 +1,4 @@
 {-# LANGUAGE Unsafe #-}
-
 {-# LANGUAGE CPP, DataKinds, GeneralizedNewtypeDeriving, InstanceSigs,
              MultiParamTypeClasses, NamedFieldPuns, ScopedTypeVariables,
              TypeFamilies, UndecidableInstances #-}
@@ -60,37 +59,67 @@ runDeadlockT (DeadlockT task) = do
    return undefined
 
 
-{-
 -- TODO/FUTURE: For now we disallow nested deadlock tracking... each thread only
 -- needs one counter.  We could change this.
 
-instance MonadTrans DeadlockT where
-  lift m = DeadlockT (lift m)
+instance ParMonad p => ParMonad (DeadlockT p) where
+  internalLiftIO io = DeadlockT $ S.lift (internalLiftIO io)
+  pbind (DeadlockT pa) f = DeadlockT $ pa >>=
+                           (\x -> let DeadlockT pb = f x
+                                  in pb)                                        
+  preturn x = DeadlockT $ return x
 
--- TODO/FIXME: Replace PrivateMonadIO with something the user can't safely access.
-instance PrivateMonadIO m => PrivateMonadIO (DeadlockT m) where
-  internalLiftIO m = DeadlockT (lift (internalLiftIO m))
+  -- Every fork increments the number of live tasks by one:
+  fork (DeadlockT task) = DeadlockT $ do
+    s0 <- S.get
+    S.lift $ internalLiftIO$ C.incrCounter 1 s0
+    let task' = do x <- task 
+                   S.lift$ internalLiftIO (C.incrCounter (-1) s0)
+                   return x
+    S.lift $ PC.fork $ do
+      (res,_) <- S.runStateT task'  s0
+      return res
 
-instance PrivateMonadIO m => PrivateMonadIO (StateT s m) where
-  internalLiftIO io = lift (internalLiftIO io)
--- data CPair = CPair !Bool ![DState]
+liftDT :: ParMonad p => p e s a -> DeadlockT p e s a
+liftDT pa = DeadlockT (S.lift pa)
 
-
-instance (ParSealed m) => ParSealed (DeadlockT m) where
-  type GetSession (DeadlockT m) = GetSession m
-
-instance (PrivateMonadIO m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
+instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
   type LVar (DeadlockT m) = LVar m
+  -- This fork calls the ParMonad.fork above, which increments the counter:
   forkLV act = PC.fork act
-  newLV act = lift$ newLV act
-  stateLV lvar = let (_::Proxy (m ()), a) = stateLV lvar
-                 in (Proxy::Proxy((DeadlockT m) ()), a)
-  putLV lv putter = lift $ putLV lv putter
-  getLV lv globThresh deltThresh = do
-     x <- lift $ getLV lv globThresh deltThresh
-     return x
-  returnToSched = lift returnToSched
+  newLV act = liftDT$ newLV act
 
+  stateLV :: forall e s a d . (LVar (DeadlockT m) a d)
+             -> (Proxy ((DeadlockT m) e s ()), a)
+  stateLV lvar = let prx :: Proxy (m e s ())
+                     (prx, a) = stateLV lvar
+                 in (Proxy::Proxy((DeadlockT m e s) ()), a)
+  putLV lv putter = liftDT $ putLV lv putter
+
+  -- Gets may block, and must decrement the counter if they do:
+  getLV lv globThresh deltThresh = do
+     x <- liftDT $ getLV lv gThresh' dThresh'
+     return x
+   where
+     -- TODO: Some delicate guarantees need to be established here:
+     --  For each GET call:
+     --    * globalThresh is called exactly once
+     --    * if globalThresh returns Nothing, then dThresh is called AT LEAST once
+     --    * get only returns when dThresh returns Just
+     --    * dzThresh is never called again after it returns Just.
+     
+     -- TODO: figure out where to mess with the counter here:
+     gThresh' st frzn = do x <- globThresh st frzn
+                           case x of
+                            Just a -> return x 
+                            Nothing -> error "FINISHME" -- Decr counter?
+     dThresh' delt = do x <- deltThresh delt
+                        case x of
+                         Just a -> error "FINISHM" -- INCR here, assume this happens ONCE
+                         Nothing -> return Nothing
+
+  returnToSched = liftDT returnToSched
+{-  
 instance (ParQuasi m qm) => ParQuasi (DeadlockT m) (DeadlockT qm) where
   toQPar :: (DeadlockT m) a -> (DeadlockT qm) a
   toQPar (DeadlockT (S.StateT{runStateT})) =
@@ -125,15 +154,6 @@ instance ParFuture m => ParFuture (DeadlockT m) where
 #endif
 
 instance (PrivateMonadIO m, PC.ParIVar m) => PC.ParIVar (DeadlockT m) where
-  fork (DeadlockT task) = DeadlockT $ do
-    s0 <- S.get
-    lift $ internalLiftIO$ C.incrCounter 1 s0
-    let task' = do x <- task
-                   internalLiftIO (C.incrCounter (-1) s0)
-                   return x
-    lift $ PC.fork $ do
-      (res,_) <- S.runStateT task'  s0
-      return res
 #if 0
   new       = DeadlockT$ lift PC.new
   put_ iv v = DeadlockT$ lift$ PC.put_ iv v
