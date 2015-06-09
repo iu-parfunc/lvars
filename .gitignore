@@ -11,4 +11,3 @@ docs_examples
 *cabal.sandbox.config
 .cabal-sandbox
 test-results.xml
-
