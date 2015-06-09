@@ -60,22 +60,22 @@ cancel02 =
   runParLogged $ isDet $ runCancelT comp
  where
    comp :: forall p e s a .
-           (HasGet e, HasPut e,
+           (GetG e ~ G, HasPut e,
             ParMonad p, LVarSched p, FutContents p (), ParIVar p) =>
            CancelT p e s ()
    comp = do
      dbg "[parent] Begin test 02"
      iv <- new
-     let p1 :: CancelT p e s ()
-         p1 = do
-           dbg "[child] Running on child thread... block so parent can run"
-           -- lift $ Control.LVish.yield -- Not working!
-           -- Do we need this? ^ Next line will force rescheduling.
-           get iv -- This forces the parent to get scheduled.
-           dbg "[child] Woke up, now wait so we will be cancelled..."
-           internalLiftIO appreciableDelay
-           pollForCancel
-           dbg "!! [child] thread got past delay!"
+     let p1 :: CancelT p (SetReadOnly e) s ()
+         p1 = get iv >> return ()
+           -- dbg "[child] Running on child thread... block so parent can run"
+           -- -- lift $ Control.LVish.yield -- Not working!
+           -- -- Do we need this? ^ Next line will force rescheduling.
+           -- get iv -- This forces the parent to get scheduled.
+           -- dbg "[child] Woke up, now wait so we will be cancelled..."
+           -- internalLiftIO appreciableDelay
+           -- pollForCancel
+           -- dbg "!! [child] thread got past delay!"
 
          -- p2 :: CancelT p e s ()
          -- p2 = forkCancelable undefined
