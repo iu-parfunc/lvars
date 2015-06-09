@@ -38,7 +38,8 @@ Library
                  Control.Par.StateT
 
                  Control.Par.ST
-                 Control.Par.ST.Vec
+--               Control.Par.ST.Vec
+
 -- Temporarily disabled:
 --                 Control.Par.ST.Vec2
 --                 Control.Par.ST.UVec
@@ -87,7 +88,7 @@ Test-suite test-par-transformers
                , ghc-prim
 
   -- (1C) Additional depends to test concrete instances:
-  Build-depends: lvish        >= 2.0
+  Build-depends: lvish >= 2.0
 
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit

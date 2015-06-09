@@ -61,6 +61,7 @@ cancel02 =
  where
    comp :: forall p e s a .
            (GetG e ~ G, HasPut e,
+            GetG (SetReadOnly e) ~ GetG e,
             ParMonad p, LVarSched p, FutContents p (), ParIVar p) =>
            CancelT p e s ()
    comp = do

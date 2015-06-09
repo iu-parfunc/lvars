@@ -111,6 +111,11 @@ type instance SetI i2 (Ef p g f b i) = (Ef p g f b i2)
 type family SetReadOnly (e :: EffectSig) :: EffectSig where
   SetReadOnly (Ef p g f b i) = Ef NP g NF NB NI
 
+-- NOTE: We could consider an alias for this, but it doesn't help
+-- teach the GHC type checker theorems like (GetG (SetP e) ~ GetG e).
+-- 
+-- type SetReadOnly e = SetP NP (SetF NF (SetB NB (SetI NI e)))
+
 ----------------------------------------
 -- Same thing but lifted to work over monads:
 
