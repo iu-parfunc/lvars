@@ -462,6 +462,7 @@ forkWithExceptions forkit descr action = do
            printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n"
              (show tid) (show descr)
 #endif
+           return ()
          _  -> do
 #ifdef DEBUG_LVAR
            printf "\nException inside child thread %s, %s: %s\n"

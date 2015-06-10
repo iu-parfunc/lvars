@@ -809,6 +809,9 @@ hpId_ (HandlerPool cnt bag) = do
 -- | For debugging purposes.  This can help us figure out (by an ugly
 --   process of elimination) which MVar reads are leading to a "Thread
 --   blocked indefinitely" exception.
+--
+-- FIXME: This function is suppressing "thread blocked indefinitely in an MVar
+-- operation" exceptions and continue trying to read from the LVar.
 busyTakeMVar :: [ThreadId] -> String -> MVar a -> IO a
 busyTakeMVar tids msg mv = 
   do b <- L.newBackoff maxWait
