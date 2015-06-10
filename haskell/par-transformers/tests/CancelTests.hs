@@ -79,6 +79,12 @@ case_test0_CancelT = do
   (logs, _) <- runParLogged $ isDet $ runCancelT $ dbg logMsg
   assertHasLog logMsg logs
 
+-- Make sure `cancelMe` is not crashing anything. (no logging here)
+case_cancel01_NoLog :: IO ()
+case_cancel01_NoLog = do
+  runParLogged $ isDet $ runCancelT cancelMe
+  return ()
+
 case_cancel01 :: IO ()
 case_cancel01 = do
   (logs, _) <- cancel01
