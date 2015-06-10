@@ -59,6 +59,9 @@ instance PC.ParMonad m => PC.ParMonad (CancelT m) where
 
   internalLiftIO m = CancelT (S.lift (internalLiftIO m))
 
+instance ParMonadTrans CancelT where
+  lift = CancelT . S.lift
+
 -- | Each computation has a boolean flag that stays True while it is still live.
 -- Also, the state for one computation is linked to the state of children, so
 -- that cancellation may be propagated transitively.
