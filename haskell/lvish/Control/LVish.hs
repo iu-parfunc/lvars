@@ -143,7 +143,7 @@ instance PC.LVarSched Par where
 
   stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
 
-  returnToSched = WrapPar $ mkPar $ \_k -> L.sched
+  returnToSched = WrapPar $ L.mkPar $ \_k -> L.sched
 
 instance PU.ParThreadSafe Par where
   unsafeParIO = I.liftIO
