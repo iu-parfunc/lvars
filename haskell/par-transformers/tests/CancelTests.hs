@@ -91,7 +91,7 @@ case_cancel01 = do
   assertHasLog "Begin test 01" logs
   assertDoesntHaveLog "Past cancelation point!" logs
 
--- FIXME: This seems to be a harrible behavior of test-framework: Expressions
+-- FIXME: This seems to be a horrible behavior of test-framework: Exceptions
 -- are not shown! At one point this test was failing with this:
 --
 -- (from GHCi)
