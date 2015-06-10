@@ -61,7 +61,7 @@ Library
                , vector       >= 0.9
                , ghc-prim
                , atomic-primops >= 0.6
-  ghc-options: -O2
+  ghc-options: -O2 -Wall
   Include-Dirs: includes/
 
 -- Note: This is actually broken with ghc 7.6 on linux, due to a bug
@@ -93,7 +93,7 @@ Test-suite test-par-transformers
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
-  ghc-options: -threaded
+  ghc-options: -threaded -Wall
 
   -- Atomic-primops fails when used by template-haskell/ghci on linux:
   if impl(ghc < 7.7) && os(linux) {
