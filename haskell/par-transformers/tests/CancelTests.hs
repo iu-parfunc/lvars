@@ -65,20 +65,31 @@ assertDoesntHaveLog log allLogs =
     not $ any (log `isInfixOf`) allLogs
 
 
--- Making sure the logger is working.
-case_test0 :: IO ()
-case_test0 = do
+-- Making sure the logger is working with Par.
+case_test0_Par :: IO ()
+case_test0_Par = do
   let logMsg = "Testing the logger."
-  logs <- fst <$> runParLogged (logDbgLn 0 logMsg)
+  (logs, _) <- runParLogged $ logDbgLn 0 logMsg
+  assertHasLog logMsg logs
+
+-- Make sure logging is working with CancelT.
+case_test0_CancelT :: IO ()
+case_test0_CancelT = do
+  let logMsg = "Testing the logger."
+  (logs, _) <- runParLogged $ isDet $ CT.runCancelT $ dbg logMsg
   assertHasLog logMsg logs
 
 case_cancel01 :: IO ()
-case_cancel01 = assertHasLog "Begin test 01" =<< fmap fst cancel01
+case_cancel01 = do
+  (logs, _) <- cancel01
+  assertHasLog "Begin test 01" logs
+  assertDoesntHaveLog "Past cancelation point!" logs
 
 cancel01 :: IO ([String], ())
 cancel01 = runParLogged $ isDet $ CT.runCancelT $ do
   dbg "Begin test 01"
-  cancelMe
+  cancelMe -- this is just returnToSched from LVarSched method of Par
+           -- FIXME: seems like log state is not passed
   dbg "Past cancelation point!"
 
 
