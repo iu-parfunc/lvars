@@ -51,6 +51,13 @@ newtype CancelT (p :: EffectSig -> * -> * -> *) e s a =
   CancelT { unCancelT :: StateT CState (p e s) a }
 
 instance PC.ParMonad m => PC.ParMonad (CancelT m) where
+  pbind (CancelT st) f = CancelT $ do
+    s0 <- S.get
+    (res, s) <- S.lift $ S.runStateT st s0
+    unCancelT $ f res
+
+  preturn = CancelT . return
+
   fork (CancelT task) = CancelT $ do
     s0 <- S.get
     S.lift $ PC.fork $ do
