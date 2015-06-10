@@ -165,13 +165,6 @@ dbgChatterOnly lvl msg = do
     Nothing  -> logDbgLn lvl msg
     Just lgr -> liftIO $ logOn lgr (OffTheRecord lvl msg)
         
-
------- DUPLICATED: -----
-mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
-mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
-type SchedState = State L.ClosedPar LVarID
-type LVarID = IORef ()
-
 ------------------------------------------------------------
 
 hasPut :: HasPut e => Par e s a -> Par e s a
