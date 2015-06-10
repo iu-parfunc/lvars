@@ -35,11 +35,45 @@ runTests = defaultMain [tests]
 appreciableDelay :: IO ()
 appreciableDelay = threadDelay (100 * 1000)
 
-dbg :: ParMonad p => String -> CancelT p e s ()
-dbg s = undefined -- lift . logDbgLn (-1)
+dbg :: String -> CancelT Par e s ()
+dbg = lift . logDbgLn 0
+
+-- FIXME: Logging has some problems:
+-- - It depends on env variable DEBUG.
+-- - However, when DEBUG=0, `logDbgLn 0 msg` doesn't log anything. It has to be
+--   at least 1.
+-- - But when it's 1, it prints lots of internal log messages too.
+-- - Also, LVish needs to be compiled with -DDEBUG_LVAR for logging.
+-- - It also adds some prefix to log messages. I think those prefixes are
+--   non-deterministic, becuase worker thread ID is part of the prefix. So we
+--   can't directly compare log messages in tests.
+--
+-- Currently I'm not fixing anything. I'll write some tests for specifically
+-- logging. For now we should search log messages in all collected messages in
+-- tests:
+
+-- | Assert that given log message is infix of at least one log message.
+assertHasLog :: String -> [String] -> Assertion
+assertHasLog log allLogs =
+  assertBool ("Can't find the log message " ++ show log ++ " in logs: " ++ show allLogs) $
+    any (log `isInfixOf`) allLogs
+
+-- | Assert that given log message is not infix of any log messages.
+assertDoesntHaveLog :: String -> [String] -> Assertion
+assertDoesntHaveLog log allLogs =
+  assertBool ("Found the log message " ++ show log ++ " in logs: " ++ show allLogs) $
+    not $ any (log `isInfixOf`) allLogs
+
+
+-- Making sure the logger is working.
+case_test0 :: IO ()
+case_test0 = do
+  let logMsg = "Testing the logger."
+  logs <- fst <$> runParLogged (logDbgLn 0 logMsg)
+  assertHasLog logMsg logs
 
 case_cancel01 :: IO ()
-case_cancel01 = assertEqual "" ["Begin test 01"] =<< fmap fst cancel01
+case_cancel01 = assertHasLog "Begin test 01" =<< fmap fst cancel01
 
 cancel01 :: IO ([String], ())
 cancel01 = runParLogged $ isDet $ CT.runCancelT $ do
@@ -48,11 +82,11 @@ cancel01 = runParLogged $ isDet $ CT.runCancelT $ do
   dbg "Past cancelation point!"
 
 
-case_cancel02 :: IO ()
-case_cancel02 = do
-  (lines, _) <- cancel02
-  assertEqual "Read wrong number of outputs" 4 (length lines)
-  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+-- case_cancel02 :: IO ()
+-- case_cancel02 = do
+--   (lines, _) <- cancel02
+--   assertEqual "Read wrong number of outputs" 4 (length lines)
+--   assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
 
 -- | This should always cancel the child before printing "!!".
 cancel02 :: IO ([String], ())
@@ -61,22 +95,21 @@ cancel02 =
  where
    comp :: forall p e s a .
            (GetG e ~ G, HasPut e,
-            GetG (SetReadOnly e) ~ GetG e,
-            ParMonad p, LVarSched p, FutContents p (), ParIVar p) =>
-           CancelT p e s ()
+            GetG (SetReadOnly e) ~ GetG e) =>
+           CancelT Par e s ()
    comp = do
      dbg "[parent] Begin test 02"
      iv <- new
-     let p1 :: CancelT p (SetReadOnly e) s ()
-         p1 = get iv >> return ()
-           -- dbg "[child] Running on child thread... block so parent can run"
-           -- -- lift $ Control.LVish.yield -- Not working!
-           -- -- Do we need this? ^ Next line will force rescheduling.
-           -- get iv -- This forces the parent to get scheduled.
-           -- dbg "[child] Woke up, now wait so we will be cancelled..."
-           -- internalLiftIO appreciableDelay
-           -- pollForCancel
-           -- dbg "!! [child] thread got past delay!"
+     let p1 :: CancelT Par (SetReadOnly e) s ()
+         p1 = do
+           dbg "[child] Running on child thread... block so parent can run"
+           -- lift $ Control.LVish.yield -- Not working!
+           -- Do we need this? ^ Next line will force rescheduling.
+           get iv -- This forces the parent to get scheduled.
+           dbg "[child] Woke up, now wait so we will be cancelled..."
+           internalLiftIO appreciableDelay
+           pollForCancel
+           dbg "!! [child] thread got past delay!"
 
          -- p2 :: CancelT p e s ()
          -- p2 = forkCancelable undefined
@@ -84,8 +117,7 @@ cancel02 =
   --        p3 :: CancelT m1 (CT.ThreadId, CFut m1 ())
   --        p3 = undefined -- This is ok.
   --        -- Then here we fail, with a strange "Couldn't match type 'NP with 'P":
---         p3 = forkCancelable undefined
---         p3 = forkCancelable p1 -- This gets the same error as the line above.
+         -- p3 = forkCancelable undefined
 
 {-
    -- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
