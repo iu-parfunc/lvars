@@ -7,7 +7,7 @@ module CancelTests (tests, runTests)
 import Control.LVish (isDet, isND, isQD, isReadOnly, liftReadOnly, logDbgLn,
                       runPar, runParLogged, runParNonDet)
 
-import Control.LVish.CancelT as CT
+import Control.LVish.CancelT
 import Control.LVish.Internal
 import Control.Par.Class
 import Control.Par.Class.Unsafe
@@ -76,7 +76,7 @@ case_test0_Par = do
 case_test0_CancelT :: IO ()
 case_test0_CancelT = do
   let logMsg = "Testing the logger."
-  (logs, _) <- runParLogged $ isDet $ CT.runCancelT $ dbg logMsg
+  (logs, _) <- runParLogged $ isDet $ runCancelT $ dbg logMsg
   assertHasLog logMsg logs
 
 case_cancel01 :: IO ()
@@ -85,8 +85,18 @@ case_cancel01 = do
   assertHasLog "Begin test 01" logs
   assertDoesntHaveLog "Past cancelation point!" logs
 
+-- FIXME: This seems to be a harrible behavior of test-framework: Expressions
+-- are not shown! At one point this test was failing with this:
+--
+-- (from GHCi)
+--
+-- -- > cancel01
+-- -- ([],*** Exception: Control/LVish/CancelT.hs:56:10-49: No instance nor default method for class operation pbind
+--
+-- But test output was just "Failed".
+
 cancel01 :: IO ([String], ())
-cancel01 = runParLogged $ isDet $ CT.runCancelT $ do
+cancel01 = runParLogged $ isDet $ runCancelT $ do
   dbg "Begin test 01"
   cancelMe -- this is just returnToSched from LVarSched method of Par
            -- FIXME: seems like log state is not passed
