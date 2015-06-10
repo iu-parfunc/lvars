@@ -133,7 +133,6 @@ library
                     Data.LVar.Internal.Pure
                     Data.LVar.Generic.Internal
                     Data.LVar.PureMap.Unsafe
-                    Data.LVar.SLMap.Unsafe
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
 
@@ -184,7 +183,7 @@ library
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0
 
-  ghc-options: -rtsopts
+  ghc-options: -rtsopts -Wall
   if flag(useopt)
     ghc-options: -O2 
 
