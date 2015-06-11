@@ -218,10 +218,6 @@ class (ParMonad m) => LVarSched (m :: EffectSig -> * -> * -> *)  where
 
    -- addHandler
 
-   -- | Fork a child thread.  DEPRECATED!  This is not needed because
-   -- the superclass ParMonad gives a `fork` method.
-   forkLV :: m e s () -> m e s ()
-
    -- | Put ourselves at the bottom of the work-pile for the current thread, allowing
    -- others a chance to run.
    yield :: m e s ()

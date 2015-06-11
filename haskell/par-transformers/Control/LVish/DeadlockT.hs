@@ -85,8 +85,7 @@ liftDT pa = DeadlockT (S.lift pa)
 
 instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
   type LVar (DeadlockT m) = LVar m
-  -- This fork calls the ParMonad.fork above, which increments the counter:
-  forkLV act = PC.fork act
+
   newLV act = liftDT$ newLV act
 
   stateLV :: forall e s a d . (LVar (DeadlockT m) a d)

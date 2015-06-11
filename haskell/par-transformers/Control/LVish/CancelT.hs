@@ -58,6 +58,9 @@ instance PC.ParMonad m => PC.ParMonad (CancelT m) where
 
   preturn = CancelT . return
 
+  -- Comment moved from LVarSched.forkLV implementation:
+  -- (because that method no longer exists)
+  -- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
   fork (CancelT task) = CancelT $ do
     s0 <- S.get
     S.lift $ PC.fork $ do
@@ -209,7 +212,7 @@ forkInternal (CState childRef) (CancelT act) = CancelT $ do
                   S.lift $ PC.put_ result x
                   return ()
     if live
-      then S.lift $ forkLV (evalStateT act' (CState childRef))
+      then S.lift $ fork (evalStateT act' (CState childRef))
       else cancelMe'
     return $! CFut fate result
 
@@ -261,10 +264,6 @@ instance forall p (e :: EffectSig) s .
          (PC.ParMonad (CancelT p), PC.ParIVar p, PC.LVarSched p, ParMonadTrans CancelT) =>
           PC.LVarSched (CancelT p) where
   type LVar (CancelT p) = LVar p
-
--- FIXME: we shouldn't need to fork a CANCELABLE thread here, should we?
---  forkLV act = do _ <- forkCancelable act; return ()
-  forkLV act = PC.fork act
 
   newLV act = PC.lift $ newLV act
 

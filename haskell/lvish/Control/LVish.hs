@@ -136,7 +136,6 @@ import qualified Control.Par.Class.Unsafe as PU
 instance PC.LVarSched Par where
   type LVar Par = L.LVar 
 
-  forkLV = fork
   newLV  = WrapPar . L.newLV
   getLV lv glob delt = WrapPar $ L.getLV lv glob delt
   putLV lv putter    = WrapPar $ L.putLV lv putter
