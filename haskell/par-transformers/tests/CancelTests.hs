@@ -5,8 +5,8 @@ module CancelTests (tests, runTests)
        where
 
 import Control.LVish (isDet, isND, isQD, isReadOnly, liftReadOnly, logDbgLn,
-                      runPar, runParLogged, runParNonDet, runParDetailed)
-import Control.LVish (DbgCfg(..), OutDest(..)) 
+                      runPar, runParNonDet, runParDetailed)
+import Control.LVish (DbgCfg(..), OutDest(..))
 import Control.LVish.CancelT
 import Control.LVish.Internal
 import Control.Par.Class
@@ -71,7 +71,7 @@ assertDoesntHaveLog log allLogs =
 runDbg :: (forall s . Par e s a) -> IO ([String], Either String a)
 runDbg comp = do
   numCap <- getNumCapabilities
-  (logs,ans) <- runParDetailed 
+  (logs,ans) <- runParDetailed
                    DbgCfg { dbgRange = (Just (0,1))
                           , dbgDests = [OutputEvents, OutputInMemory, OutputTo stderr]
                           , dbgScheduling = False }
@@ -84,21 +84,19 @@ runDbg comp = do
 case_LogTest1 :: IO ()
 case_LogTest1 = do
   let logMsg = "Testing the logger."
-  (logs, _) <- runParLogged $ logDbgLn 0 logMsg
+  (logs, _) <- runDbg $ logDbgLn 0 logMsg
   assertHasLog logMsg logs
 
 -- Make sure logging is working with CancelT.
 case_LogTest2 :: IO ()
 case_LogTest2 = do
   let logMsg = "Testing the logger."
-  (logs, _) <- runParLogged $ isDet $ runCancelT $ dbg logMsg
+  (logs, _) <- runDbg $ isDet $ runCancelT $ dbg logMsg
   assertHasLog logMsg logs
 
 -- Make sure `cancelMe` is not crashing anything. (no logging here)
 case_cancelMe_NoLog :: IO ()
-case_cancelMe_NoLog = do
-  runParNonDet $  runCancelT cancelMe
-  return ()
+case_cancelMe_NoLog = runParNonDet $ runCancelT cancelMe
 
 case_cancel01_CancelMe :: IO ()
 case_cancel01_CancelMe = do
@@ -133,9 +131,9 @@ cancel01 = do
 --   assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
 
 -- | This should always cancel the child before printing "!!".
-cancel02 :: IO ([String], ())
+cancel02 :: IO ([String], Either String ())
 cancel02 =
-  runParLogged $ isDet $ runCancelT comp
+  runDbg $ isDet $ runCancelT comp
  where
    comp :: forall p e s a .
            (GetG e ~ G, HasPut e,
