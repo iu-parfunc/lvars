@@ -29,7 +29,9 @@ import Unsafe.Coerce (unsafeCoerce)
 --
 -- > do m1; m2 == do fork m1; m2
 --
-class ParMonad p => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
+class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
+-- ^ TODO: add SecretClass superclass to prevent users from instancing this.
+  
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
   unsafeParIO :: IO a -> p e s a

@@ -93,7 +93,7 @@ Test-suite test-par-transformers
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
-  ghc-options: -threaded -Wall
+  ghc-options: -threaded -Wall -rtsopts -with-rtsopts=-N4 -eventlog
 
   -- Atomic-primops fails when used by template-haskell/ghci on linux:
   if impl(ghc < 7.7) && os(linux) {

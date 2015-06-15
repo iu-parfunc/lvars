@@ -646,12 +646,11 @@ runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
 runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
--- #ifndef DEBUG_LVAR
+-- ifndef DEBUG_LVAR
 --   when (dbgScheduling /= True) $ -- || dbgRange /= Nothing  
 --     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
--- #endif
+-- endif
   (lgr,queues) <- Sched.new cfg numWrkrs noName 
-
   case lgr of
     Nothing -> return ()
     Just l  -> L.logOn l (L.OffTheRecord 1 " [dbg-lvi6sh] New logger & scheds created... entering main loop.")
@@ -758,9 +757,9 @@ runParIO = defaultRun
 -- 
 runParLogged :: Par a -> IO ([String],a)
 runParLogged comp = do
--- #ifndef DEBUG_LVAR
+-- ifndef DEBUG_LVAR
 --   error "runParLogged: this function is disabled when LVish is compiled without debugging support."
--- #endif
+-- endif
   (logs,ans) <- runParDetailed 
                    DbgCfg { dbgRange = (Just (0,dbgLvl))
                           , dbgDests = [L.OutputEvents, L.OutputInMemory]

@@ -5,8 +5,8 @@ module CancelTests (tests, runTests)
        where
 
 import Control.LVish (isDet, isND, isQD, isReadOnly, liftReadOnly, logDbgLn,
-                      runPar, runParLogged, runParNonDet)
-
+                      runPar, runParLogged, runParNonDet, runParDetailed)
+import Control.LVish (DbgCfg(..), OutDest(..)) 
 import Control.LVish.CancelT
 import Control.LVish.Internal
 import Control.Par.Class
@@ -15,6 +15,8 @@ import Control.Par.EffectSigs
 
 import Control.Concurrent
 import Data.List (isInfixOf)
+
+import System.IO (stderr)
 
 import Test.Framework
 import Test.Framework.Providers.HUnit
@@ -65,29 +67,42 @@ assertDoesntHaveLog log allLogs =
     not $ any (log `isInfixOf`) allLogs
 
 
+-- | A runner for testing which both grabs logs AND echos them to the screen.
+runDbg :: (forall s . Par e s a) -> IO ([String], Either String a)
+runDbg comp = do
+  numCap <- getNumCapabilities
+  (logs,ans) <- runParDetailed 
+                   DbgCfg { dbgRange = (Just (0,1))
+                          , dbgDests = [OutputEvents, OutputInMemory, OutputTo stderr]
+                          , dbgScheduling = False }
+                   numCap comp
+  case ans of
+    Left err  -> return $! (logs, Left (show err))
+    Right x   -> return $! (logs, Right x)
+
 -- Making sure the logger is working with Par.
-case_test0_Par :: IO ()
-case_test0_Par = do
+case_LogTest1 :: IO ()
+case_LogTest1 = do
   let logMsg = "Testing the logger."
   (logs, _) <- runParLogged $ logDbgLn 0 logMsg
   assertHasLog logMsg logs
 
 -- Make sure logging is working with CancelT.
-case_test0_CancelT :: IO ()
-case_test0_CancelT = do
+case_LogTest2 :: IO ()
+case_LogTest2 = do
   let logMsg = "Testing the logger."
   (logs, _) <- runParLogged $ isDet $ runCancelT $ dbg logMsg
   assertHasLog logMsg logs
 
 -- Make sure `cancelMe` is not crashing anything. (no logging here)
-case_cancel01_NoLog :: IO ()
-case_cancel01_NoLog = do
-  runParLogged $ isDet $ runCancelT cancelMe
+case_cancelMe_NoLog :: IO ()
+case_cancelMe_NoLog = do
+  runParNonDet $  runCancelT cancelMe
   return ()
 
-case_cancel01 :: IO ()
-case_cancel01 = do
-  (logs, _) <- cancel01
+case_cancel01_CancelMe :: IO ()
+case_cancel01_CancelMe = do
+  logs <- cancel01
   assertHasLog "Begin test 01" logs
   assertDoesntHaveLog "Past cancelation point!" logs
 
@@ -101,13 +116,15 @@ case_cancel01 = do
 --
 -- But test output was just "Failed".
 
-cancel01 :: IO ([String], ())
-cancel01 = runParLogged $ isDet $ runCancelT $ do
-  dbg "Begin test 01"
-  cancelMe -- this is just returnToSched from LVarSched method of Par
-           -- FIXME: seems like log state is not passed
-  dbg "Past cancelation point!"
-
+cancel01 :: IO [String]
+cancel01 = do
+  (logs,Left err) <- runDbg $ isDet $ runCancelT $ do
+       dbg "Begin test 01: about to cancelMe on main thread"
+       cancelMe -- this is just returnToSched from LVarSched method of Par
+                -- FIXME: seems like log state is not passed
+       dbg "Past cancelation point!"
+  assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
+  return logs
 
 -- case_cancel02 :: IO ()
 -- case_cancel02 = do

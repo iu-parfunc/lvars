@@ -49,6 +49,7 @@ import qualified Data.Atomics.Counter as C
 -- each cancellable computation in the fork-tree.
 newtype CancelT (p :: EffectSig -> * -> * -> *) e s a =
   CancelT { unCancelT :: StateT CState (p e s) a }
+-- TODO: Make this READER instead of StateT.
 
 instance PC.ParMonad m => PC.ParMonad (CancelT m) where
   pbind (CancelT st) f = CancelT $ do
@@ -77,20 +78,23 @@ instance ParMonadTrans CancelT where
 -- that cancellation may be propagated transitively.
 newtype CState = CState (IORef CPair)
 
-data CPair = CPair !Bool ![CState]
+data CPair = CPair { _stillLive :: !Bool
+                   , topLevel   :: !Bool -- ^ Are NOT under a forkCancelable
+                   , _children  :: ![CState]
+                   }
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it
 -- is possible to cancel subtrees of computations.
 runCancelT :: (PC.ParMonad p) => CancelT p e s a -> p e s a
 runCancelT (CancelT st) = do
-  ref <- internalLiftIO $ newIORef (CPair True [])
+  ref <- internalLiftIO $ newIORef (CPair True True [])
   evalStateT st (CState ref)
 
 -- Check for cancellation of our thread.
 poll :: (PC.ParMonad p, LVarSched p) => CancelT p e s Bool
 poll = CancelT $ do
   CState ref  <- S.get
-  CPair flg _ <- S.lift $ internalLiftIO $ readIORef ref
+  CPair flg _ _ <- S.lift $ internalLiftIO $ readIORef ref
   return flg
 
 -- | Check with the scheduler to see if the current thread has been canceled, if so
@@ -104,7 +108,14 @@ pollForCancel = do
 -- cancelMe only cancels the current leaf of the computation tree, not its siblings
 -- (not the entire subtree under a forkCancelable, that is).
 cancelMe :: (ParMonad p, LVarSched p) => CancelT p e s ()
-cancelMe = CancelT $ S.lift returnToSched
+cancelMe = CancelT $ do
+  CState ref <- S.get
+  CPair{topLevel} <- S.lift $ internalLiftIO $ readIORef ref
+  if topLevel then
+    error "cancelMe: cannot be used unless underneath forkCancelable"
+   else
+    error "FINISHME!  CANCEL TIME"
+    -- S.lift returnToSched
 
 -- | The type of cancellable thread identifiers.
 type ThreadId = CState
@@ -115,7 +126,7 @@ type ThreadId = CState
 createTid :: (PC.ParMonad p, LVarSched p) => CancelT p e s ThreadId
 {-# INLINE createTid #-}
 createTid = CancelT $ do
-  newSt <- S.lift $ internalLiftIO $ newIORef (CPair True [])
+  newSt <- S.lift $ internalLiftIO $ newIORef (CPair True False [])
   return (CState newSt)
 
 
@@ -202,10 +213,10 @@ forkInternal (CState childRef) (CancelT act) = CancelT $ do
     CState parentRef <- S.get
     -- Create new child state:
     live <- S.lift $ internalLiftIO $
-      atomicModifyIORef' parentRef $ \ orig@(CPair bl ls) ->
+      atomicModifyIORef' parentRef $ \ orig@(CPair bl top ls) ->
         if bl then
           -- Extend the tree by pointing to our child:
-          (CPair True (CState childRef : ls), True)
+          (CPair True top (CState childRef : ls), True)
         else -- The current thread has already been canceled: DONT fork:
           (orig, False)
     let act' = do x <- act
@@ -243,9 +254,9 @@ internal_cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
   -- be added to that node.
-  chldrn <- internalLiftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg ls) ->
+  chldrn <- internalLiftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg top ls) ->
     if flg
-     then (CPair False [], ls)
+     then (CPair False top [], ls)
      else (orig, [])
 
   -- FIXME: write the fates of all associated futures -- lift $ PC.put_ fate
