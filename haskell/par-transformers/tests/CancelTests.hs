@@ -162,84 +162,35 @@ cancel02 =
      cancel tid
      dbg "[parent] Issued cancel, now exiting."
 
+-- Different than 02 in that child thread cancels itself.
+case_cancel02B :: IO ()
+case_cancel02B = do
+  (lines, err) <- cancel02B
+  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+
+cancel02B :: IO ([String], Either String ())
+cancel02B = runDbg $ isDet $ runCancelT comp
+  where
+    comp :: forall p e s a .
+            (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
+            CancelT Par e s ()
+    comp = do
+      dbg $ "Begin test 02B"
+
+      let p1 :: CancelT Par (SetReadOnly e) s ()
+          p1 = do
+            dbg $ "(1) Running on child thread..."
+            cancelMe
+            dbg $ "!! (2) Running on child thread..."
+
+      _ <- forkCancelable p1
+      dbg $ "Waiting on main thread..."
+      internalLiftIO $ appreciableDelay
+      dbg $ "Now exiting on main thread."
+      return ()
+
 --------------------------------------------------------------------------------
 -- Tests:
-
-{-
--- case_cancel01 =
-
--- type MyM a = CancelT (Par e s)
-
--- | This deadlocks, because the last computation was canceled!
-
--- TODO: Need to catch the deadlock and put this in a timeout:
-
-
--- | A variant of liftReadOnly which works on a particular transformer
--- stack... creating the GENERAL version of this has proven difficult.
-liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a -> CancelT (Par (Ef p g f b i) s) a
-liftReadOnly2 = error "FINISHME"
-
-
-
-isDet2 :: (e ~ (Ef P G NF B NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
-isDet2 x = x
-
-
-isRO :: (e ~ (Ef NP G NF NB NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
-isRO x = x
-
-#if 1
-cancel02B :: IO ()
-cancel02B = runParPolyIO$ runCancelT $ do
-  dbg$ "Begin test 02B"
---  _ <- isRO$ forkTemp $ isRO$ do
-  _ <- isRO$ id $ isRO$ do
-      dbg$ "(1) Running on child thread..."
-      cancelMe
-      dbg$ "(2) Running on child thread..."
-  dbg$ "Waiting on main thread..."
-  io$ appreciableDelay
-  dbg$ "Now exiting on main thread."
-  return ()
-#endif
-
--- | DEBUGGING -- this really should look like an identity function:
-forkTemp :: ( PC.ParIVar m, PC.LVarSched m
-             -- ReadOnlyM m,
-             -- e ~ GetEffects m,
-             -- NoPut e,
-            -- , PC.FutContents m CFutFate
---            , PC.FutContents m a -- This line alone screws it up:
-                                 --   Couldn't match type 'NP with 'P
-            ) =>
-            (CancelT m a -> CancelT m a)
-forkTemp = error "FINISHME"
-
-ro1 :: CancelT (Par (Ef NP G NF NB NI) s) ()
-ro1 = undefined
-
-ro2 :: CancelT (Par (Ef NP G NF NB NI) s) ()
--- ro2 = id ro1
-ro2 = forkTemp ro1 -- Activate WEIRD bug.
-
-
-main = cancel02B
-
-------------------------------------------------------------
-
-cancel03 :: IO ()
-cancel03 = runParNonDet$ runCancelT $ do
-  dbg$ "Begin test 03"
-  tid <- forkCancelableND $ do
-      dbg$ "(1) Running on child thread..."
-      cancelMe
-      dbg$ "(2) Running on child thread..."
-
-  dbg$ "Waiting on main thread..."
-  io$ appreciableDelay
-  dbg$ "Now exiting on main thread."
-  return ()
 
 --------------------------------------------------------------------------------
 -- -- BOOLEAN TESTS:
@@ -330,6 +281,4 @@ cancel03 = runParNonDet$ runCancelT $ do
 -- -- TODO: add ones with explicit timing controls (sleep).
 
 -- --------------------------------------------------------------------------------
--}
-
 -}
