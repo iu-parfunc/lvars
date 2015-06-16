@@ -48,7 +48,7 @@ import qualified Data.Splittable.Class as SC
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
-  fork = PC.fork  
+  fork = WrapPar . L.fork . unWrapPar
   internalLiftIO = liftIO  
   liftReadOnly (WrapPar p) = WrapPar p
 

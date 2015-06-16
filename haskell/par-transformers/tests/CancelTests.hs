@@ -124,11 +124,12 @@ cancel01 = do
   assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
   return logs
 
--- case_cancel02 :: IO ()
--- case_cancel02 = do
---   (lines, _) <- cancel02
---   assertEqual "Read wrong number of outputs" 4 (length lines)
---   assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+case_cancel02 :: IO ()
+case_cancel02 = do
+  (lines, _) <- cancel02
+  -- Can't compare number of logs, internal logs are interleaved with our logs
+  -- assertEqual "Read wrong number of outputs" 4 (length lines)
+  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
 
 -- | This should always cancel the child before printing "!!".
 cancel02 :: IO ([String], Either String ())
@@ -141,6 +142,8 @@ cancel02 =
    comp = do
      dbg "[parent] Begin test 02"
      iv <- new
+     dbg "[parent] Created IVar"
+
      let p1 :: CancelT Par (SetReadOnly e) s ()
          p1 = do
            dbg "[child] Running on child thread... block so parent can run"
@@ -153,7 +156,9 @@ cancel02 =
            dbg "!! [child] thread got past delay!"
 
      (tid, cfut) <- forkCancelable p1
+     dbg "[parent] Putting to IVar"
      put iv ()
+     dbg "[parent] Cancelling child thread"
      cancel tid
      dbg "[parent] Issued cancel, now exiting."
 
