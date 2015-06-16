@@ -39,21 +39,11 @@ module Control.Par.ST
        )-}
        where
 
-import Control.Applicative
-import Control.Monad
-
--- Transformers:
--- import qualified Control.Monad.Trans as T
--- import qualified Control.Monad.Trans.State.Strict as S
-
--- mtl:
-import qualified Control.Monad.State.Strict as S
--- import qualified Control.Monad.State.Class (MonadState(..))
 
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
+import qualified Control.Monad.State.Strict as S
 import Control.Monad.Trans (lift)
-import Control.Par.EffectSigs
 
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Storable.Mutable as MS
@@ -62,6 +52,7 @@ import Prelude hiding (length, read)
 
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe (unsafeParIO))
+import Control.Par.EffectSigs
 
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -166,25 +157,25 @@ newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
 -- computation only -- just like `runStateT`.  Here, using the standard trick
 -- runParST has a rank-2 type, with a phantom type @s1@.
 --
--- `stt` is the type constructor for the state kept in the monad, e.g. `MVectorFlp`.
+-- `st` is the type constructor for the state kept in the monad, e.g. `MVectorFlp`.
 --
 {-# INLINE runParST #-}
-runParST :: forall stt s0 (parM :: EffectSig -> * -> * -> *) ef s2 ans .
-            (ParThreadSafe parM, Monad (parM ef s2)) =>
-             stt s0
-             -> (forall s1 . ParST (stt s1) parM ef s2 ans)
-             -> parM ef s2 ans
-runParST initVal (ParST fn) = do
-  let xm :: parM ef s2 (ans, stt s0)
+runParST :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+            (ParMonad p, ParThreadSafe p) =>
+             st s0
+             -> (forall s1 . ParST (st s1) p e s2 a)
+             -> p e s2 a
+runParST initVal (ParST fn) =
+  let xm :: p e s2 (a, st s0)
       xm = fn initVal
-  xm >>= (return . fst)
+   in xm `pbind` (preturn . fst)
 
 -- | A `ParST` computation that results in the current value of the state, which is
 -- typically some combination of `STRef` and `STVector`s.  These require `ST`
 -- computation to do anything with the state.
 {-# INLINE reify #-}
-reify :: (Monad (p e s), ParThreadSafe p) => ParST stt p e s stt
-reify = ParST $ \s -> return (s, s)
+reify :: (ParMonad p, ParThreadSafe p) => ParST stt p e s stt
+reify = ParST $ \s -> preturn (s, s)
 
 -- | Installs a new piece of ST-mutable state.
 --
@@ -204,6 +195,7 @@ instance ParMonad p => ParMonad (ParST st p) where
 
   {-# INLINE internalLiftIO #-}
   internalLiftIO io = liftPar (internalLiftIO io)
+
   {-# INLINE fork #-}
   fork (ParST task) = liftPar $ PC.fork $ do
       (res,_) <- task
@@ -216,7 +208,7 @@ liftPar :: ParMonad parM => parM e s a -> (ParST stt1 parM) e s a
 liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s)))
 
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
-instance (ParMonad p, Monad (p e s), ParThreadSafe p) =>
+instance (ParMonad p, ParThreadSafe p) =>
          S.MonadState stts (ParST stts p e s) where
   {-# INLINE get #-}
   get = reify
@@ -226,10 +218,10 @@ instance (ParMonad p, Monad (p e s), ParThreadSafe p) =>
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead.
 {-# INLINE liftST #-}
-liftST :: (ParMonad p, ParThreadSafe p) => ST s a -> ParST (stt s1) p e s a
+liftST :: (ParMonad p, ParThreadSafe p) => (forall ss. ST ss a) -> ParST (stt s) p e s a
 liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
- where
-   io = unsafeSTToIO st
+  where
+    io = unsafeSTToIO st
 
 {-# INLINE overPartition #-}
 overPartition :: Int
@@ -276,7 +268,7 @@ transmute fn (ParST comp) = do
 forkSTSplit
   :: forall p t stt sFull e s.
      (PC.FutContents p (t, stt sFull), PC.ParFuture p, STSplittable stt,
-      GetP e ~ 'P, GetG e ~ 'G)
+      HasPut e, HasGet e)
      => SplitIdx stt                        -- ^ Where to split the data.
      -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
      -> (forall sr. ParST (stt sr) p e s t) -- ^ Right child computation.
