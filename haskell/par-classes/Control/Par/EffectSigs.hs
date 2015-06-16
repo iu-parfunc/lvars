@@ -65,47 +65,45 @@ data IOing    = I | NI
 -- Effect sigs and their extraction:
 --------------------------------------------------------------------------------
 
--- TODO: Could make these all closed families:
-
 -- | Utility for getting just the Put effect flag.
-type family GetP (e :: EffectSig) :: Putting
-type instance GetP (Ef p g f b i) = p
+type family GetP (e :: EffectSig) :: Putting where
+  GetP (Ef p g f b i) = p
 
 -- | Utility for getting just the Bump effect flag.
-type family GetB (e :: EffectSig) :: Bumping
-type instance GetB (Ef p g f b i) = b
+type family GetB (e :: EffectSig) :: Bumping where
+  GetB (Ef p g f b i) = b
 
 -- | Utility for getting just the Freeze effect flag.
-type family GetF (e :: EffectSig) :: Freezing
-type instance GetF (Ef p g f b i) = f
+type family GetF (e :: EffectSig) :: Freezing where
+  GetF (Ef p g f b i) = f
 
 -- | Utility for getting just the Get effect flag.
-type family GetG (e :: EffectSig) :: Getting
-type instance GetG (Ef p g f b i) = g
+type family GetG (e :: EffectSig) :: Getting where
+  GetG (Ef p g f b i) = g
 
 -- | Utility for getting just the IO effect flag.
-type family GetI (e :: EffectSig) :: IOing
-type instance GetI (Ef p g f b i) = i
+type family GetI (e :: EffectSig) :: IOing where
+  GetI (Ef p g f b i) = i
 
 -- | Utility for setting just the Put effect flag.
-type family SetP (p :: Putting) (e :: EffectSig) :: EffectSig
-type instance SetP p2 (Ef p1 g f b i) = (Ef p2 g f b i)
+type family SetP (p :: Putting) (e :: EffectSig) :: EffectSig where
+  SetP p2 (Ef p1 g f b i) = (Ef p2 g f b i)
 
 -- | Utility for setting just the Get effect flag.
-type family SetG (p :: Getting) (e :: EffectSig) :: EffectSig
-type instance SetG g2 (Ef p g f b i) = (Ef p g2 f b i)
+type family SetG (p :: Getting) (e :: EffectSig) :: EffectSig where
+  SetG g2 (Ef p g f b i) = (Ef p g2 f b i)
 
 -- | Utility for setting just the Freeze effect flag.
-type family SetF (p :: Freezing) (e :: EffectSig) :: EffectSig
-type instance SetF f2 (Ef p g f b i) = (Ef p g f2 b i)
+type family SetF (p :: Freezing) (e :: EffectSig) :: EffectSig where
+  SetF f2 (Ef p g f b i) = (Ef p g f2 b i)
 
 -- | Utility for setting just the Bump effect flag.
-type family SetB (b :: Bumping) (e :: EffectSig) :: EffectSig
-type instance SetB b2 (Ef p g f b i) = (Ef p g f b2 i)
+type family SetB (b :: Bumping) (e :: EffectSig) :: EffectSig where
+  SetB b2 (Ef p g f b i) = (Ef p g f b2 i)
 
 -- | Utility for setting just the IO effect flag.
-type family SetI (b :: IOing) (e :: EffectSig) :: EffectSig
-type instance SetI i2 (Ef p g f b i) = (Ef p g f b i2)
+type family SetI (b :: IOing) (e :: EffectSig) :: EffectSig where
+  SetI i2 (Ef p g f b i) = (Ef p g f b i2)
 
 -- | Replace the relevant effect bits with those required by `ReadOnly`.
 type family SetReadOnly (e :: EffectSig) :: EffectSig where
@@ -115,10 +113,6 @@ type family SetReadOnly (e :: EffectSig) :: EffectSig where
 -- teach the GHC type checker theorems like (GetG (SetP e) ~ GetG e).
 -- 
 -- type SetReadOnly e = SetP NP (SetF NF (SetB NB (SetI NI e)))
-
-----------------------------------------
--- Same thing but lifted to work over monads:
-
 
 --------------------------------------------------------------------------------
 -- Now for constraints:
