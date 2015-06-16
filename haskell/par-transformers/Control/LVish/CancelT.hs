@@ -137,14 +137,14 @@ createTid = CancelT $ do
 forkCancelableWithTid
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
      (PC.ParIVar p, LVarSched p,
-      FutContents p CFutFate, FutContents p a) =>
+      FutContents p CFutFate, FutContents p a,
+      GetP (SetP 'P e) ~ 'P) =>
       ThreadId -> CancelT p (SetReadOnly e) s a ->
       CancelT p e s (CFut p s a)
 {-# INLINE forkCancelableWithTid #-}
 forkCancelableWithTid tid act =
     -- FIXME: forkInternal shouldn't require Put for forked thread!
-    -- forkInternal tid (internalCastEffects act)
-    undefined
+    forkInternal tid (internalCastEffects act)
 
 -- | Futures that may be canceled before the result is available.
 data CFut f m a = CFut (Future f m CFutFate) (Future f m a)
@@ -166,7 +166,8 @@ data CFutFate = Canceled | Completed
 -- into a non-read-only parent computation at some point.
 forkCancelable
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
-     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a) =>
+     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
+     GetP (SetP 'P e) ~ 'P) =>
      CancelT p (SetReadOnly e) s a ->
      CancelT p e s (ThreadId, CFut p s a)
 forkCancelable act = do
@@ -182,7 +183,8 @@ forkCancelable act = do
 forkCancelableND
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
      (PC.ParIVar p, LVarSched p, GetI e ~ 'I, GetP e ~ 'P,
-      FutContents p CFutFate, FutContents p a) =>
+      FutContents p CFutFate, FutContents p a,
+      GetP (SetP 'P e) ~ 'P) =>
      CancelT p e s a -> CancelT p e s (ThreadId, CFut p s a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
@@ -193,7 +195,8 @@ forkCancelableND act = do
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
 forkCancelableNDWithTid
   :: (PC.ParIVar p, LVarSched p, GetI e ~ 'I, GetP e ~ 'P,
-      FutContents p CFutFate, FutContents p a) =>
+      FutContents p CFutFate, FutContents p a,
+      GetP (SetP 'P e) ~ 'P) =>
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
@@ -201,12 +204,12 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 -- Internal version -- no rules!
 forkInternal
   :: forall (p :: EffectSig -> * -> * -> *) e s a f .
-     (PC.ParIVar p, LVarSched p, GetP e ~ P,
-      FutContents p CFutFate, FutContents p a) =>
+     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
+      GetP (SetP 'P e) ~ 'P) =>
      -- FIXME: Forked thread doesn't have to have P!
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkInternal #-}
-forkInternal (CState childRef) (CancelT act) = CancelT $ do
+forkInternal (CState childRef) act = CancelT $ do
     fate   <- S.lift (PC.new :: p e s (Future p s CFutFate))
     result <- S.lift (PC.new :: p e s (Future p s a))
 
@@ -219,13 +222,23 @@ forkInternal (CState childRef) (CancelT act) = CancelT $ do
           (CPair True top (CState childRef : ls), True)
         else -- The current thread has already been canceled: DONT fork:
           (orig, False)
-    let act' = do x <- act
-                  S.lift $ PC.put_ result x
-                  return ()
+
+    let act' :: CancelT p e s ()
+        act' = do x <- internalCastEffects act
+                  cast $ PC.put_ result x
+                  cast $ PC.put_ fate Completed
+
     if live
-      then S.lift $ fork (evalStateT act' (CState childRef))
-      else cancelMe'
+      then S.lift $ fork (evalStateT (unCancelT act') (CState childRef))
+      else S.lift (cast' $ PC.put_ fate Canceled) >> cancelMe'
+
     return $! CFut fate result
+  where
+    cast :: CancelT p (SetP P e) s r -> CancelT p e s r
+    cast = internalCastEffects
+
+    cast' :: p (SetP 'P e) s r -> p e s r
+    cast' = internalCastEffects
 
 cancelMe' :: LVarSched p => StateT CState (p e s) ()
 cancelMe' = unCancelT cancelMe
@@ -320,7 +333,8 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 asyncAndCPS
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
      (PC.ParMonad p, PC.ParIVar p, LVarSched p,
-      FutContents p CFutFate, FutContents p ()) =>
+      FutContents p CFutFate, FutContents p (),
+      GetP (SetP 'P e) ~ 'P) =>
      (CancelT p (SetReadOnly e) s Bool) ->
      (CancelT p (SetReadOnly e) s Bool) ->
      (Bool -> CancelT p e s ()) ->
@@ -368,7 +382,8 @@ asyncAndCPS leftM rightM kont = do
 asyncAnd
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
      (HasPut e, HasGet e, PC.ParIVar p, FutContents p CFutFate, FutContents p (),
-      FutContents p Bool, LVarSched p) =>
+      FutContents p Bool, LVarSched p,
+      GetP (SetP 'P e) ~ 'P) =>
      (CancelT p (SetReadOnly e) s Bool) ->
      (CancelT p (SetReadOnly e) s Bool) ->
      CancelT p e s Bool
