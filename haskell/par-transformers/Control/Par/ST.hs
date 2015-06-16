@@ -14,7 +14,7 @@
 -- the `Par` monad underneath.
 
 module Control.Par.ST
-       {-(
+       (
          -- * The monad: a dischargable effect
          ParST, runParST,
 
@@ -28,6 +28,7 @@ module Control.Par.ST
          transmute,
 
          --  Useful utilities
+         for_,
 --         vecParMap_,
 
          -- * Type class for valid states.
@@ -36,7 +37,7 @@ module Control.Par.ST
          -- * Annoying newtypes and wrappers to take the @s@ param last:
          MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
          STTup2(..), STUnit(..)
-       )-}
+       )
        where
 
 
@@ -204,7 +205,7 @@ instance ParMonad p => ParMonad (ParST st p) where
 
 -- | Lift an ordinary `Par` computation into `ParST`.
 {-# INLINE liftPar #-}
-liftPar :: ParMonad parM => parM e s a -> (ParST stt1 parM) e s a
+liftPar :: ParMonad p => p e s a -> (ParST st p) e s a
 liftPar m = ParST (\s -> m `pbind` (\x -> preturn (x,s)))
 
 -- | We use the generic interface for `put` and `get` on the entire (mutable) state.
@@ -218,7 +219,7 @@ instance (ParMonad p, ParThreadSafe p) =>
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead.
 {-# INLINE liftST #-}
-liftST :: (ParMonad p, ParThreadSafe p) => (forall ss. ST ss a) -> ParST (stt s) p e s a
+liftST :: (ParMonad p, ParThreadSafe p) => ST ss a -> ParST (stt ss) p e s a
 liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
   where
     io = unsafeSTToIO st
