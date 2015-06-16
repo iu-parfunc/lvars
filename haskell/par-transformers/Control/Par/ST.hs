@@ -160,10 +160,7 @@ instance STSplittable (SVectorFlp a) where
 -- Its final parameter, 'ans', is the result of running the entire computation, after
 -- which the vector is no longer accessible.
 newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
-        ParST (stState -> p e s (a,stState))
-
-data ParStateT (state :: *) (p :: EffectSig -> * -> * -> *) e s a =
-  ParStateT (state -> p e s (a,state))
+        ParST { unwrapParST :: stState -> p e s (a,stState) }
 
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
@@ -196,7 +193,15 @@ reify = ParST $ \s -> return (s, s)
 install :: (Monad (p e s), ParThreadSafe p) => stt -> ParST stt p e s ()
 install val = ParST $ \_ -> return ((), val)
 
-instance ParMonad parM => ParMonad (ParST stt1 parM) where
+instance ParMonad p => ParMonad (ParST st p) where
+  {-# INLINE preturn #-}
+  preturn a = ParST $ \st -> return (a, st)
+
+  {-# INLINE pbind #-}
+  pbind (ParST p1) f = ParST $ \st -> do
+    (a, st') <- p1 st
+    unwrapParST (f a) st'
+
   {-# INLINE internalLiftIO #-}
   internalLiftIO io = liftPar (internalLiftIO io)
   {-# INLINE fork #-}
@@ -283,12 +288,6 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   (rx, _) <- rig slice2
   (lx, _) <- PC.get lv
   return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
-
--- | A conditional instance which will only be usable if unsafe imports are made.
--- FIXME: Not conditional right now.
--- FIXME: This won't work. We may need our own ParMonadIO typeclass.
--- instance MonadIO p => MonadIO (ParST s p e s) where
---   liftIO io = ParST (liftIO io)
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
