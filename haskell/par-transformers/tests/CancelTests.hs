@@ -137,7 +137,8 @@ cancel02 =
  where
    comp :: forall p e s a .
            (GetG e ~ G, HasPut e,
-            GetG (SetReadOnly e) ~ GetG e) =>
+            GetG (SetReadOnly e) ~ GetG e,
+            GetP (SetP 'P e) ~ 'P) =>
            CancelT Par e s ()
    comp = do
      dbg "[parent] Begin test 02"
@@ -153,24 +154,7 @@ cancel02 =
            pollForCancel
            dbg "!! [child] thread got past delay!"
 
-         -- p2 :: CancelT p e s ()
-         -- p2 = forkCancelable undefined
-
-  --        p3 :: CancelT m1 (CT.ThreadId, CFut m1 ())
-  --        p3 = undefined -- This is ok.
-  --        -- Then here we fail, with a strange "Couldn't match type 'NP with 'P":
-         -- p3 = forkCancelable undefined
-
-{-
-   -- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
-   --       p2 :: m2 (CT.ThreadId, CFut m1 ())
-   --       p2 = undefined -- forkCancelable p
-
-
-   --      p2 = forkCancelable p
-   --  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
--}
-     let tid = undefined
+     (tid, cfut) <- forkCancelable p1
      put iv ()
      cancel tid
      dbg "[parent] Issued cancel, now exiting."
