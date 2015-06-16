@@ -51,7 +51,7 @@ newtype CancelT (p :: EffectSig -> * -> * -> *) e s a =
   CancelT { unCancelT :: StateT CState (p e s) a }
 -- TODO: Make this READER instead of StateT.
 
-instance PC.ParMonad m => PC.ParMonad (CancelT m) where
+instance ParMonad m => ParMonad (CancelT m) where
   pbind (CancelT st) f = CancelT $ do
     s0 <- S.get
     (res, s) <- S.lift $ S.runStateT st s0
@@ -85,13 +85,13 @@ data CPair = CPair { _stillLive :: !Bool
 
 -- | Run a Par monad with the cancellation effect.  Within this computation, it
 -- is possible to cancel subtrees of computations.
-runCancelT :: (PC.ParMonad p) => CancelT p e s a -> p e s a
+runCancelT :: ParMonad p => CancelT p e s a -> p e s a
 runCancelT (CancelT st) = do
   ref <- internalLiftIO $ newIORef (CPair True True [])
   evalStateT st (CState ref)
 
 -- Check for cancellation of our thread.
-poll :: (PC.ParMonad p, LVarSched p) => CancelT p e s Bool
+poll :: ParMonad p => CancelT p e s Bool
 poll = CancelT $ do
   CState ref  <- S.get
   CPair flg _ _ <- S.lift $ internalLiftIO $ readIORef ref
@@ -99,7 +99,7 @@ poll = CancelT $ do
 
 -- | Check with the scheduler to see if the current thread has been canceled, if so
 -- stop computing immediately.
-pollForCancel :: (PC.ParMonad p, LVarSched p) => CancelT p e s ()
+pollForCancel :: (ParMonad p, LVarSched p) => CancelT p e s ()
 pollForCancel = do
   b <- poll
   unless b $ cancelMe
@@ -123,7 +123,7 @@ type ThreadId = CState
 -- | Sometimes it is necessary to have a TID in scope *before* forking the
 -- computations in question.  For that purpose, we provide a two-phase interface:
 -- `createTid` followed by `forkCancelableWithTid`.
-createTid :: (PC.ParMonad p, LVarSched p) => CancelT p e s ThreadId
+createTid :: ParMonad p => CancelT p e s ThreadId
 {-# INLINE createTid #-}
 createTid = CancelT $ do
   newSt <- S.lift $ internalLiftIO $ newIORef (CPair True False [])
@@ -136,15 +136,11 @@ createTid = CancelT $ do
 -- will be canceled as a group.
 forkCancelableWithTid
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
-     (PC.ParIVar p, LVarSched p,
-      FutContents p CFutFate, FutContents p a,
-      GetP (SetP 'P e) ~ 'P) =>
-      ThreadId -> CancelT p (SetReadOnly e) s a ->
-      CancelT p e s (CFut p s a)
+     (ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
+      HasPut (SetP 'P e)) =>
+      ThreadId -> CancelT p (SetReadOnly e) s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkCancelableWithTid #-}
-forkCancelableWithTid tid act =
-    -- FIXME: forkInternal shouldn't require Put for forked thread!
-    forkInternal tid (internalCastEffects act)
+forkCancelableWithTid tid act = forkInternal tid (internalCastEffects act)
 
 -- | Futures that may be canceled before the result is available.
 data CFut f m a = CFut (Future f m CFutFate) (Future f m a)
@@ -166,8 +162,8 @@ data CFutFate = Canceled | Completed
 -- into a non-read-only parent computation at some point.
 forkCancelable
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
-     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
-     GetP (SetP 'P e) ~ 'P) =>
+     (ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
+      HasPut (SetP 'P e)) =>
      CancelT p (SetReadOnly e) s a ->
      CancelT p e s (ThreadId, CFut p s a)
 forkCancelable act = do
@@ -182,9 +178,9 @@ forkCancelable act = do
 --   introduces nondeterminism and must register the "IO effect".
 forkCancelableND
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s a .
-     (PC.ParIVar p, LVarSched p, GetI e ~ 'I, GetP e ~ 'P,
+     (ParIVar p, LVarSched p, HasIO e, HasPut e,
       FutContents p CFutFate, FutContents p a,
-      GetP (SetP 'P e) ~ 'P) =>
+      HasPut (SetP 'P e)) =>
      CancelT p e s a -> CancelT p e s (ThreadId, CFut p s a)
 -- TODO/FIXME: Should we allow the child computation to not have IO set if it likes?
 forkCancelableND act = do
@@ -194,9 +190,9 @@ forkCancelableND act = do
 
 -- | Variant of `forkCancelableWithTid` that works for nondeterministic computations.
 forkCancelableNDWithTid
-  :: (PC.ParIVar p, LVarSched p, GetI e ~ 'I, GetP e ~ 'P,
+  :: (ParIVar p, LVarSched p, HasIO e, HasPut e,
       FutContents p CFutFate, FutContents p a,
-      GetP (SetP 'P e) ~ 'P) =>
+      HasPut (SetP 'P e)) =>
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkCancelableNDWithTid #-}
 forkCancelableNDWithTid tid act = forkInternal tid act
@@ -204,9 +200,8 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 -- Internal version -- no rules!
 forkInternal
   :: forall (p :: EffectSig -> * -> * -> *) e s a f .
-     (PC.ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
-      GetP (SetP 'P e) ~ 'P) =>
-     -- FIXME: Forked thread doesn't have to have P!
+     (ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
+      HasPut (SetP 'P e)) =>
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkInternal #-}
 forkInternal (CState childRef) act = CancelT $ do
@@ -246,7 +241,7 @@ cancelMe' = unCancelT cancelMe
 -- | Do a blocking read on the result of a cancelable-future.  This is an ERROR if
 --   the future has been cancelled.  (And for determinism, the reverse is also true.
 --   A cancellation after this read is an error.)
-readCFut :: (PC.ParIVar p, GetP e ~ P, GetG e ~ G,
+readCFut :: (ParIVar p, HasPut e, HasGet e,
              FutContents p CFutFate, FutContents p a)
          => CFut p s a -> p e s a
 readCFut (CFut fate res) = do
@@ -256,18 +251,16 @@ readCFut (CFut fate res) = do
 -- | Issue a cancellation request for a given sub-computation.  It will not be
 -- fulfilled immediately, because the cancellation process is cooperative and only
 -- happens when the thread(s) check in with the scheduler.
-cancel :: (PC.ParMonad p, Monad (p e s), ParMonad (CancelT p), GetP e ~ P)
+cancel :: (ParMonad p, Monad (p e s), ParMonad (CancelT p), HasPut e)
        => ThreadId -> CancelT p e s ()
 cancel = internal_cancel
 
-internal_cancel
-  :: (PC.ParMonad p, Monad (p e s), ParMonad (CancelT p))
-  => ThreadId -> CancelT p e s ()
+internal_cancel :: ParMonad p => ThreadId -> CancelT p e s ()
 internal_cancel (CState ref) = do
   -- To cancel a tree of threads, we atomically mark the root as canceled and then
   -- start chasing the children.  After we cancel any node, no further children may
   -- be added to that node.
-  chldrn <- internalLiftIO$ atomicModifyIORef' ref $ \ orig@(CPair flg top ls) ->
+  chldrn <- internalLiftIO $ atomicModifyIORef' ref $ \ orig@(CPair flg top ls) ->
     if flg
      then (CPair False top [], ls)
      else (orig, [])
@@ -277,16 +270,9 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
-{- FIXME: Looks like ParSealed is gone. Make sure this is not needed and remove.
-
-instance (PC.ParSealed m) => PC.ParSealed (CancelT m) where
-  type GetSession (CancelT m) = PC.GetSession m
-
--}
-
 instance forall p (e :: EffectSig) s .
-         (PC.ParMonad (CancelT p), PC.ParIVar p, PC.LVarSched p, ParMonadTrans CancelT) =>
-          PC.LVarSched (CancelT p) where
+         (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
+          LVarSched (CancelT p) where
   type LVar (CancelT p) = LVar p
 
   newLV act = PC.lift $ newLV act
@@ -308,9 +294,9 @@ instance forall p (e :: EffectSig) s .
 
   returnToSched = PC.lift returnToSched
 
-instance PC.ParFuture m => PC.ParFuture (CancelT m) where
+instance ParFuture m => ParFuture (CancelT m) where
   type Future (CancelT m) = Future m
-  type FutContents (CancelT m) a = PC.FutContents m a
+  type FutContents (CancelT m) a = FutContents m a
   spawn_ (CancelT task) = CancelT $ do
      s0 <- S.get
      S.lift $ PC.spawn_ $ do
@@ -320,7 +306,7 @@ instance PC.ParFuture m => PC.ParFuture (CancelT m) where
            return res
   get iv = CancelT $ S.lift $ PC.get iv
 
-instance PC.ParIVar m => PC.ParIVar (CancelT m) where
+instance ParIVar m => ParIVar (CancelT m) where
   new       = CancelT $ S.lift PC.new
   put_ iv v = CancelT $ S.lift $ PC.put_ iv v
 
@@ -332,9 +318,9 @@ instance PC.ParIVar m => PC.ParIVar (CancelT m) where
 -- additional data structure to synchronize on when waiting on the result.
 asyncAndCPS
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
-     (PC.ParMonad p, PC.ParIVar p, LVarSched p,
+     (ParMonad p, ParIVar p, LVarSched p,
       FutContents p CFutFate, FutContents p (),
-      GetP (SetP 'P e) ~ 'P) =>
+      HasPut (SetP 'P e)) =>
      (CancelT p (SetReadOnly e) s Bool) ->
      (CancelT p (SetReadOnly e) s Bool) ->
      (Bool -> CancelT p e s ()) ->
@@ -381,9 +367,9 @@ asyncAndCPS leftM rightM kont = do
 -- a False input, but also attempts to cancel the other, unneeded computation.
 asyncAnd
   :: forall (p :: EffectSig -> * -> * -> *) (e :: EffectSig) s .
-     (HasPut e, HasGet e, PC.ParIVar p, FutContents p CFutFate, FutContents p (),
+     (HasPut e, HasGet e, ParIVar p, FutContents p CFutFate, FutContents p (),
       FutContents p Bool, LVarSched p,
-      GetP (SetP 'P e) ~ 'P) =>
+      HasPut (SetP 'P e)) =>
      (CancelT p (SetReadOnly e) s Bool) ->
      (CancelT p (SetReadOnly e) s Bool) ->
      CancelT p e s Bool

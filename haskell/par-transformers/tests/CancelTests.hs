@@ -136,9 +136,7 @@ cancel02 =
   runDbg $ isDet $ runCancelT comp
  where
    comp :: forall p e s a .
-           (GetG e ~ G, HasPut e,
-            GetG (SetReadOnly e) ~ GetG e,
-            GetP (SetP 'P e) ~ 'P) =>
+           (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
            CancelT Par e s ()
    comp = do
      dbg "[parent] Begin test 02"
