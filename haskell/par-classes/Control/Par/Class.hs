@@ -418,29 +418,3 @@ class ParMonadTrans (t :: (EffectSig -> * -> * -> *)
                        -> (EffectSig -> * -> * -> *)) where
    lift :: ParMonad p => 
            p e s a -> (t p) e s a
-
-----------------------------------------------------------------------------------------------------
-
-{-
--- t1 :: P.Par Int
--- If the ParIVar => ParFuture instance exists the following is sufficient:
-t1 :: (ParFuture v m) => m Int
-t1 = do
-  x <- spawn (return 3)
-  get x
-
-t2 :: (ParIVar v m) => m Int
-t2 = do
-  x <- new
-  put x "hi"
-  return 3
-
-
--- TODO: SPECIALIZE generic routines for the default par monad (and possibly ParRNG)?
-
---  SPECIALISE parMap  :: (NFData b) => (a -> b)     -> [a] -> Par [b]
--- SPECIALISE parMapM :: (NFData b) => (a -> Par b) -> [a] -> Par [b]
--}
-
-
-
