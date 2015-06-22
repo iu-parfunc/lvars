@@ -283,7 +283,7 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
 
 -- | Spawn which does not assume idempotency of forked computations:
-mySpawn :: (HasPut e, PC.ParIVar p )=> p e s a -> p e s (PC.IVar p s a)
+mySpawn :: (HasPut e, PC.ParIVar p) => p e s a -> p e s (PC.IVar p s a)
 mySpawn f =
   do l <- PC.new
      PC.fork (do x <- f; PC.putNI_ l x)
@@ -312,6 +312,8 @@ instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
   new       = ParST $ \st -> (,st) <$> PC.new
   {-# INLINE put_ #-}
   put_ iv v = ParST $ \st -> (,st) <$> PC.put_ iv v
+  {-# INLINE putNI_ #-}
+  putNI_ iv v = ParST $ \st -> (,st) <$> PC.putNI_ iv v
 
 {-
 
