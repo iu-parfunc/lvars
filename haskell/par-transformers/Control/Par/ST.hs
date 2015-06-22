@@ -268,7 +268,7 @@ transmute fn (ParST comp) = do
 {-# INLINE forkSTSplit #-}
 forkSTSplit
   :: forall p t stt sFull e s.
-     (PC.FutContents p (t, stt sFull), PC.ParFuture p, STSplittable stt,
+     (PC.ParIVar p, STSplittable stt,
       HasPut e, HasGet e)
      => SplitIdx stt                        -- ^ Where to split the data.
      -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
@@ -277,10 +277,17 @@ forkSTSplit
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   let slice1, slice2 :: stt sFull
       (slice1, slice2) = splitST spltidx snap
-  lv <- PC.spawn_ $ lef slice1
+  lv <- mySpawn $ lef slice1
   (rx, _) <- rig slice2
   (lx, _) <- PC.get lv
   return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
+
+-- | Spawn which does not assume idempotency of forked computations:
+mySpawn :: (HasPut e, PC.ParIVar p )=> p e s a -> p e s (PC.IVar p s a)
+mySpawn f =
+  do l <- PC.new
+     PC.fork (do x <- f; PC.putNI_ l x)
+     return l
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.

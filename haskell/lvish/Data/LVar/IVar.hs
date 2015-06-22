@@ -139,12 +139,26 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 put_ :: (HasPut e, Eq a) => IVar s a -> a -> Par e s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef' ref update
+        update Nothing  = (Just x, Just x)        
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
-        update Nothing  = (Just x, Just x)
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++
+                                      show n2++" was "++show n1++")")
+
+putNI_ :: (HasPut e) => IVar s a -> a -> Par e s ()
+putNI_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
+  where putter ref      = atomicModifyIORef' ref update
+        update Nothing  = (Just x, Just x)        
+        update (Just y) = unsafePerformIO $
+                            do n1 <- fmap hashStableName $ makeStableName x
+                               n2 <- fmap hashStableName $ makeStableName y
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++
+                                      show n2++" was "++show n1++
+                                      ").  putNI_ used, so no multiple-equal-puts allowed.")
+
+
 
 -- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
 freezeIVar :: HasFreeze e => IVar s a -> I.Par e s (Maybe a)
@@ -224,5 +238,6 @@ instance PC.ParFuture Par where
 
 instance PC.ParIVar Par where
   put_ = put_
+  putNI_ = putNI_
   new = new
 

@@ -32,13 +32,17 @@ Library
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
 
-                 Control.LVish.DeadlockT
+                 -- Control.LVish.DeadlockT
+
+
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT
 
                  Control.Par.ST
---               Control.Par.ST.Vec
+                 Control.Par.ST.Vec
+
+
 
 -- Temporarily disabled:
 --                 Control.Par.ST.Vec2
