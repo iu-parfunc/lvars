@@ -38,7 +38,7 @@ module Control.Par.Class
   -- * Futures: basic parallelism with communication
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
-  , ParIVar(..)
+  , ParIVar(..), IVar
   -- * Full LVar monads 
   -- , ParLVar(..)
 
@@ -115,9 +115,9 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- | Like 'spawn', but the result is only head-strict, not fully-strict.
   spawn_ :: (HasPut e, FutContents m a) =>
             m e s a -> m e s (Future m s a)
-              
+
   -- | Wait for the result of a future, and then return it.
-  get    :: (HasGet e, FutContents m a) => Future m s a -> m e s a
+  get    :: (HasGet e) => Future m s a -> m e s a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
@@ -143,11 +143,11 @@ type IVar m s a = Future m s a
 --   These are more expressive but may not be supported by all distributed schedulers.
 --
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
-class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
- 
+class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where  
+  
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
-  new  :: forall a e s . FutContents m a => m e s (Future m s a)
+  new  :: forall a e s . m e s (Future m s a)
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -167,6 +167,11 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   -- | like 'put', but only head-strict rather than fully-strict.  
   put_ :: forall a e s . (FutContents m a, HasPut e) =>
           IVar m s a -> a -> m e s ()
+
+  -- | NonIdem version of put.  This version does not have the same constraint
+  -- on the contents of the IVar.
+  putNI_ :: forall a e s . (HasPut e) =>
+            IVar m s a -> a -> m e s ()
 
   -- Extra API routines that have default implementations:
 

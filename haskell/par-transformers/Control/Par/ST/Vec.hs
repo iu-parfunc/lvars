@@ -79,14 +79,14 @@ reify = do
 --
 --   This function reserves the right to sequentialize some iterations.
 parMapM :: forall s1 va p e s .
-           (HasPut e, HasGet e, PC.ParFuture p, ParThreadSafe p) =>
+           ( HasPut e, HasGet e, PC.ParIVar p, ParThreadSafe p) =>
            (va -> p e s va) -> ParVecT s1 va p e s ()
 parMapM fn = do
   VFlp vec <- S.get
   len <- length
   let share = max 1 (len `quot` (numProcs * overPartition))
 
-      loop :: Int -> (forall s3 . ParVecT s3 va p e s ())
+      loop :: Int -> (ParVecT s3 va p e s ())
       loop iters
         | iters <= share =
           -- Bottom out to a sequential loop:
@@ -97,43 +97,6 @@ parMapM fn = do
         | otherwise = do
           let (iters2,extra) = iters `quotRem` 2
               iters1 = iters2 + extra
-          -- FIXME:
-          -- Could not deduce (PC.FutContents p ((), MVectorFlp va s3))
-          --   arising from a use of ‘forkSTSplit’
-          -- from the context (HasPut e,
-          --                   HasGet e,
-          --                   PC.ParFuture p,
-          --                   ParThreadSafe p)
-          --   bound by the type signature for
-          --              parMapM :: (HasPut e, HasGet e, PC.ParFuture p, ParThreadSafe p) =>
-          --                         (va -> p e s va) -> ParVecT s1 va p e s ()
-          --   at Control/Par/ST/Vec.hs:(81,12)-(83,53)
-          -- Relevant bindings include
-          --   loop :: Int -> forall s3. ParVecT s3 va p e s ()
-          --     (bound at Control/Par/ST/Vec.hs:90:7)
-          --   vec :: MV.MVector s1 va (bound at Control/Par/ST/Vec.hs:85:8)
-          --   fn :: va -> p e s va (bound at Control/Par/ST/Vec.hs:84:9)
-          --   parMapM :: (va -> p e s va) -> ParVecT s1 va p e s ()
-          --     (bound at Control/Par/ST/Vec.hs:84:1)
-          -- In a stmt of a 'do' block:
-          --   forkSTSplit iters1 (loop iters1) (loop iters2)
-          -- In the expression:
-          --   do { let (iters2, extra) = iters `quotRem` 2
-          --            iters1 = iters2 + extra;
-          --        forkSTSplit iters1 (loop iters1) (loop iters2);
-          --        return () }
-          -- In an equation for ‘loop’:
-          --     loop iters
-          --       | iters <= share
-          --       = for_ (0, iters)
-          --         $ \ ind
-          --             -> do { x <- read ind;
-          --                     .... }
-          --       | otherwise
-          --       = do { let (iters2, extra) = ...
-          --                  ....;
-          --              forkSTSplit iters1 (loop iters1) (loop iters2);
-          --              return () }
           forkSTSplit iters1 (loop iters1) (loop iters2)
           return ()
 
