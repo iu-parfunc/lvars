@@ -3,7 +3,7 @@
     ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
 
 -- | Type-level effect signatures that characterize the side-effects of a given `Par`
--- computation.  
+-- computation.
 --
 -- This notion of effect tracking is coarse.  We track whether a given
 -- computation may:
@@ -11,7 +11,7 @@
 --  * Put - may mutate one or more variables outside the computation.
 --  * Get - may read and thus block on one or more variables outside
 --          the scope of the computation.
---  * Frz - may freeze 
+--  * Frz - may freeze
 --  * Bmp - may perform non-idempotent writes
 --  * IO  - may perform arbitrary IO effects and thus is nondeterministic.
 --
@@ -20,15 +20,15 @@
 -- there is an effect subtype ordering for the above effect signatures
 -- in which "pgfbi" is bottom and "PGFBI" is top (all off vs all on).
 
-module Control.Par.EffectSigs 
+module Control.Par.EffectSigs
        (
         -- * A type-level record of effects
-        EffectSig(..), 
+        EffectSig(..),
         -- * Simple boolean flags, each with a disttinct kind to prevent mixups
-        Putting(..), Getting(..), Freezing(..), Bumping(..), IOing(..), 
+        Putting(..), Getting(..), Freezing(..), Bumping(..), IOing(..),
 
-        -- * User-visible Constraints 
-        HasPut, HasGet, HasFreeze, HasBump, HasIO, 
+        -- * User-visible Constraints
+        HasPut, HasGet, HasFreeze, HasBump, HasIO,
         NoPut, NoGet, NoFreeze, NoBump, NoIO,
 
         -- * Derived constraints, i.e. shorthands for common combinations:
@@ -37,11 +37,9 @@ module Control.Par.EffectSigs
 
         -- * Accessor and setter functions for EffectSigs
         GetP, GetG, GetF, GetB, GetI,
-        SetP, SetG, SetF, SetB, SetI,       
+        SetP, SetG, SetF, SetB, SetI,
        )
        where
-
-import GHC.Exts (Constraint)
 
 --------------------------------------------------------------------------------
 
@@ -67,51 +65,51 @@ data IOing    = I | NI
 
 -- | Utility for getting just the Put effect flag.
 type family GetP (e :: EffectSig) :: Putting where
-  GetP (Ef p g f b i) = p
+  GetP ('Ef p g f b i) = p
 
 -- | Utility for getting just the Bump effect flag.
 type family GetB (e :: EffectSig) :: Bumping where
-  GetB (Ef p g f b i) = b
+  GetB ('Ef p g f b i) = b
 
 -- | Utility for getting just the Freeze effect flag.
 type family GetF (e :: EffectSig) :: Freezing where
-  GetF (Ef p g f b i) = f
+  GetF ('Ef p g f b i) = f
 
 -- | Utility for getting just the Get effect flag.
 type family GetG (e :: EffectSig) :: Getting where
-  GetG (Ef p g f b i) = g
+  GetG ('Ef p g f b i) = g
 
 -- | Utility for getting just the IO effect flag.
 type family GetI (e :: EffectSig) :: IOing where
-  GetI (Ef p g f b i) = i
+  GetI ('Ef p g f b i) = i
 
 -- | Utility for setting just the Put effect flag.
 type family SetP (p :: Putting) (e :: EffectSig) :: EffectSig where
-  SetP p2 (Ef p1 g f b i) = (Ef p2 g f b i)
+  SetP p2 ('Ef p1 g f b i) = 'Ef p2 g f b i
 
 -- | Utility for setting just the Get effect flag.
 type family SetG (p :: Getting) (e :: EffectSig) :: EffectSig where
-  SetG g2 (Ef p g f b i) = (Ef p g2 f b i)
+  SetG g2 ('Ef p g f b i) = 'Ef p g2 f b i
 
 -- | Utility for setting just the Freeze effect flag.
 type family SetF (p :: Freezing) (e :: EffectSig) :: EffectSig where
-  SetF f2 (Ef p g f b i) = (Ef p g f2 b i)
+  SetF f2 ('Ef p g f b i) = 'Ef p g f2 b i
 
 -- | Utility for setting just the Bump effect flag.
 type family SetB (b :: Bumping) (e :: EffectSig) :: EffectSig where
-  SetB b2 (Ef p g f b i) = (Ef p g f b2 i)
+  SetB b2 ('Ef p g f b i) = 'Ef p g f b2 i
 
 -- | Utility for setting just the IO effect flag.
 type family SetI (b :: IOing) (e :: EffectSig) :: EffectSig where
-  SetI i2 (Ef p g f b i) = (Ef p g f b i2)
+  SetI i2 ('Ef p g f b i) = 'Ef p g f b i2
 
 -- | Replace the relevant effect bits with those required by `ReadOnly`.
 type family SetReadOnly (e :: EffectSig) :: EffectSig where
-  SetReadOnly (Ef p g f b i) = Ef NP g NF NB NI
+  SetReadOnly ('Ef p g f b i) = 'Ef 'NP g 'NF 'NB 'NI
 
 -- NOTE: We could consider an alias for this, but it doesn't help
 -- teach the GHC type checker theorems like (GetG (SetP e) ~ GetG e).
--- 
+--
 -- type SetReadOnly e = SetP NP (SetF NF (SetB NB (SetI NI e)))
 
 --------------------------------------------------------------------------------
@@ -121,17 +119,17 @@ type family SetReadOnly (e :: EffectSig) :: EffectSig where
 -- APPROACH (1): Type aliases.
 -- These have the problem that when you ask the type in GHC (:t),
 -- it inlines the aliases, revealing ugly types.
-type HasPut e    = (GetP e ~ P)
-type HasGet e    = (GetG e ~ G)
-type HasFreeze e = (GetF e ~ F)
-type HasBump   e = (GetB e ~ B)
-type HasIO  e    = (GetI e ~ I)
+type HasPut e    = (GetP e ~ 'P)
+type HasGet e    = (GetG e ~ 'G)
+type HasFreeze e = (GetF e ~ 'F)
+type HasBump   e = (GetB e ~ 'B)
+type HasIO  e    = (GetI e ~ 'I)
 
-type NoPut    e = (NP ~ GetP e)
-type NoGet    e = (NG ~ GetG e)
-type NoBump   e = (NB ~ GetB e)
-type NoFreeze e = (NF ~ GetF e)
-type NoIO     e = (NI ~ GetI e)
+type NoPut    e = ('NP ~ GetP e)
+type NoGet    e = ('NG ~ GetG e)
+type NoBump   e = ('NB ~ GetB e)
+type NoFreeze e = ('NF ~ GetF e)
+type NoIO     e = ('NI ~ GetI e)
 
 type QuasiDeterministic e = (NoIO e)
 type Deterministic e = (NoFreeze e, NoIO e)

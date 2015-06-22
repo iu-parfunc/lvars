@@ -1,7 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-{-| 
+{-# LANGUAGE CPP, FlexibleInstances, FunctionalDependencies,
+             MultiParamTypeClasses, TypeFamilies #-}
+{-|
 
   A simple type class for data that can be split into pieces for parallel operation,
   and then reassembled.
@@ -11,10 +10,6 @@
 module Data.Splittable.Class
        (Split(..))
        where
-
-import Control.Applicative
-import qualified Data.Foldable as F
-import System.IO.Unsafe (unsafePerformIO)
 
 -- | Data that can be split into balanced pieces.  The main application of this is
 -- parallel consumption of the data.
@@ -34,14 +29,11 @@ class Split a where
 
   -- -- | The inverse of split.
   -- combine :: [a] -> a
-  
---  empty   :: a 
+
+--  empty   :: a
 
 -- In some cases we may know exactly how many pieces the underlying data structur
 -- can produce efficiently.
-  
+
 --  split2  :: a -> (a,a)
 --  split3  :: a -> (a,a,a)
-
-
-

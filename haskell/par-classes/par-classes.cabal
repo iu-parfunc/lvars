@@ -38,7 +38,7 @@ Source-repository head
 
 Library
 
-  Exposed-modules: 
+  Exposed-modules:
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
@@ -50,3 +50,4 @@ Library
                , deepseq >= 1.1
                , ghc-prim >= 0.3
 
+  ghc-options: -Wall
