@@ -1,11 +1,11 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DataKinds #-}  -- For Determinism
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE Unsafe                     #-}
 
 
 {-|
@@ -22,7 +22,7 @@ module Control.LVish.Internal
   (
     -- * Type-safe wrappers around internal components
     Par(..), LVar(..),
-    
+
     -- * Unsafe conversions and lifting
     unWrapPar, unsafeRunPar,
     unsafeConvert, unsafeDet,
@@ -34,22 +34,22 @@ module Control.LVish.Internal
   where
 
 import           Control.Applicative
-import qualified Internal.Control.LVish.SchedIdempotent as L
-import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
+import           Control.LVish.DeepFrz.Internal         (Frzn, Trvrsbl)
 import           Control.Par.EffectSigs
 import           Data.Concurrent.Internal.MonadToss
+import qualified Internal.Control.LVish.SchedIdempotent as L
 
-import qualified Data.Foldable    as F
-import           Data.List (sort)
+import qualified Data.Foldable as F
+import           Data.List     (sort)
 
+import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU
-import qualified Control.Par.Class     as PC
-import qualified Data.Splittable.Class as SC
+import qualified Data.Splittable.Class    as SC
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
   fork = WrapPar . L.fork . unWrapPar
-  internalLiftIO = liftIO  
+  internalLiftIO = liftIO
   liftReadOnly (WrapPar p) = WrapPar p
 
   pbind (WrapPar lp) fn = WrapPar (lp >>= fn')
@@ -65,25 +65,25 @@ instance PU.ParMonad Par where
 -- | The type of parallel computations.  A computation @Par e s a@ may or may not be
 -- deterministic based on the setting of the `d` parameter (of kind `Determinism`).
 -- The `s` parameter is for preventing the escape of @LVar@s from @Par@ computations
--- (just like the @ST@ monad).  
--- 
--- Implementation note: This is a wrapper around the internal `Par` type, only with more type parameters.  
+-- (just like the @ST@ monad).
+--
+-- Implementation note: This is a wrapper around the internal `Par` type, only with more type parameters.
 newtype Par :: EffectSig -> * -> * -> * where
   WrapPar :: L.Par a -> Par e s a
---  deriving (Monad, Functor, Applicative)
 
--- type instance GetSession (Par e s) = s
---- type instance SetSession s2 (Par e s) = Par e s2
+instance PC.LVarSched Par where
+  type LVar Par = L.LVar
 
--- Example type error:
--- _ = foo bar
--- foo :: Deterministic e => Par e s a -> Int
--- foo = undefined
--- bar :: Par (Ef P G F B I) s Int
--- bar = undefined
+  newLV  = WrapPar . L.newLV
+  getLV lv glob delt = WrapPar $ L.getLV lv glob delt
+  putLV lv putter    = WrapPar $ L.putLV lv putter
 
+  stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
 
+  returnToSched = WrapPar $ L.mkPar $ \_k -> L.sched
 
+instance PU.ParThreadSafe Par where
+  unsafeParIO = liftIO
 
 -- | The generic representation of LVars used by the scheduler.  The
 -- end-user can't actually do anything with these and should not try
@@ -97,7 +97,7 @@ newtype LVar s all delt = WrapLVar { unWrapLVar :: L.LVar all delt }
 -- | Unsafe: drops type information to go from the safe `Par` monad to
 -- the internal, dangerous one.
 unWrapPar :: Par e s a -> L.Par a
-unWrapPar (WrapPar p) = p 
+unWrapPar (WrapPar p) = p
 
 -- | This is cheating!  It pays no attention to session sealing (@s@) or to the
 -- determinism level (@d@).
@@ -124,4 +124,4 @@ instance MonadToss (Par e s) where
 
 -- | Unsafe internal operation to lift IO into the Par monad.
 liftIO :: IO a -> Par e s a
-liftIO = WrapPar . L.liftIO   
+liftIO = WrapPar . L.liftIO
