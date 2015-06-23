@@ -1,51 +1,27 @@
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module STTests (tests, runTests) where
 
-import           Control.LVish                    as LV
-import qualified Data.LVar.IVar                   as IV
+import           Control.LVish                  as LV
+import qualified Control.Par.ST                 as PST
+import qualified Control.Par.ST.Vec             as V
+-- import qualified Control.Par.ST.Vec2              as VV
 
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.ST                 (ST)
-import           Control.Monad.ST.Unsafe          (unsafeSTToIO)
-import           Control.Monad.State              (get, put)
-import           Control.Monad.Trans              (lift)
-import qualified Control.Monad.Trans.State.Strict as S
-
-import           Control.Concurrent               (threadDelay)
-
+import qualified Control.Monad.State.Strict     as S
 import           Data.STRef
-import           Data.Vector                      (freeze)
-import           Data.Vector.Mutable              as MV
-import           Debug.Trace
-
-import           Prelude                          hiding (length, read)
-import           System.IO.Unsafe                 (unsafePerformIO)
-
-import           GHC.Prim                         (RealWorld)
-
-import qualified Control.Par.Class                as PC
-import           Control.Par.EffectSigs           (GetG, Getting (G))
+import           Data.Vector                    (freeze)
 
 import           Test.Framework
 import           Test.Framework.Providers.HUnit
-import           Test.Framework.TH                (testGroupGenerator)
-import           Test.HUnit                       (Assertion, Counts (..),
-                                                   assert, assertBool,
-                                                   assertEqual)
-
-import qualified Control.Par.ST                   as PST
-import qualified Control.Par.ST.Vec               as V
--- import qualified Control.Par.ST.Vec2              as VV
-
-import           Control.Par.Class.Unsafe         (ParThreadSafe (unsafeParIO))
+import           Test.Framework.TH              (testGroupGenerator)
+import           Test.HUnit                     (Assertion, assertEqual)
 
 --------------------------------------------------------------------------------
-
---- New Tests for Par/Vec
 
 case_v_t0 :: Assertion
 case_v_t0 = assertEqual "basic forkSTSplit usage"
@@ -57,7 +33,7 @@ t0 = LV.runPar $ V.runParVecT 10 p0
 p0 :: (HasGet e, HasPut e) => PST.ParST (PST.MVectorFlp Int s1) Par e s String
 p0 = do
   V.set 0
-  V.forkSTSplit 5 (V.write 0 5) (V.write 0 120)
+  void $ V.forkSTSplit 5 (V.write 0 5) (V.write 0 120)
   raw <- V.reify
   frozen <- PST.liftST $ freeze raw
   return $ show frozen
@@ -69,15 +45,17 @@ p0 = do
 -- t1 :: String
 -- t1 = LV.runPar $ V.runParVecT 1 p1
 --
--- p1 :: (HasGet e, HasPut e) => PST.ParST (PST.MVectorFlp Int s1) Par e s String
+-- p1 :: forall s e .
+--       (HasGet e, HasPut e) => PST.ParST (PST.MVectorFlp Int s1) Par e s String
 -- p1 = do
 --   V.set 0
---   PST.transmute (\v -> PST.STTup2 v v) $ do
---     PST.STTup2 rawL rawR <- V.reify
---     frozenL <- PST.liftST $ freeze rawL
---     frozenR <- PST.liftST $ freeze rawR
---     return $ show frozenL ++ show frozenR
---
+--   PST.transmute undefined undefined
+--   -- flip PST.transmute (\v -> PST.STTup2 v v) $ undefined
+--     -- PST.STTup2 rawL rawR <- V.reify
+--     -- frozenL <- PST.liftST $ freeze rawL
+--     -- frozenR <- PST.liftST $ freeze rawR
+--     -- return $ show frozenL ++ show frozenR
+
 -- case_v_t2 :: Assertion
 -- case_v_t2 = assertEqual "testing transmute with effects"
 --                  "fromList [120,5] fromList [120,5]fromList [120,5]" t2
@@ -104,14 +82,40 @@ p0 = do
 --   frozen <- PST.liftST$ freeze raw
 --   let result = show frozen ++ " " ++ str
 --   return result
-{-
-splitVec v = (PST.STTup2 (PST.VFlp l) (PST.VFlp r))
-  where
-    len = length v
-    mid = len `quot` 2
-    l = MV.slice 0 mid v
-    r = MV.slice mid (len - mid) v
--}
+
+--------------------------------------------------------------------------------
+
+data Tree a s = Empty
+              | Node (STRef s a) (Tree a s) (Tree a s)
+
+instance PST.STSplittable (Tree a) where
+  type SplitIdx (Tree a) = ()
+
+  splitST () Empty = error "splitST: cannot split empty tree!"
+  splitST () (Node _ left right) = (left, right)
+
+p2 :: forall s ss.
+      PST.ParST (Tree Integer ss) Par ('Ef 'P 'G 'NF 'B 'NI) s String
+p2 = do
+  x <- PST.liftST $ newSTRef 10
+  y <- PST.liftST $ newSTRef 20
+  z <- PST.liftST $ newSTRef 30
+  S.put (Node x (Node y Empty Empty) (Node z Empty Empty))
+  void $ V.forkSTSplit ()
+    (do Node r _ _ <- S.get
+        PST.liftST $ writeSTRef r 99)
+    (do Node r _ _ <- S.get
+        PST.liftST $ writeSTRef r 101)
+
+  (Node _ (Node y' _ _) (Node z' _ _)) <- S.get
+  a1 <- PST.liftST $ readSTRef y'
+  a2 <- PST.liftST $ readSTRef z'
+  return $ show (a1,a2)
+
+case_treeSplit :: Assertion
+case_treeSplit =
+  assertEqual "splitting binary tree" "(99,101)" (runPar $ PST.runParST undefined p2)
+
 --------------------------------------------------------------------------------
 
 tests :: Test
