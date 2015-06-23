@@ -159,6 +159,3 @@ set val = do
 -- MV.unsafeMove MV.unsafeTail
 -- MV.unsafeCopy MV.unsafeNew MV.unsafeTake
 -}
-
-unFlp :: MVectorFlp va s1 -> MV.MVector s1 va
-unFlp (VFlp v) = v

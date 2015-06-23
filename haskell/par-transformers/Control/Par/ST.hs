@@ -79,7 +79,7 @@ newtype VecSplit = SplitAt Int
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
-newtype MVectorFlp a s = VFlp (MV.MVector s a)
+newtype MVectorFlp a s = VFlp { unFlp :: MV.MVector s a }
 
 instance STSplittable (MVectorFlp a) where
   type SplitIdx (MVectorFlp a) = Int
