@@ -42,7 +42,7 @@ module Control.Par.ST
 
 
 import Control.Monad.ST (ST)
-import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
+import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import qualified Control.Monad.State.Strict as S
 import Control.Monad.Trans (lift)
 
@@ -58,10 +58,6 @@ import Control.Par.EffectSigs
 import GHC.Conc (getNumProcessors)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-{-# INLINE unsafeCastST #-}
-unsafeCastST :: ST s1 a -> ST s2 a
-unsafeCastST = unsafeIOToST . unsafeSTToIO
-
 --------------------------------------------------------------------------------
 -- | The class of types that can be modified in ST computations, and whose state can
 -- be partitioned into disjoint pieces to be passed linearly to exactly one parallel
@@ -71,11 +67,6 @@ class STSplittable (ty :: * -> *) where
   type SplitIdx ty :: *
   -- | `splitST` does the actual splitting.
   splitST :: SplitIdx ty -> ty s -> (ty s, ty s)
-
--- | The ways to split a vector.  For now we only allow splitting into two pieces at a
--- given index.  In the future, other ways of partitioning the set of elements may be
--- possible.
-newtype VecSplit = SplitAt Int
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
@@ -332,9 +323,10 @@ mkParMapM :: forall elt s1 stt p e s .
            -> ParST (stt s1) p e s ()
 {-# INLINE mkParMapM #-}
 mkParMapM reader writer getsize mksplit fn = do
-  stt <- S.get
   len <- getsize
+
   let share = max 1 (len `quot` (numProcs * overPartition))
+
       loopmpm :: Int -> (forall ls . ParST (stt ls) p e s ())
       loopmpm iters
         | iters <= share =
@@ -348,8 +340,6 @@ mkParMapM reader writer getsize mksplit fn = do
         | otherwise = do
             let (iters2,extra) = iters `quotRem` 2
                 iters1 = iters2 + extra
-            forkSTSplit (mksplit iters1)
-              (loopmpm iters1)
-              (loopmpm iters2)
-            return ()
-  return ()
+            S.void $ forkSTSplit (mksplit iters1) (loopmpm iters1) (loopmpm iters2)
+
+  loopmpm len
