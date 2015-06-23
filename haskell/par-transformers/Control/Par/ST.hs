@@ -1,7 +1,8 @@
-{-# LANGUAGE BangPatterns, ConstraintKinds, DataKinds, FlexibleContexts,
-             FlexibleInstances, GADTs, GeneralizedNewtypeDeriving,
-             MultiParamTypeClasses, Rank2Types, ScopedTypeVariables,
-             TupleSections, TypeFamilies, TypeSynonymInstances #-}
+{-# LANGUAGE BangPatterns, ConstraintKinds, CPP, DataKinds,
+             FlexibleContexts, FlexibleInstances, GADTs,
+             GeneralizedNewtypeDeriving, MultiParamTypeClasses,
+             Rank2Types, ScopedTypeVariables, TupleSections,
+             TypeFamilies, TypeSynonymInstances #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -40,6 +41,10 @@ module Control.Par.ST
        )
        where
 
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
