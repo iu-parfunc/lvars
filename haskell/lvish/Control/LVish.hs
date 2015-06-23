@@ -128,9 +128,6 @@ import qualified Internal.Control.LVish.SchedIdempotent as L
 
 --------------------------------------------------------------------------------
 
-import qualified Control.Par.Class        as PC
-import qualified Control.Par.Class.Unsafe as PU
-
 -- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
 -- signature.
 parIO :: HasIO e => IO a -> Par e s a

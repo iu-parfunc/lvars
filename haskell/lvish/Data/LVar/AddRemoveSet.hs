@@ -18,13 +18,12 @@ module Data.LVar.AddRemoveSet
          remove, waitRemovedElem, waitRemovedSize,
 
          freezeSet
-         
+
        ) where
-import qualified Data.Set as S
-import           Control.LVish
-import           Control.LVish.Internal
-import qualified Data.LVar.PureSet as PS
 import           Control.Applicative
+import           Control.LVish
+import qualified Data.LVar.PureSet   as PS
+import qualified Data.Set            as S
 
 -- | The set datatype.
 data AddRemoveSet s a =
@@ -44,7 +43,7 @@ newSet :: Ord a => S.Set a -> Par e s (AddRemoveSet s a)
 newSet set = AddRemoveSet <$> (PS.newSet set) <*> PS.newEmptySet
 -- Alternate version that works if we import `Control.Monad`:
 -- newSet set = ap (fmap AddRemoveSet (PS.newSet set)) PS.newEmptySet
-  
+
 -- | A simple convenience function.  Create a new 'ISet' drawing
 -- initial elements from an existing list.
 newFromList :: Ord a => [a] -> Par e s (AddRemoveSet s a)
@@ -56,30 +55,30 @@ insert :: (HasPut e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
 -- Because the two sets inside an AddRemoveSet are already PureSets,
 -- we really just have to call the provided `insert` method for
 -- PureSet.  We don't need to call `putLV` or anything like that!
-insert !elm (AddRemoveSet added removed) = PS.insert elm added
+insert !elm (AddRemoveSet added _) = PS.insert elm added
 
 -- | Wait for the set to contain a specified element.
 waitAddedElem :: (HasGet e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
 -- And similarly here, we don't have to call `getLV` ourselves.
-waitAddedElem !elm (AddRemoveSet added removed) = PS.waitElem elm added
+waitAddedElem !elm (AddRemoveSet added _) = PS.waitElem elm added
 
 -- | Wait on the size of the set of added elements.
 waitAddedSize :: HasGet e => Int -> AddRemoveSet s a -> Par e s ()
 -- You get the idea...
-waitAddedSize !sz (AddRemoveSet added removed) = PS.waitSize sz added
+waitAddedSize !sz (AddRemoveSet added _) = PS.waitSize sz added
 
 -- | Remove a single element from the set.
 remove :: (HasPut e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
 -- We remove an element by adding it to the `removed` set!
-remove !elm (AddRemoveSet added removed) = PS.insert elm removed
+remove !elm (AddRemoveSet _ removed) = PS.insert elm removed
 
 -- | Wait for a single element to be removed from the set.
 waitRemovedElem :: (HasGet e, Ord a) => a -> AddRemoveSet s a -> Par e s ()
-waitRemovedElem !elm (AddRemoveSet added removed) = PS.waitElem elm removed
+waitRemovedElem !elm (AddRemoveSet _ removed) = PS.waitElem elm removed
 
 -- | Wait on the size of the set of removed elements.
 waitRemovedSize :: HasGet e => Int -> AddRemoveSet s a -> Par e s ()
-waitRemovedSize !sz (AddRemoveSet added removed) = do 
+waitRemovedSize !sz (AddRemoveSet _ removed) = do
    logDbgLn 2 "waitRemovedSize: about to block."
    PS.waitSize sz removed
    logDbgLn 2 "waitRemovedSize: unblocked, returning."

@@ -33,18 +33,12 @@ module Control.LVish.Internal
   )
   where
 
-import           Control.Applicative
-import           Control.LVish.DeepFrz.Internal         (Frzn, Trvrsbl)
 import           Control.Par.EffectSigs
 import           Data.Concurrent.Internal.MonadToss
 import qualified Internal.Control.LVish.SchedIdempotent as L
 
-import qualified Data.Foldable as F
-import           Data.List     (sort)
-
 import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU
-import qualified Data.Splittable.Class    as SC
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where

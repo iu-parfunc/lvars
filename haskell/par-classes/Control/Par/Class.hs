@@ -39,7 +39,7 @@ module Control.Par.Class
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
   , ParIVar(..), IVar
-  -- * Full LVar monads 
+  -- * Full LVar monads
   -- , ParLVar(..)
 
   --  Monotonically growing finite maps
@@ -47,11 +47,11 @@ module Control.Par.Class
 
    -- * Data structures that can be consumed in parallel
   , ParFoldable(..)
-  , Generator(..)    
-    
+  , Generator(..)
+
    -- * (Internal) Abstracting LVar Schedulers.
   , LVarSched(..)
-                   
+
     -- RRN: Not releasing this interface until there is a nice implementation of it:
     --  Channels (Streams)
     --  , ParChan(..)
@@ -62,15 +62,15 @@ module Control.Par.Class
   -- * Simple tracking of WHICH Par monads permit only threadsafe effects
   , ParThreadSafe()
 
-  -- * Reexports    
-  , NFData() 
+  -- * Reexports
+  , NFData()
   , Proxy(Proxy)
   )
 where
 
 import Control.DeepSeq
 import Control.Par.Class.Unsafe
--- import Data.Splittable.Class as Sp 
+-- import Data.Splittable.Class as Sp
 import GHC.Prim (Constraint)
 
 import Control.Par.EffectSigs
@@ -99,7 +99,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- implementations require an Eq Constraint.
   type FutContents m a :: Constraint
   type FutContents m a = () -- By default, no constraints.
-      
+
   -- | Create a potentially-parallel computation, and return a /future/
   -- (or /promise/) that can be used to query the result of the forked
   -- computataion.
@@ -109,7 +109,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- >    fork (p >>= put r)
   -- >    return r
   --
-  spawn  :: (NFData a, HasPut e, FutContents m a) => 
+  spawn  :: (NFData a, HasPut e, FutContents m a) =>
             m e s a -> m e s (Future m s a)
 
   -- | Like 'spawn', but the result is only head-strict, not fully-strict.
@@ -124,7 +124,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- >  spawnP = spawn . return
   spawnP :: (NFData a, HasPut e, FutContents m a) => a -> m e s (Future m s a)
 
-  -- FIXME: We could conceivably elide the HasPut constraints, because spawn does not 
+  -- FIXME: We could conceivably elide the HasPut constraints, because spawn does not
   -- have any possibility of doing a write to memory outside its scope (already allocated).
 
   -- Default implementations:
@@ -143,8 +143,8 @@ type IVar m s a = Future m s a
 --   These are more expressive but may not be supported by all distributed schedulers.
 --
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
-class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where  
-  
+class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
+
   -- | creates a new @IVar@
 --  new  :: m (IVar m a)
   new  :: forall a e s . m e s (Future m s a)
@@ -163,8 +163,8 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   put  :: forall a e s . (FutContents m a, HasPut e, NFData a) =>
           IVar m s a -> a -> m e s ()
   put v a = deepseq a (put_ v a)
-  
-  -- | like 'put', but only head-strict rather than fully-strict.  
+
+  -- | like 'put', but only head-strict rather than fully-strict.
   put_ :: forall a e s . (FutContents m a, HasPut e) =>
           IVar m s a -> a -> m e s ()
 
@@ -183,8 +183,8 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   newFull_ :: (HasPut e, FutContents m a) => a -> m e s (IVar m s a)
   newFull_ a = do v <- new
                   -- This is usually inefficient!
-        	  put_ v a
-        	  return v
+                  put_ v a
+                  return v
 
 --------------------------------------------------------------------------------
 
@@ -211,7 +211,7 @@ class (ParMonad m) => LVarSched (m :: EffectSig -> * -> * -> *)  where
    -- | Do a threshold read on an LVar.  This requires both a "global" and "delta"
    -- handler, and if the underlying Par monad assumes idempotency, both could even
    -- execute for the same value.
-   getLV :: (LVar m a d)                -- ^ the LVar 
+   getLV :: (LVar m a d)                -- ^ the LVar
          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
                                         -- The @Bool@ indicates whether the LVar is FROZEN.
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
@@ -238,7 +238,7 @@ class (ParMonad m) => LVarSched (m :: EffectSig -> * -> * -> *)  where
 
    -- -- | Log a line of debugging output, if supported by the scheduler.
    -- -- The debug message is associated with a "chatter level".
-   -- -- 
+   -- --
    -- -- The default implementation is for this to be a no-op.
    -- logDbgLn :: Int -> String -> m ()
    -- logDbgLn _ _ = return ()
@@ -270,7 +270,7 @@ class (Functor m, Monad m) => ParIMap m  where
   newEmptyMap :: m (IMap m k v)
 
   -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
-  -- 
+  --
   --   As with other container LVars, if a key is inserted multiple times, the values had
   --   better be equal @(==)@, or a multiple-put error is raised.
   insert :: (IMapContents m k v) => k -> v -> IMap m k v -> m ()
@@ -307,18 +307,18 @@ data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 
 -- | Collections that can generate a sequence of elements of the same element type.
--- 
+--
 --   Reason: We have a problem where some types (like Ranges) are splittable, but they are
 --   not containers for arbitrary data.  Thus we introduce a more limited concept of
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).
 --
 --   It is trivial to provide an instance for any type that is already a `Functor`:
---   
+--
 -- > import Data.Foldable as F
 -- > instance Foldable f => Generator (f a) where
 -- >   type ElemOf (f a) = a
--- >   foldrM = F.foldrM 
+-- >   foldrM = F.foldrM
 --
 --   However, we don't provide this blanket instance because it would conflict with
 --   more tailored instances that may be desired for particular containers.  For
@@ -331,14 +331,14 @@ class Generator c where
   -- | Fold all outputs from the generator, sequentially.
   --   The ordering is determined by the generator type, and is whatever
   --   the natural and inexpensive ordering for that type is.
-  --        
+  --
   --   In general this should be used with commutative, associative functions.
-  --   This fold is strict in the accumulator.       
+  --   This fold is strict in the accumulator.
   fold :: (acc -> ElemOf c -> acc) -> acc -> c -> acc
 
   -- | A monadic version of `fold`.
   foldM :: (Monad m) => (acc -> ElemOf c -> m acc) -> acc -> c -> m acc
-  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc  
+  -- foldM :: (Monad m) => (ElemOf c -> acc -> m acc) -> acc -> c -> m acc
   foldM fn zer = fold (\ !acc elm -> acc >>= (`fn2` elm)) (return zer)
      where fn2 !acc elm = fn acc elm
 
@@ -353,30 +353,30 @@ class Generator c where
 
   -- | Execute an action for each output of the generator.
   forM_ :: (Monad m) => c -> (ElemOf c -> m ()) -> m ()
-  forM_ c fn = foldM (\ () x -> fn x) () c 
+  forM_ c fn = foldM (\ () x -> fn x) () c
 
   -- | The same as `forM_` but for a Par monad.
   forMP_ :: (ParMonad m) => c -> (ElemOf c -> m e s ()) -> m e s ()
-  forMP_ c fn= foldMP (\ () x -> fn x) () c 
+  forMP_ c fn= foldMP (\ () x -> fn x) () c
 
 
 -- instance F.Foldable f => Generator (f a) where
 --   type ElemOf (f a) = a
 --   {-# INLINE foldrM #-}
---   foldrM = F.foldrM 
-   
+--   foldrM = F.foldrM
+
 --------------------------------------------------------------------------------
 
 -- class Sp.Generator c e => ParFoldable c e | c -> e where
 
 -- | Collection types which can be consumed in parallel.
-class Generator c => ParFoldable c where  
+class Generator c => ParFoldable c where
   pmapFold :: forall m e s a t .
               (ParFuture m, HasGet e, HasPut e, FutContents m a)
               => (ElemOf c -> m e s a) -- ^ compute one result
-              -> (a -> a -> m e s a)   -- ^ combine two results 
+              -> (a -> a -> m e s a)   -- ^ combine two results
               -> a                 -- ^ initial accumulator value
-              -> c                 -- ^ element generator to consume              
+              -> c                 -- ^ element generator to consume
               -> m e s a
 
 --------------------------------------------------------------------------------
@@ -419,7 +419,7 @@ class Monad m => ParChan snd rcv m | m -> snd, m -> rcv where
 -- they cannot use the regular `MonadTrans` class.  Rather, a
 -- transformer in this class adds additional effects to a `ParMonad`
 -- while leaving the `e` and `s` parameters exposed.
-class ParMonadTrans (t :: (EffectSig -> * -> * -> *) 
+class ParMonadTrans (t :: (EffectSig -> * -> * -> *)
                        -> (EffectSig -> * -> * -> *)) where
-   lift :: ParMonad p => 
+   lift :: ParMonad p =>
            p e s a -> (t p) e s a

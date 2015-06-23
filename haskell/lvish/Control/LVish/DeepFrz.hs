@@ -73,7 +73,7 @@ import Internal.Control.LVish.SchedIdempotent (runPar, runParIO)
 -- Significantly, the freeze at the end of `runParThenFreeze` has /no/ runtime cost, in
 -- spite of the fact that it enables a /deep/ (recursive) freeze of the value returned
 -- by the `Par` computation.
-runParThenFreeze :: DeepFrz a => Par (Ef P G NF B NI) NonFrzn a -> FrzType a
+runParThenFreeze :: DeepFrz a => Par ('Ef 'P 'G 'NF 'B 'NI) NonFrzn a -> FrzType a
 -- runParThenFreeze :: Deterministic e => DeepFrz a => Par e NonFrzn a -> FrzType a
 runParThenFreeze (WrapPar p) = frz $ runPar p
 

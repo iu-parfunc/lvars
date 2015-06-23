@@ -22,13 +22,13 @@ module Data.LVar.PNCounter
          decrement, waitForDecrements,
 
          freezeCounter
-         
+
        ) where
 import           Control.LVish
 import           Control.LVish.Internal
 import qualified Data.Atomics.Counter as AC
 -- LK: FIXME: it can't be okay to use SchedIdempotent if we're using bump, can it?!
-import           Internal.Control.LVish.SchedIdempotent (newLV)
+-- import           Internal.Control.LVish.SchedIdempotent (newLV)
 import           Data.IORef
 
 
@@ -36,7 +36,7 @@ import           Data.IORef
 
 -- LK: LVar around the outside, or PureLVar?  What's the difference?
 data PNCounter s = LVar s (AC.AtomicCounter, AC.AtomicCounter)
-  
+
 -- | Create a new `PNCounter` set to zero.
 newCounter :: Par e s (PNCounter s)
 newCounter = newCounterWithValue 0
