@@ -1,8 +1,8 @@
 module Main where
 
--- import qualified STTests
 import qualified CancelTests
-import Test.Framework
+import qualified STTests
+import           Test.Framework
 
 --------------------------------------------------------------------------------
 
@@ -11,6 +11,6 @@ main = defaultMain alltests
 
 alltests :: [Test]
 alltests =
-       [ -- STTests.tests
-         CancelTests.tests
+       [ STTests.tests
+       , CancelTests.tests
        ]
