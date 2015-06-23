@@ -233,12 +233,26 @@ spawnP a = spawn (return a)
 put :: (HasPut e, Eq a, NFData a) => IVar s a -> a -> Par e s ()
 put v a = deepseq a (put_ v a)
 
+--------------------------------------------------------------------------------
+
+-- NOTE(osa): It's hard to to prevent orphan instances in this case, because
+-- of the associated type:
+--
+--   * ParFuture: Defined in Control.Par.Class
+--   * Par: Defined in Control.LVish.Internal
+--   * IVar: Defined in current module
+--
+-- As long as IVar is not defined in same module with either ParFuture or Par
+-- we'll we have orphan instances.
 
 instance PC.ParFuture Par where
   type Future Par = IVar
   type FutContents Par a = (Eq a)
   spawn_ f = spawn_ f
   get iv = get iv
+
+-- NOTE(osa): This orphan instance is fixable, but we need to separate ParIVar
+-- from ParFuture.
 
 instance PC.ParIVar Par where
   put_ = put_
