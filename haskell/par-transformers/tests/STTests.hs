@@ -94,8 +94,9 @@ instance PST.STSplittable (Tree a) where
   splitST () Empty = error "splitST: cannot split empty tree!"
   splitST () (Node _ left right) = (left, right)
 
-p2 :: forall s ss.
-      PST.ParST (Tree Integer ss) Par ('Ef 'P 'G 'NF 'B 'NI) s String
+p2 :: forall s ss e.
+      (HasPut e, HasGet e) =>
+      PST.ParST (Tree Integer ss) Par e s String
 p2 = do
   x <- PST.liftST $ newSTRef 10
   y <- PST.liftST $ newSTRef 20
