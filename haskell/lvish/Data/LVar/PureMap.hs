@@ -329,21 +329,3 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do 
    sn <- makeStableName x
    return (hashStableName sn)
-
---------------------------------------------------------------------------------
--- Interfaces for generic programming with containers:
-
-instance PC.Generator (IMap k Frzn a) where
-  type ElemOf (IMap k Frzn a) = (k,a)
-  {-# INLINE fold #-}
-  {-# INLINE foldM #-}    
-  {-# INLINE foldMP #-}  
-  fold   fn zer (IMap (WrapLVar lv)) = PC.fold   fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-  foldM  fn zer (IMap (WrapLVar lv)) = PC.foldM  fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-  foldMP fn zer (IMap (WrapLVar lv)) = PC.foldMP fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-
--- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
--- instance.  
--- instance Show k => PC.ParFoldable (IMap k Frzn a) where
-
-
