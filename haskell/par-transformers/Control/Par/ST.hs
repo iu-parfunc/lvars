@@ -28,7 +28,7 @@ module Control.Par.ST
          transmute,
 
          --  Useful utilities
-         for_,
+         for_, mkParMapM,
 --         vecParMap_,
 
          -- * Type class for valid states.
@@ -315,7 +315,6 @@ instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
   {-# INLINE putNI_ #-}
   putNI_ iv v = ParST $ \st -> (,st) <$> PC.putNI_ iv v
 
-{-
 
 --------------------------------------------------------------------------------
 -- | Generic way to build an in-place map operation for a collection state.
@@ -323,7 +322,8 @@ instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
 --   This function reserves the right to sequentialize some iterations.
 mkParMapM :: forall elt s1 stt p e s .
              (STSplittable stt, ParThreadSafe p,
-              PC.ParFuture p, PC.FutContents p (), GetP e ~ 'P, GetG e ~ 'G) =>
+              PC.ParFuture p, HasGet e, HasPut e,
+              PC.ParIVar p) =>
               (forall s2 . Int ->        ParST (stt s2) p e s elt) -- ^ Reader
            -> (forall s2 . Int -> elt -> ParST (stt s2) p e s ())  -- ^ Writer
            -> (forall s2 .               ParST (stt s2) p e s Int) -- ^ Length
@@ -347,11 +347,9 @@ mkParMapM reader writer getsize mksplit fn = do
 
         | otherwise = do
             let (iters2,extra) = iters `quotRem` 2
-                iters1 = iters2+extra
+                iters1 = iters2 + extra
             forkSTSplit (mksplit iters1)
               (loopmpm iters1)
               (loopmpm iters2)
             return ()
   return ()
-
--}

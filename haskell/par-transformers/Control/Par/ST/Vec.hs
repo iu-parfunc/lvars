@@ -74,33 +74,13 @@ reify = do
 
 --------------------------------------------------------------------------------
 
--- TODO: Redo this with the generic mkParMapM:
 -- | Do an in-place parallel map on the vector state.
 --
 --   This function reserves the right to sequentialize some iterations.
 parMapM :: forall s1 va p e s .
-           ( HasPut e, HasGet e, PC.ParIVar p, ParThreadSafe p) =>
+           (HasPut e, HasGet e, PC.ParIVar p, ParThreadSafe p) =>
            (va -> p e s va) -> ParVecT s1 va p e s ()
-parMapM fn = do
-  VFlp vec <- S.get
-  len <- length
-  let share = max 1 (len `quot` (numProcs * overPartition))
-
-      loop :: Int -> (ParVecT s3 va p e s ())
-      loop iters
-        | iters <= share =
-          -- Bottom out to a sequential loop:
-          for_ (0,iters) $ \ ind -> do
-            x <- read ind
-            y <- liftPar $ fn x
-            write ind y
-        | otherwise = do
-          let (iters2,extra) = iters `quotRem` 2
-              iters1 = iters2 + extra
-          forkSTSplit iters1 (loop iters1) (loop iters2)
-          return ()
-
-  loop len
+parMapM = mkParMapM read write length id
 
 overPartition :: Int
 overPartition = 8
