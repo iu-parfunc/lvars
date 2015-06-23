@@ -44,7 +44,6 @@ module Control.Par.ST
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import qualified Control.Monad.State.Strict as S
-import Control.Monad.Trans (lift)
 
 import qualified Data.Vector.Mutable as MV
 import qualified Data.Vector.Storable.Mutable as MS
@@ -234,18 +233,12 @@ for_ (start, end) fn = loop start
            | otherwise = do fn i; loop (i+1)
 
 {-# INLINE transmute #-}
--- transmute :: forall a b s p e ans .
---              (ParMonad p,
---               ParThreadSafe p,
---               STSplittable a,
---               STSplittable b)
---               => (b s -> a s) -> ParST (a s) p e s ans -> ParST (b s) p e s ans
-transmute fn (ParST comp) = do
-  orig <- S.get
-  let -- newSt :: a s
-      newSt = fn orig
-  (res, _) <- lift $ comp newSt
-  return $! res
+transmute :: forall p e s ans a b .
+             ParMonad p =>
+             (b s -> a s) -> ParST (a s) p e s ans -> ParST (b s) p e s ans
+transmute fn (ParST comp) = ParST $ \orig -> do
+  (res, _) <- comp (fn orig)
+  return $! (res, orig)
 
 -- | @forkSTSplit@ takes a split point and two ParST computations.  It gets the
 -- state of the current computation, for example a vector, and then divides up
