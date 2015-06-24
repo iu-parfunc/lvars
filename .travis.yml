@@ -38,7 +38,8 @@ install:
 
 # Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
 script:
- - PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers ";
+ - set -e;
+   PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers ";
    for path in $PKGS; do
     cd ./haskell/$path;
     cabal configure --enable-tests --enable-benchmarks -v2;
