@@ -109,6 +109,30 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
         (b',b'') = splitST spltB b
     in ((STTup2 a' b'), (STTup2 a'' b''))
 
+-- | Safe lifting of a computation on state `A` to one on state `(A,B)`, where
+--   the second component is ignored.
+liftL :: ParMonad p =>
+         (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st1 st2) s0) p) e s1 a
+liftL (ParST f1) = ParST $ \(STTup2 st1 r) ->
+  do (x,l') <- (f1 st1)
+     return (x, STTup2 l' r)
+
+-- | Like `liftL`, but flipped.
+liftR :: ParMonad p =>
+         (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
+liftR (ParST f1) = ParST $ \(STTup2 l st1) ->
+  do (x,new) <- (f1 st1)
+     return (x, STTup2 l new)
+
+-- | Swap the components of a STTup2 computation.
+swap :: ParMonad p =>
+      (ParST ((STTup2 st1 st2) s0) p) e s1 a
+   -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
+swap (ParST f1) = ParST $ \(STTup2 y x) ->
+  do (ans, STTup2 x' y') <- f1 (STTup2 x y)
+     return (ans, STTup2 y' x')
+
+
 -- | A splittable type which contains no information.
 data STUnit s = STUnit
 -- newtype STUnit s = STUnit ()
