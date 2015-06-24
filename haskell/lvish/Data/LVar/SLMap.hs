@@ -446,7 +446,6 @@ instance PC.Generator (IMap k Frzn a) where
     SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
                      zer (L.state lv)
 
-
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split:

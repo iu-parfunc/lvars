@@ -5,7 +5,7 @@
 -- Handlers:
 
 -- | Add one then subtract one to all entries.
-prop_traverse :: [Int] -> Bool 
+prop_traverse :: [Int] -> Bool
 prop_traverse ls = mkSimpleIdentityProp fn (zip ls ls)
   where
     fn mp = IM.traverseMap (\_ x -> return (x+1)) mp >>=
@@ -68,11 +68,11 @@ v7a = fmap (L.sort . F.toList) $
 
 --------------------------------------------------------------------------------
 -- Tests that use `forEachHP`
---------------------------------------------------------------------------------  
+--------------------------------------------------------------------------------
 
 case_v8c :: Assertion
 case_v8c = assertEqual "forEachHP on maps" [101,102] =<< v8c
-           
+
 -- | Similar test with Maps instead of Sets.
 v8c :: IO [Int]
 v8c = fmap (L.sort . F.toList) $
@@ -82,7 +82,7 @@ v8c = fmap (L.sort . F.toList) $
   m2 <- IM.newEmptyMap
   let cb k v = do logDbgLn 1$" [v8c]  Inside callback for Map.. key="++show k
                   IM.insert k (v+100) m2
-  IM.forEachHP (Just hp) m1 cb 
+  IM.forEachHP (Just hp) m1 cb
   logDbgLn 1 " [v8c] Everything set up; about to quiesce..."
   quiesce hp
   logDbgLn 1 " [v8c] quiesce finished, next freeze:"
@@ -100,7 +100,7 @@ case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParQuasiDet v8d
 v8d :: (HasFreeze e, HasPut e) => Par e s [Int]
 v8d = do
   hp <- newPool
-  logDbgLn 1 " [v8d] Got a new pool..."  
+  logDbgLn 1 " [v8d] Got a new pool..."
   m1 <- IM.newFromList [(1,1),(2,2) :: (Int,Int)]
   m2 <- IM.newFromList [(40,40),(50,50)]
   logDbgLn 1 " [v8d] Got two fresh maps..."
@@ -112,7 +112,7 @@ v8d = do
     logDbgLn 1 $ " [v8d] [foreach] Got element: "++show (k,elm)
   logDbgLn 1 " [v8d] Everything set up; about to quiesce..."
   quiesce hp
---  quiesceAll  
+--  quiesceAll
   logDbgLn 1 " [v8d] quiesce finished, next freeze::"
   m <- IM.freezeMap m4
   return (L.sort $ F.toList m)
@@ -122,8 +122,8 @@ v8d = do
 
 -- | Check for sufficient parallelism in handlers
 case_v9a :: Assertion
-case_v9a = assertEqual "make sure there's sufficient parallelism" () =<< 
-  (assertNoTimeOut 1.0 $ 
+case_v9a = assertEqual "make sure there's sufficient parallelism" () =<<
+  (assertNoTimeOut 1.0 $
    runParNonDet $ do
      mp <- IM.newEmptyMap
      IM.forEach mp $ \ c v -> do
@@ -151,7 +151,7 @@ case_handlrDup = runParNonDet $ do
   logDbgLn 1 "[case_handlrDup] Step 1"
   ctr <- I.liftIO$ newIORef 0
   mp  <- IM.newEmptyMap
-  logDbgLn 1 "[case_handlrDup] Step 2"  
+  logDbgLn 1 "[case_handlrDup] Step 2"
   hp  <- newPool
 --  ls <- I.liftIO$ IM.levelCounts mp
 --  logDbgLn 1 $ "[case_handlrDup] Step 3: check slm counts: "++show ls
@@ -162,7 +162,7 @@ case_handlrDup = runParNonDet $ do
 --  ls2 <- I.liftIO$ IM.levelCounts mp
 --  logDbgLn 1 $ "[case_handlrDup] Step 4: Main thread, done registering callback, slm: "++show ls2
   IM.insert 2 2 mp
-  IM.insert 3 3 mp 
+  IM.insert 3 3 mp
   quiesce hp
   sum <- I.liftIO $ readIORef ctr
   I.liftIO $ assertEqual "Should be no duplication in this case" 2 sum
@@ -178,13 +178,13 @@ incr ref = atomicModifyIORef' ref (\x -> (x+1,()))
 fillOne :: (HasPut e, HasGet e) => [(Int, Int)] -> Par e s (TheMap Int s Int)
 -- fillOne :: PC.ParMonad p => [(Int, Int)] -> p (TheMap Int Int)
 fillOne chunks = do
-  mp <- IM.newEmptyMap 
+  mp <- IM.newEmptyMap
   vars <- forM chunks $ \ (start,end) -> do
     iv <- IV.new
     fork $ do
       T.for_ (start, end)$ \n -> IM.insert n n mp
       IV.put iv () -- Mark the chunk as complete.
-    return iv  
+    return iv
   -- Sequentially block on all of them:
   forM_ vars IV.get
   return mp
@@ -192,7 +192,7 @@ fillOne chunks = do
 insertionTest :: [(Int, Int)] -> IO (Bool, Word64)
 insertionTest chunks = do
   mp <- timeit$ runParThenFreezeIO $ isND $ fillOne chunks
-  let matches = PC.fold (\b (k,v) -> b && k == v) True mp
+  let matches = PC.fold (\b (k::Int,v::Int) -> b && k == v) True mp
 --  summed  <- SLM.foldlWithKey id (\s _ v -> return $! s + fromIntegral v) 0 slm
 --  return (matches, summed)
   error "FINISHME"
@@ -201,28 +201,28 @@ insertionTest chunks = do
 -- -- Concurrent insertion of the same values:
 -- slm2 :: IO (Bool, Word64)
 -- slm2 = insertionTest (replicate numCapabilities (1,mediumSize))
--- case_slm2 :: Assertion  
+-- case_slm2 :: Assertion
 -- case_slm2 = slm2 >>= assertEqual "test concurrent insertion for SkipListMap (#2)" (True, expectedSum)
 
 -- -- Same, but in the opposite order:
 -- -- Takes much longer (in parallel)!! Why?
 -- slm3 :: IO (Bool, Word64)
 -- slm3 = insertionTest (replicate numCapabilities (mediumSize,1))
--- case_slm3 :: Assertion 
+-- case_slm3 :: Assertion
 -- case_slm3 = slm3 >>= assertEqual "test concurrent insertion for SkipListMap (#3)" (True, expectedSum)
 
 -- slm4 :: IO (Bool, Word64)
 -- slm4 = insertionTest (splitRange numCapabilities (1,mediumSize))
--- case_slm4 :: Assertion 
+-- case_slm4 :: Assertion
 -- case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
 
 
 
 --------------------------------------------------------------------------------
--- Parallel folding  
+-- Parallel folding
 --------------------------------------------------------------------------------
 
--- case_parfoldslm1 :: Assertion 
+-- case_parfoldslm1 :: Assertion
 -- case_parfoldslm1 =
 --   assertEqual "test concurrent insertion for SkipListMap (#4)" expectedSum =<<
 --     (do slm <- fillOne (splitRange numCapabilities (1,mediumSize))

@@ -250,12 +250,6 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
 
--- | /O(1)/: Convert from an `IMap` to a plain `Data.Map`.
---   This is only permitted when the `IMap` has already been frozen.
---   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.
-fromIMap :: IMap k Frzn a -> M.Map k a
-fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
-
 -- | Traverse a frozen map for side effect.  This is useful (in comparison with more
 -- generic operations) because the function passed in may see the key as well as the
 -- value.
@@ -331,3 +325,5 @@ unsafeName :: a -> Int
 unsafeName x = unsafePerformIO $ do
    sn <- makeStableName x
    return (hashStableName sn)
+
+--------------------------------------------------------------------------------

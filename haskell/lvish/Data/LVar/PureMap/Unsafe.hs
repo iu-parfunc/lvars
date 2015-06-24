@@ -10,9 +10,9 @@ module Data.LVar.PureMap.Unsafe
          -- * Unsafe operations:
          unsafePeekKey,
 --         unsafeGetOrInit, unsafeInsertIfAbsent,
-         
+
          -- * These are here only to reexport downstream:
-         IMap(..), forEachHP
+         IMap(..), forEachHP, fromIMap
        )
        where
 
@@ -31,7 +31,9 @@ import qualified Data.Foldable as F
 import qualified Data.Map.Strict as M
 import           Data.List (intersperse)
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+import qualified Control.Par.Class        as PC
 
+import           Data.Par.Map () -- For instances.
 
 ------------------------------------------------------------------------------
 -- IMaps implemented on top of LVars:
@@ -40,14 +42,14 @@ import           System.IO.Unsafe (unsafeDupablePerformIO)
 -- | The map datatype itself.  Like all other LVars, it has an @s@ parameter (think
 --  `STRef`) in addition to the @a@ parameter that describes the type of elements
 -- in the set.
--- 
+--
 -- Performance note: There is only /one/ mutable location in this implementation.  Thus
 -- it is not a scalable implementation.
 newtype IMap k s v = IMap (LVar s (IORef (M.Map k v)) (k,v))
 
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (IMap k s v) where
-  IMap lv1 == IMap lv2 = state lv1 == state lv2 
+  IMap lv1 == IMap lv2 = state lv1 == state lv2
 
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
@@ -69,7 +71,7 @@ instance OrderedLVarData1 (IMap k) where
 instance F.Foldable (IMap k Frzn) where
   foldr fn zer (IMap lv) =
     let set = unsafeDupablePerformIO (readIORef (state lv)) in
-    F.foldr fn zer set 
+    F.foldr fn zer set
 
 -- Of course, the stronger `Trvrsbl` state is still fine for folding.
 instance F.Foldable (IMap k Trvrsbl) where
@@ -96,7 +98,7 @@ instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs added to
 -- the map, optionally enrolled in a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
+forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> IMap k s v                  -- ^ Map to listen to
           -> (k -> v -> Par e s ())      -- ^ callback
           -> Par e s ()
@@ -109,7 +111,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
     globalCB ref = do
       mp <- L.liftIO $ readIORef ref -- Snapshot
-      unWrapPar $ 
+      unWrapPar $
         traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
 
 ------------------------------------------------------------------------------
@@ -123,11 +125,11 @@ unsafePeekKey key (IMap (WrapLVar lv)) = do
 
 -- | A generic initialize proceedure that returns a preexisting value, if it exists,
 -- otherwise filling in a new "bottom" value and returning it.
---     
+--
 -- The boolean return value is @True@ iff a new, fresh entry was created.
 unsafeGetOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           key -- ^ The key to lookup or populate.
-          -> IMap key s (f s a) 
+          -> IMap key s (f s a)
           -> Par e s (Bool, f s a)
 unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
  where
@@ -135,20 +137,20 @@ unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
   -- The tension here is that we can't do IO during an atomicModifyIORef.
   go1 = do
     let mpref = (L.state lv)
-    mp <- liftIO$ readIORef mpref  
-    case M.lookup key mp of 
+    mp <- liftIO$ readIORef mpref
+    case M.lookup key mp of
       Just x -> return (False,x)
       Nothing -> go2
-  go2 = do 
+  go2 = do
            bot <- G.newBottom
-           liftIO$ atomicModifyIORef' (L.state lv) $ \ mp -> 
+           liftIO$ atomicModifyIORef' (L.state lv) $ \ mp ->
              -- Here we pay the cost of a SECOND lookup.  Ouch!
              case M.lookup key mp of
                Nothing -> (M.insert key bot mp,(True,bot))
                -- Oops! it appeared in the meantime.  Our allocation was still wasted:
                Just x  -> (mp,(False,x))
 
--- FIXME: need a delta-thresh!          
+-- FIXME: need a delta-thresh!
 --      act <- putLV_ (unWrapLVar lv) putter
 
 
@@ -157,13 +159,30 @@ unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
 -- | An unsafe way to race to insert.  Returns Nothing if the insert is successful,
 -- and the found value otherwise.
 unsafeInsertIfAbsent :: (HasBump e, Ord k) => k -> v -> IMap k s v -> Par e s (Maybe v)a
-unsafeInsertIfAbsent key val (IMap (WrapLVar lv)) = liftIO$ 
-  atomicModifyIORef' (L.state lv) $ \ mp -> 
+unsafeInsertIfAbsent key val (IMap (WrapLVar lv)) = liftIO$
+  atomicModifyIORef' (L.state lv) $ \ mp ->
     case M.lookup key mp of
       Nothing -> (M.insert key val mp,Nothing)
       -- Oops! it appeared in the meantime.  Our allocation was still wasted:
       x@(Just _) -> (mp,x)
 
--- FIXME: need a delta-thresh!          
+-- FIXME: need a delta-thresh!
 --      act <- putLV_ (unWrapLVar lv) putter
 -}
+
+--------------------------------------------------------------------------------
+
+-- | /O(1)/: Convert from an `IMap` to a plain `Data.Map`.
+--   This is only permitted when the `IMap` has already been frozen.
+--   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.
+fromIMap :: IMap k Frzn a -> M.Map k a
+fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
+
+instance PC.Generator (IMap k Frzn a) where
+  type ElemOf (IMap k Frzn a) = (k,a)
+  {-# INLINE fold #-}
+  fold fn zer mp = PC.fold fn zer (fromIMap mp)
+
+  {-# INLINE foldMP #-}
+  -- | More efficient, not requiring unsafePerformIO or risk of duplication.
+  -- foldMP fn zer mp = foldMP fn zer (fromIMap mp)

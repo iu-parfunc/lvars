@@ -237,10 +237,13 @@ for_ (start, end) fn = loop start
    loop !i | i == end  = return ()
            | otherwise = do fn i; loop (i+1)
 
+-- | Apply a user-provided transformation function.  Warning: this is
+-- unsafe because the user can destroy alias-freedom.
 {-# INLINE transmute #-}
+{-# DEPRECATED transmute "transmute allows violation of alias-freedom" #-}
 transmute :: forall p e s ans a b .
              ParMonad p =>
-             (b s -> a s) -> ParST (a s) p e s ans -> ParST (b s) p e s ans
+             (b s -> a s) -> (ParST (a s) p) e s ans -> (ParST (b s) p) e s ans
 transmute fn (ParST comp) = ParST $ \orig -> do
   (res, _) <- comp (fn orig)
   return $! (res, orig)
