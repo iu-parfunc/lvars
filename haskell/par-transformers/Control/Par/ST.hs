@@ -72,6 +72,14 @@ class STSplittable (ty :: * -> *) where
   -- | `splitST` does the actual splitting.
   splitST :: SplitIdx ty -> ty s -> (ty s, ty s)
 
+-- | A valid state for a ParST computation provides various recipes
+-- and combinators for creation, splitting, and "zooming" on sub-parts.
+class STSplittable ty => ParSTState ty where
+  -- TODO: unless we think of something else to put in here.  This
+  -- should be a stand-alone type family:
+  type NewRecipe ty :: *
+
+
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
 newtype MVectorFlp a s = VFlp { unFlp :: MV.MVector s a }
@@ -83,6 +91,7 @@ instance STSplittable (MVectorFlp a) where
     let lvec = MV.slice 0 mid vec
         rvec = MV.slice mid (MV.length vec - mid) vec
     in (VFlp lvec, VFlp rvec)
+
 ------------------------------------------------------------
 
 -- | An annoying type wrapper simply for the purpose of arranging for the 's' parameter

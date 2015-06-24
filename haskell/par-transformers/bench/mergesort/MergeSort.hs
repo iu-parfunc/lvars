@@ -1,19 +1,19 @@
-{-# LANGUAGE MultiParamTypeClasses #-}                                                         
-{-# LANGUAGE ScopedTypeVariables #-}                                                           
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}                                                    
-{-# LANGUAGE TypeFamilies #-}                                                                  
-{-# LANGUAGE ConstraintKinds #-}                                                               
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}                                                             
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns  #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP, ForeignFunctionInterface #-}
 
 module Main(main) where
 
---module MergeSort 
+--module MergeSort
 --       (
 --         runTests
 --       )
@@ -90,14 +90,14 @@ newMV   x     = MV.unsafeNew   x
 readMV  x y   = MV.unsafeRead  x y
 writeMV x y z = MV.unsafeWrite x y z
 sliceMV x y z = MV.unsafeSlice x y z
-copyMV  x y   = MV.unsafeCopy  x y 
+copyMV  x y   = MV.unsafeCopy  x y
 #else
 thawit  x     = IMV.thaw   x
 newMV   x     = MV.new   x
 readMV  x y   = MV.read  x y
 writeMV x y z = MV.write x y z
 sliceMV x y z = MV.slice x y z
-copyMV  x y   = MV.copy  x y 
+copyMV  x y   = MV.copy  x y
 #endif
 {-# INLINE thawit #-}
 {-# INLINE newMV #-}
@@ -113,47 +113,49 @@ runTests :: Bool
 runTests = True
 
 -- | Generate a random vector of length N and sort it using parallel
--- in-place merge sort. 
+-- in-place merge sort.
 {-# INLINE wrapper #-}
 wrapper :: Int -> Int -> Int -> SSort -> SMerge -> ParSort -> String
 wrapper size st mt sa ma mode =
-  LV.runPar $ V.runParVec2T (0,size) $ 
+  LV.runPar $ V.runParVec2T (0,size) $
   computation size st mt sa ma mode
 
 {-# INLINE computation #-}
-computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (), 
-                PC.ParFuture parM) => 
-               Int -> Int -> Int -> SSort -> SMerge -> ParSort -> 
+computation :: (ParThreadSafe parM, PC.ParMonad parM, PC.FutContents parM (),
+                PC.ParFuture parM) =>
+               Int -> Int -> Int -> SSort -> SMerge -> ParSort ->
                V.ParVec2T s Int32 Int32 parM String
 computation size st mt sa ma mode = do
 
-  -- test setup: 
-  randVec <- liftST$ mkRandomVec size    
-  
+  -- test setup:
+  randVec <- liftST$ mkRandomVec size
+
+  -- WARNING: this is not safe! To do this with a safe API will require
+  -- some proper "zooming" combinators, probably:
   STTup2 (VFlp left) (VFlp right) <- SS.get
   SS.put (STTup2 (VFlp randVec) (VFlp right))
 
   internalLiftIO$ performGC
-  internalLiftIO$ putStrLn "about to start timing"  
+  internalLiftIO$ putStrLn "about to start timing"
   internalLiftIO$ hFlush stdout
-  start <- internalLiftIO$ getCurrentTime  
+  start <- internalLiftIO$ getCurrentTime
   -- post condition: left array is sorted
   case mode of
-    InPlace  -> mergeSort st mt sa ma 
-    OutPlace -> mergeSortOutPlace st mt sa ma 
+    InPlace  -> mergeSort st mt sa ma
+    OutPlace -> mergeSortOutPlace st mt sa ma
   end <- internalLiftIO$ getCurrentTime
 
   internalLiftIO$ putStrLn "finished run"
   internalLiftIO$ hFlush stdout
-  
+
   let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
-    
+
   (rawL, rawR) <- V.reify
   frozenL <- liftST$ IMV.freeze rawL
-  
+
   internalLiftIO$ putStrLn$ "Is Sorted?: "++show (checkSorted frozenL)
-  internalLiftIO$ putStrLn$ "SELFTIMED: "++show runningTime  
-  
+  internalLiftIO$ putStrLn$ "SELFTIMED: "++show runningTime
+
 --  return $ show frozenL
   return$ "done"
 
@@ -161,9 +163,9 @@ computation size st mt sa ma mode = do
 -- size in the right position, sort the left vector.
 {-# INLINE mergeSort #-}
 mergeSort :: (ParThreadSafe parM, PC.FutContents parM (),
-              PC.ParFuture parM, Ord elt, Show elt) => 
-             Int -> Int -> SSort -> SMerge -> 
-             V.ParVec2T s1 elt elt parM ()  
+              PC.ParFuture parM, Ord elt, Show elt) =>
+             Int -> Int -> SSort -> SMerge ->
+             V.ParVec2T s1 elt elt parM ()
 mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
 
@@ -174,8 +176,8 @@ mergeSort !st !mt !sa !ma = do
       VAISort -> seqSortL2
       CSort -> cilkSeqSort
       _ -> seqSortL
-   else do  
-    let sp = (len `quot` 2)              
+   else do
+    let sp = (len `quot` 2)
     forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
@@ -183,19 +185,19 @@ mergeSort !st !mt !sa !ma = do
             (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
-      (do len <- V.lengthL                                                                    
-          let sp = (len `quot` 2)                                                              
+      (do len <- V.lengthL
+          let sp = (len `quot` 2)
           forkSTSplit (sp,sp)
-            (mergeSort st mt sa ma)        
+            (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
     mergeTo1 sp mt ma
 
 mergeSortOutPlace ::
             (ParThreadSafe parM, PC.FutContents parM (),
-              PC.ParFuture parM, Ord elt, Show elt) => 
-             Int -> Int -> SSort -> SMerge -> 
-             V.ParVec2T s1 elt elt parM ()  
+              PC.ParFuture parM, Ord elt, Show elt) =>
+             Int -> Int -> SSort -> SMerge ->
+             V.ParVec2T s1 elt elt parM ()
 mergeSortOutPlace !st !mt !sa !ma = do
   undefined
 {-
@@ -241,38 +243,38 @@ main = do
             []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
             [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
 
-            [sz, st, mt, sa, ma] -> 
+            [sz, st, mt, sa, ma] ->
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma, InPlace)
-            
-            [sz, st, mt, sa, ma, mode] -> 
+
+            [sz, st, mt, sa, ma, mode] ->
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma, Prelude.read mode)
   putStrLn $ wrapper sz st mt sa ma mode
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int32)
-mkRandomVec len =  
+mkRandomVec len =
   -- Annoyingly there is no MV.generate:
   do g <- create
      v <- IMV.thaw $ IMV.generate len fromIntegral
      loop 0 v g
      return v
- where 
+ where
   -- Note: creating 2^24 elements takes 1.6 seconds under -O2 but 36
   -- seconds under -O0.  This sorely needs optimization!
   loop n vec g | n == len  = return vec
-	       | otherwise = do 
+	       | otherwise = do
 --    let (offset,g') = randomR (0, len - n - 1) g
     offset <- uniformR (0, len - n - 1) g
     MV.swap vec n (n + offset)
     loop (n+1) vec g
-    
+
 checkSorted :: IMV.Vector Int32 -> Bool
-checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $ 
+checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
                   IMV.imap (\i elem -> (fromIntegral i == elem)) vec
 
-  
+
 
 ---------------
 
@@ -280,12 +282,12 @@ checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
 mergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
-             PC.ParFuture parM) => 
+             PC.ParFuture parM) =>
             Int -> Int -> SMerge -> V.ParVec2T s elt elt parM ()
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
-                  
+
 -- | Parallel merge kernel.
 {-# INLINE pMergeTo2 #-}
 pMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt, PC.FutContents parM (),
@@ -295,12 +297,12 @@ pMergeTo2 threshold ma = do
 --  len <- length1
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
   let l1 = MV.length v1
-      l2 = MV.length v2  
+      l2 = MV.length v2
       len = MV.length v3
 
 --  if len < threshold then
-  if l1 < threshold || l2 < threshold then 
-    case ma of 
+  if l1 < threshold || l2 < threshold then
+    case ma of
 --      TMerge -> sMergeTo2
       CMerge -> cilkSeqMerge
       MPMerge -> seqmerge
@@ -312,29 +314,29 @@ pMergeTo2 threshold ma = do
       (pMergeTo2 threshold ma)
       (pMergeTo2 threshold ma)
     return ()
-{-      
--- | Sequential merge kernel.      
-sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>       
+{-
+-- | Sequential merge kernel.
+sMergeTo2 :: (ParThreadSafe parM, Ord elt, Show elt) =>
             ParVec21T s elt parM ()
 sMergeTo2 = do
   (lenL, lenR) <- lengthLR1
   sMergeTo2K 0 lenL 0 lenR 0
-      
+
 sMergeTo2K !lBot !lLen !rBot !rLen !index
   | lBot == lLen && rBot < rLen = do
     value <- indexR1 rBot
     write2 index value
-    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)      
+    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
 
   | rBot >= rLen && lBot < lLen = do
     value <- indexL1 lBot
     write2 index value
     sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
-    
+
   | index >= (lLen + rLen) = do
     return ()
 
-  | otherwise = do 
+  | otherwise = do
     left <- indexL1 lBot
     right <- indexR1 rBot
     if left < right then do
@@ -342,8 +344,8 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
       sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
      else do
       write2 index right
-      sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)    
--}    
+      sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
+-}
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
 {-# INLINE mergeTo1 #-}
@@ -358,30 +360,30 @@ mergeTo1 sp threshold ma = do
 -- how this function operates. We are being *very dangerous* and just
 -- not using a small threshold that triggers this issue. t=4 breaks
 -- it, but t=8 seems to work.
---         
+--
 {-# INLINE findSplit #-}
 findSplit :: forall s elt parM . (ParThreadSafe parM, Ord elt, Show elt,
-              PC.ParMonad parM) => 
+              PC.ParMonad parM) =>
 --             (Int -> ParVec21T s elt parM elt) ->
 --             (Int -> ParVec21T s elt parM elt)->
              ParVec21T s elt parM (Int, Int)
 
---findSplit indexLeft indexRight = do                                 
+--findSplit indexLeft indexRight = do
 findSplit = do
-  
-  --(lLen, rLen) <- lengthLR1    
+
+  --(lLen, rLen) <- lengthLR1
   STTup2 (STTup2 (VFlp vl) (VFlp vr)) (VFlp v) <- SS.get
   let lLen = MV.length vl
-      rLen = MV.length vr  
+      rLen = MV.length vr
       split :: Int -> Int -> Int -> Int -> ST s (Int, Int)
       split lLow lHigh rLow rHigh = do
         let lIndex = (lLow + lHigh) `div` 2
             rIndex = (rLow + rHigh) `div` 2
-            
+
         left <- MV.read vl lIndex
         right <- MV.read vr rIndex
         if (lIndex == 0) && (rIndex == 0) then do
-          return (lIndex, rIndex)                    
+          return (lIndex, rIndex)
         else if (lIndex == 0) then do
           rightSub1 <- MV.read vr (rIndex - 1)
           if (rightSub1 <= left)
@@ -406,23 +408,23 @@ findSplit = do
 --  trace (show lLen ++ " " ++ show rLen ++ " ret ans " ++ show ans) $ return ans
   liftST$ split 0 lLen 0 rLen
 
--- | Type alias for a ParST state of ((Vec,Vec), Vec)             
-type ParVec21T s elt parM ans = ParST (STTup2 
-                                       (STTup2 (MVectorFlp elt) 
+-- | Type alias for a ParST state of ((Vec,Vec), Vec)
+type ParVec21T s elt parM ans = ParST (STTup2
+                                       (STTup2 (MVectorFlp elt)
                                                (MVectorFlp elt))
                                        (MVectorFlp elt) s)
                                       parM ans
-                                              
--- | Type alias for a ParST state of (Vec, (Vec, Vec))                                
-type ParVec12T s elt parM ans = ParST (STTup2 
+
+-- | Type alias for a ParST state of (Vec, (Vec, Vec))
+type ParVec12T s elt parM ans = ParST (STTup2
                                        (MVectorFlp elt)
-                                       (STTup2 (MVectorFlp elt) 
+                                       (STTup2 (MVectorFlp elt)
                                                (MVectorFlp elt)) s)
                                       parM ans
-    
-                       
--- | Helpers for manipulating ParVec12T and ParVec21T                                
-{-                                
+
+
+-- | Helpers for manipulating ParVec12T and ParVec21T
+{-
 indexL1 :: (ParThreadSafe parM) => Int -> ParVec21T s elt parM elt
 indexL1 index = do
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
@@ -447,22 +449,22 @@ write1 :: (ParThreadSafe parM) => Int -> elt -> ParVec12T s elt parM ()
 write1 index value = do
   STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
   liftST$ MV.write v1 index value
-             
+
 write2 :: (ParThreadSafe parM) => Int -> elt -> ParVec21T s elt parM ()
 write2 index value = do
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp v2) <- SS.get
   liftST$ MV.write v2 index value
 
-length2 :: (ParThreadSafe parM) => ParVec21T s elt parM Int      
+length2 :: (ParThreadSafe parM) => ParVec21T s elt parM Int
 length2 = do
   STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
   return $ MV.length vec2
-        
+
 length1 :: (ParThreadSafe parM) => ParVec12T s elt parM Int
 length1 = do
   STTup2 (VFlp v1) (STTup2 (VFlp l2) (VFlp r2)) <- SS.get
   return$ MV.length v1
-      
+
 lengthLR1 :: (ParThreadSafe parM) => ParVec21T s elt parM (Int,Int)
 lengthLR1 = do
   STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) (VFlp vec2) <- SS.get
@@ -478,7 +480,7 @@ lengthLR2 = do
   return$ (lenL, lenR)
 -}
 -----
-  
+
 {-# INLINE morphToVec21 #-}
 morphToVec21 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
   let l1 = MV.slice 0 sp vec1
@@ -500,7 +502,7 @@ vec2printState str = do
   f1 <- liftST$ IMV.freeze v1
   f2 <- liftST$ IMV.freeze v2
   internalLiftIO$ putStrLn$ str ++ " " ++ show f1 ++ " " ++ show f2
-  
+
 vec21printState :: (ParThreadSafe parM, Show elt, PC.ParMonad parM) =>
                   String -> ParVec21T s elt parM ()
 vec21printState str = do
@@ -511,21 +513,21 @@ vec21printState str = do
   internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
 
 -----------
-  
+
 {-# INLINE seqmerge #-}
 seqmerge :: forall elt parM s . (ParThreadSafe parM, Ord elt) => ParVec21T s elt parM ()
 seqmerge = do
   STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp dest) <- SS.get
-  
-  let lenL = MV.length left                                                   
+
+  let lenL = MV.length left
       lenR = MV.length right
       len = lenL + lenR
 
---  assert (len == MV.length dest) $ return ()  
+--  assert (len == MV.length dest) $ return ()
   {- INLINE copyRemainingRight #-}
   {- INLINE copyRemainingLeft #-}
   {- INLINE loop #-}
-      
+
   let copyRemainingRight :: Int -> elt -> Int -> ST s ()
       copyRemainingRight !ri !rx !di =
         if ri < (lenR-1) then do
@@ -533,7 +535,7 @@ seqmerge = do
           let ri' = ri + 1
           rx' <- MV.read right ri'
           copyRemainingRight ri' rx' (di + 1)
-         else when (di < len) $ do          
+         else when (di < len) $ do
           MV.write dest di rx
           return ()
       copyRemainingLeft !li !lx !di =
@@ -544,8 +546,8 @@ seqmerge = do
           copyRemainingLeft li' lx' (di + 1)
          else when (di < len) $ do
           MV.write dest di lx
-          return ()      
-            
+          return ()
+
   let loop !li !lx !ri !rx !di =
         let di' = di+1 in
         if lx < rx then do
@@ -560,7 +562,7 @@ seqmerge = do
         else do
           MV.write dest di rx
           let ri' = ri + 1
-          if ri' == lenR then 
+          if ri' == lenR then
             -- copy the rest of left into dest
             copyRemainingLeft li lx di'
            else when (di' < len) $ do
@@ -569,15 +571,15 @@ seqmerge = do
   fstL <- liftST$ MV.read left 0
   fstR <- liftST$ MV.read right 0
   liftST$ loop 0 fstL 0 fstR 0
-  return ()                           
+  return ()
 
-  
+
 
 --------------------------------------------------------------------------------
 #define CILK_SEQ
 #ifdef CILK_SEQ
 -- Requires that we selected STORABLE vectors above!
-    
+
 foreign import ccall unsafe "wrap_seqquick"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
@@ -611,7 +613,7 @@ cilkSeqMerge = do
       (fptr3,_) = MV.unsafeToForeignPtr0 v3
 
   internalLiftIO$ do
-    let len1 = MV.length v1  
+    let len1 = MV.length v1
         len2 = MV.length v2
     withForeignPtr fptr1 $ \vptr1 ->
      withForeignPtr fptr2 $ \vptr2 ->
@@ -629,4 +631,3 @@ cilkSeqSort = undefined
 cilkSeqMerge = undefined
 #endif
 -- End CILK block.
-  
