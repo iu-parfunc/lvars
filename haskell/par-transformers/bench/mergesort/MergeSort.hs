@@ -187,7 +187,7 @@ mergeSortOutPlace ::
              Int -> Int -> SSort -> SMerge ->
              V.ParVec2T s1 e1 e1 p e s ()
 mergeSortOutPlace !st !mt !sa !ma = do
-  undefined
+  error "mergeOutPlace"
 {-
  where
   cpuMergeSort t cpuMS vec =
@@ -237,20 +237,18 @@ checkSorted :: IMV.Vector Int32 -> Bool
 checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
                   IMV.imap (\i elem -> (fromIntegral i == elem)) vec
 
-
-
 ---------------
 
 -- | Outer wrapper for a function that merges input vectors in the
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
 mergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
-             PC.ParFuture p) =>
+             PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
             Int -> Int -> SMerge -> V.ParVec2T s1 e1 e1 p e s ()
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
-  -- transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
-  undefined
+  transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
+  -- error "mergeTo2"
 
 
 -- | Type alias for a ParST state of ((Vec,Vec), Vec)
@@ -267,10 +265,9 @@ pMergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
               PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
              Int -> SMerge -> ParVec21T s1 e1 p e s ()
 pMergeTo2 threshold ma = do
-  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- SS.get
   let l1 = MV.length v1
       l2 = MV.length v2
-      len = MV.length v3
 
   if l1 < threshold || l2 < threshold then
     case ma of
@@ -322,7 +319,7 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
 {-# INLINE mergeTo1 #-}
 mergeTo1 sp threshold ma = do
   V.swapState
-  (mergeTo2 sp threshold ma)
+  mergeTo2 sp threshold ma
   V.swapState
 
 -- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
@@ -380,10 +377,10 @@ findSplit = do
 morphToVec21 :: Int
              -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
              -> STTup2 (STTup2 (SVectorFlp v1) (SVectorFlp v1)) (SVectorFlp v2) s
-morphToVec21 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
+morphToVec21 sp (STTup2 (VFlp vec1) vec2) =
   let l1 = MV.slice 0 sp vec1
       r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
-  STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp vec2)
+  STTup2 (STTup2 (VFlp l1) (VFlp r1)) vec2
 
 morphToVec12 :: Int
              -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
@@ -508,8 +505,8 @@ type CElmT = CUInt
 #else
 #warning "CILK_SEQ isn't defined"
 
-cilkSeqSort = undefined
-cilkSeqMerge = undefined
+cilkSeqSort = error "cilkSeqSort"
+cilkSeqMerge = error "cilkSeqMerge"
 
 #endif
 
@@ -563,7 +560,7 @@ lengthLR1 = do
       lenR = MV.length vecR
   return (lenL, lenR)
 
-lengthLR2 :: (ParThreadSafe p) => ParVec12T s1 s1 p e s (Int,Int)
+lengthLR2 :: (ParThreadSafe p) => ParVec12T s1 s1 p e s (Int, Int)
 lengthLR2 = do
   STTup2 _ (STTup2 (VFlp vecL) (VFlp vecR)) <- SS.get
   let lenL = MV.length vecL

@@ -27,9 +27,9 @@ flag sparks-st
 executable test-mergesort-parST
   main-is:           MergeSort.hs
 
-  -- Including a higher-up dir for schedulers:
-
   c-sources: cilksort.c
+  -- required for REPL, not sure about performance implications
+  cc-options: -fPIC 
 
   -- Must pick ONE of the available schedulers:
   -- if !(flag(trace-st) || flag(direct-st) || flag(sparks-st)  || flag(lvish-st) )
@@ -37,8 +37,7 @@ executable test-mergesort-parST
 
   build-depends:  base == 4.*, deepseq >= 1.3, vector >= 0.10, vector-algorithms,
                   mtl, transformers >= 0.3, time, mwc-random, ghc-prim
---  build-depends:  split >= 0.2,
---  build-depends:  test-framework, test-framework-th, test-framework-hunit, HUnit
+
   build-depends:  par-classes, par-transformers
 
   build-depends:  monad-par, lvish
@@ -59,8 +58,3 @@ executable test-mergesort-parST
 
   ghc-options:       -O2 -threaded -rtsopts -with-rtsopts=-N -Wall
   extensions:        CPP DoAndIfThenElse
-
-  -- My own custom field to change the C compiler:
---  x-cc-name: gcc
---  cc-options: -O3
-
