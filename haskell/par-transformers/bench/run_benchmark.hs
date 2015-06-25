@@ -13,19 +13,18 @@ Where mode is 'desktop', 'server', or 'quick'.
 
 module Main where
 
-import qualified Data.Set as S
+import qualified Data.Set              as S
 
-import GHC.Conc           (getNumProcessors)
-import System.Environment (getEnvironment, getArgs, withArgs)
-import System.IO.Unsafe   (unsafePerformIO)
-import System.Console.GetOpt
+import           GHC.Conc              (getNumProcessors)
+import           System.Console.GetOpt
+import           System.Environment    (getArgs, getEnvironment, withArgs)
+import           System.IO.Unsafe      (unsafePerformIO)
 
-import HSBencher.Types(BenchSpace(..), Benchmark(..), ParamSetting(..), DefaultParamMeaning(..),
-                       -- compileOptsOnly, enumerateBenchSpace, toCompileFlags,
-                       -- makeBuildID, BuildID,
-                       mkBenchmark
-                      )
-import HSBencher.App (defaultMainWithBechmarks, all_cli_options)
+import           HSBencher             (all_cli_options,
+                                        defaultMainModifyConfig)
+import           HSBencher.Types       (BenchSpace (..), Benchmark (..),
+                                        Config (..), DefaultParamMeaning (..),
+                                        ParamSetting (..), mkBenchmark)
 
 --------------------------------------------------------------------------------
 -- Main Script
@@ -38,8 +37,8 @@ data Flag = SetMode Mode
           deriving (Show,Eq)
 
 -- | Supported schedulers:
-data Sched 
-   = TraceST 
+data Sched
+   = TraceST
    | DirectST
    | SparksST
    | LVishST
@@ -53,9 +52,9 @@ options =
      , Option ['h'] ["help"] (NoArg Help)              "report this help message"
 
      , Option [] ["sparks-st"] (NoArg (SetSched SparksST)) "add this scheduler (default is all schedulers)"
-     , Option [] ["direct-st"] (NoArg (SetSched DirectST)) "add this scheduler + one transformer"       
-     , Option [] ["trace-st"]  (NoArg (SetSched TraceST))  "add this scheduler + one transformer"              
-     , Option [] ["lvish-st"]  (NoArg (SetSched LVishST))  "add this scheduler + one transformer"              
+     , Option [] ["direct-st"] (NoArg (SetSched DirectST)) "add this scheduler + one transformer"
+     , Option [] ["trace-st"]  (NoArg (SetSched TraceST))  "add this scheduler + one transformer"
+     , Option [] ["lvish-st"]  (NoArg (SetSched LVishST))  "add this scheduler + one transformer"
      ]
 
 main :: IO ()
@@ -82,14 +81,17 @@ main = do
     putStrLn$ "  [Bench script mode selection]: "++ show modes
     putStrLn$ "  [Bench script Sched selection]: "++ show activeScheds
     putStrLn$ "  [Note: passing through options to HSBencher]: "++unwords passthru
-    withArgs passthru $ 
+    withArgs passthru $
      case modes of
-       [Desktop] -> defaultMainWithBechmarks (bls_desktop activeScheds)
-       [Server]  -> defaultMainWithBechmarks (bls_server activeScheds)
-       [Quick]   -> defaultMainWithBechmarks (bls_quick activeScheds)
-       []        -> defaultMainWithBechmarks (bls_quick activeScheds)
+       [Desktop] -> defaultMainModifyConfig $ addBench (bls_desktop activeScheds)
+       [Server]  -> defaultMainModifyConfig $ addBench (bls_server activeScheds)
+       [Quick]   -> defaultMainModifyConfig $ addBench (bls_quick activeScheds)
+       []        -> defaultMainModifyConfig $ addBench (bls_quick activeScheds)
        ls        -> error$ "Conflicting mode options: "++show ls
-    
+
+addBench :: [Benchmark DefaultParamMeaning] -> Config -> Config
+addBench bs c@Config{benchlist=bl} = c{benchlist = bs ++ bl}
+
 --------------------------------------------------------------------------------
 -- Here are the actual benchmarks:
 --------------------------------------------------------------------------------
@@ -101,14 +103,14 @@ bls_quick ss =
  ]
 
 bls_desktop :: S.Set Sched -> [Benchmark DefaultParamMeaning]
-bls_desktop ss = 
- [ mergeBench [show sz, show  sthresh, show mthresh, sortmode, mergemode] ss 
+bls_desktop ss =
+ [ mergeBench [show sz, show  sthresh, show mthresh, sortmode, mergemode] ss
  | sz <- [ 25 ]
  , (sortmode,mergemode)  <- [ ("CSort","CMerge"),
                               ("VAMSort","CMerge"),
                               ("VAMSort","MPMerge"),
-                              ("VAISort","MPMerge"), 
-                              ("CSort","MPMerge")                              
+                              ("VAISort","MPMerge"),
+                              ("CSort","MPMerge")
 --                              ("VAMSort","TMerge")
                             ]
  , sthresh <- [ 8192 ] -- did 2048 for a while
@@ -125,7 +127,7 @@ mergeBench args@[sz,sthresh,mthresh,sortA,mergeA] ss =
 -- Factor out boilerplate:
 futbench :: String -> [String] -> S.Set Sched -> Benchmark DefaultParamMeaning
 futbench dir args ss =
-   (mkBenchmark ("src/"++dir++"/generated.cabal")  args  (futures ss)) { progname=Just dir }   
+   (mkBenchmark ("src/"++dir++"/generated.cabal")  args  (futures ss)) { progname=Just dir }
 
 --------------------------------------------------------------------------------
 -- Set up some common benchmark config spaces:
@@ -156,7 +158,7 @@ sched s =
 --  Set (Variant$ show s) $ RuntimeEnv "WHICHSCHED" (schedToModule s)
     Set (Variant$ show s) $ CompileParam ("--ghc-options='-DPARSCHED="++(schedToModule s)++"'")
 
--- | By default, we usually don't test meta-par 
+-- | By default, we usually don't test meta-par
 defaultSchedSet :: S.Set Sched
 defaultSchedSet = S.fromList [TraceST, SparksST, LVishST] -- Skip Direct.
   -- (S.fromList [minBound ..]) -- All of them.
@@ -174,7 +176,7 @@ schedToModule s =
   case s of
     TraceST  -> "Control.Monad.Par.Scheds.Trace"
     SparksST -> "Control.Monad.Par.Scheds.Sparks"
-    DirectST -> "Control.Monad.Par.Scheds.Direct"    
+    DirectST -> "Control.Monad.Par.Scheds.Direct"
     LVishST  -> "Control.LVish"
 
 -- TODO: make this an option:
@@ -184,12 +186,12 @@ threadSelection = unsafePerformIO $ do
   p   <- getNumProcessors
   case lookup "THREADS" env of
     Just ls -> return$ map read $ words ls
-    -- Arbitrary default policy 
+    -- Arbitrary default policy
     Nothing
       | p <= 16   -> return  [1 .. p]
       | otherwise -> return$ 1 : [2,4 .. p]
 
--- | Add variation from thread count.    
+-- | Add variation from thread count.
 varyThreads :: BenchSpace DefaultParamMeaning -> BenchSpace DefaultParamMeaning
 varyThreads conf = Or
   [
