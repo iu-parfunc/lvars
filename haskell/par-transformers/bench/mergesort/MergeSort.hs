@@ -109,7 +109,21 @@ copyMV  x y   = MV.copy  x y
 
 --------------------------------------------------------------------------------
 
-main = return ()
+main :: IO ()
+main = do
+  args <- getArgs
+  let (sz, st, mt, sa, ma, mode) = case args of
+            []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
+            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
+
+            [sz, st, mt, sa, ma] ->
+                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
+                     Prelude.read sa, Prelude.read ma, InPlace)
+
+            [sz, st, mt, sa, ma, mode] ->
+                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
+                     Prelude.read sa, Prelude.read ma, Prelude.read mode)
+  putStrLn $ wrapper sz st mt sa ma mode
 
 data SMerge = CMerge | TMerge | MPMerge
   deriving (Show, Read)
@@ -186,16 +200,16 @@ mergeSort !st !mt !sa !ma = do
       _ -> seqSortL
   else do
     let sp = (len `quot` 2)
-    forkSTSplit (sp,sp)
+    void $ forkSTSplit (sp,sp)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
-          forkSTSplit (sp,sp)
+          void $ forkSTSplit (sp,sp)
             (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
       (do len <- V.lengthL
           let sp = (len `quot` 2)
-          forkSTSplit (sp,sp)
+          void $ forkSTSplit (sp,sp)
             (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
@@ -237,26 +251,6 @@ seqSortL2 :: (Ord eL, ParThreadSafe p) => V.ParVec2T s1 eL eR p e s ()
 seqSortL2 = do
   STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
   liftST $ VI.sort vecL
-
-{-
-
-main :: IO ()
-main = do
-  args <- getArgs
-  let (sz, st, mt, sa, ma, mode) = case args of
-            []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
-            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
-
-            [sz, st, mt, sa, ma] ->
-                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
-                     Prelude.read sa, Prelude.read ma, InPlace)
-
-            [sz, st, mt, sa, ma, mode] ->
-                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
-                     Prelude.read sa, Prelude.read ma, Prelude.read mode)
-  putStrLn $ wrapper sz st mt sa ma mode
-
--}
 
 -- | Create a vector containing the numbers [0,N) in random order.
 mkRandomVec :: Int -> ST s (MV.STVector s Int32)
@@ -328,7 +322,6 @@ pMergeTo2 threshold ma = do
       (pMergeTo2 threshold ma)
     return ()
 
-seqmerge = undefined
 findSplit = undefined
 
 -- | Sequential merge kernel.
@@ -432,12 +425,21 @@ findSplit = do
 
 -----
 
+-}
+
 {-# INLINE morphToVec21 #-}
+morphToVec21 :: Int
+             -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
+             -> STTup2 (STTup2 (SVectorFlp v1) (SVectorFlp v1)) (SVectorFlp v2) s
 morphToVec21 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
   let l1 = MV.slice 0 sp vec1
       r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) (VFlp vec2)
 
+morphToVec12 :: Int
+             -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
+             -> STTup2 (SVectorFlp v1) (STTup2 (SVectorFlp v2) (SVectorFlp v2)) s
+{-# INLINE morphToVec12 #-}
 morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
   let l2 = MV.slice 0 sp vec2
       r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
@@ -445,28 +447,8 @@ morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
 
 -----
 
-vec2printState :: (ParThreadSafe parM, Show elt, PC.ParFuture parM,
-                   PC.FutContents parM ()) =>
-                  String -> V.ParVec2T s elt elt parM ()
-vec2printState str = do
-  STTup2 (VFlp v1) (VFlp v2) <- SS.get
-  f1 <- liftST$ IMV.freeze v1
-  f2 <- liftST$ IMV.freeze v2
-  internalLiftIO$ putStrLn$ str ++ " " ++ show f1 ++ " " ++ show f2
-
-vec21printState :: (ParThreadSafe parM, Show elt, PC.ParMonad parM) =>
-                  String -> ParVec21T s elt parM ()
-vec21printState str = do
-  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
-  f1 <- liftST$ IMV.freeze v1
-  f2 <- liftST$ IMV.freeze v2
-  f3 <- liftST$ IMV.freeze v3
-  internalLiftIO$ putStrLn$ str ++ " (" ++ show f1 ++ ", " ++ show f2 ++ "), " ++ show f3 ++ ")"
-
------------
-
 {-# INLINE seqmerge #-}
-seqmerge :: forall elt parM s . (ParThreadSafe parM, Ord elt) => ParVec21T s elt parM ()
+seqmerge :: forall s1 e1 p e s . (ParThreadSafe p, Ord e1) => ParVec21T s1 e1 p e s ()
 seqmerge = do
   STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp dest) <- SS.get
 
@@ -474,19 +456,18 @@ seqmerge = do
       lenR = MV.length right
       len = lenL + lenR
 
---  assert (len == MV.length dest) $ return ()
   {- INLINE copyRemainingRight #-}
   {- INLINE copyRemainingLeft #-}
   {- INLINE loop #-}
 
-  let copyRemainingRight :: Int -> elt -> Int -> ST s ()
+  let copyRemainingRight :: Int -> e1 -> Int -> ST s1 ()
       copyRemainingRight !ri !rx !di =
         if ri < (lenR-1) then do
           MV.write dest di rx
           let ri' = ri + 1
           rx' <- MV.read right ri'
           copyRemainingRight ri' rx' (di + 1)
-         else when (di < len) $ do
+        else when (di < len) $ do
           MV.write dest di rx
           return ()
       copyRemainingLeft !li !lx !di =
@@ -495,7 +476,7 @@ seqmerge = do
           let li' = li + 1
           lx' <- MV.read left li'
           copyRemainingLeft li' lx' (di + 1)
-         else when (di < len) $ do
+        else when (di < len) $ do
           MV.write dest di lx
           return ()
 
@@ -507,7 +488,7 @@ seqmerge = do
           if li' == lenL then
             -- copy the rest of right into dest
             copyRemainingRight ri rx di'
-           else when (di' < len) $ do
+          else when (di' < len) $ do
              lx' <- MV.read left li'
              loop li' lx' ri rx di'
         else do
@@ -516,17 +497,16 @@ seqmerge = do
           if ri' == lenR then
             -- copy the rest of left into dest
             copyRemainingLeft li lx di'
-           else when (di' < len) $ do
-             rx' <- MV.read right ri'
-             loop li lx ri' rx' di'
+          else when (di' < len) $ do
+            rx' <- MV.read right ri'
+            loop li lx ri' rx' di'
   fstL <- liftST$ MV.read left 0
   fstR <- liftST$ MV.read right 0
-  liftST$ loop 0 fstL 0 fstR 0
+  liftST $ loop 0 fstL 0 fstR 0
   return ()
 
--}
-
 --------------------------------------------------------------------------------
+
 #ifdef CILK_SEQ
 #warning "CILK_SEQ defined"
 
