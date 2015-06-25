@@ -32,7 +32,7 @@ reify = do
 
 -- | Swap the two state vectors.
 {-# INLINE swapState #-}
-swapState :: ParThreadSafe p => ParVec2T s a a p e s ()
+swapState :: ParThreadSafe p => ParVec2T s1 a a p e s ()
 swapState = do
   STTup2 (FLPIT vecL) (FLPIT vecR) <- S.get
   S.put $ STTup2 (FLPIT vecR) (FLPIT vecL)
