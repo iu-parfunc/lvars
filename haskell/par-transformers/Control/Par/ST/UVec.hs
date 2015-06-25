@@ -17,7 +17,6 @@
 --   threaded through the monad.
 
 module Control.Par.ST.UVec
-{-
        ( -- * A type alias for parallel computations with @Vector@ state
          ParVecT,
          runParVecT,
@@ -32,7 +31,6 @@ module Control.Par.ST.UVec
          write, read, length, swap,
          drop, take, grow, set
        )
-       -}
        where
 
 import qualified Control.Monad.State.Strict  as S
