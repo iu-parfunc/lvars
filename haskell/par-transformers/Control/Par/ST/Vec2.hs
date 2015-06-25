@@ -1,15 +1,14 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns  #-} 
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 
 -- | A convenience interface -- simply a restriction of `ParST` to the case
 --   of a single, boxed vector as the mutable state.
@@ -20,30 +19,30 @@
 
 module Control.Par.ST.Vec2
        ( -- * A type alias for parallel computations with @Vector@ state
-         ParVec2T, 
+         ParVec2T,
          runParVec2T,
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, 
-         
+         forkSTSplit, liftPar,
+
          -- * Retrieving an explict pointer to the Vector
          reify, liftST,
-         
+
          -- * Common vector operations
          writeL, writeR, readL, readR, lengthL, lengthR,
-         swapL, swapR, dropL, dropR, takeL, takeR, 
+         swapL, swapR, dropL, dropR, takeL, takeR,
          growL, growR, setL, setR, swapState
        )
        where
 
-import Control.Par.ST
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import           Control.Par.Class.Unsafe   (ParThreadSafe)
+import           Control.Par.ST
 
 import qualified Control.Monad.State.Strict as S
-import qualified Data.Vector.Mutable as MU
-import Prelude hiding (read, length, drop, take)
+import qualified Data.Vector.Mutable        as MU
+import           Prelude                    hiding (drop, length, read, take)
 
-#define CONSTRAINT(e) 
+#define CONSTRAINT(e)
 #define FLIPTY MVectorFlp
 #define FLPIT VFlp
 

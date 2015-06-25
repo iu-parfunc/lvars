@@ -42,13 +42,11 @@ Library
                  Control.Par.ST
                  Control.Par.ST.Vec
 
-
-
 -- Temporarily disabled:
---                 Control.Par.ST.Vec2
---                 Control.Par.ST.UVec
---                 Control.Par.ST.UVec2
---                 Control.Par.ST.StorableVec2
+                 Control.Par.ST.Vec2
+                 Control.Par.ST.UVec
+                 Control.Par.ST.UVec2
+                 Control.Par.ST.StorableVec2
 
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG

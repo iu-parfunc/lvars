@@ -1,15 +1,14 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 
 -- | A convenience interface -- simply a restriction of `ParST` to the case
 --   of a single, boxed vector as the mutable state.
@@ -19,30 +18,28 @@
 --   threaded through the monad.
 
 module Control.Par.ST.StorableVec2
-{-       
        ( -- * A type alias for parallel computations with @Vector@ state
-         ParVec2T, 
+         ParVec2T,
          runParVec2T,
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, liftST, 
-       
+         forkSTSplit, liftPar, liftST,
+
          -- * Retrieving an explict pointer to the Vector
-         reify, 
-         
+         reify,
+
          -- * Useful vector helpers
          writeL, writeR, readL, readR, lengthL, lengthR,
          swapL, swapR, dropL, dropR, takeL, takeR,
          growL, growR, setL, setR, swapState
        )
--}
        where
 
-import Control.Par.ST
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
-import qualified Control.Monad.State.Strict as S
+import qualified Control.Monad.State.Strict   as S
+import           Control.Par.Class.Unsafe     (ParThreadSafe)
+import           Control.Par.ST
 import qualified Data.Vector.Storable.Mutable as MU
-import Prelude hiding (read, length, drop, take)
+import           Prelude                      hiding (drop, length, read, take)
 
 #define CONSTRAINT MU.Storable
 #define FLIPTY SVectorFlp
@@ -51,4 +48,3 @@ import Prelude hiding (read, length, drop, take)
 --------------------------------------------------------------------------------
 
 #include "Vec2Common.hs"
-
