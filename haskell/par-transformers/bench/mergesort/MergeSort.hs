@@ -32,11 +32,9 @@ import           Control.Par.Class.Unsafe     (ParThreadSafe (), internalLiftIO)
 import           Control.Par.ST
 
 import           Control.Monad
-import           Control.Monad.IO.Class       (liftIO)
 import           Control.Monad.ST             (ST)
 import qualified Control.Monad.State.Strict   as SS
 import           Data.Time.Clock
-import           Data.Word
 
 #ifdef BOXED
 -- No reason to use the boxed version moving forward:
@@ -59,10 +57,6 @@ import qualified Data.Vector.Unboxed.Mutable  as MV
 import qualified Control.Par.ST.StorableVec2  as V
 import qualified Data.Vector.Storable         as IMV
 import qualified Data.Vector.Storable.Mutable as MV
-import           Foreign.C.Types
-import           Foreign.ForeignPtr           (withForeignPtr)
-import           Foreign.Marshal.Array        (allocaArray)
-import           Foreign.Ptr
 #endif
 
 -- [2013.11.15] Adding new variant:
@@ -71,41 +65,13 @@ import qualified Data.Vector.Algorithms.Merge as VA
 import           Prelude                      hiding (length, read)
 import qualified Prelude
 
-import           Control.Monad.ST.Unsafe      (unsafeIOToST)
 import           System.Environment           (getArgs)
 import           System.IO
-import           System.IO.Unsafe             (unsafePerformIO)
 import           System.Mem
 import           System.Random.MWC            (create, uniformR)
 
-import           Control.Exception            (assert)
 import           Data.Int
-import           Debug.Trace
-
---------------------------------------------------------------------------------
-
-#define SAFE
-#ifndef SAFE
-thawit  x     = IMV.unsafeThaw   x
-newMV   x     = MV.unsafeNew   x
-readMV  x y   = MV.unsafeRead  x y
-writeMV x y z = MV.unsafeWrite x y z
-sliceMV x y z = MV.unsafeSlice x y z
-copyMV  x y   = MV.unsafeCopy  x y
-#else
-thawit  x     = IMV.thaw   x
-newMV   x     = MV.new   x
-readMV  x y   = MV.read  x y
-writeMV x y z = MV.write x y z
-sliceMV x y z = MV.slice x y z
-copyMV  x y   = MV.copy  x y
-#endif
-{-# INLINE thawit #-}
-{-# INLINE newMV #-}
-{-# INLINE readMV #-}
-{-# INLINE writeMV #-}
-{-# INLINE sliceMV #-}
-{-# INLINE copyMV #-}
+-- import           Debug.Trace
 
 --------------------------------------------------------------------------------
 
@@ -153,7 +119,7 @@ computation size st mt sa ma mode = do
 
   -- WARNING: this is not safe! To do this with a safe API will require
   -- some proper "zooming" combinators, probably:
-  STTup2 (VFlp left) (VFlp right) <- SS.get
+  STTup2 _ (VFlp right) <- SS.get
   SS.put (STTup2 (VFlp randVec) (VFlp right))
 
   internalLiftIO $ performGC
@@ -214,9 +180,6 @@ mergeSort !st !mt !sa !ma = do
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
     mergeTo1 sp mt ma
-
-
-mergeTo1 = undefined
 
 mergeSortOutPlace ::
             (ParThreadSafe p, PC.FutContents p (),
@@ -317,12 +280,9 @@ pMergeTo2 threshold ma = do
   else do
     (splitL, splitR) <- findSplit
     let mid = splitL + splitR
-    forkSTSplit ((splitL, splitR), mid)
+    void $ forkSTSplit ((splitL, splitR), mid)
       (pMergeTo2 threshold ma)
       (pMergeTo2 threshold ma)
-    return ()
-
-findSplit = undefined
 
 -- | Sequential merge kernel.
 sMergeTo2 :: (ParThreadSafe p, Ord e1, Show e1) => ParVec21T s1 e1 p e s ()
@@ -357,7 +317,6 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
       write2 index right
       sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
 
-{-
 -- | Mergeing from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
 {-# INLINE mergeTo1 #-}
@@ -365,10 +324,7 @@ mergeTo1 sp threshold ma = do
   V.swapState
   (mergeTo2 sp threshold ma)
   V.swapState
--}
 
-
-{-
 -- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
 -- lengths and gets stuck. It might be a general problem with the
 -- parallel merge algorithm, but is most likely something wrong about
@@ -377,20 +333,15 @@ mergeTo1 sp threshold ma = do
 -- it, but t=8 seems to work.
 --
 {-# INLINE findSplit #-}
-findSplit :: forall s elt parM . (ParThreadSafe parM, Ord elt, Show elt,
-              PC.ParMonad parM) =>
---             (Int -> ParVec21T s elt parM elt) ->
---             (Int -> ParVec21T s elt parM elt)->
-             ParVec21T s elt parM (Int, Int)
-
---findSplit indexLeft indexRight = do
+findSplit :: forall s1 e1 p e s .
+             (ParThreadSafe p, Ord e1, Show e1,
+              PC.ParMonad p) =>
+             ParVec21T s1 e1 p e s (Int, Int)
 findSplit = do
-
-  --(lLen, rLen) <- lengthLR1
   STTup2 (STTup2 (VFlp vl) (VFlp vr)) (VFlp v) <- SS.get
   let lLen = MV.length vl
       rLen = MV.length vr
-      split :: Int -> Int -> Int -> Int -> ST s (Int, Int)
+      split :: Int -> Int -> Int -> Int -> ST s1 (Int, Int)
       split lLow lHigh rLow rHigh = do
         let lIndex = (lLow + lHigh) `div` 2
             rIndex = (rLow + rHigh) `div` 2
@@ -421,11 +372,9 @@ findSplit = do
               else split lLow lIndex rIndex rHigh
 --  ans <- trace "splt" $ liftST$ split 0 lLen 0 rLen
 --  trace (show lLen ++ " " ++ show rLen ++ " ret ans " ++ show ans) $ return ans
-  liftST$ split 0 lLen 0 rLen
+  liftST $ split 0 lLen 0 rLen
 
 -----
-
--}
 
 {-# INLINE morphToVec21 #-}
 morphToVec21 :: Int
