@@ -231,6 +231,8 @@ test-suite test-lvish
                    test-framework-quickcheck2 > 0.2.4, QuickCheck,
                    HUnit, time, text
 
+    ghc-options: -Wall
+
     -- For we duplicate these flag-dependent options:
     if flag(useopt)
       ghc-options: -O2 
@@ -268,6 +270,8 @@ benchmark bench-lvish
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0
+
+    ghc-options: -Wall
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)

@@ -60,7 +60,7 @@ Library
     cpp-options: -DNEWCONTAINERS
     build-depends: containers >= 0.5.4.0
   }
-  ghc-options: -O2 -rtsopts
+  ghc-options: -O2 -rtsopts -Wall
   Other-modules:
 
 test-suite test-par-collections
@@ -93,7 +93,7 @@ test-suite test-par-collections
   -- (4) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
-  ghc-options: -O2 -threaded -rtsopts
+  ghc-options: -O2 -threaded -rtsopts -Wall
 
   -- Debugging info:
   -- ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
