@@ -1,9 +1,6 @@
-
-
 name:                MergeSort
 version:             1.0
 build-type:          Simple
--- build-type:          Custom
 cabal-version:       >=1.8
 
 flag newgeneric
@@ -12,26 +9,25 @@ flag newgeneric
 
 flag lvish-st
   default:           True
-  description: LVish scheduler with ParST transformer on top.  
+  description: LVish scheduler with ParST transformer on top.
 
 flag direct-st
   default:           False
-  description: Direct scheduler with ParST transformer on top.  
+  description: Direct scheduler with ParST transformer on top.
 
 flag trace-st
   default:           False
-  description: Trace scheduler with ParST transformer on top.  
+  description: Trace scheduler with ParST transformer on top.
 
 flag sparks-st
   default:           False
-  description: Sparks scheduler with ParST transformer on top.  
+  description: Sparks scheduler with ParST transformer on top.
 
 --------------------------------------------------------------------------------
 executable test-mergesort-parST
   main-is:           MergeSort.hs
 
   -- Including a higher-up dir for schedulers:
-  hs-source-dirs:    . ../schedulers/
 
   c-sources: cilksort.c
 
@@ -61,10 +57,10 @@ executable test-mergesort-parST
   if flag(lvish-st)
      cpp-options:     -DPARSCHED=Control.LVish
 
-  ghc-options:       -O2 -threaded -rtsopts -with-rtsopts=-N  
-  extensions: CPP DoAndIfThenElse
+  ghc-options:       -O2 -threaded -rtsopts -with-rtsopts=-N -Wall
+  extensions:        CPP DoAndIfThenElse
 
   -- My own custom field to change the C compiler:
 --  x-cc-name: gcc
---  cc-options: -O3 
+--  cc-options: -O3
 
