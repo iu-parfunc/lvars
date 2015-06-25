@@ -202,7 +202,6 @@ mergeSort !st !mt !sa !ma = do
     mergeTo1 sp mt ma
 
 
-cilkSeqSort = undefined
 mergeTo1 = undefined
 
 mergeSortOutPlace ::
@@ -329,7 +328,6 @@ pMergeTo2 threshold ma = do
       (pMergeTo2 threshold ma)
     return ()
 
-cilkSeqMerge = undefined
 seqmerge = undefined
 findSplit = undefined
 
@@ -526,23 +524,24 @@ seqmerge = do
   liftST$ loop 0 fstL 0 fstR 0
   return ()
 
-
+-}
 
 --------------------------------------------------------------------------------
-#define CILK_SEQ
 #ifdef CILK_SEQ
+#warning "CILK_SEQ defined"
+
 -- Requires that we selected STORABLE vectors above!
 
 foreign import ccall unsafe "wrap_seqquick"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
 -- | Sequential Cilk sort, on the left vector, inplace.
-cilkSeqSort :: (Ord eltL, ParThreadSafe parM, PC.ParMonad parM) =>
-               V.ParVec2T s eltL eltR parM ()
+cilkSeqSort :: (Ord eL, ParThreadSafe p, PC.ParMonad p) =>
+               V.ParVec2T s1 eL eR p e s ()
 -- This has the same signature & contract as seqSortL.
 cilkSeqSort = do
   STTup2 (VFlp vecL) (VFlp _) <- SS.get
-  internalLiftIO$ do
+  internalLiftIO $ do
     let len = MV.length vecL
     let (fptr,_) = MV.unsafeToForeignPtr0 vecL
     withForeignPtr fptr $ \ vptr -> do
@@ -557,15 +556,14 @@ foreign import ccall unsafe "wrap_cilksort"
 foreign import ccall unsafe "wrap_seqmerge"
   c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
 
-cilkSeqMerge :: (Ord elt, ParThreadSafe parM, PC.ParMonad parM) =>
-                ParVec21T s elt parM ()
+cilkSeqMerge :: (Ord e1, ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 e1 p e s ()
 cilkSeqMerge = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
   let (fptr1,_) = MV.unsafeToForeignPtr0 v1
       (fptr2,_) = MV.unsafeToForeignPtr0 v2
       (fptr3,_) = MV.unsafeToForeignPtr0 v3
 
-  internalLiftIO$ do
+  internalLiftIO $ do
     let len1 = MV.length v1
         len2 = MV.length v2
     withForeignPtr fptr1 $ \vptr1 ->
@@ -574,21 +572,21 @@ cilkSeqMerge = do
         c_seqmerge (castPtr vptr1) (fromIntegral len1)
                    (castPtr vptr2) (fromIntegral len2)
                    (castPtr vptr3)
-  return ()
 
 -- Element type being sorted:
 type ElmT  = Word32
 type CElmT = CUInt
 #else
+#warning "CILK_SEQ isn't defined"
+
 cilkSeqSort = undefined
 cilkSeqMerge = undefined
-#endif
--- End CILK block.
 
--}
+#endif
 
 --------------------------------------------------------------------------------
 -- Helpers for manipulating ParVec12T and ParVec21T
+
 indexL1 :: (ParThreadSafe p) => Int -> ParVec21T s1 e1 p e s e1
 indexL1 index = do
   STTup2 (STTup2 (VFlp l1) _) _ <- SS.get
