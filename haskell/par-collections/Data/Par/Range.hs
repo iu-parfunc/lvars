@@ -334,7 +334,7 @@ for_ start end _fn | start > end = error "for_: start is greater than end"
 for_ start end fn = loop start
   where
    loop !i | i > end  = return ()
-	   | otherwise = do fn i; loop (i+1)
+           | otherwise = do fn i; loop (i+1)
 
 -- | Inclusive / Inclusive
 {-# INLINE forAcc_ #-}

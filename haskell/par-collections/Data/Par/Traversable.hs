@@ -32,7 +32,6 @@ import Control.Exception (evaluate)
 import Data.Traversable
 import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
-import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
 import Control.Par.EffectSigs
