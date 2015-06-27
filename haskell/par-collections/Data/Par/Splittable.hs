@@ -34,13 +34,10 @@ import Control.Par.Class
 import Data.Traversable
 import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
-import GHC.Conc (numCapabilities)
 
 import Control.Par.Class     as PC
 import Control.Par.EffectSigs
 import Data.Splittable.Class (Split(..)) 
-
-import Debug.Trace
 
 -- -----------------------------------------------------------------------------
 -- Parallel maps over splittable data structures
@@ -65,7 +62,7 @@ import Debug.Trace
 -- on different machines if the reduce function is not associative.  But even then,
 -- platform portability does NOT require a commutative reduce function.  This combinator
 -- will always fold earlier results on the left and later on the right.
-pmapReduce :: forall c e s m a t .
+pmapReduce :: forall c e s m a .
       (Split c, Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a, NFData a)
       => c                 -- ^ element generator to consume
       -> (ElemOf c -> m e s a) -- ^ compute one result
@@ -77,7 +74,7 @@ pmapReduce = mkMapReduce split PC.foldM spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
 -- the folded accumulators.
-pmapReduce_ :: forall c e s m a t .
+pmapReduce_ :: forall c e s m a .
       (Split c, Generator c, HasPut e, HasGet e, ParFuture m, FutContents m a)
       => c                     -- ^ element generator to consume
       -> (ElemOf c -> m e s a) -- ^ compute one result
@@ -88,7 +85,7 @@ pmapReduce_ :: forall c e s m a t .
 pmapReduce_ = mkMapReduce split PC.foldM spawn_
 
 -- | A version of `pmapReduce_` that uses a custom splitting function.
-pmapReduceWith_ :: forall c e s m a t .
+pmapReduceWith_ :: forall c e s m a .
       (Generator c, ParFuture m, HasPut e, HasGet e, FutContents m a)
       => (c -> [c])        -- ^ splitting function.
       -> c                 -- ^ element generator to consume
@@ -127,18 +124,25 @@ asyncForEach gen fn =
 -- | Make a parallel map-reduce function given a custom
 --   function for spawning work.
 mkMapReduce 
-   :: forall c e f s m a t .
+   :: forall c e f s m a .
       (ParFuture m, HasPut f, HasGet f, FutContents m a)
-      => (c -> [c])              -- ^ splitting function
-      -> ((a -> e -> m f s a) -> a -> c -> m f s a) -- ^ sequential fold function
-      -> (m f s a -> m f s (Future m s a)) -- ^ spawn function
-      -> c                       -- ^ element generator to consume
-      -> (e -> m f s a)              -- ^ compute one result
-      -> (a -> a -> m f s a)         -- ^ combine two results 
-      -> a                       -- ^ initial accumulator value
+      => (c -> [c])
+      -- ^ splitting function
+      -> ((a -> e -> m f s a) -> a -> c -> m f s a)
+      -- ^ sequential fold function
+      -> (m f s a -> m f s (Future m s a))
+      -- ^ spawn function
+      -> c
+      -- ^ element generator to consume
+      -> (e -> m f s a)
+      -- ^ compute one result
+      -> (a -> a -> m f s a)
+      -- ^ combine two results 
+      -> a
+      -- ^ initial accumulator value
       -> m f s a
 {-# INLINE mkMapReduce #-}
-mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
+mkMapReduce splitter seqfold spawner genc fn binop initAcc = loop genc
  where
   mapred :: a -> e -> m f s a 
   mapred ac b = do x <- fn b;
@@ -150,14 +154,14 @@ mkMapReduce splitter seqfold spawner genc fn binop init = loop genc
     case splitter gen of
       -- Sequential case, use Generator class:
       [seqchunk] -> -- trace ("[DBG]   Bottoming out to sequential fold..") $ 
-                    seqfold mapred init seqchunk
-        -- foldM mapred init [min..max]
+                    seqfold mapred initAcc seqchunk
+        -- foldM mapred initAcc [min..max]
       [a,b] -> do iv <- spawner$ loop a
                   res2 <- loop b
                   res1 <- get iv
                   binop res1 res2
       ls@(_:_:_) ->
         do ivs <- mapM (spawner . loop) ls
-           M.foldM (\ acc iv -> get iv >>= binop acc) init ivs
-      [] -> return init
+           M.foldM (\ acc iv -> get iv >>= binop acc) initAcc ivs
+      [] -> return initAcc
 

@@ -1,14 +1,15 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
--- FlexibleInstances, UndecidableInstances
-{-# LANGUAGE TypeFamilies, ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE BangPatterns           #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE Trustworthy            #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 {-|
     This module establishes a class hierarchy that captures the
@@ -68,15 +69,14 @@ module Control.Par.Class
   )
 where
 
-import Control.DeepSeq
-import Control.Par.Class.Unsafe
--- import Data.Splittable.Class as Sp
-import GHC.Prim (Constraint)
+import           Control.DeepSeq
+import           Control.Par.Class.Unsafe
+import           GHC.Prim                 (Constraint)
 
-import Control.Par.EffectSigs
+import           Control.Par.EffectSigs
 
-import qualified Data.Foldable as F
-import Data.Proxy (Proxy(..))
+import qualified Data.Foldable            as F
+import           Data.Proxy               (Proxy (..))
 
 --------------------------------------------------------------------------------
 
@@ -300,7 +300,7 @@ class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
 
 -}
 
-data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
+-- data SomeFoldable a = forall f2 . F.Foldable f2 => SomeFoldable (f2 a)
 
 
 --------------------------------------------------------------------------------
@@ -365,13 +365,18 @@ class Generator c where
 --   {-# INLINE foldrM #-}
 --   foldrM = F.foldrM
 
+instance Generator [a] where
+    type ElemOf [a] = a
+    fold  = F.foldl'
+    foldM = F.foldlM
+
 --------------------------------------------------------------------------------
 
 -- class Sp.Generator c e => ParFoldable c e | c -> e where
 
 -- | Collection types which can be consumed in parallel.
 class Generator c => ParFoldable c where
-  pmapFold :: forall m e s a t .
+  pmapFold :: forall m e s a .
               (ParFuture m, HasGet e, HasPut e, FutContents m a)
               => (ElemOf c -> m e s a) -- ^ compute one result
               -> (a -> a -> m e s a)   -- ^ combine two results

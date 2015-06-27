@@ -1,7 +1,12 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE GADTs, RankNTypes, ConstraintKinds #-}
-{-# LANGUAGE DataKinds, KindSignatures, TypeFamilies #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE ConstraintKinds   #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE Unsafe            #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
@@ -15,12 +20,13 @@ module Control.Par.Class.Unsafe
   )
 where
 
--- import Control.Monad.Par.Class
-import Control.Par.EffectSigs
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
-import Data.Proxy as P
+#endif
 
-import Unsafe.Coerce (unsafeCoerce)
+import Control.Par.EffectSigs
+
+import Unsafe.Coerce          (unsafeCoerce)
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
 -- care which thread they execute on.  Thus it is ok to inject additional parallelism.
@@ -30,8 +36,8 @@ import Unsafe.Coerce (unsafeCoerce)
 -- > do m1; m2 == do fork m1; m2
 --
 class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
--- ^ TODO: add SecretClass superclass to prevent users from instancing this.
-  
+-- TODO: add SecretClass superclass to prevent users from instancing this.
+
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
   unsafeParIO :: IO a -> p e s a
