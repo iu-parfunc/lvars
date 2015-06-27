@@ -17,7 +17,7 @@ Description:
   different levels of @Par@ functionality.  See the
   "Control.Par.Class" module for more details.
 
--- Homepage:            https://github.com/simonmar/monad-par
+Homepage:            https://github.com/iu-parfunc/lvars
 License:             BSD3
 License-file:        LICENSE
 Author:              Ryan Newton
@@ -37,7 +37,6 @@ Source-repository head
 
 
 Library
-
   Exposed-modules:
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class

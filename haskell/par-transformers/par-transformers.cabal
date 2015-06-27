@@ -31,10 +31,7 @@ Library
   Exposed-modules:
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
-
                  -- Control.LVish.DeadlockT
-
-
 
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT
@@ -42,7 +39,6 @@ Library
                  Control.Par.ST
                  Control.Par.ST.Vec
 
--- Temporarily disabled:
                  Control.Par.ST.Vec2
                  Control.Par.ST.UVec
                  Control.Par.ST.UVec2
