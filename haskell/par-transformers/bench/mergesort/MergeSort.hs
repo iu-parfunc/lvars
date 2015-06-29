@@ -1,74 +1,66 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DoAndIfThenElse            #-}
 {-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
 
-module Main(main) where
+module Main (main) where
 
---module MergeSort
---       (
---         runTests
---       )
---       where
+import           Control.LVish                   as LVishSched
+import qualified Control.Monad.Par.Scheds.Direct as DirectSched
+import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
+import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
 
-#ifdef PARSCHED
-#warning "Using PARSCHED flag"
-import           PARSCHED                     as LV
-#else
---import Control.LVish      as LV
-import           Control.Monad.Par            as LV
-#endif
-import qualified Control.Par.Class            as PC
-import           Control.Par.Class.Unsafe     (ParThreadSafe (), internalLiftIO)
+import qualified Control.Par.Class               as PC
+import           Control.Par.Class.Unsafe        (ParThreadSafe (),
+                                                  internalLiftIO)
 import           Control.Par.ST
 
 import           Control.Monad
-import           Control.Monad.ST             (ST)
-import qualified Control.Monad.State.Strict   as SS
+import           Control.Monad.ST                (ST)
+import qualified Control.Monad.State.Strict      as SS
 import           Data.Time.Clock
+
+-- TODO(osa): Remove all these CPPs and benchmark all of them in same executable
 
 #ifdef BOXED
 -- No reason to use the boxed version moving forward:
-import qualified Control.Par.ST.Vec2          as V
-import           Data.Vector                  (freeze)
-import qualified Data.Vector                  as IMV
-import           Data.Vector.Mutable          as MV
+import qualified Control.Par.ST.Vec2             as V
+import           Data.Vector                     (freeze)
+import qualified Data.Vector                     as IMV
+import           Data.Vector.Mutable             as MV
 #elif defined(UNBOXED)
 #warning "Using Unboxed Vectors."
 #define VFlp UFlp
 #define MVectorFlp UVectorFlp
-import qualified Control.Par.ST.UVec2         as V
-import           Data.Vector.Unboxed          (freeze)
-import qualified Data.Vector.Unboxed          as IMV
-import qualified Data.Vector.Unboxed.Mutable  as MV
+import qualified Control.Par.ST.UVec2            as V
+import           Data.Vector.Unboxed             (freeze)
+import qualified Data.Vector.Unboxed             as IMV
+import qualified Data.Vector.Unboxed.Mutable     as MV
 #else
 #warning "Using Storable Vectors."
 #define VFlp SFlp
 #define MVectorFlp SVectorFlp
-import qualified Control.Par.ST.StorableVec2  as V
-import qualified Data.Vector.Storable         as IMV
-import qualified Data.Vector.Storable.Mutable as MV
+import qualified Control.Par.ST.StorableVec2     as V
+import qualified Data.Vector.Storable            as IMV
+import qualified Data.Vector.Storable.Mutable    as MV
 #endif
 
 -- [2013.11.15] Adding new variant:
-import qualified Data.Vector.Algorithms.Intro as VI
-import qualified Data.Vector.Algorithms.Merge as VA
-import           Prelude                      hiding (length, read)
+import qualified Data.Vector.Algorithms.Intro    as VI
+import qualified Data.Vector.Algorithms.Merge    as VA
+import           Prelude                         hiding (length, read)
 import qualified Prelude
 
-import           System.Environment           (getArgs)
+import           System.Environment              (getArgs)
 import           System.IO
 import           System.Mem
-import           System.Random.MWC            (create, uniformR)
+import           System.Random.MWC               (create, uniformR)
 
 import           Data.Int
 -- import           Debug.Trace
@@ -89,7 +81,11 @@ main = do
             [sz, st, mt, sa, ma, mode] ->
                     (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
                      Prelude.read sa, Prelude.read ma, Prelude.read mode)
-  putStrLn $ wrapper sz st mt sa ma mode
+
+  putStrLn $ wrapper LVishSched.runPar sz st mt sa ma mode
+  -- FIXME(osa): Is there a way to run this using different schedulers?
+  -- Previous hacky version was never building with alternative schedulers...
+  -- putStrLn $ DirectSched.runPar $ V.runParVec2T (0, sz) $ computation sz st mt sa ma mode
 
 data SMerge = CMerge | TMerge | MPMerge
   deriving (Show, Read)
@@ -103,9 +99,10 @@ data ParSort = InPlace | OutPlace
 -- | Generate a random vector of length N and sort it using parallel
 -- in-place merge sort.
 {-# INLINE wrapper #-}
-wrapper :: Int -> Int -> Int -> SSort -> SMerge -> ParSort -> String
-wrapper size st mt sa ma mode =
-  LV.runPar $ V.runParVec2T (0,size) $ computation size st mt sa ma mode
+wrapper :: ((forall s . Par ('Ef 'P 'G 'NF 'B 'NI) s String) -> String)
+        -> Int -> Int -> Int -> SSort -> SMerge -> ParSort -> String
+wrapper sched size st mt sa ma mode =
+  sched $ V.runParVec2T (0,size) $ computation size st mt sa ma mode
 
 {-# INLINE computation #-}
 computation :: (ParThreadSafe p, PC.ParMonad p, PC.FutContents p (),
