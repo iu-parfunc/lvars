@@ -2,90 +2,39 @@
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DoAndIfThenElse            #-}
-{-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
-module Main (main) where
+module Control.Par.MergeSort where
 
-import           Control.LVish                   as LVishSched
-import qualified Control.Monad.Par.Scheds.Direct as DirectSched
-import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
-import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
+import           Control.LVish                as LVishSched
+-- TODO(osa): Disabling these until we implement instances:
+-- import qualified Control.Monad.Par.Scheds.Direct as DirectSched
+-- import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
+-- import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
 
-import qualified Control.Par.Class               as PC
-import           Control.Par.Class.Unsafe        (ParThreadSafe (),
-                                                  internalLiftIO)
+import           Control.Par.Class            (ParThreadSafe ())
+import qualified Control.Par.Class            as PC
 import           Control.Par.ST
 
 import           Control.Monad
-import           Control.Monad.ST                (ST)
-import qualified Control.Monad.State.Strict      as SS
-import           Data.Time.Clock
+import           Control.Monad.ST             (ST)
+import qualified Control.Monad.State.Strict   as SS
 
--- TODO(osa): Remove all these CPPs and benchmark all of them in same executable
+-- TODO(osa): Removed all variants to make test program working, maybe move each
+-- specialzed version to it's own module.
 
-#ifdef BOXED
--- No reason to use the boxed version moving forward:
-import qualified Control.Par.ST.Vec2             as V
-import           Data.Vector                     (freeze)
-import qualified Data.Vector                     as IMV
-import           Data.Vector.Mutable             as MV
-#elif defined(UNBOXED)
-#warning "Using Unboxed Vectors."
-#define VFlp UFlp
-#define MVectorFlp UVectorFlp
-import qualified Control.Par.ST.UVec2            as V
-import           Data.Vector.Unboxed             (freeze)
-import qualified Data.Vector.Unboxed             as IMV
-import qualified Data.Vector.Unboxed.Mutable     as MV
-#else
-#warning "Using Storable Vectors."
 #define VFlp SFlp
 #define MVectorFlp SVectorFlp
-import qualified Control.Par.ST.StorableVec2     as V
-import qualified Data.Vector.Storable            as IMV
-import qualified Data.Vector.Storable.Mutable    as MV
-#endif
+import qualified Control.Par.ST.StorableVec2  as V
+import qualified Data.Vector.Storable.Mutable as MV
 
 -- [2013.11.15] Adding new variant:
-import qualified Data.Vector.Algorithms.Intro    as VI
-import qualified Data.Vector.Algorithms.Merge    as VA
-import           Prelude                         hiding (length, read)
-import qualified Prelude
+import qualified Data.Vector.Algorithms.Intro as VI
+import qualified Data.Vector.Algorithms.Merge as VA
 
-import           System.Environment              (getArgs)
-import           System.IO
-import           System.Mem
-import           System.Random.MWC               (create, uniformR)
-
-import           Data.Int
--- import           Debug.Trace
-
---------------------------------------------------------------------------------
-
-main :: IO ()
-main = do
-  args <- getArgs
-  let (sz, st, mt, sa, ma, mode) = case args of
-            []   -> (2^16, 2048, 2048, VAMSort, MPMerge, InPlace)
-            [sz] -> (2^(Prelude.read sz), 2048, 2048, VAMSort, MPMerge, InPlace)
-
-            [sz, st, mt, sa, ma] ->
-                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
-                     Prelude.read sa, Prelude.read ma, InPlace)
-
-            [sz, st, mt, sa, ma, mode] ->
-                    (2^(Prelude.read sz), Prelude.read st, Prelude.read mt,
-                     Prelude.read sa, Prelude.read ma, Prelude.read mode)
-
-  putStrLn $ wrapper LVishSched.runPar sz st mt sa ma mode
-  -- FIXME(osa): Is there a way to run this using different schedulers?
-  -- Previous hacky version was never building with alternative schedulers...
-  -- putStrLn $ DirectSched.runPar $ V.runParVec2T (0, sz) $ computation sz st mt sa ma mode
 
 data SMerge = CMerge | TMerge | MPMerge
   deriving (Show, Read)
@@ -95,53 +44,6 @@ data SSort = CSort | VAMSort | VAISort
 
 data ParSort = InPlace | OutPlace
   deriving (Show, Read)
-
--- | Generate a random vector of length N and sort it using parallel
--- in-place merge sort.
-{-# INLINE wrapper #-}
-wrapper :: ((forall s . Par ('Ef 'P 'G 'NF 'B 'NI) s String) -> String)
-        -> Int -> Int -> Int -> SSort -> SMerge -> ParSort -> String
-wrapper sched size st mt sa ma mode =
-  sched $ V.runParVec2T (0,size) $ computation size st mt sa ma mode
-
-{-# INLINE computation #-}
-computation :: (ParThreadSafe p, PC.ParMonad p, PC.FutContents p (),
-                PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-               Int -> Int -> Int -> SSort -> SMerge -> ParSort ->
-               V.ParVec2T s1 Int32 Int32 p e s String
-computation size st mt sa ma mode = do
-
-  -- test setup:
-  randVec <- liftST $ mkRandomVec size
-
-  -- WARNING: this is not safe! To do this with a safe API will require
-  -- some proper "zooming" combinators, probably:
-  STTup2 _ (VFlp right) <- SS.get
-  SS.put (STTup2 (VFlp randVec) (VFlp right))
-
-  internalLiftIO $ performGC
-  internalLiftIO $ putStrLn "about to start timing"
-  internalLiftIO $ hFlush stdout
-  start <- internalLiftIO $ getCurrentTime
-  -- post condition: left array is sorted
-  case mode of
-    InPlace  -> mergeSort st mt sa ma
-    OutPlace -> mergeSortOutPlace st mt sa ma
-  end <- internalLiftIO $ getCurrentTime
-
-  internalLiftIO $ putStrLn "finished run"
-  internalLiftIO $ hFlush stdout
-
-  let runningTime = ((fromRational $ toRational $ diffUTCTime end start) :: Double)
-
-  (rawL, rawR) <- V.reify
-  frozenL <- liftST $ IMV.freeze rawL
-
-  internalLiftIO $ putStrLn $ "Is Sorted?: " ++ show (checkSorted frozenL)
-  internalLiftIO $ putStrLn $ "SELFTIMED: " ++ show runningTime
-
---  return $ show frozenL
-  return $ "done"
 
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
@@ -155,36 +57,32 @@ mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
 
   -- SET THRESHOLD
+  -- TODO(osa): Create different functions for different variants
   if len < st then do
     case sa of
       VAMSort -> seqSortL
       VAISort -> seqSortL2
-      CSort -> cilkSeqSort
-      _ -> seqSortL
+      CSort   -> cilkSeqSort
   else do
     let sp = (len `quot` 2)
     void $ forkSTSplit (sp,sp)
-      (do len <- V.lengthL
-          let sp = (len `quot` 2)
-          void $ forkSTSplit (sp,sp)
+      (do void $ forkSTSplit (sp,sp)
             (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
-      (do len <- V.lengthL
-          let sp = (len `quot` 2)
-          void $ forkSTSplit (sp,sp)
+      (do void $ forkSTSplit (sp,sp)
             (mergeSort st mt sa ma)
             (mergeSort st mt sa ma)
           mergeTo2 sp mt ma)
     mergeTo1 sp mt ma
 
-mergeSortOutPlace ::
-            (ParThreadSafe p, PC.FutContents p (),
-              PC.ParFuture p, Ord e1, Show e1) =>
-             Int -> Int -> SSort -> SMerge ->
-             V.ParVec2T s1 e1 e1 p e s ()
-mergeSortOutPlace !st !mt !sa !ma = do
-  error "mergeOutPlace"
+-- mergeSortOutPlace ::
+--             (ParThreadSafe p, PC.FutContents p (),
+--               PC.ParFuture p, Ord e1, Show e1) =>
+--              Int -> Int -> SSort -> SMerge ->
+--              V.ParVec2T s1 e1 e1 p e s ()
+-- mergeSortOutPlace !st !mt !sa !ma = do
+--   error "mergeOutPlace"
 {-
  where
   cpuMergeSort t cpuMS vec =
@@ -203,36 +101,14 @@ mergeSortOutPlace !st !mt !sa !ma = do
 {-# INLINE seqSortL #-}
 seqSortL :: (Ord eL, ParThreadSafe p) => V.ParVec2T s1 eL eR p e s ()
 seqSortL = do
-  STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
+  STTup2 (VFlp vecL) (VFlp _) <- SS.get
   liftST $ VA.sort vecL
 
 {-# INLINE seqSortL2 #-}
 seqSortL2 :: (Ord eL, ParThreadSafe p) => V.ParVec2T s1 eL eR p e s ()
 seqSortL2 = do
-  STTup2 (VFlp vecL) (VFlp vecR) <- SS.get
+  STTup2 (VFlp vecL) (VFlp _) <- SS.get
   liftST $ VI.sort vecL
-
--- | Create a vector containing the numbers [0,N) in random order.
-mkRandomVec :: Int -> ST s (MV.STVector s Int32)
-mkRandomVec len =
-  -- Annoyingly there is no MV.generate:
-  do g <- create
-     v <- IMV.thaw $ IMV.generate len fromIntegral
-     loop 0 v g
-     return v
- where
-  -- Note: creating 2^24 elements takes 1.6 seconds under -O2 but 36
-  -- seconds under -O0.  This sorely needs optimization!
-  loop n vec g | n == len  = return vec
-	       | otherwise = do
---    let (offset,g') = randomR (0, len - n - 1) g
-    offset <- uniformR (0, len - n - 1) g
-    MV.swap vec n (n + offset)
-    loop (n+1) vec g
-
-checkSorted :: IMV.Vector Int32 -> Bool
-checkSorted vec = IMV.foldl' (\acc elem -> acc && elem) True $
-                  IMV.imap (\i elem -> (fromIntegral i == elem)) vec
 
 ---------------
 
@@ -332,7 +208,7 @@ findSplit :: forall s1 e1 p e s .
               PC.ParMonad p) =>
              ParVec21T s1 e1 p e s (Int, Int)
 findSplit = do
-  STTup2 (STTup2 (VFlp vl) (VFlp vr)) (VFlp v) <- SS.get
+  STTup2 (STTup2 (VFlp vl) (VFlp vr)) _ <- SS.get
   let lLen = MV.length vl
       rLen = MV.length vr
       split :: Int -> Int -> Int -> Int -> ST s1 (Int, Int)
