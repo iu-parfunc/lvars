@@ -5,7 +5,7 @@ module Main where
 
 import           Data.Int                     (Int32)
 
-import           Control.Monad                (forM_)
+import           Control.Monad                (forM_, replicateM)
 import           Control.Monad.ST             (runST)
 import qualified Control.Monad.State.Strict   as SS
 import qualified Data.Vector.Storable         as SV
@@ -48,6 +48,12 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
         testAllVariants 1 0 $ SV.fromList [1,2,3]
     , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
         testAllVariants 1 1 $ SV.fromList [0]
+    , testCase "REGRESSION: Extracted from QuickCheck generated test, fails with exception" $
+        assertBool "" $ checkSorted $ sortPV 0 0 CSort CMerge $
+          SV.fromList [0,1,-1,-1]
+    , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
+        assertBool "" $ checkSorted $ sortPV 0 0 CSort CMerge $
+          SV.fromList [0,-1]
     ]
   where
     testAllVariants t1 t2 v =
@@ -64,12 +70,14 @@ findSplitTest l1 l2 = runST $ do
     findSplit' v1 v2 0 (length l1) 0 (length l2)
 
 properties = testProperty "QuickCheck tests" $ do
+    -- TODO(osa): Maybe use an Arbitrary instance, shrink would be useful
     vecSize           <- choose (0, 2 ^ (16 :: Int))
     seqSortThreshold  <- choose (0, vecSize `div` 10)
     seqMergeThreshold <- choose (0, vecSize `div` 10)
     seqSortMethod     <- elements seqSortMethods
     seqMergeMethod    <- elements seqMergeMethods
-    vec               <- SV.fromList <$> arbitrary
+    lst               <- replicateM vecSize arbitrary
+    let vec            = SV.fromList lst
     let ret = sortPV seqSortThreshold seqMergeThreshold
                      seqSortMethod seqMergeMethod vec
     return $ flip counterexample (checkSorted ret) $ unlines $
@@ -78,6 +86,7 @@ properties = testProperty "QuickCheck tests" $ do
                , "Seq merge threshold: " ++ show seqMergeThreshold
                , "Seq sort method: " ++ show seqSortMethod
                , "Seq merge method: " ++ show seqMergeMethod
+               -- , "Vec: " ++ show lst
                ]
 
 sortPV :: Int -> Int -> SSort -> SMerge -> SV.Vector Int32 -> SV.Vector Int32
