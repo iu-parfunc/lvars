@@ -45,9 +45,9 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "Sorting empty vector" $
         testAllVariants 10 10 $ SV.fromList []
     , testCase "REGRESSION: Should work with seq merge threshold = 0" $
-        assertBool "" (checkSorted $ sortPV 1 0 VAMSort MPMerge $ SV.fromList [1,2,3])
+        testAllVariants 1 0 $ SV.fromList [1,2,3]
     , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
-        assertBool "" (checkSorted $ sortPV 1 1 VAMSort CMerge $ SV.fromList [0])
+        testAllVariants 1 1 $ SV.fromList [0]
     ]
   where
     testAllVariants t1 t2 v =
