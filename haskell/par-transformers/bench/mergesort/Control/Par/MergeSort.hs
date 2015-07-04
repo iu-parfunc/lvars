@@ -62,26 +62,24 @@ mergeSort :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
              V.ParVec2T s1 e1 e1 p e s ()
 mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
-
-  -- SET THRESHOLD
-  -- TODO(osa): Create different functions for different variants
-  if len < st then do
-    case sa of
-      VAMSort -> seqSortL
-      VAISort -> seqSortL2
-      CSort   -> cilkSeqSort
-  else do
-    let sp = (len `quot` 2)
-    void $ forkSTSplit (sp,sp)
-      (do void $ forkSTSplit (sp,sp)
-            (mergeSort st mt sa ma)
-            (mergeSort st mt sa ma)
-          mergeTo2 sp mt ma)
-      (do void $ forkSTSplit (sp,sp)
-            (mergeSort st mt sa ma)
-            (mergeSort st mt sa ma)
-          mergeTo2 sp mt ma)
-    mergeTo1 sp mt ma
+  unless (len <= 1) $
+    if len < st then do
+      case sa of
+        VAMSort -> seqSortL
+        VAISort -> seqSortL2
+        CSort   -> cilkSeqSort
+    else do
+      let sp = len `quot` 2
+      void $ forkSTSplit (sp,sp)
+        (do void $ forkSTSplit (sp,sp)
+              (mergeSort st mt sa ma)
+              (mergeSort st mt sa ma)
+            mergeTo2 sp mt ma)
+        (do void $ forkSTSplit (sp,sp)
+              (mergeSort st mt sa ma)
+              (mergeSort st mt sa ma)
+            mergeTo2 sp mt ma)
+      mergeTo1 sp mt ma
 
 -- mergeSortOutPlace ::
 --             (ParThreadSafe p, PC.FutContents p (),
@@ -149,7 +147,9 @@ pMergeTo2 threshold ma = do
   let l1 = MV.length v1
       l2 = MV.length v2
 
-  if l1 < threshold || l2 < threshold then
+  if l1 == 0 && l2 == 0 then
+    return ()
+  else if l1 < threshold || l2 < threshold || l1 == 1 || l2 == 1 then do
     case ma of
       CMerge  -> cilkSeqMerge
       MPMerge -> seqmerge
@@ -201,12 +201,9 @@ mergeTo1 sp threshold ma = do
   mergeTo2 sp threshold ma
   V.swapState
 
--- NOTE: THIS FUNCTION IS BORKED! It has issues with very small input
--- lengths and gets stuck. It might be a general problem with the
--- parallel merge algorithm, but is most likely something wrong about
--- how this function operates. We are being *very dangerous* and just
--- not using a small threshold that triggers this issue. t=4 breaks
--- it, but t=8 seems to work.
+-- NOTE(osa): This function assumes that at least one of the vectors are not
+-- empty. Otherwise it fails with an error like:
+-- *** Exception: ./Data/Vector/Generic/Mutable.hs:591 (read): index out of bounds (0,0)
 --
 {-# INLINE findSplit #-}
 findSplit :: forall s1 e1 p e s .
@@ -217,38 +214,38 @@ findSplit = do
   STTup2 (STTup2 (VFlp vl) (VFlp vr)) _ <- SS.get
   let lLen = MV.length vl
       rLen = MV.length vr
-      split :: Int -> Int -> Int -> Int -> ST s1 (Int, Int)
-      split lLow lHigh rLow rHigh = do
-        let lIndex = (lLow + lHigh) `div` 2
-            rIndex = (rLow + rHigh) `div` 2
+  liftST $ findSplit' vl vr 0 lLen 0 rLen
 
-        left <- MV.read vl lIndex
-        right <- MV.read vr rIndex
-        if (lIndex == 0) && (rIndex == 0) then do
-          return (lIndex, rIndex)
-        else if (lIndex == 0) then do
-          rightSub1 <- MV.read vr (rIndex - 1)
-          if (rightSub1 <= left)
-             then return (lIndex, rIndex)
-             else split 0 0 rLow rIndex
---             else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "sp") $ split 0 0 rLow rIndex
-        else if (rIndex == 0) then do
-          leftSub1 <- MV.read vl (lIndex - 1)
-          if (leftSub1 <= right)
-            then return (lIndex, rIndex)
-            else split lLow lIndex 0 0
---            else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "spl") $ split lLow lIndex 0 0
-        else do
-          rightSub1 <- MV.read vr (rIndex - 1)
-          leftSub1 <- MV.read vl (lIndex - 1)
-          if (leftSub1 <= right) && (rightSub1 <= left)
-            then return (lIndex, rIndex)
-            else if (leftSub1 <= right)
-              then split lIndex lHigh rLow rIndex
-              else split lLow lIndex rIndex rHigh
---  ans <- trace "splt" $ liftST$ split 0 lLen 0 rLen
---  trace (show lLen ++ " " ++ show rLen ++ " ret ans " ++ show ans) $ return ans
-  liftST $ split 0 lLen 0 rLen
+findSplit' :: (MV.Storable a, Ord a) =>
+              MV.MVector s a -> MV.MVector s a -> Int -> Int -> Int -> Int -> ST s (Int, Int)
+findSplit' vl vr lLow lHigh rLow rHigh = do
+  let lIndex = (lLow + lHigh) `div` 2
+      rIndex = (rLow + rHigh) `div` 2
+
+  left <- MV.read vl lIndex
+  right <- MV.read vr rIndex
+  if (lIndex == 0) && (rIndex == 0) then do
+    return (lIndex, rIndex)
+  else if lIndex == 0 then do
+    rightSub1 <- MV.read vr (rIndex - 1)
+    if rightSub1 <= left
+       then return (lIndex, rIndex)
+       else findSplit' vl vr 0 0 rLow rIndex
+--           else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "sp") $ split 0 0 rLow rIndex
+  else if rIndex == 0 then do
+    leftSub1 <- MV.read vl (lIndex - 1)
+    if (leftSub1 <= right)
+      then return (lIndex, rIndex)
+      else findSplit' vl vr lLow lIndex 0 0
+--          else trace ((show rIndex) ++ " " ++ (show lIndex) ++ "spl") $ split lLow lIndex 0 0
+  else do
+    rightSub1 <- MV.read vr (rIndex - 1)
+    leftSub1 <- MV.read vl (lIndex - 1)
+    if (leftSub1 <= right) && (rightSub1 <= left)
+      then return (lIndex, rIndex)
+      else if (leftSub1 <= right)
+        then findSplit' vl vr lIndex lHigh rLow rIndex
+        else findSplit' vl vr lLow lIndex rIndex rHigh
 
 -----
 
@@ -281,10 +278,6 @@ seqmerge = do
       lenR = MV.length right
       len = lenL + lenR
 
-  {- INLINE copyRemainingRight #-}
-  {- INLINE copyRemainingLeft #-}
-  {- INLINE loop #-}
-
   let copyRemainingRight :: Int -> e1 -> Int -> ST s1 ()
       copyRemainingRight !ri !rx !di =
         if ri < (lenR-1) then do
@@ -294,7 +287,8 @@ seqmerge = do
           copyRemainingRight ri' rx' (di + 1)
         else when (di < len) $ do
           MV.write dest di rx
-          return ()
+
+      copyRemainingLeft :: Int -> e1 -> Int -> ST s1 ()
       copyRemainingLeft !li !lx !di =
         if li < (lenL-1) then do
           MV.write dest di lx
@@ -303,7 +297,6 @@ seqmerge = do
           copyRemainingLeft li' lx' (di + 1)
         else when (di < len) $ do
           MV.write dest di lx
-          return ()
 
   let loop !li !lx !ri !rx !di =
         let di' = di+1 in
@@ -325,10 +318,19 @@ seqmerge = do
           else when (di' < len) $ do
             rx' <- MV.read right ri'
             loop li lx ri' rx' di'
-  fstL <- liftST$ MV.read left 0
-  fstR <- liftST$ MV.read right 0
-  liftST $ loop 0 fstL 0 fstR 0
-  return ()
+
+  if len == 0 then
+    return ()
+  else if lenL == 0 then liftST $ do
+    fstR <- MV.read right 0
+    copyRemainingRight 0 fstR 0
+  else if lenR == 0 then liftST $ do
+    fstL <- MV.read left 0
+    copyRemainingLeft 0 fstL 0
+  else liftST $ do
+    fstL <- MV.read left 0
+    fstR <- MV.read right 0
+    loop 0 fstL 0 fstR 0
 
 --------------------------------------------------------------------------------
 

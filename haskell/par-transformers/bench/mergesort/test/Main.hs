@@ -6,6 +6,7 @@ module Main where
 import           Data.Int                     (Int32)
 
 import           Control.Monad                (forM_)
+import           Control.Monad.ST             (runST)
 import qualified Control.Monad.State.Strict   as SS
 import qualified Data.Vector.Storable         as SV
 import qualified Data.Vector.Storable.Mutable as SVM
@@ -44,7 +45,7 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "Sorting empty vector" $
         testAllVariants 10 10 $ SV.fromList []
     , testCase "REGRESSION: Should work with seq merge threshold = 0" $
-        assertBool "" (checkSorted $ sortPV 1 0 VAMSort CMerge $ SV.fromList [1,2,3])
+        assertBool "" (checkSorted $ sortPV 1 0 VAMSort MPMerge $ SV.fromList [1,2,3])
     , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
         assertBool "" (checkSorted $ sortPV 1 1 VAMSort CMerge $ SV.fromList [0])
     ]
@@ -55,6 +56,12 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
           let msg = "Result not sorted. ssMeth: " ++ show ssMeth
                     ++ " smMeth: " ++ show smMeth
           assertBool msg (checkSorted $ sortPV t1 t2 ssMeth smMeth v)
+
+findSplitTest :: (SVM.Storable a, Ord a) => [a] -> [a] -> (Int, Int)
+findSplitTest l1 l2 = runST $ do
+    v1 <- SV.thaw $ SV.fromList l1
+    v2 <- SV.thaw $ SV.fromList l2
+    findSplit' v1 v2 0 (length l1) 0 (length l2)
 
 properties = testProperty "QuickCheck tests" $ do
     vecSize           <- choose (0, 2 ^ (16 :: Int))
