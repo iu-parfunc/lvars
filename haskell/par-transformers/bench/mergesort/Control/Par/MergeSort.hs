@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DoAndIfThenElse            #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -17,6 +18,7 @@ import           Control.LVish                as LVishSched
 
 import           Control.Par.Class            (ParThreadSafe ())
 import qualified Control.Par.Class            as PC
+import           Control.Par.Class.Unsafe     (internalLiftIO)
 import           Control.Par.ST
 
 import           Control.Monad
@@ -35,8 +37,13 @@ import qualified Data.Vector.Storable.Mutable as MV
 import qualified Data.Vector.Algorithms.Intro as VI
 import qualified Data.Vector.Algorithms.Merge as VA
 
+-- FFI stuff for Cilk parts
+import           Foreign.C.Types
+import           Foreign.ForeignPtr
+import           Foreign.Ptr
 
-data SMerge = CMerge | TMerge | MPMerge
+
+data SMerge = CMerge | MPMerge
   deriving (Show, Read)
 
 data SSort = CSort | VAMSort | VAISort
@@ -144,9 +151,8 @@ pMergeTo2 threshold ma = do
 
   if l1 < threshold || l2 < threshold then
     case ma of
-      CMerge -> cilkSeqMerge
+      CMerge  -> cilkSeqMerge
       MPMerge -> seqmerge
-      _ -> seqmerge
   else do
     (splitL, splitR) <- findSplit
     let mid = splitL + splitR
@@ -326,9 +332,6 @@ seqmerge = do
 
 --------------------------------------------------------------------------------
 
-#ifdef CILK_SEQ
-#warning "CILK_SEQ defined"
-
 -- Requires that we selected STORABLE vectors above!
 
 foreign import ccall unsafe "wrap_seqquick"
@@ -373,15 +376,7 @@ cilkSeqMerge = do
                    (castPtr vptr3)
 
 -- Element type being sorted:
-type ElmT  = Word32
 type CElmT = CUInt
-#else
-#warning "CILK_SEQ isn't defined"
-
-cilkSeqSort = error "cilkSeqSort"
-cilkSeqMerge = error "cilkSeqMerge"
-
-#endif
 
 --------------------------------------------------------------------------------
 -- Helpers for manipulating ParVec12T and ParVec21T

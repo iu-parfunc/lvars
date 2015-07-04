@@ -43,8 +43,9 @@ test-suite test-mergesort
     random,
     vector              >= 0.10 && < 0.11,
 
+    QuickCheck,
     tasty               >= 0.10 && < 0.11,
-    tasty-quickcheck,
-    QuickCheck
+    tasty-hunit,
+    tasty-quickcheck
 
   ghc-options:          -Wall -O2 -rtsopts -threaded -eventlog

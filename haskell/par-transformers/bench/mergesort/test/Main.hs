@@ -5,6 +5,7 @@ module Main where
 
 import           Data.Int                     (Int32)
 
+import           Control.Monad                (forM_)
 import qualified Control.Monad.State.Strict   as SS
 import qualified Data.Vector.Storable         as SV
 import qualified Data.Vector.Storable.Mutable as SVM
@@ -18,28 +19,59 @@ import qualified Control.Par.ST.StorableVec2  as V
 
 import           Test.QuickCheck
 import           Test.Tasty
+import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
 import           Control.Par.MergeSort
 
 main :: IO ()
-main = defaultMain $ testProperty "Correctness tests" $ do
+main = defaultMain $ testGroup "MergeSort tests"
+    [ unitTests, properties ]
+
+seqSortMethods :: [SSort]
+seqSortMethods  = [CSort, VAMSort, VAISort]
+
+seqMergeMethods :: [SMerge]
+seqMergeMethods = [CMerge, MPMerge]
+
+unitTests, properties :: TestTree
+
+unitTests = testGroup "Hand-crafted tests and regression tests"
+    [ testCase "Sorting an already sorted vector" $
+        testAllVariants 10 10 $ SV.fromList [0 .. 99 :: Int32]
+    , testCase "Sorting reversed sorted vector" $
+        testAllVariants 10 10 $ SV.fromList [99 .. 0 :: Int32]
+    , testCase "Sorting empty vector" $
+        testAllVariants 10 10 $ SV.fromList []
+    , testCase "REGRESSION: Should work with seq merge threshold = 0" $
+        assertBool "" (checkSorted $ sortPV 1 0 VAMSort CMerge $ SV.fromList [1,2,3])
+    , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
+        assertBool "" (checkSorted $ sortPV 1 1 VAMSort CMerge $ SV.fromList [0])
+    ]
+  where
+    testAllVariants t1 t2 v =
+      forM_ seqSortMethods $ \ssMeth ->
+        forM_ seqMergeMethods $ \smMeth -> do
+          let msg = "Result not sorted. ssMeth: " ++ show ssMeth
+                    ++ " smMeth: " ++ show smMeth
+          assertBool msg (checkSorted $ sortPV t1 t2 ssMeth smMeth v)
+
+properties = testProperty "QuickCheck tests" $ do
     vecSize           <- choose (0, 2 ^ (16 :: Int))
     seqSortThreshold  <- choose (0, vecSize `div` 10)
     seqMergeThreshold <- choose (0, vecSize `div` 10)
-    seqSortMethod     <- elements [CSort, VAMSort, VAISort]
-    seqMergeMethod    <- elements [CMerge, TMerge, MPMerge]
+    seqSortMethod     <- elements seqSortMethods
+    seqMergeMethod    <- elements seqMergeMethods
     vec               <- SV.fromList <$> arbitrary
     let ret = sortPV seqSortThreshold seqMergeThreshold
                      seqSortMethod seqMergeMethod vec
-        test = flip counterexample (checkSorted ret) $ unlines $
-                 [ "Size: " ++ show vecSize
-                 , "Seq sort threshold: " ++ show seqSortThreshold
-                 , "Seq merge threshold: " ++ show seqMergeThreshold
-                 , "Seq sort method: " ++ show seqSortMethod
-                 , "Seq merge method: " ++ show seqMergeMethod
-                 ]
-    return test
+    return $ flip counterexample (checkSorted ret) $ unlines $
+               [ "Size: " ++ show vecSize
+               , "Seq sort threshold: " ++ show seqSortThreshold
+               , "Seq merge threshold: " ++ show seqMergeThreshold
+               , "Seq sort method: " ++ show seqSortMethod
+               , "Seq merge method: " ++ show seqMergeMethod
+               ]
 
 sortPV :: Int -> Int -> SSort -> SMerge -> SV.Vector Int32 -> SV.Vector Int32
 sortPV ssThres smThres ssMeth smMeth vec =
