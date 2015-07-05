@@ -39,14 +39,17 @@ install:
  - cabal install happy alex
  - cabal sandbox init
  - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish";
+ - export TOP=`pwd`
  - set -e;
  - for path in $PKGS; do
     cd ./haskell/$path;
+    cabal sandbox init --sandbox=$TOP/.cabal-sandbox;
     cabal install;
     cd -;
    done;
  - for path in $PKGS; do
     cd ./haskell/$path;
+    cabal sandbox init --sandbox=$TOP/.cabal-sandbox;
     cabal install --enable-benchmarks --enable-tests --dependencies-only;
     cd -;
    done;
