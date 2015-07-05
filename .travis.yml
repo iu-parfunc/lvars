@@ -37,16 +37,25 @@ install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
  - cabal install happy alex
- - cabal install ./haskell/par-classes/ ./haskell/par-collections/ ./haskell/par-transformers/ ./haskell/concurrent-skiplist/ ./haskell/lvish/ --enable-tests --enable-benchmarks --dependencies-only
+ - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish";
+ - set -e;
+ - for path in $PKGS; do
+    cd ./haskell/$path;
+    cabal install
+    cd -;
+   done;
+ - for path in $PKGS; do
+    cd ./haskell/$path;
+    cabal install --enable-benchmarks --enable-tests --dependencies-only
+    cd -;
+   done;
 
 # Here starts the actual work to be performed for the package under test; any
 # command which exits with a non-zero exit code causes the build to fail.
 script:
- - set -e;
-   PKGS=" ./par-classes ./par-transformers ./par-collections ./lvish ";
-   for path in $PKGS; do
+ - for path in $PKGS; do
     cd ./haskell/$path;
-    cabal configure --enable-tests --enable-benchmarks -v2;
+    cabal configure --enable-tests --enable-benchmarks;
     cabal build;
     cabal test;
     cabal sdist;
