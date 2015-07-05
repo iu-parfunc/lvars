@@ -1,8 +1,11 @@
-# RRN: Copied from template here: https://github.com/hvr/multi-ghc-travis/blob/master/README.md#ghc-head-snapshots
+# RRN: Copied from template here:
+# https://github.com/hvr/multi-ghc-travis/blob/master/README.md#ghc-head-snapshots
 
 # NB: don't set `language: haskell` here
 
-# The following enables several GHC versions to be tested; often it's enough to test only against the last release in a major GHC version. Feel free to omit lines listings versions you don't need/want testing for.
+# The following enables several GHC versions to be tested; often it's enough to
+# test only against the last release in a major GHC version. Feel free to omit
+# lines listings versions you don't need/want testing for.
 env:
  - CABALVER=1.18 GHCVER=7.8.2
  - CABALVER=1.18 GHCVER=7.8.3
@@ -33,13 +36,14 @@ install:
  - cabal --version
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - cabal install -j ./haskell/par-classes/ ./haskell/par-collections/ ./haskell/par-transformers/ ./haskell/concurrent-skiplist/ happy alex
- - cabal install --enable-tests --enable-benchmarks ./haskell/lvish/
+ - cabal install happy alex
+ - cabal install ./haskell/par-classes/ ./haskell/par-collections/ ./haskell/par-transformers/ ./haskell/concurrent-skiplist/ ./haskell/lvish/ --enable-tests --enable-benchmarks --dependencies-only
 
-# Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
+# Here starts the actual work to be performed for the package under test; any
+# command which exits with a non-zero exit code causes the build to fail.
 script:
  - set -e;
-   PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers ";
+   PKGS=" ./par-classes ./par-transformers ./par-collections ./lvish ";
    for path in $PKGS; do
     cd ./haskell/$path;
     cabal configure --enable-tests --enable-benchmarks -v2;
