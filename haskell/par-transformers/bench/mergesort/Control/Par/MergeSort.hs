@@ -42,7 +42,6 @@ import           Foreign.C.Types
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 
-
 data SMerge = CMerge | MPMerge
   deriving (Show, Read)
 
@@ -149,7 +148,7 @@ pMergeTo2 threshold ma = do
 
   if l1 == 0 && l2 == 0 then
     return ()
-  else if l1 < threshold || l2 < threshold || l1 == 1 || l2 == 1 then do
+  else if l1 < threshold || l2 < threshold || l1 <= 1 || l2 <= 1 then do
     case ma of
       CMerge  -> cilkSeqMerge
       MPMerge -> seqmerge
@@ -350,7 +349,7 @@ cilkSeqSort = do
     let (fptr,_) = MV.unsafeToForeignPtr0 vecL
     withForeignPtr fptr $ \ vptr -> do
       -- No allocation, C operates on this memory in-place:
-      c_seqquick (castPtr vptr) (fromIntegral len)
+      _ <- c_seqquick (castPtr vptr) (fromIntegral len)
       return ()
     return ()
 
@@ -378,7 +377,7 @@ cilkSeqMerge = do
                    (castPtr vptr3)
 
 -- Element type being sorted:
-type CElmT = CUInt
+type CElmT = CInt
 
 --------------------------------------------------------------------------------
 -- Helpers for manipulating ParVec12T and ParVec21T

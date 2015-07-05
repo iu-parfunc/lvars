@@ -49,11 +49,10 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
         testAllVariants 1 1 $ SV.fromList [0]
     , testCase "REGRESSION: Extracted from QuickCheck generated test, fails with exception" $
-        assertBool "" $ checkSorted $ sortPV 0 0 CSort CMerge $
-          SV.fromList [0,1,-1,-1]
+        assertBool "" $ checkSorted 4 $ sortPV 0 0 VAMSort MPMerge $
+          SV.fromList [0,0,0,0]
     , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
-        assertBool "" $ checkSorted $ sortPV 0 0 CSort CMerge $
-          SV.fromList [0,-1]
+        testAllVariants 0 0 $ SV.fromList [0,-1]
     ]
   where
     testAllVariants t1 t2 v =
@@ -61,7 +60,7 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
         forM_ seqMergeMethods $ \smMeth -> do
           let msg = "Result not sorted. ssMeth: " ++ show ssMeth
                     ++ " smMeth: " ++ show smMeth
-          assertBool msg (checkSorted $ sortPV t1 t2 ssMeth smMeth v)
+          assertBool msg (checkSorted (SV.length v) $ sortPV t1 t2 ssMeth smMeth v)
 
 findSplitTest :: (SVM.Storable a, Ord a) => [a] -> [a] -> (Int, Int)
 findSplitTest l1 l2 = runST $ do
@@ -80,7 +79,7 @@ properties = testProperty "QuickCheck tests" $ do
     let vec            = SV.fromList lst
     let ret = sortPV seqSortThreshold seqMergeThreshold
                      seqSortMethod seqMergeMethod vec
-    return $ flip counterexample (checkSorted ret) $ unlines $
+    return $ flip counterexample (checkSorted vecSize ret) $ unlines $
                [ "Size: " ++ show vecSize
                , "Seq sort threshold: " ++ show seqSortThreshold
                , "Seq merge threshold: " ++ show seqMergeThreshold
@@ -112,8 +111,8 @@ sortPV' ssThres smThres ssMeth smMeth vec = do
 mkRandomVec :: Int -> IO (SV.Vector Int32)
 mkRandomVec len = SV.generateM len (const randomIO)
 
-checkSorted :: SV.Vector Int32 -> Bool
-checkSorted v = go 1
+checkSorted :: Int -> SV.Vector Int32 -> Bool
+checkSorted len v = len == SV.length v && go 1
   where
     go i
       | i >= SV.length v = True

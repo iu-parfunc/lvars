@@ -69,7 +69,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-typedef uint32_t ELM;
+typedef int32_t ELM;
 
 /* MERGESIZE must be >= 2 */
 #define KILO 1024
