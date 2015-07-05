@@ -41,7 +41,7 @@ install:
  - set -e;
  - for path in $PKGS; do
     cd ./haskell/$path;
-    cabal install
+    cabal install;
     cd -;
    done;
  - for path in $PKGS; do
