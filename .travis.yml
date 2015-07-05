@@ -46,7 +46,7 @@ install:
    done;
  - for path in $PKGS; do
     cd ./haskell/$path;
-    cabal install --enable-benchmarks --enable-tests --dependencies-only
+    cabal install --enable-benchmarks --enable-tests --dependencies-only;
     cd -;
    done;
 
