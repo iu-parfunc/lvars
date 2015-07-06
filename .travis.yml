@@ -37,17 +37,17 @@ install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
  - cabal install happy alex
- - cabal sandbox init
+#  - cabal sandbox init
  - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish ./par-mergesort"
  - export TOP=`pwd`
  - set -e
  - set -x
- - for path in $PKGS; do
-    cabal install ./haskell/$path/;
-   done
- - for path in $PKGS; do
-    cabal install ./haskell/$path/ --enable-tests --enable-benchmarks --dependencies-only;
-   done
+ - cd ./haskell/
+ - cabal install $PKGS
+# Hack to break cycles here:
+ - SOMEPKGS="./par-classes ./par-transformers ./concurrent-skiplist ./lvish ./par-mergesort"
+ - cabal install --enable-tests --enable-benchmarks --only-dependencies $SOMEPKGS
+ - cd ..
 
 # Here starts the actual work to be performed for the package under test; any
 # command which exits with a non-zero exit code causes the build to fail.
