@@ -43,7 +43,9 @@ install:
  - set -e
  - set -x
  - cd ./haskell/
- - cabal install --enable-tests --enable-benchmarks $PKGS
+ # TODO(osa): Debug flag is needed for tests(because they depend on logging).
+ # It's only needed while installing lvish.
+ - cabal install --enable-tests --enable-benchmarks $PKGS -fdebug
  - cd ..
 
 # Here starts the actual work to be performed for the package under test; any
