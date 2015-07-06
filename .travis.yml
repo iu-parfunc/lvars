@@ -43,10 +43,7 @@ install:
  - set -e
  - set -x
  - cd ./haskell/
- - cabal install $PKGS
-# Hack to break cycles here:
- - SOMEPKGS="./par-classes ./par-transformers ./concurrent-skiplist ./lvish ./par-mergesort"
- - cabal install --enable-tests --enable-benchmarks --only-dependencies $SOMEPKGS
+ - cabal install --enable-tests --enable-benchmarks $PKGS
  - cd ..
 
 # Here starts the actual work to be performed for the package under test; any

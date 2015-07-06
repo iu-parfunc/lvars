@@ -59,15 +59,12 @@ else
   CFG="$CFG --enable-library-profiling $ENABLE_EXEC_PROF"
 fi
 
-# In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS $*
-
 if [ "$NOTEST" == "" ]; then
   CFG="$CFG --enable-tests"
 fi
 
-# TEMP: HACK, breaking cycle.  Build all the packages testing deps BUT leave out par-collections:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS ./lvish ./par-classes ./par-transformers ./concurrent-skiplist ./par-mergesort --only-dependencies
+# In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS $*
 
 if [ "$NOTEST" == "" ]; then
   for path in $PKGS; do
