@@ -64,7 +64,7 @@ if [ "$NOTEST" == "" ]; then
 fi
 
 # In newer cabal (>= 1.20) --enable-tests is separate from --run-tests:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS $EXTRAPKGS $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC -fdebug $PKGS $EXTRAPKGS $*
 
 if [ "$NOTEST" == "" ]; then
   for path in $PKGS; do
@@ -72,7 +72,7 @@ if [ "$NOTEST" == "" ]; then
     cd $TOP/$path
     # Assume cabal 1.20+:
     echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
-    $CABAL configure --with-ghc=$GHC --enable-tests $CABAL_FLAGS
+    $CABAL configure --with-ghc=$GHC -fdebug --enable-tests $CABAL_FLAGS
     $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
   done
 fi
