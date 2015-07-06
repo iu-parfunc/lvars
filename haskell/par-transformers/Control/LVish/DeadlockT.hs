@@ -1,24 +1,18 @@
 {-# LANGUAGE Unsafe #-}
-
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, InstanceSigs #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, DataKinds, GeneralizedNewtypeDeriving, InstanceSigs,
+             MultiParamTypeClasses, NamedFieldPuns, ScopedTypeVariables,
+             TypeFamilies, UndecidableInstances #-}
 
 -- | A module for adding the deadlock-detection capability.
-
-
 module Control.LVish.DeadlockT
        {-(
          -- * The transformer that adds thecancellation capability
          DeadlockT(), ThreadId,
-         
+
          -- * Operations specific to DeadlockT
          runDeadlockT,
          forkCancelable, createTid, forkCancelableWithTid,
-         cancel,         
+         cancel,
          pollForCancel,
          cancelMe,
 
@@ -31,76 +25,106 @@ import Control.Monad.State as S
 import Data.IORef
 
 import Control.Par.Class as PC
+import Control.Par.Class.Unsafe as PC
 import Control.Par.EffectSigs
-import Control.Par.Class.Unsafe (PrivateMonadIO(..))
 
--- import qualified Data.Atomics.Counter as C
-
-import Data.Atomics.Counter.Unboxed as C
+import qualified Data.Atomics.Counter as C
 
 --------------------------------------------------------------------------------
+
 
 -- | A Par-monad scheduler transformer that adds the deadlock-detection capability.
 -- To do this, it must track counts of active (not blocked) computations.
-newtype DeadlockT m a = DeadlockT ((StateT DState m) a)
-  deriving (Monad, Functor)
-
-unDeadlockT :: DeadlockT t t1 -> StateT DState t t1
-unDeadlockT (DeadlockT m) = m
+newtype DeadlockT (p :: EffectSig -> * -> * -> *) e s a =
+    DeadlockT { unDeadlockT :: StateT DState (p e s) a }
 
 -- The state for each thread is a (hopefully scalable) Counter.
 type DState = C.AtomicCounter
+
+--------------------------------------------------------------------------------
+-- | Run a Par monad with the deadlock-detection effect.  Return ONLY when all
+-- subcomputations have quiesced or blocked.
+runDeadlockT :: (ParIVar p, GetG e ~ NG) => DeadlockT p e s a -> p e s a
+runDeadlockT (DeadlockT task) = do
+   ref <- internalLiftIO $ C.newCounter 1
+   let
+     task' = do
+       undefined
+       -- _ <- task
+       -- internalLiftIO (C.incrCounter (-1) ref)
+       -- return ()
+   PC.fork (evalStateT task' ref)
+   -- TODO: replace the decrement with a zero-check followed by some signaling...
+   -- TODO: The main thread should wait on the signal...
+   return undefined
+
+
 -- TODO/FUTURE: For now we disallow nested deadlock tracking... each thread only
 -- needs one counter.  We could change this.
 
-instance MonadTrans DeadlockT where
-  lift m = DeadlockT (lift m)
+instance ParMonad p => ParMonad (DeadlockT p) where
+  internalLiftIO io = DeadlockT $ S.lift (internalLiftIO io)
+  pbind (DeadlockT pa) f = DeadlockT $ pa >>=
+                           (\x -> let DeadlockT pb = f x
+                                  in pb)                                        
+  preturn x = DeadlockT $ return x
 
--- TODO/FIXME: Replace PrivateMonadIO with something the user can't safely access.
-instance PrivateMonadIO m => PrivateMonadIO (DeadlockT m) where
-  internalLiftIO m = DeadlockT (lift (internalLiftIO m))
+  -- Every fork increments the number of live tasks by one:
+  fork (DeadlockT task) = DeadlockT $ do
+    s0 <- S.get
+    S.lift $ internalLiftIO$ C.incrCounter 1 s0
+    let task' = do x <- task 
+                   S.lift$ internalLiftIO (C.incrCounter (-1) s0)
+                   return x
+    S.lift $ PC.fork $ do
+      (res,_) <- S.runStateT task'  s0
+      return res
 
-instance PrivateMonadIO m => PrivateMonadIO (StateT s m) where
-  internalLiftIO io = lift (internalLiftIO io)
--- data CPair = CPair !Bool ![DState]
+liftDT :: ParMonad p => p e s a -> DeadlockT p e s a
+liftDT pa = DeadlockT (S.lift pa)
 
---------------------------------------------------------------------------------
+instance (ParMonad m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
+  type LVar (DeadlockT m) = LVar m
 
--- | Run a Par monad with the deadlock-detection effect.  Return ONLY when all
--- subcomputations have quiesced or blocked.
-runDeadlockT :: (ParIVar m, PrivateMonadIO m, NoGet (GetEffects m)) => 
-                DeadlockT m a -> m a
-runDeadlockT (DeadlockT task) = do
-  ref <- internalLiftIO $ C.newCounter 1
-  let task' = do _ <- task
-                 internalLiftIO (C.incrCounter (-1) ref)
-                 return ()
-  PC.fork (evalStateT task' ref)
-  -- TODO: replace the decrement with a zero-check followed by some signaling...
-  -- TODO: The main thread should wait on the signal...
-  return undefined
+  newLV act = liftDT$ newLV act
 
-instance (ParSealed m) => ParSealed (DeadlockT m) where
-  type GetSession (DeadlockT m) = GetSession m
+  stateLV :: forall e s a d . (LVar (DeadlockT m) a d)
+             -> (Proxy ((DeadlockT m) e s ()), a)
+  stateLV lvar = let prx :: Proxy (m e s ())
+                     (prx, a) = stateLV lvar
+                 in (Proxy::Proxy((DeadlockT m e s) ()), a)
+  putLV lv putter = liftDT $ putLV lv putter
 
-instance (PrivateMonadIO m, ParIVar m, LVarSched m) => LVarSched (DeadlockT m) where
-  type LVar (DeadlockT m) = LVar m 
-  forkLV act = PC.fork act    
-  newLV act = lift$ newLV act  
-  stateLV lvar = let (_::Proxy (m ()), a) = stateLV lvar
-                 in (Proxy::Proxy((DeadlockT m) ()), a)
-  putLV lv putter = lift $ putLV lv putter    
+  -- Gets may block, and must decrement the counter if they do:
   getLV lv globThresh deltThresh = do
-     x <- lift $ getLV lv globThresh deltThresh
+     x <- liftDT $ getLV lv gThresh' dThresh'
      return x
-  returnToSched = lift returnToSched
+   where
+     -- TODO: Some delicate guarantees need to be established here:
+     --  For each GET call:
+     --    * globalThresh is called exactly once
+     --    * if globalThresh returns Nothing, then dThresh is called AT LEAST once
+     --    * get only returns when dThresh returns Just
+     --    * dzThresh is never called again after it returns Just.
+     
+     -- TODO: figure out where to mess with the counter here:
+     gThresh' st frzn = do x <- globThresh st frzn
+                           case x of
+                            Just a -> return x 
+                            Nothing -> error "FINISHME" -- Decr counter?
+     dThresh' delt = do x <- deltThresh delt
+                        case x of
+                         Just a -> error "FINISHM" -- INCR here, assume this happens ONCE
+                         Nothing -> return Nothing
 
+  returnToSched = liftDT returnToSched
+{-  
 instance (ParQuasi m qm) => ParQuasi (DeadlockT m) (DeadlockT qm) where
-  toQPar :: (DeadlockT m) a -> (DeadlockT qm) a 
+  toQPar :: (DeadlockT m) a -> (DeadlockT qm) a
   toQPar (DeadlockT (S.StateT{runStateT})) =
     DeadlockT $ S.StateT $ toQPar . runStateT
 
-instance (Functor qm, Monad qm, PrivateMonadIO m, ParIVar m, 
+instance (Functor qm, Monad qm, PrivateMonadIO m, ParIVar m,
           LVarSched m, LVarSchedQ m qm, ParQuasi (DeadlockT m) (DeadlockT qm) ) =>
          LVarSchedQ (DeadlockT m) (DeadlockT qm) where
 
@@ -109,7 +133,7 @@ instance (Functor qm, Monad qm, PrivateMonadIO m, ParIVar m,
     let lvar2 :: LVar m a d
         lvar2 = lvar -- This works because of the specific def for "type LVar" in the instance above...
     let frz :: LVar m a d -> (Proxy (m()), qm ())
-        frz x = freezeLV x 
+        frz x = freezeLV x
     DeadlockT (lift (snd (frz lvar2)))
     return ()))
 
@@ -117,35 +141,28 @@ instance (Functor qm, Monad qm, PrivateMonadIO m, ParIVar m,
 instance ParFuture m => ParFuture (DeadlockT m) where
   type Future (DeadlockT m) = Future m
   type FutContents (DeadlockT m) a = PC.FutContents m a
-#if 0  
+#if 0
   spawn_ (DeadlockT task) = DeadlockT $ do
      s0 <- S.get
      lift $ PC.spawn_ $ do
            -- This spawned computation is part of the same tree for purposes of
            -- cancellation:
            (res,_) <- S.runStateT task s0
-           return res     
+           return res
   get iv = DeadlockT $ lift $ PC.get iv
 #endif
 
 instance (PrivateMonadIO m, PC.ParIVar m) => PC.ParIVar (DeadlockT m) where
-  fork (DeadlockT task) = DeadlockT $ do
-    s0 <- S.get
-    lift $ internalLiftIO$ C.incrCounter 1 s0
-    let task' = do x <- task
-                   internalLiftIO (C.incrCounter (-1) s0)
-                   return x
-    lift $ PC.fork $ do  
-      (res,_) <- S.runStateT task'  s0
-      return res
-#if 0      
+#if 0
   new       = DeadlockT$ lift PC.new
   put_ iv v = DeadlockT$ lift$ PC.put_ iv v
-#endif  
+#endif
 
 --------------------------------------------------------------------------------
 -- TEMPORARY: specialized get operations that decrement the counter before blocking...
 --------------------------------------------------------------------------------
 
--- getIV :: IVar 
+-- getIV :: IVar
 getIV = undefined
+
+-}

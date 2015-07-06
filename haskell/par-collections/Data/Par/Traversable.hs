@@ -3,6 +3,7 @@
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| 
@@ -31,9 +32,9 @@ import Control.Exception (evaluate)
 import Data.Traversable
 import Control.Monad as M hiding (mapM, sequence, join)
 import Prelude hiding (mapM, sequence, head,tail)
-import GHC.Conc (numCapabilities)
 
 import Control.Par.Class
+import Control.Par.EffectSigs
 import Control.Par.Class.Unsafe (internalLiftIO)
 
 -- -----------------------------------------------------------------------------
@@ -52,14 +53,14 @@ import Control.Par.Class.Unsafe (internalLiftIO)
 --
 -- But note that for efficient parallelism you want balanced task trees, not "one at
 -- a time" parallel tasks.  Thus look at `pmapReduce` and friends.
-parMap :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
-          (a -> b) -> t a -> p (t b)
+parMap :: (Traversable t, NFData b, ParFuture p, HasPut e, HasGet e, FutContents p b) =>
+          (a -> b) -> t a -> p e s (t b)
 {-# INLINE parMap #-}
 parMap f xs = mapM (spawnP . f) xs >>= mapM get
 
 -- | A variant of `ParMap` that only evaluates to weak-head-normal-form.
-parMap_ :: (Traversable t, ParFuture p, FutContents p b) =>
-          (a -> b) -> t a -> p (t b)
+parMap_ :: (Traversable t, ParFuture p, HasGet e, HasPut e, FutContents p b) =>
+          (a -> b) -> t a -> p e s (t b)
 {-# INLINE parMap_ #-}
 parMap_ f xs = mapM spawnWHNF xs >>= mapM get
   where
@@ -71,15 +72,15 @@ parMap_ f xs = mapM spawnWHNF xs >>= mapM get
 --
 -- > ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 --
-ptraverse :: (Traversable t, NFData b, ParFuture p, FutContents p b) =>
-           (a -> p b) -> t a -> p (t b)
+ptraverse :: (Traversable t, NFData b, ParFuture p, HasPut e, HasGet e, FutContents p b) =>
+           (a -> p e s b) -> t a -> p e s (t b)
 {-# INLINE ptraverse #-}           
 ptraverse f xs = mapM (spawn . f) xs >>= mapM get
 
 
 -- | A variant that only evaluates to weak-head-normal-form.
-ptraverse_ :: (Traversable t, ParFuture p, FutContents p b) =>
-           (a -> p b) -> t a -> p (t b)
+ptraverse_ :: (Traversable t, ParFuture p, HasPut e, HasGet e, FutContents p b) =>
+           (a -> p e s b) -> t a -> p e s (t b)
 {-# INLINE ptraverse_ #-}
 ptraverse_ f xs = mapM (spawn_ . f) xs >>= mapM get
 

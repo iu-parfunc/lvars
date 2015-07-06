@@ -20,7 +20,7 @@ Category:            Control,Parallelism,Monads
 Build-type:          Simple
 Cabal-version:       >=1.8
 
-Extra-source-files: Control/Par/ST/Vec2Common.hs
+Extra-source-files: includes/Vec2Common.hs
 
 Source-repository head
   type:     git
@@ -28,21 +28,22 @@ Source-repository head
   subdir:   haskell/par-transformers
 
 Library
-  Exposed-modules: 
+  Exposed-modules:
                  -- A scheduler-transformer that adds cancellation:
                  Control.LVish.CancelT
+                 -- Control.LVish.DeadlockT
 
                  -- State on top of Par is generally useful, but experimental
-                 Control.Par.StateT                 
+                 Control.Par.StateT
 
                  Control.Par.ST
                  Control.Par.ST.Vec
+
                  Control.Par.ST.Vec2
                  Control.Par.ST.UVec
                  Control.Par.ST.UVec2
-
                  Control.Par.ST.StorableVec2
-                 
+
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
@@ -56,9 +57,9 @@ Library
                , mtl          >= 2.0
                , transformers >= 0.2
                , vector       >= 0.9
-               , ghc-prim 
-               , atomic-primops >= 0.6 
-  ghc-options: -O2
+               , ghc-prim
+               , atomic-primops >= 0.6
+  ghc-options: -O2 -Wall
   Include-Dirs: includes/
 
 -- Note: This is actually broken with ghc 7.6 on linux, due to a bug
@@ -69,28 +70,28 @@ Library
 
 Test-suite test-par-transformers
   Type: exitcode-stdio-1.0
-  Hs-source-dirs: tests/  
+  Hs-source-dirs: tests/
   Main-is: Main.hs
---  Other-modules: CancelTests
-  Other-modules: STTests
+  Other-modules: CancelTests, STTests
+  -- Other-modules: STTests
   -- (1) Build depends that are used directly by the test files, including:
   -- (1A) Self dependency:
   Build-depends: par-transformers
   -- (1B) Dependencies common to test files and the library:
   Build-depends: base >= 4 && < 5
-               , par-classes >= 1.1 && < 2.0  
+               , par-classes >= 1.1 && < 2.0
                , mtl    >= 2.0
                , transformers >= 0.2
                , vector >= 0.9
-               , ghc-prim 
+               , ghc-prim
 
   -- (1C) Additional depends to test concrete instances:
-  Build-depends: lvish        >= 2.0
+  Build-depends: lvish >= 2.0
 
   -- (1C) Additional build depends for testing:
   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
 
-  ghc-options: -threaded
+  ghc-options: -threaded -Wall -rtsopts -with-rtsopts=-N4 -eventlog
 
   -- Atomic-primops fails when used by template-haskell/ghci on linux:
   if impl(ghc < 7.7) && os(linux) {

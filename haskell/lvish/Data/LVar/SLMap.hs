@@ -1,17 +1,17 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MagicHash             #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Trustworthy           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 {-|
 
@@ -31,24 +31,24 @@ module Data.LVar.SLMap
          -- * The type and its basic operations
          IMap,
          newEmptyMap, newMap, newFromList,
-         insert, 
+         insert,
          getKey, waitSize, waitValue,
-         modify, 
+         modify,
 
          -- * Generic routines and convenient aliases
          gmodify, getOrInit,
 
          -- * Quasi-deterministic operations
          freezeMap, fromIMap,
-         traverseFrzn_,         
+         traverseFrzn_,
 
          -- * Iteration and callbacks
-         forEach, forEachHP, 
+         forEach, forEachHP,
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy, traverseMap, traverseMap_, 
-         
+         copy, traverseMap, traverseMap_,
+
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP,
 
@@ -56,35 +56,36 @@ module Data.LVar.SLMap
          levelCounts
        ) where
 
-import           Control.Exception (throw)
 import           Control.Applicative
-import           Data.Concurrent.SkipListMap as SLM
-import qualified Data.Map.Strict as M
-import qualified Data.LVar.IVar as IV
-import qualified Data.Foldable    as F
-import           Data.IORef (readIORef)
-import           Data.UtilInternal (traverseWithKey_)
-import           Data.List (intersperse)
-import           Data.LVar.Generic as G
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           Control.Monad
-import           Control.Monad.IO.Class
+import           Control.Exception                      (throw)
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV)
+import           Control.LVish.Internal                 as LI
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Data.Concurrent.SkipListMap            as SLM
+import qualified Data.Foldable                          as F
+import           Data.IORef                             (readIORef)
+import           Data.List                              (intersperse)
+import           Data.LVar.Generic                      as G
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import qualified Data.LVar.IVar                         as IV
+import qualified Data.Map.Strict                        as M
+import           Data.UtilInternal                      (traverseWithKey_)
+import           GHC.Prim                               (unsafeCoerce#)
+import           Internal.Control.LVish.SchedIdempotent (freezeLV, getLV, newLV,
+                                                         putLV, putLV_)
 import qualified Internal.Control.LVish.SchedIdempotent as L
-import           System.IO.Unsafe  (unsafeDupablePerformIO)
-import           GHC.Prim          (unsafeCoerce#)
 import           Prelude
+import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 import Debug.Trace
 
-import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!
-import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (internalLiftIO)
-import qualified Data.Splittable.Class as Sp
-import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
+import           Control.LVish.Unsafe     ()
+import qualified Control.Par.Class        as PC
+import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
+import qualified Data.Splittable.Class    as Sp
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -102,7 +103,7 @@ data IMap k s v = Ord k => IMap {-# UNPACK #-} !(LVar s (SLM.SLMap k v) (k,v))
 
 -- | Equality is physical equality, as with @IORef@s.
 instance Eq (IMap k s v) where
-  IMap lv1 == IMap lv2 = state lv1 == state lv2 
+  IMap lv1 == IMap lv2 = state lv1 == state lv2
 
 -- | An `IMap` can be treated as a generic container LVar.  However, the polymorphic
 -- operations are less useful than the monomorphic ones exposed by this module.
@@ -110,19 +111,19 @@ instance LVarData1 (IMap k) where
   -- | Get the exact contents of the map.  Using this may cause your
   -- program to exhibit a limited form of nondeterminism: it will never
   -- return the wrong answer, but it may include synchronization bugs
-  -- that can (nondeterministically) cause exceptions.  
+  -- that can (nondeterministically) cause exceptions.
   freeze orig@(IMap (WrapLVar lv)) =
     WrapPar$ do freezeLV lv; return (unsafeCoerceLVar orig)
-                
-  -- | We can do better than the default here; this is /O(1)/:  
-  sortFrzn = AFoldable 
+
+  -- | We can do better than the default here; this is /O(1)/:
+  sortFrzn = AFoldable
 
   -- | This generic version has the disadvantage that it does not observe the KEY,
   -- only the value.
-  addHandler mh (IMap (WrapLVar lv)) callb = WrapPar $ 
+  addHandler mh (IMap (WrapLVar lv)) callb = WrapPar $
     L.addHandler mh lv globalCB (\(_k,v) -> return$ Just$ unWrapPar$ callb v)
     where
-      globalCB slm = 
+      globalCB slm =
         unWrapPar $
           SLM.foldlWithKey LI.liftIO
              (\() _k v -> forkHP mh $ callb v) () slm
@@ -140,7 +141,6 @@ instance DeepFrz a => DeepFrz (IMap k s a) where
   type FrzType (IMap k s a) = IMap k Frzn (FrzType a)
   frz = unsafeCoerceLVar
 
-  
 --------------------------------------------------------------------------------
 
 -- | The default number of skiplist levels
@@ -160,7 +160,7 @@ newEmptyMap_ n = fmap (IMap . WrapLVar) $ WrapPar $ newLV $ SLM.newSLMap n
 newMap :: Ord k => M.Map k v -> Par e s (IMap k s v)
 newMap mp =
  fmap (IMap . WrapLVar) $ WrapPar $ newLV $ do
-  slm <- SLM.newSLMap defaultLevels  
+  slm <- SLM.newSLMap defaultLevels
   traverseWithKey_ (\ k v -> do Added _ <- SLM.putIfAbsent slm k  (return v)
                                 return ()
                    ) mp
@@ -174,7 +174,7 @@ newFromList ls = newFromList_ ls defaultLevels
 -- | Create a new map drawing initial elements from an existing list, with
 -- the given number of skip list levels.
 newFromList_ :: Ord k => [(k,v)] -> Int -> Par e s (IMap k s v)
-newFromList_ ls n = do  
+newFromList_ ls n = do
   m@(IMap lv) <- newEmptyMap_ n
   -- TODO: May want to consider parallelism here for sufficiently large inputs:
   forM_ ls $ \(k,v) -> LI.liftIO $ SLM.putIfAbsent (state lv) k $ return v
@@ -186,19 +186,19 @@ newFromList_ ls n = do
 withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
                            IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap lv) callback action = do
-  hp  <- newPool 
-  res <- IV.new 
+  hp  <- newPool
+  res <- IV.new
   let deltCB (k,v) = return$ Just$ unWrapPar$ callback k v
       initCB slm = do
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
         unWrapPar $ do
-          SLM.foldlWithKey LI.liftIO 
+          SLM.foldlWithKey LI.liftIO
             (\() k v -> forkHP (Just hp) $ callback k v) () slm
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
   WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
-  
+
   -- We additionally have to quiesce here because we fork the inital set of
   -- callbacks on their own threads:
   quiesce hp
@@ -206,11 +206,11 @@ withCallbacksThenFreeze (IMap lv) callback action = do
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs
 -- added to the map, optionally tied to a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in 
+forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
           -> IMap k s v                  -- ^ Map to listen to
           -> (k -> v -> Par e s ())      -- ^ callback
           -> Par e s ()
-forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ 
+forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
     L.addHandler mh lv globalCB
        -- FIXME: this is bad, it schedules REPEAT callbacks on the same key:
        (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
@@ -218,26 +218,26 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
     gcallb k v = do
       logDbgLn 5 " [SLMap] callback from global traversal "
       callb k v
-    globalCB slm = do 
+    globalCB slm = do
       unWrapPar $ do
         logDbgLn 5 " [SLMap] Beginning fold to check for global-work"
         SLM.foldlWithKey LI.liftIO (\() k v -> forkHP mh $ gcallb k v) () slm
-        
+
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
 forEach :: IMap k s v -> (k -> v -> Par e s ()) -> Par e s ()
-forEach = forEachHP Nothing         
+forEach = forEachHP Nothing
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
 insert :: (Ord k, Eq v, HasPut e) =>
-          k -> v -> IMap k s v -> Par e s () 
+          k -> v -> IMap k s v -> Par e s ()
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter slm = do
           putRes <- SLM.putIfAbsent slm key $ return elm
           case putRes of
             Added _ -> return $ Just (key, elm)
             Found _ -> throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
-          
+
 -- | `IMap`s containing other LVars have some additional capabilities compared to
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
@@ -256,7 +256,7 @@ modify (IMap (WrapLVar lv)) key newBottom fn = do
           putRes <- unWrapPar $ SLM.putIfAbsent slm key newBottom
           case putRes of
             Added v -> return (Just (key,v), fn v)
-            Found v -> return (Nothing,      fn v)          
+            Found v -> return (Nothing,      fn v)
 
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
@@ -271,20 +271,20 @@ gmodify map key fn = modify map key G.newBottom fn
 
 {-# INLINE getOrInit #-}
 -- | Return the preexisting value for a key if it exists, and otherwise return
--- 
+--
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
 getOrInit :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
-            
+
 -- | Wait for the map to contain a specified key, and return the associated value.
 getKey :: (HasGet e, Ord k) => k -> IMap k s v -> Par e s v
 getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     globalThresh slm _frzn = SLM.find slm key
     deltaThresh (k,v) | k == key  = return $ Just v
-                      | otherwise = return Nothing 
+                      | otherwise = return Nothing
 
 -- | Wait until the map contains a certain value (on any key).
 waitValue :: (HasGet e, Ord k, Eq v) => v -> IMap k s v -> Par e s ()
@@ -330,7 +330,7 @@ freezeMap :: (HasFreeze e, Ord k) => IMap k s v -> Par e s (IMap k Frzn v)
 freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
   freezeLV lv
   -- For the final deepFreeze at the end of a runpar we can actually skip
-  -- the freezeLV part....  
+  -- the freezeLV part....
   return (unsafeCoerce# x)
 
 
@@ -338,7 +338,7 @@ freezeMap x@(IMap (WrapLVar lv)) = WrapPar $ do
 --   when the `IMap` has already been frozen.  This is useful for processing the
 --   result of `Control.LVish.DeepFrz.runParThenFreeze`, using standard library
 --   functions.
-fromIMap :: IMap k Frzn a -> M.Map k a 
+fromIMap :: IMap k Frzn a -> M.Map k a
 fromIMap (IMap (WrapLVar lv)) = unsafeDupablePerformIO $
   SLM.foldlWithKey id
                    (\ acc k v -> return $! M.insert k v acc)
@@ -349,7 +349,7 @@ fromIMap (IMap (WrapLVar lv)) = unsafeDupablePerformIO $
 -- value.
 traverseFrzn_ :: (Ord k) =>
                  (k -> a -> Par e s ()) -> IMap k Frzn a -> Par e s ()
-traverseFrzn_ fn (IMap (WrapLVar lv)) = 
+traverseFrzn_ fn (IMap (WrapLVar lv)) =
   SLM.foldlWithKey LI.liftIO
                    (\ () k v -> fn k v)
                    () (L.state lv)
@@ -385,7 +385,7 @@ traverseMapHP :: (Ord k, Eq b, HasPut e) =>
                  Par e s (IMap k s b)
 traverseMapHP mh fn set = do
   os <- newEmptyMap
-  traverseMapHP_ mh fn set os  
+  traverseMapHP_ mh fn set os
   return os
 
 -- | Variant of `traverseMap_` that optionally ties the handlers to a pool.
@@ -393,7 +393,7 @@ traverseMapHP_ :: (Ord k, Eq b, HasPut e) =>
                   Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a -> IMap k s b ->
                   Par e s ()
 traverseMapHP_ mh fn set os = do
-  forEachHP mh set $ \ k x -> do 
+  forEachHP mh set $ \ k x -> do
     x' <- fn k x
     insert k x' os
 
@@ -409,7 +409,7 @@ unionHP mh m1 m2 = do
   return os
 
 levelCounts :: IMap k s a -> IO [Int]
-levelCounts (IMap (WrapLVar lv)) = 
+levelCounts (IMap (WrapLVar lv)) =
   let slm = L.state lv in
   SLM.counts slm
 
@@ -421,7 +421,7 @@ levelCounts (IMap (WrapLVar lv)) =
 -- the case of this `IMap` implementation, it need only be `Frzn`, not
 -- `Trvrsbl`.
 instance F.Foldable (IMap k Frzn) where
-  -- Note: making these strict for now:  
+  -- Note: making these strict for now:
   foldr fn zer (IMap (WrapLVar lv)) =
     -- TODO: this isn't a fold RIGHT, it's a fold left.  Need to fix that:
     unsafeDupablePerformIO $
@@ -439,19 +439,18 @@ instance PC.Generator (IMap k Frzn a) where
     unsafeDupablePerformIO $
     SLM.foldlWithKey id (\ a k v -> return $! fn a (k,v))
                      zer (L.state lv)
-    
+
   {-# INLINE foldMP #-}
   -- | More efficient, not requiring unsafePerformIO or risk of duplication.
   foldMP fn zer (IMap (WrapLVar lv)) =
     SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
                      zer (L.state lv)
 
-
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
-  -- Can't split directly but can slice and then split: 
-  pmapFold mfn rfn initAcc (IMap lv) = do 
-    let slm = state lv 
+  -- Can't split directly but can slice and then split:
+  pmapFold mfn rfn initAcc (IMap lv) = do
+    let slm = state lv
         slc = SLM.toSlice slm
         -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
         -- enough that we might as well use unsafePerformIO?
@@ -462,21 +461,18 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
             Just (s1,s2) -> [s1,s2]
 
         -- Ideally we could liftIO into the Par monad here.
-        seqfold fn zer (SLM.Slice slm st en) = do 
+        seqfold fn zer (SLM.Slice slm st en) = do
           internalLiftIO $ putStrLn $ "[DBG] dropping to seqfold.., st/en: "++show (st,en)
           -- FIXME: Fold over only the range in the slice:
-          SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v)) zer slm    
+          SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v)) zer slm
     internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap... calling mkMapReduce"
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc
 
--- UNSAFE!  It is naughty if this instance escapes to the outside world, which it can...
-instance F.Foldable (SLMapSlice k) where
-
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
     "{IMap: " ++
-     (concat $ intersperse ", " $ 
+     (concat $ intersperse ", " $
       unsafeDupablePerformIO $
        SLM.foldlWithKey id (\ acc k v -> return$ show (k, v) : acc)
         [] (L.state lv)
@@ -486,11 +482,10 @@ instance (Show k, Show a) => Show (IMap k Frzn a) where
 instance (Show k, Show a) => Show (IMap k Trvrsbl a) where
   show lv = show (castFrzn lv)
 
-
 --------------------------------------------------------------------------------
-  
--- Not exported yet: 
-#if 0  
+
+-- Not exported yet:
+#if 0
 instance PC.ParIMap (Par e s) where
   type PC.IMap (Par e s) k = IMap k s
   type PC.IMapContents (Par e s) k v = (Ord k, Eq v)
@@ -499,4 +494,3 @@ instance PC.ParIMap (Par e s) where
   PC.insert      = insert
   PC.getKey      = getKey
 #endif
-

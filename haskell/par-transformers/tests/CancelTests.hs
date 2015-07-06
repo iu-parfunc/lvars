@@ -1,200 +1,206 @@
-{-# LANGUAGE TemplateHaskell, DataKinds, TypeFamilies, ConstraintKinds, ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes, CPP #-}
+{-# LANGUAGE CPP, ConstraintKinds, DataKinds, RankNTypes, ScopedTypeVariables,
+             TemplateHaskell, TypeFamilies #-}
 
 module CancelTests (tests, runTests)
        where
 
-import Control.LVish (logDbgLn, runParLogged, runParNonDet, runPar, runParPoly, runParPolyIO, Par,
-                      isDet, isQD, isND, isReadOnly, liftReadOnly)
-import Control.LVish.CancelT as CT
-import qualified Control.Par.Class as PC
+import Control.LVish (isDet, isND, isQD, isReadOnly, liftReadOnly, logDbgLn,
+                      runPar, runParNonDet, runParDetailed)
+import Control.LVish (DbgCfg(..), OutDest(..))
+import Control.LVish.CancelT
+import Control.LVish.Internal
+import Control.Par.Class
+import Control.Par.Class.Unsafe
 import Control.Par.EffectSigs
-import Control.Par.Class.Unsafe (ParMonad(internalLiftIO))
--- import Control.LVish.Unsafe ()
-import Data.LVar.IVar as IV
 
 import Control.Concurrent
-import Control.Monad.Trans
+import Data.List (isInfixOf)
 
-import Data.List
-import Test.HUnit (Assertion, assert, assertEqual, assertBool, Counts(..))
+import System.IO (stderr)
+
+import Test.Framework
 import Test.Framework.Providers.HUnit
-import Test.Framework -- (Test, defaultMain, testGroup)
 import Test.Framework.TH (testGroupGenerator)
+import Test.HUnit (Assertion, Counts (..), assert, assertBool, assertEqual)
+
+import Debug.Trace
+
+tests :: Test
+tests = $(testGroupGenerator)
+
+runTests :: IO ()
+runTests = defaultMain [tests]
 
 --------------------------------------------------------------------------------
 -- Helpers:
 
--- Invisible, untracked, unsafe IO:
-io :: ParMonad m => IO a -> m a
-io = internalLiftIO
-
 appreciableDelay :: IO ()
 appreciableDelay = threadDelay (100 * 1000)
 
--- FIXME: Need to replace this with something that will work when NOT in debug mode.
-dbg :: String -> CancelT (Par e s) ()
-dbg = lift . logDbgLn (-1)
+dbg :: String -> CancelT Par e s ()
+dbg = lift . logDbgLn 0
+
+-- FIXME: Logging has some problems:
+-- - It depends on env variable DEBUG.
+-- - However, when DEBUG=0, `logDbgLn 0 msg` doesn't log anything. It has to be
+--   at least 1.
+-- - But when it's 1, it prints lots of internal log messages too.
+-- - Also, LVish needs to be compiled with -DDEBUG_LVAR for logging.
+-- - It also adds some prefix to log messages. I think those prefixes are
+--   non-deterministic, becuase worker thread ID is part of the prefix. So we
+--   can't directly compare log messages in tests.
+--
+-- Currently I'm not fixing anything. I'll write some tests for specifically
+-- logging. For now we should search log messages in all collected messages in
+-- tests:
+
+-- | Assert that given log message is infix of at least one log message.
+assertHasLog :: String -> [String] -> Assertion
+assertHasLog log allLogs =
+  assertBool ("Can't find the log message " ++ show log ++ " in logs: " ++ show allLogs) $
+    any (log `isInfixOf`) allLogs
+
+-- | Assert that given log message is not infix of any log messages.
+assertDoesntHaveLog :: String -> [String] -> Assertion
+assertDoesntHaveLog log allLogs =
+  assertBool ("Found the log message " ++ show log ++ " in logs: " ++ show allLogs) $
+    not $ any (log `isInfixOf`) allLogs
+
+
+-- | A runner for testing which both grabs logs AND echos them to the screen.
+runDbg :: (forall s . Par e s a) -> IO ([String], Either String a)
+runDbg comp = do
+  numCap <- getNumCapabilities
+  (logs,ans) <- runParDetailed
+                   DbgCfg { dbgRange = (Just (0,1))
+                          , dbgDests = [OutputEvents, OutputInMemory, OutputTo stderr]
+                          , dbgScheduling = False }
+                   numCap comp
+  case ans of
+    Left err  -> return $! (logs, Left (show err))
+    Right x   -> return $! (logs, Right x)
+
+-- Making sure the logger is working with Par.
+case_LogTest1 :: IO ()
+case_LogTest1 = do
+  let logMsg = "Testing the logger."
+  (logs, _) <- runDbg $ logDbgLn 0 logMsg
+  assertHasLog logMsg logs
+
+-- Make sure logging is working with CancelT.
+case_LogTest2 :: IO ()
+case_LogTest2 = do
+  let logMsg = "Testing the logger."
+  (logs, _) <- runDbg $ isDet $ runCancelT $ dbg logMsg
+  assertHasLog logMsg logs
+
+-- Make sure `cancelMe` is not crashing anything. (no logging here)
+case_cancelMe_NoLog :: IO ()
+case_cancelMe_NoLog = runParNonDet $ runCancelT cancelMe
+
+case_cancel01_CancelMe :: IO ()
+case_cancel01_CancelMe = do
+  logs <- cancel01
+  assertHasLog "Begin test 01" logs
+  assertDoesntHaveLog "Past cancelation point!" logs
+
+-- FIXME: This seems to be a horrible behavior of test-framework: Exceptions
+-- are not shown! At one point this test was failing with this:
+--
+-- (from GHCi)
+--
+-- -- > cancel01
+-- -- ([],*** Exception: Control/LVish/CancelT.hs:56:10-49: No instance nor default method for class operation pbind
+--
+-- But test output was just "Failed".
+
+cancel01 :: IO [String]
+cancel01 = do
+  (logs,Left err) <- runDbg $ isDet $ runCancelT $ do
+       dbg "Begin test 01: about to cancelMe on main thread"
+       cancelMe -- this is just returnToSched from LVarSched method of Par
+                -- FIXME: seems like log state is not passed
+       dbg "Past cancelation point!"
+  assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
+  return logs
+
+case_cancel02 :: IO ()
+case_cancel02 = do
+  (lines, _) <- cancel02
+  -- Can't compare number of logs, internal logs are interleaved with our logs
+  -- assertEqual "Read wrong number of outputs" 4 (length lines)
+  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+
+-- | This should always cancel the child before printing "!!".
+cancel02 :: IO ([String], Either String ())
+cancel02 =
+  runDbg $ isDet $ runCancelT comp
+ where
+   comp :: forall p e s a .
+           (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
+           CancelT Par e s ()
+   comp = do
+     dbg "[parent] Begin test 02"
+     iv <- new
+     dbg "[parent] Created IVar"
+
+     let p1 :: CancelT Par (SetReadOnly e) s ()
+         p1 = do
+           dbg "[child] Running on child thread... block so parent can run"
+           -- lift $ Control.LVish.yield -- Not working!
+           -- Do we need this? ^ Next line will force rescheduling.
+           get iv -- This forces the parent to get scheduled.
+           dbg "[child] Woke up, now wait so we will be cancelled..."
+           internalLiftIO appreciableDelay
+           pollForCancel
+           dbg "!! [child] thread got past delay!"
+
+     (tid, cfut) <- forkCancelable p1
+     dbg "[parent] Putting to IVar"
+     put iv ()
+     dbg "[parent] Cancelling child thread"
+     cancel tid
+     dbg "[parent] Issued cancel, now exiting."
+
+-- Different than 02 in that child thread cancels itself.
+case_cancel02B :: IO ()
+case_cancel02B = do
+  (lines, err) <- cancel02B
+  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+
+cancel02B :: IO ([String], Either String ())
+cancel02B = runDbg $ isDet $ runCancelT comp
+  where
+    comp :: forall p e s a .
+            (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
+            CancelT Par e s ()
+    comp = do
+      dbg $ "Begin test 02B"
+
+      let p1 :: CancelT Par (SetReadOnly e) s ()
+          p1 = do
+            dbg $ "(1) Running on child thread..."
+            cancelMe
+            dbg $ "!! (2) Running on child thread..."
+
+      _ <- forkCancelable p1
+      dbg $ "Waiting on main thread..."
+      internalLiftIO $ appreciableDelay
+      dbg $ "Now exiting on main thread."
+      return ()
 
 --------------------------------------------------------------------------------
 -- Tests:
 
--- case_cancel01 =
-
--- type MyM a = CancelT (Par e s)
-
--- | This deadlocks, because the last computation was canceled!
-cancel01 :: IO ([String],())
-cancel01 = runParLogged$ isDet $ runCancelT $ do
-  dbg$ "Begin test 01"
-  cancelMe
-  dbg$ "Past cancelation point!"
-  return ()
-
--- TODO: Need to catch the deadlock and put this in a timeout:
--- case_cancel01 :: IO ()
--- case_cancel01 = assertEqual "" ["Begin test 01"] =<< fmap fst cancel01 
-
--- | This should always cancel the child before printing "!!".
-cancel02 :: IO ([String],())
-cancel02 = 
-  -- runParLogged$ isDet $ runCancelT comp
-  undefined
- where 
-  comp :: forall m1 m2 m3 m4 s . 
-          ( m1 ~ Par (Ef NP G NF NB NI) s
-          , PC.ParIVar m1, PC.LVarSched m1, PC.ReadOnlyM m1  -- Sanity check.
-          -- , PC.FutContents m1 CFutFate  -- ERROR HERE.  Why?
-          -- , PC.FutContents m1 () -- ERROR HERE.  Why?
-                                    -- Couldn't match type 'NP with 'P
-                                    -- Inaccessible code in
-                                    --   the type signature for
-          , m2 ~ CancelT m1
-          , m3 ~ Par (Ef P G NF NB NI) s
-          , m4 ~ CancelT m3
-          )
-       => m4 ()
-  comp = do 
-     dbg$ "[parent] Begin test 02"
-     iv  <- lift new
-     let 
-         p1 :: m2 ()
-         p1 = do dbg$ "[child] Running on child thread... block so parent can run"
-                -- lift $ Control.LVish.yield -- Not working!
-     --           lift$ get iv -- This forces the parent to get scheduled.
-                 dbg$ "[child] Woke up, now wait so we will be cancelled..."
-                 io$ appreciableDelay
-                 pollForCancel
-                 dbg$ "!! [child] thread got past delay!"
-
-         p2 :: (PC.ParIVar m, PC.LVarSched m, PC.ReadOnlyM m, 
-                PC.FutContents m CFutFate, PC.FutContents m a) => 
-               CancelT m (CT.ThreadId, CFut m a)
-         p2 = forkCancelable undefined
-
-         p3 :: CancelT m1 (CT.ThreadId, CFut m1 ())
-         p3 = undefined -- This is ok.
-         -- Then here we fail, with a strange "Couldn't match type 'NP with 'P":
---         p3 = forkCancelable undefined
---         p3 = forkCancelable p1 -- This gets the same error as the line above.
-
-{-
-   -- --      p2 :: forall s . CancelT (Par (Ef NP G NF NB NI) s) b
-   --       p2 :: m2 (CT.ThreadId, CFut m1 ())
-   --       p2 = undefined -- forkCancelable p
-
-
-   --      p2 = forkCancelable p
-   --  (tid,cfut) <- liftReadOnly2 $ forkCancelable p
-     let tid = undefined
-     lift$ put iv ()
-     cancel tid
-     dbg$ "[parent] Issued cancel, now exiting."
--}
-     return ()
-
--- | A variant of liftReadOnly which works on a particular transformer
--- stack... creating the GENERAL version of this has proven difficult.
-liftReadOnly2 :: CancelT (Par (Ef NP g NF NB NI) s) a -> CancelT (Par (Ef p g f b i) s) a
-liftReadOnly2 = error "FINISHME"
-
-
-
-case_cancel02 :: IO ()
-case_cancel02 = do (lines,_) <- cancel02
---                   assertEqual "" 4 (length lines)
-                   assertEqual "" False (or$ map (isInfixOf "!!") lines)
-
-isDet2 :: (e ~ (Ef P G NF B NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
-isDet2 x = x
-
-
-isRO :: (e ~ (Ef NP G NF NB NI)) => CancelT (Par e s) a -> CancelT (Par e s) a
-isRO x = x
-
-#if 1
-cancel02B :: IO ()
-cancel02B = runParPolyIO$ runCancelT $ do
-  dbg$ "Begin test 02B"
---  _ <- isRO$ forkTemp $ isRO$ do
-  _ <- isRO$ id $ isRO$ do
-      dbg$ "(1) Running on child thread..."
-      cancelMe
-      dbg$ "(2) Running on child thread..."
-  dbg$ "Waiting on main thread..."
-  io$ appreciableDelay
-  dbg$ "Now exiting on main thread."
-  return ()
-#endif
-
--- | DEBUGGING -- this really should look like an identity function:
-forkTemp :: ( PC.ParIVar m, PC.LVarSched m
-             -- ReadOnlyM m,
-             -- e ~ GetEffects m, 
-             -- NoPut e, 
-            -- , PC.FutContents m CFutFate
---            , PC.FutContents m a -- This line alone screws it up:
-                                 --   Couldn't match type 'NP with 'P
-            ) => 
-            (CancelT m a -> CancelT m a)
-forkTemp = error "FINISHME"
-
-ro1 :: CancelT (Par (Ef NP G NF NB NI) s) ()
-ro1 = undefined
-
-ro2 :: CancelT (Par (Ef NP G NF NB NI) s) ()
--- ro2 = id ro1
-ro2 = forkTemp ro1 -- Activate WEIRD bug.
-
-
-main = cancel02B
-
-------------------------------------------------------------
-
-cancel03 :: IO ()
-cancel03 = runParNonDet$ runCancelT $ do
-  dbg$ "Begin test 03"
-  tid <- forkCancelableND $ do
-      dbg$ "(1) Running on child thread..."
-      cancelMe
-      dbg$ "(2) Running on child thread..."
-
-  dbg$ "Waiting on main thread..."
-  io$ appreciableDelay
-  dbg$ "Now exiting on main thread."
-  return ()
-{-
--}
-
 --------------------------------------------------------------------------------
 -- -- BOOLEAN TESTS:
 -- --------------------------------------------------------------------------------
-  
-case_and1 :: Assertion
-case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
-              v <- PC.new
-              CT.asyncAndCPS (return True) (return False) (PC.put v)
-              PC.get v
+
+-- case_and1 :: Assertion
+-- case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
+--               v <- PC.new
+--               CT.asyncAndCPS (return True) (return False) (PC.put v)
+--               PC.get v
 
 -- case_and2 :: Assertion
 -- case_and2 = assertEqual "" False $ runPar $ runCancelT $ do
@@ -206,7 +212,7 @@ case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
 -- case_and3 = assertEqual "" True $ runPar $ runCancelT $ do
 --               v <- PC.new
 --               CT.asyncAnd (return True) (return True) (PC.put v)
---               PC.get v                        
+--               PC.get v
 
 -- case_and4 :: Assertion
 -- case_and4 = assertEqual "" False $ runPar $ runCancelT $ do
@@ -256,7 +262,7 @@ case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
 -- case_or3 = assertEqual "" True $ runPar $ do
 --               v <- IV.new
 --               asyncOr Nothing (return True) (return True) (IV.put v)
---               IV.get v                        
+--               IV.get v
 
 -- case_or4 :: Assertion
 -- case_or4 = assertEqual "" True $ runPar $ do
@@ -276,11 +282,3 @@ case_and1 = assertEqual "" False $ runPar $ runCancelT $ do
 
 -- --------------------------------------------------------------------------------
 -}
-
-tests :: Test
-tests = $(testGroupGenerator)
-
-
-runTests :: IO ()
-runTests = defaultMain [] -- [tests]
-

@@ -1,0 +1,51 @@
+name:                par-mergesort
+version:             1.0
+build-type:          Simple
+cabal-version:       >=1.8
+
+Source-repository head
+  type:     git
+  location: https://github.com/iu-parfunc/lvars
+  subdir:   haskell/par-transformers/bench/mergesort
+
+library
+  exposed-modules:
+    Control.Par.MergeSort
+
+  build-depends:
+    base                    == 4.*,
+    lvish,
+    monad-par,
+    mtl,
+    par-classes,
+    par-transformers,
+    vector                  >= 0.10 && < 0.11,
+    vector-algorithms
+
+  c-sources:                cilksort.c
+  -- required for REPL, not sure about performance implications
+  cc-options:               -fPIC
+
+  ghc-options:              -O2 -Wall
+
+test-suite test-mergesort
+  type:                 exitcode-stdio-1.0
+  hs-source-dirs:       test/
+  main-is:              Main.hs
+
+  build-depends:
+    base,
+    lvish,
+    mtl,
+    par-classes,
+    par-mergesort,
+    par-transformers,
+    random,
+    vector              >= 0.10 && < 0.11,
+
+    QuickCheck,
+    tasty               >= 0.10 && < 0.11,
+    tasty-hunit,
+    tasty-quickcheck
+
+  ghc-options:          -Wall -O2 -rtsopts -threaded -eventlog

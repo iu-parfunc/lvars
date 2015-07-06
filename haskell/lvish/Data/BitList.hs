@@ -2,7 +2,7 @@
 
 -- | A simple module that provides a more memory-efficient representation of `[Bool]`.
 
-module Data.BitList 
+module Data.BitList
   ( BitList
   , cons, head, tail, empty, null
   , pack, unpack, length, drop, reverse
@@ -13,19 +13,17 @@ module Data.BitList
   )
 where
 
-import Data.Int
-import Data.Bits hiding (popCount)
+import           Data.Bits hiding (popCount)
 import qualified Data.Bits as B
-import Data.Word
-import Prelude hiding (head,tail,drop,length,reverse,null, (>>))
-import qualified Prelude as P
+import           Data.Int
 import qualified Data.List as L
-
-import Debug.Trace
+import           Data.Word
+import           Prelude   hiding (drop, head, length, null, reverse, tail,
+                            (>>))
 
 #ifdef TESTING
 import Test.HUnit
-import Test.QuickCheck hiding ((.&.))
+import Test.QuickCheck     hiding ((.&.))
 import Test.QuickCheck.Gen
 #endif
 
@@ -41,7 +39,7 @@ data BitList = One  {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word64
 {-# INLINABLE tail #-}
 {-# INLINABLE null #-}
 
-instance Show BitList where 
+instance Show BitList where
  show bl = "BitList " ++ show (map (\b -> case b of True -> '1'; False -> '0') (unpack bl))
 -- show bl = "pack " ++ show (unpack bl)
 
@@ -106,7 +104,7 @@ pack  []   = One 0 0
 pack (h:t) = cons h (pack t)
 
 -- | Switch to the more sparse (but isomprophic) memory representation.
-unpack :: BitList -> [Bool] 
+unpack :: BitList -> [Bool]
 unpack (One 0 _)     = []
 unpack (One i bv)    = (bv `testBit` (toI i-1)) : unpack (One (i-1) bv)
 unpack (More 0 _ r)  = unpack r
@@ -114,10 +112,10 @@ unpack (More i bv r) = (bv `testBit` (toI i-1)) : unpack (More (i-1) bv r)
 
 -- drop :: Int -> BitList -> BitList
 -- drop 0 bl           = bl
--- drop n bl | n >= 64 = case bl of 
+-- drop n bl | n >= 64 = case bl of
 -- 		        One _ _    -> error "drop: not enough elements in BitList"
 -- 			More i _ r -> drop (n-i) r
--- drop n bl = case bl of 
+-- drop n bl = case bl of
 -- 	      One i  bv   -> One  (i-n) bv
 -- 	      More i bv r -> More (i-n) bv r
 
@@ -148,14 +146,14 @@ popCount (More ix bv tl) = B.popCount (flp ix bv) + popCount tl
 -- TODO: Reverse.. reverse CAN be efficient if we allow chunks that are NOT full.
 
 -- | Reverse a bitlist, O(N) time and space.
--- 
+--
 -- NOTE: This is somewhat more efficient than reversing a regular list
 -- because bitwise operations can be used to reverse 64 bit chunks at
 -- a time.  However, it is still costly because reversing the order of
 -- bits is not a native operation.
 reverse :: BitList -> BitList
-reverse (One  ix bv)    =          One ix (flp ix bv)
-reverse (More ix bv tl) = loop tl (One ix (flp ix bv))
+reverse (One  ix0 bv0)     =           One ix0 (flp ix0 bv0)
+reverse (More ix0 bv0 tl0) = loop tl0 (One ix0 (flp ix0 bv0))
  where
    loop (More ix bv tl) acc = loop tl (More ix (flp ix bv) acc)
    loop (One  ix bv   ) acc = More ix (flp ix bv) acc
@@ -164,17 +162,14 @@ reverse (More ix bv tl) = loop tl (One ix (flp ix bv))
 flp :: Word8 -> Word64 -> Word64
 flp ix bv = rev64 (bv << (64 - toI ix))
 
-bar :: Integral a => a -> BitList
-bar w = One 64 (fromIntegral w)
-
 instance Eq BitList where
   -- Here we specifically ignore upper bits in the representation:
-  One i1 bv1 == One i2 bv2 
+  One i1 bv1 == One i2 bv2
      | i1 == i2 && mask i1 bv1 == mask i2 bv2  = True
      | otherwise = False
 
-  More i1 bv1 tl1 == More i2 bv2 tl2 = 
-   (One i1 bv1 == One i2 bv2) && 
+  More i1 bv1 tl1 == More i2 bv2 tl2 =
+   (One i1 bv1 == One i2 bv2) &&
    (tl1 == tl2)
 
   _ == _ = False
@@ -185,7 +180,7 @@ mask 0 x = 0
 mask i x = (x << n) >> n
 -- mask i x =
 -- trace ("SHIFT left "++show n++" yielding "++show (x `unsafeShiftL` n)++
---        " unsafe, "++show (x `shiftL` n)++" safe.") $ 
+--        " unsafe, "++show (x `shiftL` n)++" safe.") $
 --   (x `unsafeShiftL` n) >> n
   where n = 64 - toI i
 
@@ -193,7 +188,7 @@ mask i x = (x << n) >> n
 -- | This lexiographic Ord instance makes it suitable for using for pedigree:
 instance Ord BitList where
   {-# INLINABLE compare #-}
-  
+
   -- False < True
   compare a b =
     if null a
@@ -207,9 +202,9 @@ instance Ord BitList where
                 GT -> GT
                 EQ -> compare (tail a) (tail b)
 
-{-  
+{-
   compare a b = cmp a b
-    where 
+    where
      cmp (One  i1 v1)    (One  i2 v2)    = go i1 v1 i2 v2
      cmp (More i1 v1 tl1) (More i2 v2 tl2) =
        case go i1 v1 i2 v2 of
@@ -217,7 +212,7 @@ instance Ord BitList where
          GT -> GT
          EQ -> compare tl1 tl2
      {-# INLINE go #-}
-     go i1 v1 i2 v2 = 
+     go i1 v1 i2 v2 =
        case compare i1 i2 of
          LT -> LT
          GT -> GT
@@ -289,7 +284,7 @@ t5b :: Int
 t5b = L.length (unpack t5)
 
 t6 :: BitList
-t6 = drop 5 (More 1 0 (One 64 0)) 
+t6 = drop 5 (More 1 0 (One 64 0))
 -- More (-4) 0 (One 64 0)
 
 t7 :: Bool
@@ -320,9 +315,9 @@ prop_ord xs ys =
 
 #ifdef TESTING
 tests :: Test
-tests = 
-  TestList 
-    [ 
+tests =
+  TestList
+    [
       show t1 ~=? "BitList \"101101101101101101101101101101\""
     , t2  ~=? 1000
     , t5a ~=? 250
@@ -356,7 +351,7 @@ q6 = quickCheck (\b -> popCount b == P.length (filter id (unpack b)))
 all_props = do q1; q2; q3; q4; q5; q6
 
 instance Arbitrary BitList where
-  arbitrary = MkGen $ \ rng n -> 
+  arbitrary = MkGen $ \ rng n ->
 	        let ls = (unGen arbitrary) rng n
 		in pack ls
 #endif

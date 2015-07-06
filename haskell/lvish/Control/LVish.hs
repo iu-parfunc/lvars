@@ -16,26 +16,26 @@
 > {-# LANGUAGE DataKinds #-}
 > import Control.LVish  -- Generic scheduler; works with any lattice.
 > import Data.LVar.IVar -- The particular lattice in question.
-> 
+>
 > p :: Par Det s Int
 > p = do
 >   num <- new
 >   fork $ put num 4
 >   fork $ put num 4
 >   get num
-> 
+>
 > main = do
 >   print $ runPar $ p
 
- -}
+-}
 
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE TypeFamilies          #-}
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-} -- For Deterministic e superclass constraint.
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 {-# LANGUAGE MultiParamTypeClasses #-}
 
@@ -44,7 +44,7 @@
 module Control.LVish
   (
     -- * CRITICAL OBLIGATIONS for the user: valid @Eq@ and total @Ord@
-    {-| 
+    {-|
     We would like to tell you that if you're programming with Safe Haskell (@-XSafe@),
     that this library provides a formal guarantee that anything executed with `runPar` is
     guaranteed-deterministic.  Unfortunately, as of this release there is still one back-door
@@ -60,13 +60,13 @@ module Control.LVish
     -}
 
     -- * Par computations and their parameters
-    Par(), 
+    Par(),
     LVishException(..),
 
     -- * Running various Par computations
     runPar, runParQuasiDet, runParNonDet,
     -- * More polymorphic variants of same
-    runParPoly, runParPolyIO, 
+    runParPoly, runParPolyIO,
 
     -- * Effect signature manipulation and conversion
     module Control.Par.EffectSigs,
@@ -81,10 +81,10 @@ module Control.LVish
     -- | These effects are a conservative approximation, therefore it is always ok,
     --   for example, to turn "no put" (`NP`) into "put" (`P`).
     addP, addG, addF, addB, addI, liftReadOnly,
-    
+
     -- * Basic control flow
-    fork, yield, 
-    --    quiesceAll,    
+    fork, yield,
+    --    quiesceAll,
 
     -- * Lifting IO, sacrifices determinism
     parIO,
@@ -98,10 +98,10 @@ module Control.LVish
      -- asyncAnd, asyncOr, andMap, orMap,
 
      -- * Synchronizing with handler pools
-     L.HandlerPool(),    
-     newPool, 
-     withNewPool, withNewPool_, 
-     quiesce, 
+     L.HandlerPool(),
+     newPool,
+     withNewPool, withNewPool_,
+     quiesce,
 
      forkHP,
 
@@ -115,62 +115,18 @@ module Control.LVish
    ) where
 
 -- NOTE : This is an aggregation module:
-import           Control.LVish.Types
-import           Control.LVish.Internal as I
-import           Control.LVish.Basics as B
+import           Control.LVish.Basics                   as B
+import           Control.LVish.Internal                 as I
+import           Control.LVish.Logging                  (LogMsg (..),
+                                                         defaultMemDbgRange,
+                                                         logOn)
 import           Control.LVish.Logical
-import qualified Internal.Control.LVish.SchedIdempotent as L
-import           Control.LVish.SchedIdempotentInternal (State)
+import           Control.LVish.Types
 import           Control.Par.EffectSigs
-import           Control.LVish.Logging (LogMsg(..), OutDest(..), defaultMemDbgRange, logOn)
-import           Data.LVar.IVar 
-import           Data.Proxy
-import           Data.Coerce (coerce)
+import           Data.LVar.IVar
+import qualified Internal.Control.LVish.SchedIdempotent as L
 
-import Data.IORef
 --------------------------------------------------------------------------------
-
-import qualified Control.Par.Class as PC
-import qualified Control.Par.Class.Unsafe as PU
---------------------------------------------------------------------------------                
-    
-instance (Deterministic e1, e2 ~ SetF F e1) => 
-         PC.ParQuasi (Par e1 s) (Par e2 s) where
-  -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
-  toQPar act = unsafeConvert act
-  
-instance PC.ParSealed (Par e s) where
-  type GetSession (Par e s) = s
-  
-instance PC.LVarSched (Par e s) where
-  type LVar (Par e s) = L.LVar 
-
-  forkLV = fork
-  newLV  = WrapPar . L.newLV
-  getLV lv glob delt = WrapPar $ L.getLV lv glob delt
-  putLV lv putter    = WrapPar $ L.putLV lv putter
-
-  stateLV (L.LVar{L.state=s}) = (PC.Proxy,s)
-
-  returnToSched = WrapPar $ mkPar $ \_k -> L.sched
-
-
-instance (Deterministic e1, e2 ~ SetF F e1) => 
-         PC.LVarSchedQ (Par e1 s) (Par e2 s)  where
---  freezeLV = WrapPar . L.freezeLV  -- FINISHME
-
-instance PU.ParThreadSafe (Par e s) where
-  unsafeParIO = I.liftIO
-
-instance PC.ParLVar (Par e s) where
-
-instance PU.ParWEffects (Par e s) where
-  type GetEffects (Par e s) = e
-  type SetEffects e2 (Par e1 s) = Par e2 s
-  liftReadOnly (WrapPar y) = (WrapPar y)
-  coerceProp Proxy eprox = PU.MkConstraint
-  law1 _ _ = PU.MkConstraint
-  law2 _ _ = PU.MkConstraint
 
 -- | Lifting IO into `Par` in a manner that is fully accounted for in the effect
 -- signature.
@@ -181,18 +137,11 @@ parIO = I.liftIO
 -- only, NOT to signal that a given thread is about to read or modify
 -- a memory address.
 dbgChatterOnly :: Int -> String -> Par e s ()
-dbgChatterOnly lvl msg = do
+dbgChatterOnly logLvl msg = do
   x <- getLogger
   case x of
-    Nothing  -> logDbgLn lvl msg
-    Just lgr -> liftIO $ logOn lgr (OffTheRecord lvl msg)
-        
-
------- DUPLICATED: -----
-mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
-mkPar f = L.Par $ \k -> L.ClosedPar $ \q -> f k q
-type SchedState = State L.ClosedPar LVarID
-type LVarID = IORef ()
+    Nothing  -> logDbgLn logLvl msg
+    Just lgr -> liftIO $ logOn lgr (OffTheRecord logLvl msg)
 
 ------------------------------------------------------------
 
@@ -229,42 +178,42 @@ noGet x = x
 
 
 
-isDet :: (e ~ (Ef P G NF B NI)) => Par e s a -> Par e s a
+isDet :: (e ~ ('Ef 'P 'G 'NF 'B 'NI)) => Par e s a -> Par e s a
 isDet x = x
 
-isQD :: (e ~ (Ef P G F B NI)) => Par e s a -> Par e s a
+isQD :: (e ~ ('Ef 'P 'G 'F 'B 'NI)) => Par e s a -> Par e s a
 isQD x = x
 
-isND :: (e ~ (Ef P G F B I)) => Par e s a -> Par e s a
+isND :: (e ~ ('Ef 'P 'G 'F 'B 'I)) => Par e s a -> Par e s a
 isND x = x
 
-isIdemD :: (e ~ (Ef P G NF NB NI)) => Par e s a -> Par e s a
+isIdemD :: (e ~ ('Ef 'P 'G 'NF 'NB 'NI)) => Par e s a -> Par e s a
 isIdemD x = x
 
-isIdemQD :: (e ~ (Ef P G F NB NI)) => Par e s a -> Par e s a
+isIdemQD :: (e ~ ('Ef 'P 'G 'F 'NB 'NI)) => Par e s a -> Par e s a
 isIdemQD x = x
 
-isReadOnly :: (e ~ (Ef NP G NF NB NI)) => Par e s a -> Par e s a
+isReadOnly :: (e ~ ('Ef 'NP 'G 'NF 'NB 'NI)) => Par e s a -> Par e s a
 isReadOnly x = x
 
 -- | Lift a read-only computation to participate in a parent computation with more
 -- effects.
-liftReadOnly :: Par (Ef NP g NF NB NI) s a -> Par (Ef p g f b i) s a
+liftReadOnly :: Par ('Ef 'NP g 'NF 'NB 'NI) s a -> Par ('Ef p g f b i) s a
 liftReadOnly (WrapPar p) = WrapPar p
 
 
-addP :: Par (Ef NP g f b i) s a -> Par (Ef p g f b i) s a
+addP :: Par ('Ef 'NP g f b i) s a -> Par ('Ef p g f b i) s a
 addP (WrapPar p) = WrapPar p
 
-addG :: Par (Ef p NG f b i) s a -> Par (Ef p g f b i) s a
+addG :: Par ('Ef p 'NG f b i) s a -> Par ('Ef p g f b i) s a
 addG (WrapPar p) = WrapPar p
 
-addF :: Par (Ef p g NF b i) s a -> Par (Ef p g f b i) s a
+addF :: Par ('Ef p g 'NF b i) s a -> Par ('Ef p g f b i) s a
 addF (WrapPar p) = WrapPar p
 
-addB :: Par (Ef p g f NB i) s a -> Par (Ef p g f b i) s a
+addB :: Par ('Ef p g f 'NB i) s a -> Par ('Ef p g f b i) s a
 addB (WrapPar p) = WrapPar p
 
-addI :: Par (Ef p g f b NI) s a -> Par (Ef p g f b i) s a
+addI :: Par ('Ef p g f b 'NI) s a -> Par ('Ef p g f b i) s a
 addI (WrapPar p) = WrapPar p
 

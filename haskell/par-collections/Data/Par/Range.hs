@@ -31,6 +31,7 @@ import Control.Monad as M hiding (mapM, sequence, join)
 import GHC.Conc (getNumProcessors)
 
 import Control.Par.Class
+import Control.Par.EffectSigs
 import Data.Splittable.Class as Sp
 import Prelude hiding (init,max,sequence, head,tail)
 
@@ -165,12 +166,12 @@ num_procs = unsafePerformIO getNumProcessors
 -- | For convenience: A variant of `Data.Par.Splittable.pmapReduce`
 -- specialized to operating on `Range` data.
 pmapReduce
-   :: (NFData a, ParFuture p, FutContents p a)
+   :: (NFData a, ParFuture p, HasPut e, HasGet e, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
-      -> (Int -> p a)     -- ^ compute one result
-      -> (a -> a -> p a)  -- ^ combine two results 
+      -> (Int -> p e s a)     -- ^ compute one result
+      -> (a -> a -> p e s a)  -- ^ combine two results 
       -> a                -- ^ initial result
-      -> p a
+      -> p e s a
 -- pmapReduce = P.pmapReduce 
 pmapReduce = mkMapReduce spawn
 
@@ -180,12 +181,12 @@ pmapReduce = mkMapReduce spawn
 -- Also, like `pmapReduce`, this is merely a specialized version of
 -- `Data.Par.Splittable.pmapReduce_`.
 pmapReduce_
-   :: (ParFuture p, FutContents p a)
+   :: (ParFuture p, HasPut e, HasGet e, FutContents p a)
       => Range   -- ^ iteration range over which to calculate
-      -> (Int -> p a)     -- ^ compute one result
-      -> (a -> a -> p a)  -- ^ combine two results 
+      -> (Int -> p e s a)     -- ^ compute one result
+      -> (a -> a -> p e s a)  -- ^ combine two results 
       -> a                -- ^ initial result
-      -> p a
+      -> p e s a
 pmapReduce_ = mkMapReduce spawn_
 
 
@@ -193,8 +194,9 @@ pmapReduce_ = mkMapReduce spawn_
               
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
-mkMapReduce :: (ParFuture m, FutContents m t) => (m t -> m (Future m t)) ->
-               Range -> (Int -> m t) -> (t -> t -> m t) -> t -> m t
+mkMapReduce :: (ParFuture m, HasPut e,  HasGet e, FutContents m t) => 
+               (m e s t -> m e s (Future m s t)) ->
+               Range -> (Int -> m e s t) -> (t -> t -> m e s t) -> t -> m e s t
 mkMapReduce spawner irng fn binop init = loop irng
  where
   mapred b ac = do x <- fn b;
@@ -332,7 +334,7 @@ for_ start end _fn | start > end = error "for_: start is greater than end"
 for_ start end fn = loop start
   where
    loop !i | i > end  = return ()
-	   | otherwise = do fn i; loop (i+1)
+           | otherwise = do fn i; loop (i+1)
 
 -- | Inclusive / Inclusive
 {-# INLINE forAcc_ #-}

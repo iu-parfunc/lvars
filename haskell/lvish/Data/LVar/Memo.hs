@@ -1,7 +1,8 @@
-{-# LANGUAGE ScopedTypeVariables, DataKinds #-}
-{-# LANGUAGE KindSignatures, EmptyDataDecls #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE EmptyDataDecls      #-}
+{-# LANGUAGE KindSignatures      #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 {-# OPTIONS_GHC -O2 #-}
 
 {-|
@@ -10,26 +11,22 @@ This basic version of memotables is implemented on top of existing LVars without
 breaking any rules.
 
 The problem is that it cannot do cycle detection, because that requires tracking
-extra information (where we've been) which is NOT exposed to the user and NOT used 
+extra information (where we've been) which is NOT exposed to the user and NOT used
 
  -}
 module Data.LVar.Memo
        (
-         -- * Memo tables and defered lookups 
+         -- * Memo tables and defered lookups
          Memo, MemoFuture, makeMemo,
-         
+
          -- * Memo table operations
          getLazy, getMemo, force
        ) where
 import Debug.Trace
 
-import Control.LVish
-import qualified Data.Set as S
--- import qualified Data.LVar.SLMap as IM
--- import Data.LVar.SLSet as IS
+import           Control.LVish
 import qualified Data.LVar.PureMap as IM
-import Data.LVar.PureSet as IS
-import Data.LVar.IVar as IV
+import           Data.LVar.PureSet as IS
 
 --------------------------------------------------------------------------------
 -- Types
@@ -55,7 +52,7 @@ makeMemo fn = do
   mp <- IM.newEmptyMap
   IS.forEach st $ \ elm -> do
     res <- fn elm
-    trace ("makeMemo, about to insert result: "++show (show elm, show res)) $    
+    trace ("makeMemo, about to insert result: "++show (show elm, show res)) $
       IM.insert elm res mp
   return $! Memo st mp
 -- TODO: this version may want to have access to the memo-table within the handler as
@@ -64,7 +61,7 @@ makeMemo fn = do
 
 -- | Read from the memo-table.  If the value must be computed, do that right away and
 -- block until its complete.
-getMemo :: (HasPut e, HasGet e, Ord a, Eq b) => Memo e s a b -> a -> Par e s b 
+getMemo :: (HasPut e, HasGet e, Ord a, Eq b) => Memo e s a b -> a -> Par e s b
 getMemo tab key =
   do fut <- getLazy tab key
      force fut
@@ -73,18 +70,18 @@ getMemo tab key =
 -- already present.  Don't block on the computation being complete, rather, return a
 -- future.
 getLazy :: (HasPut e, HasGet e, Ord a, Eq b) => Memo e s a b -> a -> Par e s (MemoFuture e s b)
-getLazy (Memo st mp) key = do 
+getLazy (Memo st mp) key = do
   IS.insert key st
   return $! MemoFuture (IM.getKey key mp)
 
 
 -- | This will throw exceptions that were raised during the computation, INCLUDING
 -- multiple put.
-force :: MemoFuture e s b -> Par e s b 
+force :: MemoFuture e s b -> Par e s b
 force (MemoFuture pr) = pr
 -- FIXME!!! Where do errors in the memoized function (e.g. multiple put) surface?
 -- We must pick a determined, consistent place.
--- 
+--
 -- Multiple put errors may not be able to wait until this point to get
 -- thrown.  Otherwise we'd have to be at least quasideterministic here.  If you have
 -- a MemoFuture you never force, it and an outside computation may be racing to do a

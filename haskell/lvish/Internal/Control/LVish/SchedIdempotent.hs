@@ -13,7 +13,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-} -- For DeepFreeze
 
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 
 -- | This is an internal module that provides the core parallel scheduler.
 --   It is /not/ for end-users.
@@ -646,12 +646,11 @@ runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
 runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
--- #ifndef DEBUG_LVAR
+-- ifndef DEBUG_LVAR
 --   when (dbgScheduling /= True) $ -- || dbgRange /= Nothing  
 --     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
--- #endif
+-- endif
   (lgr,queues) <- Sched.new cfg numWrkrs noName 
-
   case lgr of
     Nothing -> return ()
     Just l  -> L.logOn l (L.OffTheRecord 1 " [dbg-lvi6sh] New logger & scheds created... entering main loop.")
@@ -758,9 +757,9 @@ runParIO = defaultRun
 -- 
 runParLogged :: Par a -> IO ([String],a)
 runParLogged comp = do
--- #ifndef DEBUG_LVAR
+-- ifndef DEBUG_LVAR
 --   error "runParLogged: this function is disabled when LVish is compiled without debugging support."
--- #endif
+-- endif
   (logs,ans) <- runParDetailed 
                    DbgCfg { dbgRange = (Just (0,dbgLvl))
                           , dbgDests = [L.OutputEvents, L.OutputInMemory]
@@ -809,6 +808,9 @@ hpId_ (HandlerPool cnt bag) = do
 -- | For debugging purposes.  This can help us figure out (by an ugly
 --   process of elimination) which MVar reads are leading to a "Thread
 --   blocked indefinitely" exception.
+--
+-- FIXME: This function is suppressing "thread blocked indefinitely in an MVar
+-- operation" exceptions and continue trying to read from the LVar.
 busyTakeMVar :: [ThreadId] -> String -> MVar a -> IO a
 busyTakeMVar tids msg mv = 
   do b <- L.newBackoff maxWait

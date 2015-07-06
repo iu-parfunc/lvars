@@ -1,34 +1,46 @@
-{-# LANGUAGE Unsafe #-}
-{-# LANGUAGE GADTs, RankNTypes, ConstraintKinds #-}
-{-# LANGUAGE DataKinds, KindSignatures, TypeFamilies #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE ConstraintKinds   #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE Unsafe            #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
 -- | Unsafe operations that end users should NOT import.
--- 
+--
 --   This is here only for other trusted implementation components.
 
-module Control.Par.Class.Unsafe 
+module Control.Par.Class.Unsafe
   ( ParThreadSafe(unsafeParIO)
   , ParMonad(..)
-  , ParWEffects(..)
-  , ReadOnlyOf
-  , ReifyConstraint(..)
-  ) 
+  )
 where
 
--- import Control.Monad.Par.Class
-import Control.Par.EffectSigs
-import Data.Proxy as P
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 
-import Data.Coerce
+import Control.Par.EffectSigs
+
+import Unsafe.Coerce          (unsafeCoerce)
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
 -- care which thread they execute on.  Thus it is ok to inject additional parallelism.
-class Monad p => ParThreadSafe p where 
+--
+-- Specifically, instances of ParThreadSafe must satisfy the law:
+--
+-- > do m1; m2 == do fork m1; m2
+--
+class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
+-- TODO: add SecretClass superclass to prevent users from instancing this.
+
   -- | Run some IO in parallel on whatever thread we happen to be on.
   --   The end user does not get access to this.
-  unsafeParIO :: IO a -> p a
+  unsafeParIO :: IO a -> p e s a
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
@@ -39,51 +51,38 @@ class Monad p => ParThreadSafe p where
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
 -- should not be able to access the `internalLiftIO` operation of this class from
 -- @Safe@ code.
-class (Functor p, Monad p) => ParMonad p where
+class ParMonad (p :: EffectSig -> * -> * -> *)
+  where
+  pbind :: p e s a -> (a -> p e s b) -> p e s b
+  preturn :: a -> p e s a
 
-  -- | Forks a computation to happen in parallel.  
-  fork :: p () -> p ()
-  
+  -- | Forks a computation to happen in parallel.
+  fork :: p e s () -> p e s ()
+
   -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
   -- only be used by other infrastructure-level components, e.g. the implementation
   -- of monad transformers or LVars.
-  internalLiftIO :: IO a -> p a
+  internalLiftIO :: IO a -> p e s a
 
-
--- unsafeCastEffects :: ParLVar p => p a -> (SetEffects p) a
-
--- | A full LVar-compatible Par monad has effect tracking.
-class ParWEffects m where
-  -- | Type-level utility function for extracting the `e` part of a valid Par-monad stack.
-  type GetEffects m :: EffectSig
-  -- | Type-level utility function for replacing the `s` part of a valid Par-monad stack.
-  type SetEffects (e::EffectSig) m :: (* -> *)
+  -- | (Internal! Not exposed to the end user.) Unsafely cast effect signatures.
+  internalCastEffects :: p e1 s a -> p e2 s a
+  internalCastEffects = unsafeCoerce
 
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
-  liftReadOnly :: (ReadOnlyOf m) a -> m a
-  
-  unsafeCastEffects :: P.Proxy e -> m a -> (SetEffects e m) a
-  unsafeCastEffects2 :: P.Proxy e -> (SetEffects e m) a -> m a
+  liftReadOnly :: p (SetReadOnly e) s a -> p e s a
+  liftReadOnly = unsafeCoerce
 
-  -- Include evidence of a property that we might need for getting our
-  -- type families to go through.
-  law1 :: forall e. Proxy (m ()) -> Proxy e -> 
-          ReifyConstraint (e ~ GetEffects (SetEffects e m))
-  law2 :: forall e. Proxy (m ()) -> Proxy e -> 
-          ReifyConstraint (ParMonad (SetEffects e m))
+-- If we use this design for ParMonad, we suffer these orphan instances:
+-- (We cannot include Monad as a super-class of ParMonad, because it would
+--  have to universally quantify over 'e' and 's', which is not allowed.)
+instance ParMonad p => Monad (p e s) where
+  (>>=) = pbind
+  return = preturn
 
-  coerceProp :: forall e a . 
-                Proxy (m ()) -> Proxy e -> 
-                ReifyConstraint (Coercible m (SetEffects e m))
-  --              ReifyConstraint (Coercible (m a) ((SetEffects2 e m) a))
+instance ParMonad p => Functor (p e s) where
+  fmap f p = pbind p (return . f)
 
-data ReifyConstraint c where 
-  MkConstraint :: c => ReifyConstraint c
-
--- | A shorthand for taking the ReadOnly restriction of a given Par
--- monadic type.
---
--- This is one particular form of valid "upcast" in the implicit
--- effect subtype ordering.
-type ReadOnlyOf m = (SetEffects (Ef NP (GetG (GetEffects m)) NF NB NI) m)
+instance ParMonad p => Applicative (p e s) where
+  pure = preturn
+  f <*> x = pbind f (\f' -> pbind x (return . f'))
 

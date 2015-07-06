@@ -1,13 +1,16 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE BangPatterns, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE MagicHash #-} 
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Trustworthy           #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 {-|
 
@@ -37,7 +40,7 @@ module Data.LVar.IVar
          IVar(..),
          -- * Basic IVar operations, same as in monad-par
          new, get, put, put_,
-         
+
          -- * Derived IVar operations, same as in monad-par
         spawn, spawn_, spawnP,
 
@@ -45,31 +48,35 @@ module Data.LVar.IVar
         freezeIVar, fromIVar, whenFull)
        where
 
-import           Data.IORef
 import           Control.DeepSeq
-import           System.Mem.StableName (makeStableName, hashStableName)
-import           System.IO.Unsafe      (unsafePerformIO, unsafeDupablePerformIO)
-import qualified Data.Foldable    as F
-import           Control.Exception (throw)
-import qualified Control.LVish.Types as LV 
-import           Control.Par.EffectSigs
-import qualified Control.LVish.Basics as LV 
+import           Control.Exception                      (throw)
+import qualified Control.LVish.Basics                   as LV
 import           Control.LVish.DeepFrz.Internal
-import qualified Control.LVish.Internal as I
-import           Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar))
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, getLV, freezeLV)
-import qualified Internal.Control.LVish.SchedIdempotent as LI 
+import           Control.LVish.Internal                 (LVar (WrapLVar),
+                                                         Par (WrapPar))
+import qualified Control.LVish.Internal                 as I
+import qualified Control.LVish.Types                    as LV
+import           Control.Par.EffectSigs
+import qualified Data.Foldable                          as F
+import           Data.IORef
 import           Data.LVar.Generic
-import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
-import           GHC.Prim (unsafeCoerce#)
+import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
+import           GHC.Prim                               (unsafeCoerce#)
+import           Internal.Control.LVish.SchedIdempotent (freezeLV, getLV, newLV,
+                                                         putLV)
+import qualified Internal.Control.LVish.SchedIdempotent as LI
+import           System.IO.Unsafe                       (unsafeDupablePerformIO,
+                                                         unsafePerformIO)
+import           System.Mem.StableName                  (hashStableName,
+                                                         makeStableName)
 
-import qualified Control.Par.Class as PC
+import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PC
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars
 ------------------------------------------------------------------------------
-       
+
 -- | An `IVar` is the simplest form of `LVar`.
 newtype IVar s a = IVar (LVar s (IORef (Maybe a)) a)
 -- the global data for an IVar a is a reference to Maybe a, while deltas are
@@ -82,7 +89,7 @@ instance Eq (IVar s a) where
 -- | An `IVar` can be treated as a generic container LVar which happens to
 -- contain at most one value!  Note, however, that the polymorphic operations are
 -- less useful than the monomorphic ones exposed by this module.
-instance LVarData1 IVar where  
+instance LVarData1 IVar where
   freeze :: HasFreeze e => IVar s a -> Par e s (IVar Frzn a)
   freeze orig@(IVar (WrapLVar lv)) = WrapPar $ do
     freezeLV lv
@@ -112,12 +119,12 @@ instance (Show a) => Show (IVar Frzn a) where
 
 -- | For convenience only; the user could define this.
 instance Show a => Show (IVar Trvrsbl a) where
-  show = show . castFrzn 
+  show = show . castFrzn
 
 --------------------------------------
 
 {-# INLINE new #-}
--- | A new IVar that starts out empty. 
+-- | A new IVar that starts out empty.
 new :: Par e s (IVar s a)
 new = WrapPar$ fmap (IVar . WrapLVar) $
       newLV $ newIORef Nothing
@@ -134,28 +141,42 @@ get (IVar (WrapLVar iv)) = WrapPar$ getLV iv globalThresh deltaThresh
 {-# INLINE put_ #-}
 -- | Put a value into an IVar.  Multiple 'put's to the same IVar
 -- are not allowed, and result in a runtime error, unless the values put happen to be @(==)@.
---         
+--
 -- This function is always at least strict up to WHNF in the element put.
 put_ :: (HasPut e, Eq a) => IVar s a -> a -> Par e s ()
 put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef' ref update
+        update Nothing  = (Just x, Just x)
         update (Just y) | x == y = (Just y, Nothing)
                         | otherwise = unsafePerformIO $
                             do n1 <- fmap hashStableName $ makeStableName x
                                n2 <- fmap hashStableName $ makeStableName y
-                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++show n2++" was "++show n1++")")
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++
+                                      show n2++" was "++show n1++")")
+
+putNI_ :: (HasPut e) => IVar s a -> a -> Par e s ()
+putNI_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
+  where putter ref      = atomicModifyIORef' ref update
         update Nothing  = (Just x, Just x)
+        update (Just y) = unsafePerformIO $
+                            do n1 <- fmap hashStableName $ makeStableName x
+                               n2 <- fmap hashStableName $ makeStableName y
+                               throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++
+                                      show n2++" was "++show n1++
+                                      ").  putNI_ used, so no multiple-equal-puts allowed.")
+
+
 
 -- | A specialized freezing operation for IVars that leaves the result in a handy format (`Maybe`).
 freezeIVar :: HasFreeze e => IVar s a -> I.Par e s (Maybe a)
-freezeIVar (IVar (WrapLVar lv)) = WrapPar $ 
+freezeIVar (IVar (WrapLVar lv)) = WrapPar $
    do freezeLV lv
       getLV lv globalThresh deltaThresh
   where
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
-    
+
 -- | Unpack a frozen IVar (as produced by a generic `freeze` operation) as a more
 -- palatable data structure.
 fromIVar :: IVar Frzn a -> Maybe a
@@ -168,7 +189,7 @@ fromIVar (IVar lv) = unsafeDupablePerformIO $ readIORef (I.state lv)
 --   Note that like `fork`, adding handlers doesn't introduce specifically tracked
 --   effects in the `e` signature.
 whenFull :: Maybe LI.HandlerPool -> IVar s a -> (a -> Par e s ()) -> Par e s ()
-whenFull mh (IVar (WrapLVar lv)) fn = 
+whenFull mh (IVar (WrapLVar lv)) fn =
    WrapPar (LI.addHandler mh lv globalCB fn')
   where
     -- The threshold is ALWAYS met when a put occurs:
@@ -179,7 +200,7 @@ whenFull mh (IVar (WrapLVar lv)) fn =
       case mx of
         Nothing -> return ()
         Just v  -> I.unWrapPar$ fn v
-  
+
 --------------------------------------------------------------------------------
 
 -- TODO: introduce a distinct future type which we can wait on WITHOUT incurring a
@@ -195,7 +216,7 @@ spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
 
 -- Note that while the implementation of spawn does an IVar `put`, internally,
 -- `HasPut` need not appear in the signature, because no puts can possible happen to
--- memory locations visible outside of 
+-- memory locations visible outside of
 
 
 {-# INLINE spawn_ #-}
@@ -212,17 +233,28 @@ spawnP a = spawn (return a)
 put :: (HasPut e, Eq a, NFData a) => IVar s a -> a -> Par e s ()
 put v a = deepseq a (put_ v a)
 
--- instance PC.ParFuture (Par (Ef P G f b i) s) where
---   type Future (Par (Ef P G f b i) s) = IVar s
---   type FutContents (Par (Ef P G f b i) s) a = (Eq a)
+--------------------------------------------------------------------------------
 
-instance PC.ParFuture (Par e s) where
-  type Future (Par e s) = IVar s
-  type FutContents (Par e s) a = (Eq a, HasPut e, HasGet e)
+-- NOTE(osa): It's hard to to prevent orphan instances in this case, because
+-- of the associated type:
+--
+--   * ParFuture: Defined in Control.Par.Class
+--   * Par: Defined in Control.LVish.Internal
+--   * IVar: Defined in current module
+--
+-- As long as IVar is not defined in same module with either ParFuture or Par
+-- we'll we have orphan instances.
+
+instance PC.ParFuture Par where
+  type Future Par = IVar
+  type FutContents Par a = (Eq a)
   spawn_ f = spawn_ f
   get iv = get iv
 
-instance PC.ParIVar (Par e s) where
-  put_ = put_
-  new = new
+-- NOTE(osa): This orphan instance is fixable, but we need to separate ParIVar
+-- from ParFuture.
 
+instance PC.ParIVar Par where
+  put_ = put_
+  putNI_ = putNI_
+  new = new

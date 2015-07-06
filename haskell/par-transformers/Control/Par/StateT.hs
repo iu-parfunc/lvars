@@ -48,6 +48,8 @@ class SplittableState a where
 ----------------------------------------------------------------------------------------------------
 -- Strict State:
 
+{-
+
 instance ParThreadSafe p => ParThreadSafe (S.StateT s p) where
   {-# INLINE unsafeParIO #-}
   unsafeParIO io = lift (unsafeParIO io)
@@ -136,3 +138,4 @@ instance (SplittableState s, PC.ParIVar p)
 
 -- </DUPLICATE_CODE>
 
+-}

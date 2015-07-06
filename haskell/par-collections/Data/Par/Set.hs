@@ -12,11 +12,6 @@ import qualified Control.Par.Class as PC
 import qualified Data.Set as S
 import qualified Data.Foldable as F
 
-import qualified Data.Par.Splittable as Sp 
-
-import Control.Applicative
-import Data.Monoid
-
 --------------------------------------------------------------------------------
 
 instance PC.Generator (S.Set a) where

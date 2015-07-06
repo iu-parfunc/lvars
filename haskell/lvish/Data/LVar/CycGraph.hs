@@ -1,9 +1,12 @@
-{-# LANGUAGE ScopedTypeVariables, DataKinds #-}
-{-# LANGUAGE KindSignatures, EmptyDataDecls #-}
-{-# LANGUAGE NamedFieldPuns, ParallelListComp  #-}
-{-# LANGUAGE BangPatterns, CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE EmptyDataDecls      #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE KindSignatures      #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE ParallelListComp    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 -- {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -O2 #-}
 
@@ -29,39 +32,33 @@ module Data.LVar.CycGraph
        )
        where
 -- Standard:
-import Data.Set (Set)
-import Control.Monad
-import qualified Data.Set as S
-import qualified Data.Map as M
-import Data.IORef
-import Data.Char (ord)
-import Data.List (intersperse)
-import Data.Int
-import qualified Data.Foldable as F
-import System.IO.Unsafe
-import Debug.Trace
+import           Control.Monad
+import           Data.Char        (ord)
+import qualified Data.Foldable    as F
+import           Data.Int
+import           Data.IORef
+import           Data.List        (intersperse)
+import qualified Data.Map         as M
+import           Data.Set         (Set)
+import qualified Data.Set         as S
+import           System.IO.Unsafe
 
 -- LVish:
-import Control.LVish
-import qualified Control.LVish.Internal as LV
-import qualified Internal.Control.LVish.SchedIdempotent as LI
-import Data.LVar.PureSet as IS
-import Data.LVar.IVar as IV
-import qualified Data.Concurrent.SkipListMap as SLM
-import qualified Data.Set as S
-import qualified Data.LVar.PureMap as IM
--- import qualified Data.LVar.SLMap as IM
--- import qualified Data.LVar.PureSet as S
+import           Control.LVish
+import qualified Control.LVish.Internal                 as LV
+import           Data.LVar.IVar                         as IV
+import qualified Data.LVar.PureMap                      as IM
+import           Data.LVar.PureSet                      as IS
 
 ----- For debugging: ----
-#ifdef DEBUG_MEMO  
-import System.Environment (getEnvironment)
-import Data.Graph.Inductive.Graph as G
-import Data.Graph.Inductive.PatriciaTree as G
-import Data.GraphViz as GV
-import qualified Data.GraphViz.Attributes.Complete as GA
+#ifdef DEBUG_MEMO
+import           Data.Graph.Inductive.Graph        as G
+import           Data.Graph.Inductive.PatriciaTree as G
+import           Data.GraphViz                     as GV
 import qualified Data.GraphViz.Attributes.Colors   as GC
-import           Data.Text.Lazy     (pack)
+import qualified Data.GraphViz.Attributes.Complete as GA
+import           Data.Text.Lazy                    (pack)
+import           System.Environment                (getEnvironment)
 #endif
 --------------------------------------------------------------------------------
 -- Simple atomic Set accumulators
@@ -94,14 +91,14 @@ unionSetAcc x ref = LV.WrapPar $ LI.liftIO $
 --------------------------------------------------------------------------------
 
 -- | A Memo-table that stores cached results of executing a `Par` computation.
--- 
+--
 --   This, enhanced, version of the Memo-table also is required to track all the keys
 --   that are reachable from each key (for cycle-detection).
 data Memo (e::EffectSig) s k v =
   -- Here we keep both a Ivars of return values, and a set of keys whose computations
   -- have traversed through THIS key.  If we see a cycle there, we can catch it.
 --       !(IM.IMap k s (SetAcc k, IVar s v))
-  
+
   Memo !(IS.ISet s k)
        -- EXPENSIVE version:
        !(IM.IMap k s (NodeRecord s k v))
@@ -129,7 +126,7 @@ data NodeRecord s k v = NodeRecord
 data Response par key ans =
     Done !ans
   | Request !key (RequestCont par key ans)
-    
+
 type RequestCont par key ans = (ans -> par (Response par key ans))
 
 --------------------------------------------------------------------------------
@@ -137,7 +134,7 @@ type RequestCont par key ans = (ans -> par (Response par key ans))
 
 -- | This supercombinator does a parallel depth-first search of a dynamic graph, with
 -- detection of cycles.
--- 
+--
 -- Each node in the graph is a computation whose input is the `key` (the vertex ID).
 -- Each such computation dynamically computes which other keys it depends on and
 -- requests the values associated with those keys.
@@ -181,15 +178,15 @@ exploreGraph_seq initCont cycHndlr initKey = do
             resp'' <- newCont ans2
             -- Popping back to processing the current key, which may not be finished.
             loop current hist resp'' kont
-            
+
 -- --            if wasloop then do
---             if False then do            
+--             if False then do
 --                -- Here the child computation ended up being processed as a cycle, so we must be as well:
 --                dbgPr ("    Child comp "++showID key2++" of "++showID current++" hit a cycle...")
 --                ans3 <- cycHndlr current
 --                kont (True,ans3)
 
-        
+
 --------------------------------------------------------------------------------
 
 type IsCycle = Bool
@@ -197,7 +194,7 @@ type IsCycle = Bool
 -- | The handler at a particular node (key) in the graph.  This takes as argument a
 --   key, along with a boolean indicating whether the current node has been found to
 --   be part of a cycle.
--- 
+--
 --   Also, for each child node, this handler is provided a way to demand the
 --   resulting value of that child node, plus an indication of whether the child node
 --   participates in a cycle.
@@ -211,7 +208,7 @@ type NodeAction e s k v =
 
 -- | At the end of the handler execution, the value of a node is either ready, or it
 -- is instead deferred to be exactly the value provided by another key.
-data NodeValue k v = FinalValue !v | Defer k 
+data NodeValue k v = FinalValue !v | Defer k
   deriving (Show,Eq,Ord)
 
 
@@ -237,7 +234,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
 
   -- First: propogate key requests.
   -- This will not diverge because the Set here suppressed duplicate callbacks:
-  set <- IS.newEmptySet  
+  set <- IS.newEmptySet
   -- The map stores results:
   mp  <- IM.newEmptyMap
 
@@ -247,19 +244,19 @@ exploreGraph keyNbrs nodeHndlr initKey = do
     dbgPr ("![MemoFixedPoint] Start new key "++show key0)
     -- Make some empty space for results:
     key0_res   <- IV.new
-    key0_cycle <- IV.new    
+    key0_cycle <- IV.new
     key0_reach <- IS.newEmptySet
     -- Next fetch the child node identities:
-    child_keys <- keyNbrs key0    
+    child_keys <- keyNbrs key0
     IM.insert key0 (NodeRecord key0 child_keys key0_reach key0_cycle key0_res) mp
     dbgPr ("  Computed nbrs of "++showID key0++" to be: "++ (showIDs child_keys))
 
     case child_keys of
       [] -> return () -- IV.put_ key0_cycle False
-      _  -> do 
+      _  -> do
        -- Spawn traversals of child nodes:
        forM_ child_keys (`IS.insert` set)
-         
+
        -- Establish the (expensive) cycle-checker handler:
        IS.forEachHP (Just keywalkHP) key0_reach $ \ key1 ->
          when (key1 == key0) $ do
@@ -268,7 +265,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
 
        -- Now we must wait for records to come up, and establish ourselves as upstream
        -- of each child:
-       chldrecs <- forM child_keys $ \child -> do 
+       chldrecs <- forM child_keys $ \child -> do
          nrec@NodeRecord{reachme} <- IM.getKey child mp
          IS.insert key0 reachme -- Child is reachable from us.
          -- Further, what reaches us, reaches the child:
@@ -283,7 +280,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
        --                case bl of
        --                  True  -> return ()
        --                  False -> loop tl
-       --        in loop chldrecs         
+       --        in loop chldrecs
        -- FINISHME: If we have some cycle children and some leafish ones....
        -- then we may need to do an unsafe peek at our reachme set, no?
        return ()
@@ -294,7 +291,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
   frmap <- IM.freezeMap mp
 
   dbgPr ("Froze map: "++show (M.keys frmap))
-  
+
   -- TODO: need parallel traversable:
   let getcyc vr = do mb <- IV.freezeIVar vr
                      if mb == Just True
@@ -309,7 +306,7 @@ exploreGraph keyNbrs nodeHndlr initKey = do
           x  <- nodeHndlr bl mykey [ (k, b, result (frmap # k)) | b <- bls
                                                                 | k <- chldrn ]
           case x of
-            FinalValue vv -> do 
+            FinalValue vv -> do
               dbgPr ("   !! Writing result into key "++showID mykey++" value: "++show x)
               IV.put_ myres vv
             Defer tokey -> do dbgPr ("   !! No result yet on key "++showID mykey++", DEFERing to key "++showID tokey)
@@ -323,20 +320,20 @@ exploreGraph keyNbrs nodeHndlr initKey = do
   ------------------------------------------------------------
   -- TEMP: Debugging
   ------------------------------------------------------------
-#ifdef DEBUG_MEMO  
+#ifdef DEBUG_MEMO
   when (dbg_lvl >= 4) $ do
      dbgPr ("| START creating dot graph...")
      dg <- debugVizMemoGraph True initKey frmap
      unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc_short.pdf")
-       `seq` return ()     
+       `seq` return ()
      dg <- debugVizMemoGraph False initKey frmap
      unsafePerformIO (GV.runGraphviz dg GV.Pdf "MemoCyc.pdf")
        `seq` return ()
-     dbgPr ("| DONE creating dot graph...")       
-#endif       
-  ------------------------------------------------------------  
+     dbgPr ("| DONE creating dot graph...")
+#endif
+  ------------------------------------------------------------
   return final
---  return $! Memo set mp  
+--  return $! Memo set mp
 
 {-
 
@@ -345,11 +342,11 @@ exploreGraph keyNbrs nodeHndlr initKey = do
 -- would normally diverge.  Once caught, the user specifies what to do with these
 -- cycles by providing a handler.  The handler is called on the key which formed the
 -- cycle.  That is, computing the invocation spawned by that key results in a demand
--- for that key.  
+-- for that key.
 makeMemoCyclic :: (MemoTable d s a b -> a -> Par e s b) -> (a -> Par e s b) -> Par e s (MemoTable d s a b)
 makeMemoCyclic normalFn ifCycle  = undefined
 -- FIXME: Are there races where more than one cycle can be hit?  Can we guarantee
--- that all are hit?  
+-- that all are hit?
 
 
 
@@ -427,6 +424,7 @@ showID x = let str = (show x) in
            if length str < 10 then str
            else (show (length str))++"-"++ show (checksum str)
 
+showIDs :: Show a => [a] -> [Char]
 showIDs ls = ("{"++(concat$ intersperse ", " $ map showID ls)++"}")
 
 checksum :: String -> Int
@@ -446,7 +444,7 @@ instance ShortShow Bool where
   shortShow 1 True  = "t"
   shortShow 1 False = "f"
   shortShow 2 True  = "#t"
-  shortShow 2 False = "#f"  
+  shortShow 2 False = "#f"
   shortShow n b     = take n (show b)
 
 instance ShortShow Integer where shortShow = shortShowNum
@@ -454,7 +452,7 @@ instance ShortShow Int   where shortShow = shortShowNum
 instance ShortShow Int8  where shortShow = shortShowNum
 instance ShortShow Int16 where shortShow = shortShowNum
 instance ShortShow Int32 where shortShow = shortShowNum
-instance ShortShow Int64 where shortShow = shortShowNum                                                            
+instance ShortShow Int64 where shortShow = shortShowNum
 
 shortShowNum :: Show a => Int -> a -> String
 shortShowNum n num =
@@ -463,7 +461,7 @@ shortShowNum n num =
     if len > n then
       (take (n-2) str)++".."
     else str
-         
+
 instance ShortShow String where
   shortShow n str =
     let len = length str in
@@ -476,7 +474,7 @@ instance ShortShow String where
 instance (ShortShow a, ShortShow b) => ShortShow (a,b) where
   shortShow 1 _ = "?"
   shortShow 2 _ = ".."
-  shortShow n (a,b) = let (l,r) = shortTwo (n-3) a b 
+  shortShow n (a,b) = let (l,r) = shortTwo (n-3) a b
                       in "("++ l ++","++ r ++")"
 
 -- | Combine two things within a given size budget.
@@ -486,7 +484,7 @@ shortTwo n a b = (left, shortShow (half+remain) b)
    where
      remain = abs (half - length left)
      left = shortShow half a
-     (q,r) = quotRem (abs(n-3)) 2 
+     (q,r) = quotRem (abs(n-3)) 2
      half = q + r
 
 --------------------------------------------------------------------------------
@@ -512,8 +510,8 @@ theEnv = unsafePerformIO getEnvironment
 defaultDbg :: Int
 defaultDbg = 0
 
-debugVizMemoGraph :: forall s t t1 t2 e . 
-                     (Ord t1, ShortShow t1, Show t2, F.Foldable t, 
+debugVizMemoGraph :: forall s t t1 t2 e .
+                     (Ord t1, ShortShow t1, Show t2, F.Foldable t,
                       HasGet e, HasFreeze e) =>
                      Bool                       -- ^ Use shorter `showID` for keys.
                      -> t1                      -- ^ The inital key.
@@ -523,7 +521,7 @@ debugVizMemoGraph :: forall s t t1 t2 e .
 debugVizMemoGraph idOnly initKey frmap = do
   let showKey = if idOnly then showID
                 else shortShow 40
-  let gcons :: (HasFreeze e) => 
+  let gcons :: (HasFreeze e) =>
                NodeRecord s t1 t2
             ->                (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
             -> Par e s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
@@ -533,42 +531,42 @@ debugVizMemoGraph idOnly initKey frmap = do
         res <- IV.get result
         dbgPr (" .. About to wait for node in_cycle, key "++show mykey)
         cyc <- IV.freezeIVar in_cycle
-        let num = 1 + G.noNodes gracc  
-            gr' = G.insNode (num, (cyc == Just True,mykey,res)) $ 
+        let num = 1 + G.noNodes gracc
+            gr' = G.insNode (num, (cyc == Just True,mykey,res)) $
                   gracc
             labmap' = M.insert mykey num labmap
         return (labmap',gr')
-        
+
       gedges :: NodeRecord s t1 t2
             ->         (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
             -> Par e s (M.Map t1 G.Node, G.Gr (Bool,t1,t2) ())
       gedges NodeRecord{mykey, chldrn }
-            (labmap, gracc) = do 
+            (labmap, gracc) = do
         let chldnodes = map (labmap #) chldrn
             num = labmap # mykey
             gr' = G.insEdges [ (num,cnd::Int,()) | cnd <- chldnodes ] $
                   gracc
             labmap' = M.insert mykey num labmap
         return (labmap',gr')
-        
+
   dbgPr (" !! Creating graphviz graph from MemoCyc map of size "++show (F.foldr (\ _ n -> 1+n) 0 frmap))
 --  dbgPr (" !! All keys "++show frmap)
-  
+
   -- Two passes, first add nodes, then edges:
   (lm,graph0) <- F.foldrM gcons (M.empty, G.empty) frmap
-  dbgPr (" .. Added all nodes to the graph...")  
+  dbgPr (" .. Added all nodes to the graph...")
   (_,graph)   <- F.foldrM gedges (lm, graph0) frmap
-  dbgPr (" .. Added all edges to the graph...")    
+  dbgPr (" .. Added all edges to the graph...")
   let -- dg = graphToDot nonClusteredParams graph
       myparams :: GV.GraphvizParams G.Node (Bool,t1,t2) () () (Bool,t1,t2)
       myparams = GV.defaultParams { GV.fmtNode= nodeAttrs }
 
       nodeAttrs :: (Int, (Bool,t1,t2)) -> [GA.Attribute]
---      nodeAttrs :: (Int, String) -> [GA.Attribute]      
+--      nodeAttrs :: (Int, String) -> [GA.Attribute]
       nodeAttrs (_num, (cyc,key,res)) =
         let lbl = showKey key++"\n=> "++ show res in
         [ GA.Label$ GA.StrLabel $ pack lbl ] ++
-        (if key == initKey 
+        (if key == initKey
          then [GA.Color [weighted$ GA.X11Color GV.Red]]
          else []) ++
         (if cyc then []

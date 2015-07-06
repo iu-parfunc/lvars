@@ -132,13 +132,6 @@ toString x = case x of
 maxWait :: Int
 maxWait = 10*1000 -- 10ms
 
-andM :: [IO Bool] -> IO a -> IO a -> IO a
-andM [] t _f = t
-andM (hd:tl) t f = do
-  b <- hd
-  if b then andM tl t f
-       else f
-
 catchAll :: ThreadId -> E.SomeException -> IO ()
 catchAll parent exn =
   case E.fromException exn of 
@@ -297,6 +290,7 @@ runCoordinator waitWorkers shutdownFlag checkPoint logged loutDests =
           printAll str = mapM_ (printOne str) loutDests
 
 
+isOffTheRecord :: LogMsg -> Bool
 isOffTheRecord (OffTheRecord{}) = True
 isOffTheRecord _ = False
 
@@ -310,12 +304,7 @@ silenceOffTheRecord = case lookup "SILENCEOTR" theEnv of
        Just "false" -> False
        Just _ -> True
 
-                   
-chatter :: String -> IO ()
--- chatter = hPrintf stderr
--- chatter = printf "%s\n"
-chatter _ = return ()
-
+printNTrace :: String -> IO ()
 printNTrace s = do putStrLn s; traceEventIO s; hFlush stdout
 
 -- UNFINISHED:
@@ -460,22 +449,23 @@ replayDbg = 100
 --   garbage collected (at least as of GHC 7.6).  This means that even if it was
 --   complete, it will still be hanging around to accept the exception below.
 forkWithExceptions :: (IO () -> IO ThreadId) -> String -> IO () -> IO ThreadId
-forkWithExceptions forkit descr action = do 
+forkWithExceptions forkit descr action = do
    parent <- myThreadId
    forkit $ do
-      tid <- myThreadId
-      E.catch action 
-	 (\ e -> 
-           case E.fromException e of 
-             Just E.ThreadKilled -> do
--- Killing worker threads is normal now when exception handling, so this chatter is restricted to debug mode:
+     tid <- myThreadId
+     E.catch action $ \e ->
+       case E.fromException e of
+         Just E.ThreadKilled -> do
+-- Killing worker threads is normal now when exception handling, so this chatter
+-- is restricted to debug mode:
 #ifdef DEBUG_LVAR
-               printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n" (show tid) (show descr)
+           printf "\nThreadKilled exception inside child thread, %s (not propagating!): %s\n"
+             (show tid) (show descr)
 #endif
-               return ()
-	     _  -> do
-#ifdef DEBUG_LVAR               
-                      printf "\nException inside child thread %s, %s: %s\n" (show descr) (show tid) (show e)
+           return ()
+         _  -> do
+#ifdef DEBUG_LVAR
+           printf "\nException inside child thread %s, %s: %s\n"
+             (show descr) (show tid) (show e)
 #endif
-                      E.throwTo parent (e :: E.SomeException)
-	 )
+           E.throwTo parent (e :: E.SomeException)

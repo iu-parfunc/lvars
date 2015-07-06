@@ -1,9 +1,8 @@
-
 module Main where
 
+import qualified CancelTests
 import qualified STTests
--- import qualified CancelTests
-import Test.Framework 
+import           Test.Framework
 
 --------------------------------------------------------------------------------
 
@@ -11,8 +10,7 @@ main :: IO ()
 main = defaultMain alltests
 
 alltests :: [Test]
-alltests = 
+alltests =
        [ STTests.tests
--- [2014.09.29] Temp, disabling while refactoring the effect system:
---       , CancelTests.tests
+       , CancelTests.tests
        ]

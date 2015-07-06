@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Provide instances for parallel handling of common, pure Haskell data structures.
@@ -7,24 +7,21 @@
 module Data.Par.Map
        () where
 
-import Data.Splittable.Class (Split(..))
-import qualified Control.Par.Class as PC
-import qualified Data.Map as M
-import qualified Data.Foldable as F
+import qualified Control.Par.Class     as PC
+import qualified Data.Map              as M
+import           Data.Splittable.Class (Split (..))
 
-import qualified Data.Par.Splittable as Sp 
-
-import Control.Applicative
-import Data.Monoid
+-- import Control.Applicative
+-- import           Data.Monoid
 
 --------------------------------------------------------------------------------
 
 instance PC.Generator (M.Map k v) where
   type ElemOf (M.Map k v) = (k,v)
-  {-# INLINE foldM #-}  
+  {-# INLINE foldM #-}
   foldM = foldrMWithKey
   {-# INLINE fold #-}
-  fold fn = M.foldlWithKey (\ !a k v -> fn a (k,v)) 
+  fold fn = M.foldlWithKey (\ !a k v -> fn a (k,v))
 
 #ifdef NEWCONTAINERS
 instance (Eq k, Eq v) => Split (M.Map k v) where
@@ -36,7 +33,7 @@ instance (Eq k, Eq v) => Split (M.Map k v) where
 --  pmapFold = Sp.pmapReduce
 #else
 -- instance PC.ParFoldable (M.Map k v) where
-#endif  
+#endif
 
 foldrMWithKey :: Monad m => (acc -> (k, v) -> m acc) -> acc -> M.Map k v -> m acc
 foldrMWithKey fn zer mp =
@@ -50,7 +47,7 @@ foldrMWithKey fn zer mp =
 foldrMWithKey :: Monad m => ((k, v) -> acc -> m acc) -> acc -> M.Map k v -> m acc
 -- foldrMWithKey :: Applicative m => ((k, v) -> acc -> m acc) -> acc -> M.Map k v -> m acc
 foldrMWithKey fn zer mp =
-  undefined 
+  undefined
 --  M.foldMapWithKey (\ k v -> undefined) mp
 
 newtype FoldAction_ f acc = FoldAction_ { runFoldAction_ :: acc -> f acc }

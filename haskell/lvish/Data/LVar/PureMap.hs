@@ -1,15 +1,15 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy         #-}
+{-# LANGUAGE TypeFamilies        #-}
 -- {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleInstances   #-}
 -- {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
 
 {-|
 
@@ -24,14 +24,14 @@
 module Data.LVar.PureMap
        (
          -- * Basic operations
-         IMap(..), 
+         IMap(..),
          newEmptyMap, newMap, newFromList,
-         insert, 
+         insert,
          getKey, waitValue, waitSize, modify,
 
          -- * Generic routines and convenient aliases
          gmodify, getOrInit,
-         
+
          -- * Iteration and callbacks
          forEach, forEachHP,
          withCallbacksThenFreeze,
@@ -42,32 +42,34 @@ module Data.LVar.PureMap
 
          -- * Higher-level derived operations
          copy, traverseMap, traverseMap_,  union,
-         
+
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
-         traverseMapHP, traverseMapHP_, unionHP                                        
+         traverseMapHP, traverseMapHP_, unionHP
        ) where
 
-import           Control.LVish.DeepFrz.Internal
 import           Control.LVish
-import           Control.LVish.Internal as LI
-import           Internal.Control.LVish.SchedIdempotent (newLV, putLV, putLV_, getLV, freezeLV, freezeLVAfter)
-import qualified Internal.Control.LVish.SchedIdempotent as L
-import qualified Data.LVar.IVar as IV
-import           Data.LVar.Generic as G
+import           Control.LVish.DeepFrz.Internal
+import           Control.LVish.Internal                 as LI
+import           Data.LVar.Generic                      as G
+import qualified Data.LVar.IVar                         as IV
 import           Data.LVar.PureMap.Unsafe
-import           Data.UtilInternal (traverseWithKey_)
+import           Data.UtilInternal                      (traverseWithKey_)
+import           Internal.Control.LVish.SchedIdempotent (freezeLV,
+                                                         freezeLVAfter, getLV,
+                                                         newLV, putLV, putLV_)
+import qualified Internal.Control.LVish.SchedIdempotent as L
 
-import           Control.Exception (throw)
+import           Control.Exception     (throw)
 import           Data.IORef
-import qualified Data.Map.Strict as M
-import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
-import           System.Mem.StableName (makeStableName, hashStableName)
+import qualified Data.Map.Strict       as M
+import           System.IO.Unsafe      (unsafeDupablePerformIO, unsafePerformIO)
+import           System.Mem.StableName (hashStableName, makeStableName)
 
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
 
-import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (internalLiftIO)
+import qualified Control.Par.Class        as PC
+import           Control.Par.Class.Unsafe (internalLiftIO)
 -- import qualified Data.Splittable.Class as Sp
 -- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
 
@@ -93,8 +95,8 @@ newFromList = newMap . M.fromList
 withCallbacksThenFreeze :: forall k v b s e . (HasPut e, HasGet e, HasFreeze e, Eq b) =>
                            IMap k s v -> (k -> v -> Par e s ()) -> Par e s b -> Par e s b
 withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
-    do hp  <- newPool 
-       res <- IV.new 
+    do hp  <- newPool
+       res <- IV.new
        WrapPar$ freezeLVAfter lv (initCB hp res) deltaCB
        -- We additionally have to quiesce here because we fork the inital set of
        -- callbacks on their own threads:
@@ -107,23 +109,23 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- L.liftIO $ readIORef ref -- Snapshot
-      unWrapPar $ do 
+      unWrapPar $ do
         traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) mp
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 
-        
+
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
 forEach :: IMap k s v -> (k -> v -> Par e s ()) -> Par e s ()
-forEach = forEachHP Nothing 
+forEach = forEachHP Nothing
 
 -- | Put a single entry into the map.  Strict (WHNF) in the key and value.
--- 
+--
 --   As with other container LVars, if a key is inserted multiple times, the values had
 --   better be equal @(==)@, or a multiple-put error is raised.
 insert :: (Ord k, Eq v, HasPut e) =>
-          k -> v -> IMap k s v -> Par e s () 
+          k -> v -> IMap k s v -> Par e s ()
 insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter ref  = atomicModifyIORef' ref update
         update mp =
@@ -141,7 +143,7 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
 -- those containing regular Haskell data.  In particular, it is possible to modify
 -- existing entries (monotonically).  Further, this `modify` function implicitly
 -- inserts a \"bottom\" element if there is no existing entry for the key.
--- 
+--
 -- Unfortunately, that means that this takes another computation for creating new
 -- \"bottom\" elements for the nested LVars stored inside the `IMap`.
 modify :: forall f a b e s key . (Ord key, Show key, Ord a, HasPut e) =>
@@ -150,21 +152,21 @@ modify :: forall f a b e s key . (Ord key, Show key, Ord a, HasPut e) =>
           -> (Par e s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par e s b
-modify (IMap lv) key newBottom fn = WrapPar $ do 
-  let ref = state lv      
+modify (IMap lv) key newBottom fn = WrapPar $ do
+  let ref = state lv
   mp  <- L.liftIO$ readIORef ref
   case M.lookup key mp of
     Just lv2 -> do L.logStrLn 3 $ " [Map.modify] key already present: "++show key++
                                  " adding to inner "++show(unsafeName lv2)
                    unWrapPar$ fn lv2
-    Nothing -> do 
+    Nothing -> do
       bot <- unWrapPar newBottom :: L.Par (f s a)
       L.logStrLn 3$ " [Map.modify] allocated new inner "++show(unsafeName bot)
       let putter _ = L.liftIO$ atomicModifyIORef' ref $ \ mp2 ->
             case M.lookup key mp2 of
               Just lv2 -> (mp2, (Nothing, unWrapPar$ fn lv2))
               Nothing  -> (M.insert key bot mp2,
-                           (Just (key, bot), 
+                           (Just (key, bot),
                             do L.logStrLn 3$ " [Map.modify] key absent, adding the new one."
                                unWrapPar$ fn bot))
       act <- putLV_ (unWrapLVar lv) putter
@@ -182,7 +184,7 @@ gmodify map key fn = modify map key G.newBottom fn
 
 {-# INLINE getOrInit #-}
 -- | Return the preexisting value for a key if it exists, and otherwise return
--- 
+--
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
 getOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
@@ -196,7 +198,7 @@ getKey !key (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
       mp <- readIORef ref
       return (M.lookup key mp)
     deltaThresh (k,v) | k == key  = return$ Just v
-                      | otherwise = return Nothing 
+                      | otherwise = return Nothing
 
 -- | Wait until the map contains a certain value (on any key).
 waitValue :: (Ord k, Eq v, HasGet e) => v -> IMap k s v -> Par e s ()
@@ -211,7 +213,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
       -- FIXME: no short-circuit for this fold:
       return $! M.foldl fn Nothing mp
     deltaThresh (_,v) | v == val  = return$ Just ()
-                      | otherwise = return Nothing 
+                      | otherwise = return Nothing
 
 
 -- | Wait on the /size/ of the map, not its contents.
@@ -247,12 +249,6 @@ freezeMap (IMap (WrapLVar lv)) = WrapPar $
     globalThresh _  False = return Nothing
     globalThresh ref True = fmap Just $ readIORef ref
     deltaThresh _ = return Nothing
-
--- | /O(1)/: Convert from an `IMap` to a plain `Data.Map`.
---   This is only permitted when the `IMap` has already been frozen.
---   This is useful for processing the result of `Control.LVish.DeepFrz.runParThenFreeze`.    
-fromIMap :: IMap k Frzn a -> M.Map k a 
-fromIMap (IMap lv) = unsafeDupablePerformIO (readIORef (state lv))
 
 -- | Traverse a frozen map for side effect.  This is useful (in comparison with more
 -- generic operations) because the function passed in may see the key as well as the
@@ -301,7 +297,7 @@ traverseMapHP :: (Ord k, Eq b, HasPut e) =>
                  Par e s (IMap k s b)
 traverseMapHP mh fn set = do
   os <- newEmptyMap
-  traverseMapHP_ mh fn set os  
+  traverseMapHP_ mh fn set os
   return os
 
 -- | A variant of `traverseMap_` that optionally ties the handlers to a pool.
@@ -309,7 +305,7 @@ traverseMapHP_ :: (Ord k, Eq b, HasPut e) =>
                   Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a -> IMap k s b ->
                   Par e s ()
 traverseMapHP_ mh fn set os = do
-  forEachHP mh set $ \ k x -> do 
+  forEachHP mh set $ \ k x -> do
     x' <- fn k x
     insert k x' os
 
@@ -326,24 +322,8 @@ unionHP mh m1 m2 = do
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
-unsafeName x = unsafePerformIO $ do 
+unsafeName x = unsafePerformIO $ do
    sn <- makeStableName x
    return (hashStableName sn)
 
 --------------------------------------------------------------------------------
--- Interfaces for generic programming with containers:
-
-instance PC.Generator (IMap k Frzn a) where
-  type ElemOf (IMap k Frzn a) = (k,a)
-  {-# INLINE fold #-}
-  {-# INLINE foldM #-}    
-  {-# INLINE foldMP #-}  
-  fold   fn zer (IMap (WrapLVar lv)) = PC.fold   fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-  foldM  fn zer (IMap (WrapLVar lv)) = PC.foldM  fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-  foldMP fn zer (IMap (WrapLVar lv)) = PC.foldMP fn zer $ unsafeDupablePerformIO $ readIORef $ L.state lv
-
--- TODO: Once containers 0.5.3.2+ is broadly available we can have a real parFoldable
--- instance.  
--- instance Show k => PC.ParFoldable (IMap k Frzn a) where
-
-
