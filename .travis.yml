@@ -38,21 +38,16 @@ install:
  - travis_retry cabal update
  - cabal install happy alex
  - cabal sandbox init
- - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish";
+ - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish ./par-mergesort"
  - export TOP=`pwd`
- - set -e;
+ - set -e
+ - set -x
  - for path in $PKGS; do
-    cd ./haskell/$path;
-    cabal sandbox init --sandbox=$TOP/.cabal-sandbox;
-    cabal install;
-    cd -;
-   done;
+    cabal install ./haskell/$path/;
+   done
  - for path in $PKGS; do
-    cd ./haskell/$path;
-    cabal sandbox init --sandbox=$TOP/.cabal-sandbox;
-    cabal install --enable-benchmarks --enable-tests --dependencies-only;
-    cd -;
-   done;
+    cabal install ./haskell/$path/ --enable-tests --enable-benchmarks --dependencies-only;
+   done
 
 # Here starts the actual work to be performed for the package under test; any
 # command which exits with a non-zero exit code causes the build to fail.
@@ -64,7 +59,7 @@ script:
     cabal test;
     cabal sdist;
     cd -;
-   done;
+   done
 
  # There's no Setup.hs for lvish.  Perhaps there should be?
 # - cabal check

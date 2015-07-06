@@ -37,7 +37,7 @@ if [ "$CABAL" == "" ]; then
   fi
 fi
 
-PKGS=" ./lvish ./par-classes ./par-collections ./par-collections/tests ./par-transformers ./concurrent-skiplist "
+PKGS=" ./lvish ./par-classes ./par-collections ./par-transformers ./concurrent-skiplist ./par-mergesort "
 
 # We build the sandbox, not at the repo root, but at the root of the Haskell code dir.
 cd ./haskell/
