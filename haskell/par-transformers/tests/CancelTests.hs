@@ -1,12 +1,16 @@
-{-# LANGUAGE CPP, ConstraintKinds, DataKinds, RankNTypes, ScopedTypeVariables,
-             TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module CancelTests (tests, runTests)
        where
 
-import Control.LVish (isDet, isND, isQD, isReadOnly, liftReadOnly, logDbgLn,
-                      runPar, runParNonDet, runParDetailed)
-import Control.LVish (DbgCfg(..), OutDest(..))
+import Control.LVish                  (isDet, runParDetailed, runParNonDet)
+import Control.LVish                  (DbgCfg (..))
 import Control.LVish.CancelT
 import Control.LVish.Internal
 import Control.Par.Class
@@ -14,16 +18,14 @@ import Control.Par.Class.Unsafe
 import Control.Par.EffectSigs
 
 import Control.Concurrent
-import Data.List (isInfixOf)
-
-import System.IO (stderr)
+import Data.IORef
+import Data.List                      (isInfixOf)
 
 import Test.Framework
 import Test.Framework.Providers.HUnit
-import Test.Framework.TH (testGroupGenerator)
-import Test.HUnit (Assertion, Counts (..), assert, assertBool, assertEqual)
-
-import Debug.Trace
+import Test.Framework.TH              (testGroupGenerator)
+import Test.HUnit                     (Assertion, Counts (..), assert,
+                                       assertBool)
 
 tests :: Test
 tests = $(testGroupGenerator)
@@ -37,8 +39,13 @@ runTests = defaultMain [tests]
 appreciableDelay :: IO ()
 appreciableDelay = threadDelay (100 * 1000)
 
-dbg :: String -> CancelT Par e s ()
-dbg = lift . logDbgLn 0
+type Logger = IORef [String] -- new logs are just consed, reverse before use
+
+dbg :: ParMonad p => Logger -> String -> p e s ()
+dbg logger msg = internalLiftIO $ modifyIORef' logger (msg :)
+
+fetchLogs :: Logger -> IO [String]
+fetchLogs = fmap reverse . readIORef
 
 -- FIXME: Logging has some problems:
 -- - It depends on env variable DEBUG.
@@ -66,32 +73,37 @@ assertDoesntHaveLog log allLogs =
   assertBool ("Found the log message " ++ show log ++ " in logs: " ++ show allLogs) $
     not $ any (log `isInfixOf`) allLogs
 
+assertNoError :: [String] -> Assertion
+assertNoError logs =
+  assertBool ("Found error message in logs: " ++ show logs) (not $ any (isInfixOf "!!") logs)
 
 -- | A runner for testing which both grabs logs AND echos them to the screen.
-runDbg :: (forall s . Par e s a) -> IO ([String], Either String a)
+runDbg :: (Logger -> forall s . Par e s a) -> IO ([String], Either String a)
 runDbg comp = do
+  logs <- newIORef []
   numCap <- getNumCapabilities
-  (logs,ans) <- runParDetailed
-                   DbgCfg { dbgRange = (Just (0,1))
-                          , dbgDests = [OutputEvents, OutputInMemory, OutputTo stderr]
+  (_,ans) <- runParDetailed
+                   DbgCfg { dbgRange = Nothing
+                          , dbgDests = []
                           , dbgScheduling = False }
-                   numCap comp
+                   numCap (comp logs)
+  logs' <- reverse <$> readIORef logs
   case ans of
-    Left err  -> return $! (logs, Left (show err))
-    Right x   -> return $! (logs, Right x)
+    Left err  -> return $! (logs', Left (show err))
+    Right x   -> return $! (logs', Right x)
 
 -- Making sure the logger is working with Par.
 case_LogTest1 :: IO ()
 case_LogTest1 = do
   let logMsg = "Testing the logger."
-  (logs, _) <- runDbg $ logDbgLn 0 logMsg
+  (logs, _) <- runDbg $ \l -> dbg l logMsg
   assertHasLog logMsg logs
 
 -- Make sure logging is working with CancelT.
 case_LogTest2 :: IO ()
 case_LogTest2 = do
   let logMsg = "Testing the logger."
-  (logs, _) <- runDbg $ isDet $ runCancelT $ dbg logMsg
+  (logs, _) <- runDbg $ \l -> isDet $ runCancelT $ dbg l logMsg
   assertHasLog logMsg logs
 
 -- Make sure `cancelMe` is not crashing anything. (no logging here)
@@ -102,81 +114,79 @@ case_cancel01_CancelMe :: IO ()
 case_cancel01_CancelMe = do
   logs <- cancel01
   assertHasLog "Begin test 01" logs
+  assertNoError logs
   assertDoesntHaveLog "Past cancelation point!" logs
 
 cancel01 :: IO [String]
 cancel01 = do
-  (logs,Left err) <- runDbg $ isDet $ runCancelT $ do
-       dbg "Begin test 01: about to cancelMe on main thread"
+  (logs, Left err) <- runDbg $ \l -> isDet $ runCancelT $ do
+       dbg l "Begin test 01: about to cancelMe on main thread"
        cancelMe -- this is just returnToSched from LVarSched method of Par
-                -- FIXME: seems like log state is not passed
-       dbg "Past cancelation point!"
+       dbg l "!! Past cancelation point!"
   assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
   return logs
 
 case_cancel02 :: IO ()
 case_cancel02 = do
-  (lines, _) <- cancel02
-  -- Can't compare number of logs, internal logs are interleaved with our logs
-  -- assertEqual "Read wrong number of outputs" 4 (length lines)
-  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+  (logs, _) <- cancel02
+  assertNoError logs
 
 -- | This should always cancel the child before printing "!!".
 cancel02 :: IO ([String], Either String ())
 cancel02 =
-  runDbg $ isDet $ runCancelT comp
+  runDbg $ \l -> isDet $ runCancelT (comp l)
  where
-   comp :: forall p e s a .
+   comp :: forall e s .
            (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
-           CancelT Par e s ()
-   comp = do
-     dbg "[parent] Begin test 02"
+           Logger -> CancelT Par e s ()
+   comp l = do
+     dbg l "[parent] Begin test 02"
      iv <- new
-     dbg "[parent] Created IVar"
+     dbg l "[parent] Created IVar"
 
      let p1 :: CancelT Par (SetReadOnly e) s ()
          p1 = do
-           dbg "[child] Running on child thread... block so parent can run"
+           dbg l "[child] Running on child thread... block so parent can run"
            -- lift $ Control.LVish.yield -- Not working!
            -- Do we need this? ^ Next line will force rescheduling.
            get iv -- This forces the parent to get scheduled.
-           dbg "[child] Woke up, now wait so we will be cancelled..."
+           dbg l "[child] Woke up, now wait so we will be cancelled..."
            internalLiftIO appreciableDelay
            pollForCancel
-           dbg "!! [child] thread got past delay!"
+           dbg l "!! [child] thread got past delay!"
 
-     (tid, cfut) <- forkCancelable p1
-     dbg "[parent] Putting to IVar"
+     (tid, _) <- forkCancelable p1
+     dbg l "[parent] Putting to IVar"
      put iv ()
-     dbg "[parent] Cancelling child thread"
+     dbg l "[parent] Cancelling child thread"
      cancel tid
-     dbg "[parent] Issued cancel, now exiting."
+     dbg l "[parent] Issued cancel, now exiting."
 
 -- Different than 02 in that child thread cancels itself.
 case_cancel02B :: IO ()
 case_cancel02B = do
-  (lines, err) <- cancel02B
-  assertEqual "Read an error message" False (any (isInfixOf "!!") lines)
+  (logs, _) <- cancel02B
+  assertNoError logs
 
 cancel02B :: IO ([String], Either String ())
-cancel02B = runDbg $ isDet $ runCancelT comp
+cancel02B = runDbg $ \l -> isDet $ runCancelT (comp l)
   where
-    comp :: forall p e s a .
+    comp :: forall e s .
             (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>
-            CancelT Par e s ()
-    comp = do
-      dbg $ "Begin test 02B"
+            Logger -> CancelT Par e s ()
+    comp l = do
+      dbg l "Begin test 02B"
 
       let p1 :: CancelT Par (SetReadOnly e) s ()
           p1 = do
-            dbg $ "(1) Running on child thread..."
+            dbg l "(1) Running on child thread..."
             cancelMe
-            dbg $ "!! (2) Running on child thread..."
+            dbg l "!! (2) Running on child thread..."
 
       _ <- forkCancelable p1
-      dbg $ "Waiting on main thread..."
+      dbg l "Waiting on main thread..."
       internalLiftIO $ appreciableDelay
-      dbg $ "Now exiting on main thread."
+      dbg l "Now exiting on main thread."
       return ()
 
 --------------------------------------------------------------------------------
