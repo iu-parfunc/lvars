@@ -49,7 +49,6 @@ Library
                , transformers >= 0.2
                , par-classes  >= 1.1
 
-
                -- These are so we can provide instances for existing collections:
                , primitive    >= 0.6 && < 0.7
                , vector       >= 0.10 && < 0.11
@@ -62,39 +61,3 @@ Library
   }
   ghc-options: -O2 -rtsopts -Wall
   Other-modules:
-
--- test-suite test-par-collections
---   type:             exitcode-stdio-1.0
---   hs-source-dirs:   tests
---   main-is:          Main.hs
-
---   -- Build depends that are used directly by the test files, including:
---   -- (1) Self dependency:
---   Build-depends: par-collections
---   -- (2) Dependencies common to test files and the library:
---   Build-depends: base >= 4 && < 5
---                , time >= 1.4
---                , par-classes >= 1.1
---   --              , monad-par >= 0.3.4.7 -- Not an instance of the new ParMonad class.
---                , atomic-primops >= 0.6
---   --              , mtl    >= 2.0
---   --              , transformers >= 0.2
---   --              , vector >= 0.9
---   --              , ghc-prim
-
---   -- Atomic-primops fails when used by template-haskell/ghci on linux:
---   if impl(ghc < 7.7) && os(linux) {
---     buildable: False
---   }
-
---   -- (3) Additional depends to test concrete instances:
---   Build-depends: lvish  >= 2.0
-
---   -- (4) Additional build depends for testing:
---   Build-depends: test-framework, test-framework-th, test-framework-hunit, HUnit
-
---   ghc-options: -O2 -threaded -rtsopts -Wall
-
---   -- Debugging info:
---   -- ghc-options: -keep-tmp-files -dsuppress-module-prefixes -ddump-to-file -ddump-core-stats -ddump-simpl-stats -dcore-lint -dcmm-lint
---   -- ghc-options: -ddump-ds -ddump-simpl -ddump-stg -ddump-asm -ddump-bcos -ddump-cmm -ddump-opt-cmm -ddump-inlinings
