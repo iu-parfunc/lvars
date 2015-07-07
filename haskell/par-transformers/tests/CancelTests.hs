@@ -3,7 +3,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 module CancelTests (tests, runTests)
@@ -20,18 +19,18 @@ import Control.Par.EffectSigs
 import Control.Concurrent
 import Data.IORef
 import Data.List                      (isInfixOf)
+import Prelude hiding (log)
 
-import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.Framework.TH              (testGroupGenerator)
-import Test.HUnit                     (Assertion, Counts (..), assert,
-                                       assertBool)
+import Test.Tasty
+import Test.Tasty.HUnit
 
-tests :: Test
-tests = $(testGroupGenerator)
+tests :: TestTree
+tests = testGroup "CancelT tests"
+  [simpleLogging, loggingWCancelT, cancelSelfSimple,
+   cancelSelf, cancelOther, cancelOther_self]
 
 runTests :: IO ()
-runTests = defaultMain [tests]
+runTests = defaultMain tests
 
 --------------------------------------------------------------------------------
 -- Helpers:
@@ -43,9 +42,6 @@ type Logger = IORef [String] -- new logs are just consed, reverse before use
 
 dbg :: ParMonad p => Logger -> String -> p e s ()
 dbg logger msg = internalLiftIO $ modifyIORef' logger (msg :)
-
-fetchLogs :: Logger -> IO [String]
-fetchLogs = fmap reverse . readIORef
 
 -- FIXME: Logging has some problems:
 -- - It depends on env variable DEBUG.
@@ -67,12 +63,6 @@ assertHasLog log allLogs =
   assertBool ("Can't find the log message " ++ show log ++ " in logs: " ++ show allLogs) $
     any (log `isInfixOf`) allLogs
 
--- | Assert that given log message is not infix of any log messages.
-assertDoesntHaveLog :: String -> [String] -> Assertion
-assertDoesntHaveLog log allLogs =
-  assertBool ("Found the log message " ++ show log ++ " in logs: " ++ show allLogs) $
-    not $ any (log `isInfixOf`) allLogs
-
 assertNoError :: [String] -> Assertion
 assertNoError logs =
   assertBool ("Found error message in logs: " ++ show logs) (not $ any (isInfixOf "!!") logs)
@@ -92,33 +82,32 @@ runDbg comp = do
     Left err  -> return $! (logs', Left (show err))
     Right x   -> return $! (logs', Right x)
 
--- Making sure the logger is working with Par.
-case_LogTest1 :: IO ()
-case_LogTest1 = do
+simpleLogging :: TestTree
+simpleLogging = testCase "Make sure the logger is working with Par" $ do
   let logMsg = "Testing the logger."
   (logs, _) <- runDbg $ \l -> dbg l logMsg
   assertHasLog logMsg logs
 
 -- Make sure logging is working with CancelT.
-case_LogTest2 :: IO ()
-case_LogTest2 = do
+loggingWCancelT :: TestTree
+loggingWCancelT = testCase "Make sure logging is working with CancelT" $ do
   let logMsg = "Testing the logger."
   (logs, _) <- runDbg $ \l -> isDet $ runCancelT $ dbg l logMsg
   assertHasLog logMsg logs
 
 -- Make sure `cancelMe` is not crashing anything. (no logging here)
-case_cancelMe_NoLog :: IO ()
-case_cancelMe_NoLog = runParNonDet $ runCancelT cancelMe
+cancelSelfSimple :: TestTree
+cancelSelfSimple = testCase "Make sure `cancelMe` is not crashing anything" $ do
+  runParNonDet $ runCancelT cancelMe
 
-case_cancel01_CancelMe :: IO ()
-case_cancel01_CancelMe = do
-  logs <- cancel01
+cancelSelf :: TestTree
+cancelSelf = testCase "Self cancellation with logging" $ do
+  logs <- cancelSelf'
   assertHasLog "Begin test 01" logs
   assertNoError logs
-  assertDoesntHaveLog "Past cancelation point!" logs
 
-cancel01 :: IO [String]
-cancel01 = do
+cancelSelf' :: IO [String]
+cancelSelf' = do
   (logs, Left err) <- runDbg $ \l -> isDet $ runCancelT $ do
        dbg l "Begin test 01: about to cancelMe on main thread"
        cancelMe -- this is just returnToSched from LVarSched method of Par
@@ -126,14 +115,12 @@ cancel01 = do
   assertBool "cancel01: correct error" $ "cancelMe: cannot be used" `isInfixOf` err
   return logs
 
-case_cancel02 :: IO ()
-case_cancel02 = do
-  (logs, _) <- cancel02
-  assertNoError logs
+cancelOther :: TestTree
+cancelOther = testCase "Cancel other thread" $ cancelOther' >>= assertNoError . fst
 
 -- | This should always cancel the child before printing "!!".
-cancel02 :: IO ([String], Either String ())
-cancel02 =
+cancelOther' :: IO ([String], Either String ())
+cancelOther' =
   runDbg $ \l -> isDet $ runCancelT (comp l)
  where
    comp :: forall e s .
@@ -163,13 +150,13 @@ cancel02 =
      dbg l "[parent] Issued cancel, now exiting."
 
 -- Different than 02 in that child thread cancels itself.
-case_cancel02B :: IO ()
-case_cancel02B = do
-  (logs, _) <- cancel02B
+cancelOther_self :: TestTree
+cancelOther_self = testCase "Spawned thread cancels itself" $ do
+  (logs, _) <- cancelOther_self'
   assertNoError logs
 
-cancel02B :: IO ([String], Either String ())
-cancel02B = runDbg $ \l -> isDet $ runCancelT (comp l)
+cancelOther_self' :: IO ([String], Either String ())
+cancelOther_self' = runDbg $ \l -> isDet $ runCancelT (comp l)
   where
     comp :: forall e s .
             (HasGet e, HasPut e, HasGet (SetReadOnly e), HasPut (SetP 'P e)) =>

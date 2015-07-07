@@ -1,42 +1,48 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 module STTests (tests, runTests) where
 
-import           Control.LVish                  as LV
-import qualified Control.Par.ST                 as PST
-import qualified Control.Par.ST.Vec             as V
+import           Control.LVish              as LV
+import qualified Control.Par.ST             as PST
+import qualified Control.Par.ST.Vec         as V
 -- import qualified Control.Par.ST.Vec2              as VV
 
 import           Control.Monad
-import qualified Control.Monad.State.Strict     as S
+import qualified Control.Monad.State.Strict as S
 import           Data.STRef
-import           Data.Vector                    (freeze)
+import           Data.Vector                (freeze, toList)
 
-import           Test.Framework
-import           Test.Framework.Providers.HUnit
-import           Test.Framework.TH              (testGroupGenerator)
-import           Test.HUnit                     (Assertion, assertEqual)
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 --------------------------------------------------------------------------------
 
-case_v_t0 :: Assertion
-case_v_t0 = assertEqual "basic forkSTSplit usage"
-            "fromList [5,0,0,0,0,120,0,0,0,0]" t0
+tests :: TestTree
+tests = testGroup "ST tests"
+  [basicST, treeSplit]
 
-t0 :: String
+runTests :: IO ()
+runTests = defaultMain tests
+
+--------------------------------------------------------------------------------
+
+basicST :: TestTree
+basicST = testCase "basic formSTSplit usage" $
+  assertEqual "basic forkSTSplit usage" [5,0,0,0,0,120,0,0,0,0] t0
+
+t0 :: [Int]
 t0 = LV.runPar $ V.runParVecT 10 p0
 
-p0 :: (HasGet e, HasPut e) => PST.ParST (PST.MVectorFlp Int s1) Par e s String
+p0 :: (HasGet e, HasPut e) => PST.ParST (PST.MVectorFlp Int s1) Par e s [Int]
 p0 = do
   V.set 0
   void $ V.forkSTSplit 5 (V.write 0 5) (V.write 0 120)
   raw <- V.reify
   frozen <- PST.liftST $ freeze raw
-  return $ show frozen
+  return $ toList frozen
 
 -- case_v_t1 :: Assertion
 -- case_v_t1 = assertEqual "testing transmute"
@@ -96,7 +102,7 @@ instance PST.STSplittable (Tree a) where
 
 p2 :: forall s ss e.
       (HasPut e, HasGet e) =>
-      PST.ParST (Tree Integer ss) Par e s String
+      PST.ParST (Tree Int ss) Par e s (Int, Int)
 p2 = do
   x <- PST.liftST $ newSTRef 10
   y <- PST.liftST $ newSTRef 20
@@ -111,16 +117,8 @@ p2 = do
   (Node _ (Node y' _ _) (Node z' _ _)) <- S.get
   a1 <- PST.liftST $ readSTRef y'
   a2 <- PST.liftST $ readSTRef z'
-  return $ show (a1,a2)
+  return (a1,a2)
 
-case_treeSplit :: Assertion
-case_treeSplit =
-  assertEqual "splitting binary tree" "(99,101)" (runPar $ PST.runParST undefined p2)
-
---------------------------------------------------------------------------------
-
-tests :: Test
-tests = $(testGroupGenerator)
-
-runTests :: IO ()
-runTests = defaultMain [tests]
+treeSplit :: TestTree
+treeSplit = testCase "Splitting binary tree" $
+  assertEqual "" (99,101) (runPar $ PST.runParST undefined p2)

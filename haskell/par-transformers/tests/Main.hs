@@ -2,15 +2,15 @@ module Main where
 
 import qualified CancelTests
 import qualified STTests
-import           Test.Framework
+import           Test.Tasty
 
 --------------------------------------------------------------------------------
 
 main :: IO ()
 main = defaultMain alltests
 
-alltests :: [Test]
-alltests =
+alltests :: TestTree
+alltests = testGroup "par-transformers tests"
        [ STTests.tests
        , CancelTests.tests
        ]
