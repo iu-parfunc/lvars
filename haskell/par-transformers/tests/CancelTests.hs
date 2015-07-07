@@ -104,16 +104,6 @@ case_cancel01_CancelMe = do
   assertHasLog "Begin test 01" logs
   assertDoesntHaveLog "Past cancelation point!" logs
 
--- FIXME: This seems to be a horrible behavior of test-framework: Exceptions
--- are not shown! At one point this test was failing with this:
---
--- (from GHCi)
---
--- -- > cancel01
--- -- ([],*** Exception: Control/LVish/CancelT.hs:56:10-49: No instance nor default method for class operation pbind
---
--- But test output was just "Failed".
-
 cancel01 :: IO [String]
 cancel01 = do
   (logs,Left err) <- runDbg $ isDet $ runCancelT $ do
