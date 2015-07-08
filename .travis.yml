@@ -37,15 +37,12 @@ install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
  - cabal install happy alex
-#  - cabal sandbox init
  - export PKGS="./par-classes ./par-transformers ./par-collections ./concurrent-skiplist ./lvish ./par-mergesort"
  - export TOP=`pwd`
  - set -e
  - set -x
  - cd ./haskell/
- # TODO(osa): Debug flag is needed for tests(because they depend on logging).
- # It's only needed while installing lvish.
- - cabal install --enable-tests --enable-benchmarks $PKGS -fdebug
+ - cabal install --enable-tests --enable-benchmarks $PKGS
  - cd ..
 
 # Here starts the actual work to be performed for the package under test; any
