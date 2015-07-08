@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ConstraintKinds     #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -8,8 +7,8 @@
 module CancelTests (tests, runTests)
        where
 
-import Control.LVish                  (isDet, runParDetailed, runParNonDet)
-import Control.LVish                  (DbgCfg (..))
+import Control.LVish            (isDet, runParDetailed, runParNonDet)
+import Control.LVish            (DbgCfg (..))
 import Control.LVish.CancelT
 import Control.LVish.Internal
 import Control.Par.Class
@@ -18,8 +17,8 @@ import Control.Par.EffectSigs
 
 import Control.Concurrent
 import Data.IORef
-import Data.List                      (isInfixOf)
-import Prelude hiding (log)
+import Data.List                (isInfixOf)
+import Prelude                  hiding (log)
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -77,7 +76,7 @@ runDbg comp = do
                           , dbgDests = []
                           , dbgScheduling = False }
                    numCap (comp logs)
-  logs' <- reverse <$> readIORef logs
+  logs' <- reverse `fmap` readIORef logs
   case ans of
     Left err  -> return $! (logs', Left (show err))
     Right x   -> return $! (logs', Right x)
