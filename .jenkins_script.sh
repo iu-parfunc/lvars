@@ -73,6 +73,8 @@ if [ "$NOTEST" == "" ]; then
     # Assume cabal 1.20+:
     echo "Do a reconfigure to make sure test doesn't rebuild with different arguments."
     $CABAL configure --with-ghc=$GHC -fdebug --enable-tests $CABAL_FLAGS
-    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1 --jxml=test-results.xml --jxml-nested'
+    $CABAL test --show-details=$SHOWDETAILS --test-options='-j1'
+# FIXME: we lost xml output when switching to tasty.  Restore.
+#    --jxml=test-results.xml --jxml-nested
   done
 fi
