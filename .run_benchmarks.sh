@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script runs benchmarks and files their results away in a
+# database (currently, Google fusion table).
+
 echo "Running benchmarks remotely on server `hostname`"
 set -e
 set -x
@@ -16,7 +19,7 @@ pwd -P
 # These are the arguments to the HSBencher harness...
 export BENCHARGS=$*
 
-if [ "$CABAL" == "" ]; then 
+if [ "$CABAL" == "" ]; then
   CABAL=cabal-1.20
 fi
 
@@ -66,11 +69,11 @@ cabal exec fusion-upload-criterion -- --name=LVish_microbench_results $NAME.crit
 # Phone home and send the report
 function phone_home() {
     STAMP=`date +"%Y_%M_%d_%H:%M:%S"`
-    mkdir -p $HOME/collected_criterion_reports 
+    mkdir -p $HOME/collected_criterion_reports
     # Copy locally first:
-    cp $NAME.html $HOME/collected_criterion_reports/"$STAMP"_$NAME.html    
-    ssh parfunc@tank.soic.indiana.edu mkdir -p collected_criterion_reports 
-    scp $NAME.html parfunc@tank.soic.indiana.edu:collected_criterion_reports/"$STAMP"_$NAME.html 
+    cp $NAME.html $HOME/collected_criterion_reports/"$STAMP"_$NAME.html
+    ssh parfunc@tank.soic.indiana.edu mkdir -p collected_criterion_reports
+    scp $NAME.html parfunc@tank.soic.indiana.edu:collected_criterion_reports/"$STAMP"_$NAME.html
 }
 
 phone_home || echo "ok if this fails."
@@ -86,9 +89,9 @@ cd $CHECKOUT/haskell/lvish-apps
 
 # Old/scrap:
 # ================================================================================
-	
+
 # NUMCPUS=`ls -d /sys/devices/system/cpu/cpu? /sys/devices/system/cpu/cpu?? 2> /dev/null | wc -l`
-# if [ $NUMCPUS -lt 17 ]; then 
+# if [ $NUMCPUS -lt 17 ]; then
 #   export THREADS=`seq 1 $NUMCPUS`
 # else
 #   THREADS="1 "
@@ -102,6 +105,3 @@ cd $CHECKOUT/haskell/lvish-apps
 
 # echo "Printing out final .dat file:"
 # cat result*.dat
-
-
-
