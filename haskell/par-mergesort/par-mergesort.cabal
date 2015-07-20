@@ -22,7 +22,7 @@ library
     vector                  >= 0.10 && < 0.11,
     vector-algorithms
 
-  c-sources:                cilksort.c
+  c-sources:                cbits/cilksort.c
   -- required for REPL, not sure about performance implications
   cc-options:               -fPIC
 
