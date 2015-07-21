@@ -25,6 +25,7 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
 import           Control.Par.MergeSort
+                  (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)
 
 main :: IO ()
 main = defaultMain $ testGroup "MergeSort tests"
