@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE RankNTypes #-}
 
 module STTests (tests, runTests) where
 
@@ -11,10 +12,10 @@ import qualified Control.Par.ST.Vec         as V
 -- import qualified Control.Par.ST.Vec2              as VV
 
 import           Control.Monad
-import qualified Control.Monad.State.Strict as S
+-- import qualified Control.Monad.State.Strict as S
+import qualified Control.Monad.Reader       as R
 import           Data.STRef
 import           Data.Vector                (freeze, toList)
-
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -22,7 +23,12 @@ import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "ST tests"
-  [basicST, treeSplit]
+  [ basicST
+  , treeSplit
+  , testCase "runParST test with recipe" $
+    assertEqual "" 33 $
+    LV.runPar $ PST.runParST PST.STUnitRecipe p3
+  ]
 
 runTests :: IO ()
 runTests = defaultMain tests
@@ -89,6 +95,11 @@ p0 = do
 --   let result = show frozen ++ " " ++ str
 --   return result
 
+p3 :: PST.ParST (PST.STUnit s0) Par e s Int
+p3 = do PST.STUnit <- PST.reify
+        PST.unsafeInstall PST.STUnit
+        return 33
+
 --------------------------------------------------------------------------------
 
 data Tree a s = Empty
@@ -100,6 +111,20 @@ instance PST.STSplittable (Tree a) where
   splitST () Empty = error "splitST: cannot split empty tree!"
   splitST () (Node _ left right) = (left, right)
 
+  -- | With these the practice is to simply pass a tree, and the STRefs get "freshened":
+  data BuildRecipe (Tree a) = TreeRecipe (forall s . Tree a s)
+
+  instantiateRecipe (TreeRecipe tr) = PST.cloneState tr
+
+  cloneState Empty = return Empty
+  cloneState (Node ref l r) =
+    do val <- readSTRef ref
+       x   <- newSTRef val
+       l'  <- PST.cloneState l
+       r'  <- PST.cloneState r
+       return $ Node x l' r'
+
+
 p2 :: forall s ss e.
       (HasPut e, HasGet e) =>
       PST.ParST (Tree Int ss) Par e s (Int, Int)
@@ -107,18 +132,18 @@ p2 = do
   x <- PST.liftST $ newSTRef 10
   y <- PST.liftST $ newSTRef 20
   z <- PST.liftST $ newSTRef 30
-  S.put (Node x (Node y Empty Empty) (Node z Empty Empty))
+  PST.unsafeInstall (Node x (Node y Empty Empty) (Node z Empty Empty))
   void $ V.forkSTSplit ()
-    (do Node r _ _ <- S.get
+    (do Node r _ _ <- R.ask
         PST.liftST $ writeSTRef r 99)
-    (do Node r _ _ <- S.get
+    (do Node r _ _ <- R.ask
         PST.liftST $ writeSTRef r 101)
 
-  (Node _ (Node y' _ _) (Node z' _ _)) <- S.get
+  (Node _ (Node y' _ _) (Node z' _ _)) <- R.ask
   a1 <- PST.liftST $ readSTRef y'
   a2 <- PST.liftST $ readSTRef z'
   return (a1,a2)
 
 treeSplit :: TestTree
 treeSplit = testCase "Splitting binary tree" $
-  assertEqual "" (99,101) (runPar $ PST.runParST undefined p2)
+  assertEqual "" (99,101) (runPar $ PST.runParST (TreeRecipe Empty) p2)

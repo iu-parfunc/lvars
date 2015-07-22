@@ -27,9 +27,10 @@ module Control.Par.ST.Vec
        )
        where
 
-import Control.Par.ST
+import Control.Par.ST hiding (reify)
 
 import qualified Control.Monad.State.Strict as S
+import qualified Control.Monad.Reader as R
 import qualified Data.Vector.Mutable as MV
 
 import GHC.Conc (getNumProcessors)
@@ -57,19 +58,23 @@ runParVecT :: forall p e s s2 a va .
              => Int
              -> (forall s1 . ParVecT s1 va p e s a)
              -> p e s a
-runParVecT size comp = runParST (error "runParVecT -- this initial value should be unused.") comp'
+runParVecT size comp =
+   -- We start with a dummy state because we haven't yet done "new"
+   unsafeRunParST
+     (error "runParVecT: this initial value should be unused.") comp'
+   -- runParST (VFlp MV.null) comp'
   where
     comp' :: ParST (MVectorFlp va s1) p e s a
     comp' = do
       vec <- liftST $ MV.new size
-      S.put $ VFlp vec
+      unsafeInstall $ VFlp vec
       comp
 
 -- | Extract a pointer to the whole Vector in its normal, usable @STVector@ form.
 --   Use the `liftST` operator to act on it.
 reify :: (ParThreadSafe p) => ParVecT s1 va p e s (MV.STVector s1 va)
 reify = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   return vec
 
 --------------------------------------------------------------------------------
@@ -93,51 +98,51 @@ numProcs = unsafeDupablePerformIO getNumProcessors
 -- | Write to the (implicit) vector state.
 write :: ParThreadSafe p => Int -> va -> ParVecT s1 va p e s ()
 write ind val = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   liftST $ MV.write vec ind val
 
 -- | Read the (implicit) vector state.
 read :: ParThreadSafe p => Int -> ParVecT s1 va p e s va
 read ind = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   liftST $ MV.read vec ind
 
 -- | Return the length of the (implicit) vector state.
 length :: ParThreadSafe p => ParVecT s1 va p e s Int
-length = S.get >>= (return . MV.length . unFlp)
+length = R.ask >>= (return . MV.length . unFlp)
 
 
 -- | Update the vector state by swapping two elements.
 swap :: ParThreadSafe p => Int -> Int -> ParVecT s1 va p e s ()
 swap x y = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   liftST $ MV.swap vec x y
 
 -- | Update the vector state by dropping the first @n@ elements.
 drop :: ParThreadSafe p => Int -> ParVecT s1 va p e s ()
 drop n = do
-  VFlp vec <- S.get
-  S.put (VFlp (MV.drop n vec))
+  VFlp vec <- R.ask
+  unsafeInstall (VFlp (MV.drop n vec))
 
 -- | Update the vector state by taking the first @n@ elements, discarding the rest.
 take :: ParThreadSafe p => Int -> ParVecT s1 va p e s ()
 take n = do
-  VFlp vec <- S.get
-  S.put (VFlp (MV.take n vec))
+  VFlp vec <- R.ask
+  unsafeInstall (VFlp (MV.take n vec))
 
 -- | Destructively replace the vector with a bigger vector, adding the given number
 -- of elements.  The new elements are uninitialized and will result in errors if
 -- read.
 grow :: ParThreadSafe p => Int -> ParVecT s1 va p e s ()
 grow n = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   vec' <- liftST$ MV.grow vec n
-  S.put (VFlp vec')
+  unsafeInstall (VFlp vec')
 
 -- | Mutate all the elements of the vector, setting them to the given value.
 set :: ParThreadSafe p => va -> ParVecT s1 va p e s ()
 set val = do
-  VFlp vec <- S.get
+  VFlp vec <- R.ask
   liftST $ MV.set vec val
 
 {-

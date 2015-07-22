@@ -35,9 +35,10 @@ module Control.Par.ST.StorableVec2
        )
        where
 
+import qualified Control.Monad.Reader as R
 import qualified Control.Monad.State.Strict   as S
 import           Control.Par.Class.Unsafe     (ParThreadSafe)
-import           Control.Par.ST
+import           Control.Par.ST hiding (reify)
 import qualified Data.Vector.Storable.Mutable as MU
 import           Prelude                      hiding (drop, length, read, take)
 

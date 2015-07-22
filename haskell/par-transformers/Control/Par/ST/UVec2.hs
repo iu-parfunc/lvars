@@ -20,15 +20,15 @@
 
 module Control.Par.ST.UVec2
        ( -- * A type alias for parallel computations with @Vector@ state
-         ParVec2T, 
+         ParVec2T,
          runParVec2T,
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, liftST, 
-       
+         forkSTSplit, liftPar, liftST,
+
          -- * Retrieving an explict pointer to the Vector
-         reify, 
-         
+         reify,
+
          -- * Useful vector helpers
          writeL, writeR, readL, readR, lengthL, lengthR,
          swapL, swapR, dropL, dropR, takeL, takeR,
@@ -36,8 +36,9 @@ module Control.Par.ST.UVec2
        )
        where
 
-import Control.Par.ST
+import Control.Par.ST hiding (reify)
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import qualified Control.Monad.Reader as R
 import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Unboxed.Mutable as MU
 import Prelude hiding (read, length, drop, take)
