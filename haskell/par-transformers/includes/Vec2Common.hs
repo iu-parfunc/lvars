@@ -23,6 +23,7 @@ runParVec2T (size1, size2) comp =
   unused = error "runParVec2T -- this initial value should be unused."
 
 
+emptArrRecipe :: ArrayRecipe s a
 emptArrRecipe = ArrayRecipe 0 (\_ -> error "never called")
 
 -- | Extract a pointer to the whole Vector in its normal, usable @STVector@ form.
@@ -192,3 +193,9 @@ installR vecR =
               then liftST $ MU.clone vecR
               else return vecR
      unsafeInstall (STTup2 (FLPIT vecL) (FLPIT vecR2))
+
+
+-- TODO: We could also have versions of installL/R that work when the
+-- left and right vectors are of DIFFERENT type.  But this requires
+-- some kind of type disequality constraint, which can be implemented
+-- with a closed type family.
