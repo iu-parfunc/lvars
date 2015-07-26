@@ -10,7 +10,7 @@ type ParVec2T s1 e1 e2 p e s a =
 {-# INLINE runParVec2T #-}
 runParVec2T :: forall e1 e2 p e s a .
                (CONSTRAINT(e1)) => (CONSTRAINT(e2)) => (ParThreadSafe p)
-             => (Int, Int)
+             => (Int, Int) -- ^ Size of left and right vectors.
              -> (forall s1 . ParVec2T s1 e1 e2 p e s a)
              -> p e s a
 runParVec2T (size1, size2) comp =
@@ -159,3 +159,31 @@ setR :: ParThreadSafe p => eR -> ParVec2T s1 eL eR p e s ()
 setR val = do
   STTup2 _ (FLPIT vecR) <- R.ask
   liftST $ MU.set vecR val
+
+
+-- | Install a new vector on the left side.  To retain alias freedom
+--   this *may* copy the vector provided, if and only if it overlaps
+--   with the vector already installed on the right side.
+--
+--   Unfortunately, this function only works for elements of the same
+--   type, because, otherwise it is not possible to do the overlap test.
+installL :: (CONSTRAINT(eL))
+         => ParThreadSafe p
+         => MU.MVector s1 eL -> ParVec2T s1 eL eL p e s ()
+installL vecL =
+  do STTup2 _ (FLPIT vecR) <- R.ask
+     vecL2 <- if MU.overlaps vecL vecR
+              then liftST $ MU.clone vecL
+              else return vecL
+     unsafeInstall (STTup2 (FLPIT vecL2) (FLPIT vecR))
+
+-- | Like `installL`, but for the right vector.
+installR :: (CONSTRAINT(eR))
+         => ParThreadSafe p
+         => MU.MVector s1 eR -> ParVec2T s1 eR eR p e s ()
+installR vecR =
+  do STTup2 (FLPIT vecL) _ <- R.ask
+     vecR2 <- if MU.overlaps vecL vecR
+              then liftST $ MU.clone vecR
+              else return vecR
+     unsafeInstall (STTup2 (FLPIT vecL) (FLPIT vecR2))

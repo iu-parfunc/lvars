@@ -106,8 +106,9 @@ sortPV' :: (PC.ParMonad p, ParThreadSafe p, PC.ParIVar p, PC.FutContents p (),
            Int -> Int -> SSort -> SMerge ->
            SVM.STVector s1 Int32 -> V.ParVec2T s1 Int32 Int32 p e s ()
 sortPV' ssThres smThres ssMeth smMeth vec = do
-    STTup2 _ (SFlp right) <- SS.get
-    SS.put (STTup2 (SFlp vec) (SFlp right))
+--    (_, right) <- V.reify
+--    SS.put (STTup2 (SFlp vec) (SFlp right))
+    installL vec
     mergeSort ssThres smThres ssMeth smMeth
 
 mkRandomVec :: Int -> IO (SV.Vector Int32)

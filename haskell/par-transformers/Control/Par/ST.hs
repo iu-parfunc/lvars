@@ -363,6 +363,8 @@ instance (ParMonad p, ParThreadSafe p) =>
   {-# INLINE ask #-}
   ask = reify
 
+  -- local fn m =
+
 -- | Allow `ST` computations inside `ParST` computations.
 --   This operation has some overhead.
 {-# INLINE liftST #-}

@@ -24,7 +24,7 @@ import           Control.Par.ST
 
 import           Control.Monad
 import           Control.Monad.ST             (ST)
-import qualified Control.Monad.State.Strict   as SS
+-- import qualified Control.Monad.State.Strict   as SS
 
 -- TODO(osa): Removed all variants to make test program working, maybe move each
 -- specialzed version to it's own module.
@@ -106,13 +106,13 @@ mergeSort !st !mt !sa !ma = do
 {-# INLINE seqSortL #-}
 seqSortL :: (Ord eL, ParThreadSafe p) => V.ParVec2T s1 eL eR p e s ()
 seqSortL = do
-  STTup2 (VFlp vecL) (VFlp _) <- SS.get
+  STTup2 (VFlp vecL) (VFlp _) <- reify
   liftST $ VA.sort vecL
 
 {-# INLINE seqSortL2 #-}
 seqSortL2 :: (Ord eL, ParThreadSafe p) => V.ParVec2T s1 eL eR p e s ()
 seqSortL2 = do
-  STTup2 (VFlp vecL) (VFlp _) <- SS.get
+  STTup2 (VFlp vecL) (VFlp _) <- reify
   liftST $ VI.sort vecL
 
 ---------------
@@ -126,6 +126,7 @@ mergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
+
   -- error "mergeTo2"
 
 
@@ -143,7 +144,7 @@ pMergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
               PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
              Int -> SMerge -> ParVec21T s1 e1 p e s ()
 pMergeTo2 threshold ma = do
-  STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- SS.get
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- reify
   let l1 = MV.length v1
       l2 = MV.length v2
 
@@ -211,7 +212,7 @@ findSplit :: forall s1 e1 p e s .
               PC.ParMonad p) =>
              ParVec21T s1 e1 p e s (Int, Int)
 findSplit = do
-  STTup2 (STTup2 (VFlp vl) (VFlp vr)) _ <- SS.get
+  STTup2 (STTup2 (VFlp vl) (VFlp vr)) _ <- reify
   let lLen = MV.length vl
       rLen = MV.length vr
   liftST $ findSplit' vl vr 0 lLen 0 rLen
@@ -272,7 +273,7 @@ morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
 {-# INLINE seqmerge #-}
 seqmerge :: forall s1 e1 p e s . (ParThreadSafe p, Ord e1) => ParVec21T s1 e1 p e s ()
 seqmerge = do
-  STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp dest) <- SS.get
+  STTup2 (STTup2 (VFlp left) (VFlp right)) (VFlp dest) <- reify
 
   let lenL = MV.length left
       lenR = MV.length right
@@ -344,7 +345,7 @@ cilkSeqSort :: (Ord eL, ParThreadSafe p, PC.ParMonad p) =>
                V.ParVec2T s1 eL eR p e s ()
 -- This has the same signature & contract as seqSortL.
 cilkSeqSort = do
-  STTup2 (VFlp vecL) (VFlp _) <- SS.get
+  STTup2 (VFlp vecL) (VFlp _) <- reify
   internalLiftIO $ do
     let len = MV.length vecL
     let (fptr,_) = MV.unsafeToForeignPtr0 vecL
@@ -362,7 +363,7 @@ foreign import ccall unsafe "wrap_seqmerge"
 
 cilkSeqMerge :: (Ord e1, ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 e1 p e s ()
 cilkSeqMerge = do
-  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- SS.get
+  STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- reify
   let (fptr1,_) = MV.unsafeToForeignPtr0 v1
       (fptr2,_) = MV.unsafeToForeignPtr0 v2
       (fptr3,_) = MV.unsafeToForeignPtr0 v3
@@ -385,54 +386,54 @@ type CElmT = CInt
 
 indexL1 :: (ParThreadSafe p) => Int -> ParVec21T s1 e1 p e s e1
 indexL1 index = do
-  STTup2 (STTup2 (VFlp l1) _) _ <- SS.get
+  STTup2 (STTup2 (VFlp l1) _) _ <- reify
   liftST $ MV.read l1 index
 
 indexR1 :: (ParThreadSafe p) => Int -> ParVec21T s1 e1 p e s e1
 indexR1 index = do
-  STTup2 (STTup2 _ (VFlp r1)) _ <- SS.get
+  STTup2 (STTup2 _ (VFlp r1)) _ <- reify
   liftST $ MV.read r1 index
 
 indexL2 :: (ParThreadSafe p) => Int -> ParVec12T s1 e1 p e s e1
 indexL2 index = do
-  STTup2 _ (STTup2 (VFlp l2) _) <- SS.get
+  STTup2 _ (STTup2 (VFlp l2) _) <- reify
   liftST $ MV.read l2 index
 
 indexR2 :: (ParThreadSafe p) => Int -> ParVec12T s1 e1 p e s e1
 indexR2 index = do
-  STTup2 _ (STTup2 _ (VFlp r2)) <- SS.get
+  STTup2 _ (STTup2 _ (VFlp r2)) <- reify
   liftST $ MV.read r2 index
 
 write1 :: (ParThreadSafe p) => Int -> e1 -> ParVec12T s1 e1 p e s ()
 write1 index value = do
-  STTup2 (VFlp v1) _ <- SS.get
+  STTup2 (VFlp v1) _ <- reify
   liftST $ MV.write v1 index value
 
 write2 :: (ParThreadSafe p) => Int -> e1 -> ParVec21T s1 e1 p e s ()
 write2 index value = do
-  STTup2 _ (VFlp v2) <- SS.get
+  STTup2 _ (VFlp v2) <- reify
   liftST $ MV.write v2 index value
 
 length2 :: (ParThreadSafe p) => ParVec21T s1 e1 p e s Int
 length2 = do
-  STTup2 _ (VFlp vec2) <- SS.get
+  STTup2 _ (VFlp vec2) <- reify
   return $ MV.length vec2
 
 length1 :: (ParThreadSafe p) => ParVec12T s1 e1 p e s Int
 length1 = do
-  STTup2 (VFlp v1) _ <- SS.get
+  STTup2 (VFlp v1) _ <- reify
   return $ MV.length v1
 
 lengthLR1 :: (ParThreadSafe p) => ParVec21T s1 e1 p e s (Int, Int)
 lengthLR1 = do
-  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) _ <- SS.get
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) _ <- reify
   let lenL = MV.length vecL
       lenR = MV.length vecR
   return (lenL, lenR)
 
 lengthLR2 :: (ParThreadSafe p) => ParVec12T s1 s1 p e s (Int, Int)
 lengthLR2 = do
-  STTup2 _ (STTup2 (VFlp vecL) (VFlp vecR)) <- SS.get
+  STTup2 _ (STTup2 (VFlp vecL) (VFlp vecR)) <- reify
   let lenL = MV.length vecL
       lenR = MV.length vecR
   return (lenL, lenR)

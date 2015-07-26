@@ -28,6 +28,9 @@ module Control.Par.ST.Vec2
          -- * Retrieving an explict pointer to the Vector
          reify, liftST,
 
+         -- * Installing new vectors
+         installL, installR,
+
          -- * Common vector operations
          writeL, writeR, readL, readR, lengthL, lengthR,
          swapL, swapR, dropL, dropR, takeL, takeR,
