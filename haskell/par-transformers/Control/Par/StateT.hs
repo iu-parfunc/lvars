@@ -16,6 +16,7 @@ module Control.Par.StateT
   )
   where
 
+{-
 import Control.Monad
 import Control.Monad.Trans
 import qualified Control.Monad.Trans.State.Strict as S
@@ -24,6 +25,7 @@ import qualified Control.Monad.Trans.State.Lazy as SL
 -- import qualified Control.Monad.Par.Class as PC
 import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad(..), ParThreadSafe(..))
+-}
 
 ---------------------------------------------------------------------------------
 --- Make Par computations with state work.
@@ -54,7 +56,7 @@ instance ParThreadSafe p => ParThreadSafe (S.StateT s p) where
   {-# INLINE unsafeParIO #-}
   unsafeParIO io = lift (unsafeParIO io)
 
-instance (SplittableState s, ParMonad p) => ParMonad (S.StateT s p) where  
+instance (SplittableState s, ParMonad p) => ParMonad (S.StateT s p) where
   {-# INLINE fork #-}
   fork (task :: S.StateT s p ()) =
               do s <- S.get
@@ -99,14 +101,14 @@ instance ParThreadSafe p => ParThreadSafe (SL.StateT s p) where
   {-# INLINE unsafeParIO #-}
   unsafeParIO io = lift (unsafeParIO io)
 
-instance (SplittableState s, ParMonad p) => ParMonad (SL.StateT s p) where  
+instance (SplittableState s, ParMonad p) => ParMonad (SL.StateT s p) where
   {-# INLINE fork #-}
   fork (task :: SL.StateT s p ()) =
               do s <- SL.get
                  let (s1,s2) = splitState s
                  SL.put s2
                  lift$ PC.fork $ do SL.runStateT task s1; return ()
-  {-# INLINE internalLiftIO #-}                                    
+  {-# INLINE internalLiftIO #-}
   internalLiftIO io = lift (internalLiftIO io)
 
 -- | Adding State to a `ParFuture` monad yield s another `ParFuture` monad.
@@ -114,7 +116,7 @@ instance (SplittableState s, PC.ParFuture p)
       =>  PC.ParFuture (SL.StateT s p)
  where
   type Future (SL.StateT s p)        = PC.Future p
-  type FutContents (SL.StateT s p) a = PC.FutContents p a   
+  type FutContents (SL.StateT s p) a = PC.FutContents p a
   {-# INLINE get #-}
   get = lift . PC.get
   {-# INLINE spawn_ #-}

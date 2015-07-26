@@ -14,11 +14,16 @@ runParVec2T :: forall e1 e2 p e s a .
              -> (forall s1 . ParVec2T s1 e1 e2 p e s a)
              -> p e s a
 runParVec2T (size1, size2) comp =
-  runParST (error "runParVec -- this initial value should be unused.") $ do
+  runParST (STTup2Recipe (ARRRECIP emptArrRecipe) (ARRRECIP emptArrRecipe)) $ do
     vec1 <- liftST $ MU.new size1
     vec2 <- liftST $ MU.new size2
     unsafeInstall (STTup2 (FLPIT vec1) (FLPIT vec2))
     comp
+ where
+  unused = error "runParVec2T -- this initial value should be unused."
+
+
+emptArrRecipe = ArrayRecipe 0 (\_ -> error "never called")
 
 -- | Extract a pointer to the whole Vector in its normal, usable @STVector@ form.
 --   Use the `liftST` operator to act on it.

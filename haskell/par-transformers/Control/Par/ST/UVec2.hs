@@ -24,10 +24,13 @@ module Control.Par.ST.UVec2
          runParVec2T,
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, liftST,
+         forkSTSplit, liftPar,
 
          -- * Retrieving an explict pointer to the Vector
-         reify,
+         reify, liftST,
+
+         -- * Installing new vectors
+         installL, installR,
 
          -- * Useful vector helpers
          writeL, writeR, readL, readR, lengthL, lengthR,
@@ -39,13 +42,14 @@ module Control.Par.ST.UVec2
 import Control.Par.ST hiding (reify)
 import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
 import qualified Control.Monad.Reader as R
-import qualified Control.Monad.State.Strict as S
+--import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Unboxed.Mutable as MU
 import Prelude hiding (read, length, drop, take)
 
 #define CONSTRAINT  MU.Unbox
 #define FLIPTY UVectorFlp
 #define FLPIT UFlp
+#define ARRRECIP UVectorFlpRecipe
 
 --------------------------------------------------------------------------------
 

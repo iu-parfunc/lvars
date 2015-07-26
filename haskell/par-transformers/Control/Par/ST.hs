@@ -36,7 +36,8 @@ module Control.Par.ST
          MVectorFlp(..), UVectorFlp(..), SVectorFlp(..),
          STTup2(..), STUnit(..),
 
-         BuildRecipe(..),
+         -- * Build recipes for state objects
+         BuildRecipe(..), ArrayRecipe (..),
 
          -- * TEMPORARY: Useful utilities
          for_, mkParMapM
@@ -100,14 +101,6 @@ class STSplittable ty => ParSTState ty where
   -- should be a stand-alone type family:
   type NewRecipe ty :: *
 -}
-
--- -- | A handful of generally useful ways to initialize a vector.
--- data ArrayRecipe a = Constant { len :: Int, fill :: a }
---                      -- ^ Constant array
---                    | Consecutive { start  :: a
---                                  , end    :: a
---                                  , stride :: a }
---                    | Random a a -- ^ Lower and upper bound, inclusive.
 
 -- | A method of initializing a fresh array.
 data ArrayRecipe s a = ArrayRecipe Int (Int -> ST s a)
@@ -177,24 +170,24 @@ instance (STSplittable a, STSplittable b) => STSplittable (STTup2 a b) where
 
 -- | Safe lifting of a computation on state `A` to one on state `(A,B)`, where
 --   the second component is ignored.
-liftL :: ParMonad p =>
-         (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st1 st2) s0) p) e s1 a
-liftL (ParST f1) = ParST $ \(STTup2 st1 r) ->
+_liftL :: ParMonad p =>
+          (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st1 st2) s0) p) e s1 a
+_liftL (ParST f1) = ParST $ \(STTup2 st1 r) ->
   do (x,l') <- (f1 st1)
      return (x, STTup2 l' r)
 
 -- | Like `liftL`, but flipped.
-liftR :: ParMonad p =>
-         (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
-liftR (ParST f1) = ParST $ \(STTup2 l st1) ->
+_liftR :: ParMonad p =>
+          (ParST (st1 s0) p) e s1 a -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
+_liftR (ParST f1) = ParST $ \(STTup2 l st1) ->
   do (x,new) <- (f1 st1)
      return (x, STTup2 l new)
 
 -- | Swap the components of a STTup2 computation.
-swap :: ParMonad p =>
-      (ParST ((STTup2 st1 st2) s0) p) e s1 a
+_swap :: ParMonad p =>
+       (ParST ((STTup2 st1 st2) s0) p) e s1 a
    -> (ParST ((STTup2 st2 st1) s0) p) e s1 a
-swap (ParST f1) = ParST $ \(STTup2 y x) ->
+_swap (ParST f1) = ParST $ \(STTup2 y x) ->
   do (ans, STTup2 x' y') <- f1 (STTup2 x y)
      return (ans, STTup2 y' x')
 
@@ -286,27 +279,30 @@ newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
 -- To retain alias-freedom the user may not directly initialize the state, rather, they
 -- pass a recipe to describe how to build the initial state.
 {-# INLINE runParST #-}
-runParST :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+runParST :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
             (ParMonad p, ParThreadSafe p, STSplittable st) =>
              (BuildRecipe st)
              -> (forall s1 . ParST (st s1) p e s2 a)
              -> p e s2 a
 runParST recipe (ParST fn) =
   doST (instantiateRecipe recipe) `pbind` \initVal ->
-   let xm :: p e s2 (a, st s0)
+   let -- xm :: p e s2 (a, st s0)
        xm = fn initVal
     in xm `pbind` (preturn . fst)
  where
   doST = unsafeParIO . unsafeSTToIO
 
 -- | This version does a deep copy of the initial state.
-runParST2 :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-             (ParMonad p, ParThreadSafe p, STSplittable st) =>
-              st s0
-              -> (forall s1 . ParST (st s1) p e s2 a)
-              -> p e s2 a
-runParST2 initVal (ParST fn) =
-  error "runParST2"
+runParSTCopy :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+                (ParMonad p, ParThreadSafe p, STSplittable st) =>
+                 (forall s0 . st s0)
+                 -> (forall s1 . ParST (st s1) p e s2 a)
+                 -> p e s2 a
+runParSTCopy initVal pst =
+  unsafeRunParST (error "runParSTCopy: This value should be unused.") $
+    do initVal' <- liftST $ cloneState initVal
+       unsafeInstall initVal'
+       pst
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}

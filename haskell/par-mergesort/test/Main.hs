@@ -8,7 +8,7 @@ import           Data.Int                     (Int32)
 
 import           Control.Monad                (forM_, replicateM)
 import           Control.Monad.ST             (runST)
-import qualified Control.Monad.State.Strict   as SS
+-- import qualified Control.Monad.State.Strict   as SS
 import qualified Data.Vector.Storable         as SV
 import qualified Data.Vector.Storable.Mutable as SVM
 import           System.Random                (randomIO)
@@ -108,7 +108,7 @@ sortPV' :: (PC.ParMonad p, ParThreadSafe p, PC.ParIVar p, PC.FutContents p (),
 sortPV' ssThres smThres ssMeth smMeth vec = do
 --    (_, right) <- V.reify
 --    SS.put (STTup2 (SFlp vec) (SFlp right))
-    installL vec
+    V.installL vec
     mergeSort ssThres smThres ssMeth smMeth
 
 mkRandomVec :: Int -> IO (SV.Vector Int32)

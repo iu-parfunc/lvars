@@ -23,10 +23,13 @@ module Control.Par.ST.StorableVec2
          runParVec2T,
 
          -- * Reexported from the generic interface
-         forkSTSplit, liftPar, liftST,
+         forkSTSplit, liftPar,
 
          -- * Retrieving an explict pointer to the Vector
-         reify,
+         reify, liftST,
+
+         -- * Installing new vectors
+         installL, installR,
 
          -- * Useful vector helpers
          writeL, writeR, readL, readR, lengthL, lengthR,
@@ -36,7 +39,7 @@ module Control.Par.ST.StorableVec2
        where
 
 import qualified Control.Monad.Reader as R
-import qualified Control.Monad.State.Strict   as S
+-- import qualified Control.Monad.State.Strict   as S
 import           Control.Par.Class.Unsafe     (ParThreadSafe)
 import           Control.Par.ST hiding (reify)
 import qualified Data.Vector.Storable.Mutable as MU
@@ -45,6 +48,7 @@ import           Prelude                      hiding (drop, length, read, take)
 #define CONSTRAINT MU.Storable
 #define FLIPTY SVectorFlp
 #define FLPIT SFlp
+#define ARRRECIP SVectorFlpRecipe
 
 --------------------------------------------------------------------------------
 
