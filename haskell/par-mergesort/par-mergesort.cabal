@@ -3,6 +3,20 @@ version:             1.0
 build-type:          Simple
 cabal-version:       >=1.8
 
+synopsis: Fast in-place parallel mergesort using a Par-monad.
+
+description:
+
+  Out-of-place parallel sorts are not fast.  Even if they bottom out
+  to fast sequential sorts, executing an out-of-place sort at larger
+  array sizes creates extra memory traffic exactly when array slices
+  are larger than last-level cache.
+
+  This module provides a guaranteed-deterministic parallel mergesort
+  that uses only the safe API provided by the `ParST` monad
+  transformer.  It works with any underlying `ParMonad`.
+
+
 Source-repository head
   type:     git
   location: https://github.com/iu-parfunc/lvars
@@ -21,7 +35,8 @@ library
     par-classes,
     par-transformers,
     vector                  >= 0.10 && < 0.11,
-    vector-algorithms
+    vector-algorithms,
+    primitive               >= 0.6
 
   c-sources:                cbits/cilksort.c
   -- required for REPL, not sure about performance implications
