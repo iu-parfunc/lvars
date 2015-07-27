@@ -17,7 +17,7 @@
 module Control.Par.ST
        (
          -- * The monad: a dischargable effect
-         ParST, runParST, unsafeRunParST,
+         ParST, runParST, runParSTCopy, unsafeRunParST,
          reify, unsafeInstall,
 
          -- * An alternate fork operation
@@ -110,9 +110,14 @@ data ArrayRecipe s a = ArrayRecipe Int (Int -> ST s a)
 
 -- | An annoying type alias simply for the purpose of arranging for the 's' parameter
 -- to be last.
+--
 newtype MVectorFlp a s = VFlp { unFlp :: MV.MVector s a }
 
 -- | A single vector cannot contain aliases.
+--
+--   The reason for this is subtle.  If there were, say, STRefs
+--   contained inside the vector, they would be unusable due to
+--   forall-quantification in the branches of `forkSTSplit`.
 instance STSplittable (MVectorFlp a) where
   type SplitIdx (MVectorFlp a) = Int
   {-# INLINE splitST #-}
@@ -134,6 +139,7 @@ instance STSplittable (MVectorFlp a) where
        for_ (0,len) $ \ix -> do el <- (fn ix)
                                 MV.write v ix el
        return (VFlp v)
+
   cloneState (VFlp v) =
      do v' <- MV.clone v
         return $ VFlp v'
@@ -295,14 +301,23 @@ runParST recipe (ParST fn) =
 -- | This version does a deep copy of the initial state.
 runParSTCopy :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
-                 (forall s0 . st s0)
+                 (forall s0 . ST s0 (st s0))
                  -> (forall s1 . ParST (st s1) p e s2 a)
                  -> p e s2 a
-runParSTCopy initVal pst =
+runParSTCopy mkInit pst =
   unsafeRunParST (error "runParSTCopy: This value should be unused.") $
-    do initVal' <- liftST $ cloneState initVal
+    do initVal  <- liftST mkInit
+       initVal' <- liftST $ cloneState initVal
        unsafeInstall initVal'
        pst
+
+-- TODO: We could have a version that looks like this
+runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
+                  (st s0)
+                  -> (ParST (st s0) p e s2 a)
+                  -> ST s0 (p e s2 a)
+runParSTCopy' initVal pst = undefined
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}

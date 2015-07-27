@@ -6,18 +6,20 @@
 
 module STTests (tests, runTests) where
 
-import           Control.LVish              as LV
-import           Control.Par.ST             as PST
-import qualified Control.Par.ST.Vec         as V
+import           Control.LVish as LV
+import           Control.Par.ST as PST
+import qualified Control.Par.ST.Vec as V
 -- import qualified Control.Par.ST.Vec2              as VV
 
 import           Control.Monad
+import           Control.Monad.ST
 -- import qualified Control.Monad.State.Strict as S
-import qualified Control.Monad.Reader       as R
+import qualified Control.Monad.Reader as R
 import           Data.STRef
-import           Data.Vector                (freeze, toList)
+import           Data.Vector (freeze, toList)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import qualified Data.Vector.Mutable as MV
 
 --------------------------------------------------------------------------------
 
@@ -28,6 +30,8 @@ tests = testGroup "ST tests"
   , testCase "runParST test with recipe" $
     assertEqual "" 33 $
     LV.runPar $ runParST STUnitRecipe p4
+  , testCase "runParSTCopy with a vec of refs" $
+    assertEqual "" [99,88] t5
   ]
 
 runTests :: IO ()
@@ -149,3 +153,75 @@ p4 :: ParST (STUnit s0) Par e s Int
 p4 = do STUnit <- reify
         unsafeInstall STUnit
         return 33
+
+
+----------------------------------------
+
+
+newtype VecOfIntRef s = VecOfIntRef (MV.MVector s (STRef s Int))
+
+mapMV :: (a -> ST s b) -> MV.MVector s a -> ST s (MV.MVector s b)
+mapMV fn vec = do
+ newV <- MV.new (MV.length vec)
+ forM_ [0 .. MV.length vec - 1] $ \ ix ->
+   do val <- MV.read vec ix
+      val' <- fn val
+      MV.write newV ix val'
+ return newV
+
+-- | A correct instance at this type must copy the *elements*,
+--   removing any sharing.
+instance STSplittable VecOfIntRef where
+  type SplitIdx (VecOfIntRef) = Int
+
+  splitST pos (VecOfIntRef vec) =
+    let (VFlp v1, VFlp v2) = splitST pos (VFlp vec)
+    in (VecOfIntRef v1, VecOfIntRef v2)
+
+  data BuildRecipe VecOfIntRef = VecOfIntRefRecipe (forall s . ArrayRecipe s Int)
+
+--  instantiateRecipe (VecOfIntRefRecipe (ArrayRecipe len fn)) =
+--    undefined
+
+  cloneState (VecOfIntRef vec) =
+    do v' <- mapMV (\ref ->
+                     do v <- readSTRef ref
+                        newSTRef v)
+                   vec
+       return $ VecOfIntRef v'
+
+p5 :: (HasGet e, HasPut e) => ParST (VecOfIntRef s1) Par e s [Int]
+p5 =
+  do (x,y) <- forkSTSplit 5
+               (do VecOfIntRef left <- PST.reify
+                   ref <- liftST $ MV.read left 0
+                   liftST $ writeSTRef ref 99
+                   liftST $ readSTRef ref)
+               (do VecOfIntRef right <- PST.reify
+                   ref <- liftST $ MV.read right 0
+                   liftST $ writeSTRef ref 88
+                   liftST $ readSTRef ref)
+     return [x,y]
+
+t5 :: [Int]
+t5 = runPar $ runParSTCopy mkInit p5
+ where
+  mkInit = do vec  <- MV.new 10
+              ref  <- newSTRef 11
+              MV.set vec ref
+              return (VecOfIntRef vec)
+
+{-
+  -- This, correctly, gets a type error:
+  p5 :: (HasGet e, HasPut e) => ParST (MVectorFlp (STRef s1 Int) s1) Par e s [Int]
+  p5 = do
+    sr <- liftST $ newSTRef (33::Int)
+    V.set sr
+    liftPar $ fork $ return ()
+    void $ V.forkSTSplit 5
+       (do sr' <- V.read 0
+           liftST $ writeSTRef sr' 88)
+       (do sr' <- V.read 0
+           liftST $ writeSTRef sr' 99)
+    return []
+ -}
