@@ -35,7 +35,7 @@ seqSortMethods :: [SSort]
 seqSortMethods  = [CSort, VAMSort, VAISort]
 
 seqMergeMethods :: [SMerge]
-seqMergeMethods = [CMerge, MPMerge]
+seqMergeMethods = [CMerge, HSMerge]
 
 unitTests, properties :: TestTree
 
@@ -51,7 +51,7 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "REGRESSION: Sorting singleton vector with thresholds 1" $
         testAllVariants 1 1 $ SV.fromList [0]
     , testCase "REGRESSION: Extracted from QuickCheck generated test, fails with exception" $
-        assertBool "" $ checkSorted 4 $ sortPV 0 0 VAMSort MPMerge $
+        assertBool "" $ checkSorted 4 $ sortPV 0 0 VAMSort HSMerge $
           SV.fromList [0,0,0,0]
     , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
         testAllVariants 0 0 $ SV.fromList [0,-1]

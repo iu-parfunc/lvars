@@ -47,13 +47,12 @@ import           Foreign.C.Types
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 
-data SMerge = CMerge | MPMerge
+-- | Select which sequential merge implementation to use.
+data SMerge = CMerge | HSMerge
   deriving (Show, Read)
 
+-- | Select which sequential sort implementation to use.
 data SSort = CSort | VAMSort | VAISort
-  deriving (Show, Read)
-
-data ParSort = InPlace | OutPlace
   deriving (Show, Read)
 
 -- | Given a vector in left position, and an available buffer of equal
@@ -157,7 +156,7 @@ pMergeTo2 threshold ma = do
   else if l1 < threshold || l2 < threshold || l1 <= 1 || l2 <= 1 then do
     case ma of
       CMerge  -> cilkSeqMerge
-      MPMerge -> seqmerge
+      HSMerge -> seqmerge
   else do
     (splitL, splitR) <- findSplit
     let mid = splitL + splitR
