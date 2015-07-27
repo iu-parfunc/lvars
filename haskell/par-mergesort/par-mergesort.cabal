@@ -11,6 +11,7 @@ Source-repository head
 library
   exposed-modules:
     Control.Par.MergeSort
+    Control.Par.MergeSort.Internal
 
   build-depends:
     base                    == 4.*,
