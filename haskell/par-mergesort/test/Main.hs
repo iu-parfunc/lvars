@@ -4,27 +4,24 @@
 
 module Main where
 
-import           Data.Int (Int32)
-
 import           Control.Monad (forM_, replicateM)
 import           Control.Monad.ST (runST)
 -- import qualified Control.Monad.State.Strict   as SS
 import qualified Data.Vector.Storable as SV
 import qualified Data.Vector.Storable.Mutable as SVM
 import           Debug.Trace
+import           Data.Int
 import           System.Random (randomIO)
-
 import           Control.LVish as LVishSched
 import           Control.Par.Class (ParThreadSafe ())
 import qualified Control.Par.Class as PC
 import           Control.Par.ST
 import qualified Control.Par.ST.StorableVec2 as V
-
 import           Test.QuickCheck
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
-
+import           Foreign.C.Types (CInt, CLong)
 import qualified Control.Par.MergeSort as MS
 import           Control.Par.MergeSort.Internal
                   (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)
@@ -58,7 +55,15 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
         testAllVariants 0 0 $ SV.fromList [0,-1]
 
-    , testCase "Public sort interface" $
+    , testCase "Public sort interface / Int32" $
+        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int32])
+    , testCase "Public sort interface / Int64" $
+        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int64])
+    , testCase "Public sort interface / CInt" $
+        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::CInt])
+    , testCase "Public sort interface / CLong" $
+        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::CLong])
+    , testCase "Public sort interface / Int" $
         assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int])
 
     ]
@@ -128,7 +133,7 @@ checkSorted :: (Show elt, SVM.Storable elt, Ord elt)
 checkSorted len v =
     if len == SV.length v
     then go 1
-    else trace ("bad length: "++show (SV.length v)) $
+    else trace ("\n ! Bad length: "++show (SV.length v)) $
          False
   where
     go i
@@ -136,5 +141,5 @@ checkSorted len v =
       | otherwise        =
         if (v SV.! (i - 1) <= v SV.! i)
         then go (i + 1)
-        else trace ("Out of order elements: "++show (v SV.! (i - 1), v SV.! i)) $
+        else trace ("\n ! Out of order elements: "++show (v SV.! (i - 1), v SV.! i)) $
              False
