@@ -22,8 +22,9 @@ module Control.Par.MergeSort
  where
 
 import           Control.Monad.Primitive
-import           Data.Vector.Generic.Mutable
+import           Data.Int
 import           Data.Vector.Generic as G
+import           Data.Vector.Generic.Mutable
 import qualified Data.Vector.Mutable as MV
 -- import qualified Control.Par.ST as PST
 -- import qualified Control.Par.ST.Vec2 as V2
@@ -45,7 +46,8 @@ type Comparison e = e -> e -> Ordering
 
 -- | Perform an out-of-place sort on a pure vector.
 --
-sort :: (S.Storable e, Ord e) => S.Vector e -> S.Vector e
+sort :: S.Vector Int32 -> S.Vector Int32
+-- sort :: (S.Storable e, Ord e) => S.Vector e -> S.Vector e
 sort vec = LV.runPar (sortPar vec)
 
 -- -- The type is generic, but this should only be used for BOXED
@@ -71,16 +73,17 @@ sortBy = undefined
 
 sortPar :: forall p e elt s .
            (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
-            PC.ParFuture p, HasGet e, HasPut e,
-            Ord elt, SV.Storable elt)
-        => S.Vector elt
-        -> p e s (S.Vector elt)
+            PC.ParFuture p, HasGet e, HasPut e
+            ) -- Ord elt, SV.Storable elt
+        => S.Vector Int32
+        -> p e s (S.Vector Int32)
 sortPar vec =
   -- Allocate the temporary buffer.  But null-out the left side which
   -- we'll replace in a moment:
   S2.runParVec2T (0, S.length vec) comp
   where
-   comp :: S2.ParVec2T s1 elt elt p e s (S.Vector elt)
+   -- comp :: S2.ParVec2T s1 elt elt p e s (S.Vector elt)
+   comp :: S2.ParVec2T s1 Int32 Int32 p e s (S.Vector Int32)
    comp = do vec' <- S2.liftST (S.thaw vec)
              S2.installL vec'
 --             mergeSort 2048 2048 CSort CMerge    -- Breaks in ghci.

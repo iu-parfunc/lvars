@@ -39,6 +39,7 @@ library
     primitive               >= 0.6
 
   c-sources:                cbits/sort_int32.c
+                            cbits/sort_int64.c
   -- required for REPL, not sure about performance implications
   cc-options:               -fPIC
 

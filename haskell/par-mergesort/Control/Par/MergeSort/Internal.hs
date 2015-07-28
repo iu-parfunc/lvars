@@ -15,27 +15,28 @@
 module Control.Par.MergeSort.Internal
   where
 
-import           Control.LVish                as LVishSched
+import           Control.LVish as LVishSched
 -- TODO(osa): Disabling these until we implement instances:
 -- import qualified Control.Monad.Par.Scheds.Direct as DirectSched
 -- import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
 -- import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
 
-import           Control.Par.Class            (ParThreadSafe ())
-import qualified Control.Par.Class            as PC
-import           Control.Par.Class.Unsafe     (internalLiftIO)
+import           Control.Par.Class (ParThreadSafe ())
+import qualified Control.Par.Class as PC
+import           Control.Par.Class.Unsafe (internalLiftIO)
 import           Control.Par.ST
 
 import           Control.Monad
-import           Control.Monad.ST             (ST)
+import           Control.Monad.ST (ST)
 -- import qualified Control.Monad.State.Strict   as SS
+import           Data.Int
 
 -- TODO(osa): Removed all variants to make test program working, maybe move each
 -- specialzed version to it's own module.
 
 #define VFlp SFlp
 #define MVectorFlp SVectorFlp
-import qualified Control.Par.ST.StorableVec2  as V
+import qualified Control.Par.ST.StorableVec2 as V
 import qualified Data.Vector.Storable.Mutable as MV
 
 -- [2013.11.15] Adding new variant:
@@ -64,11 +65,11 @@ data SSort = CSort | VAMSort | VAISort
 {-# INLINE mergeSort #-}
 mergeSort :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
               HasGet e, HasPut e,
-              PC.ParFuture p, Ord e1) =>
+              PC.ParFuture p) =>
              Int -- ^ Sequential sort threshold
           -> Int -- ^ Sequential merge threshold
           -> SSort -> SMerge ->
-       V.ParVec2T s1 e1 e1 p e s ()
+       V.ParVec2T s1 Int32 Int32 p e s ()
 mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
   unless (len <= 1) $
@@ -129,9 +130,9 @@ seqSortL2 = do
 -- | Outer wrapper for a function that merges input vectors in the
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
-mergeTo2 :: (ParThreadSafe p, Ord e1, PC.FutContents p (),
+mergeTo2 :: (ParThreadSafe p, PC.FutContents p (),
              PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-            Int -> Int -> SMerge -> V.ParVec2T s1 e1 e1 p e s ()
+            Int -> Int -> SMerge -> V.ParVec2T s1 Int32 Int32 p e s ()
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
@@ -149,9 +150,9 @@ type ParVec12T s1 e1 p e s a =
 
 -- | Parallel merge kernel.
 {-# INLINABLE pMergeTo2 #-}
-pMergeTo2 :: (ParThreadSafe p, Ord e1, PC.FutContents p (),
+pMergeTo2 :: (ParThreadSafe p, PC.FutContents p (),
               PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-             Int -> SMerge -> ParVec21T s1 e1 p e s ()
+             Int -> SMerge -> ParVec21T s1 Int32 p e s ()
 pMergeTo2 threshold ma = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- reify
   let l1 = MV.length v1
@@ -161,7 +162,7 @@ pMergeTo2 threshold ma = do
     return ()
   else if l1 < threshold || l2 < threshold || l1 <= 1 || l2 <= 1 then do
     case ma of
-      CMerge  -> cilkSeqMerge
+      CMerge  -> cilkSeqMerge_int32
       HSMerge -> seqmerge
   else do
     (splitL, splitR) <- findSplit
@@ -346,6 +347,12 @@ seqmerge = do
 
 -- Requires that we selected STORABLE vectors above!
 
+-- Element type being sorted:
+type CElmT = Int32
+-- type CElmT = CInt
+
+type SeqMerge e = Ptr e -> CLong -> Ptr e -> CLong -> Ptr e -> IO ()
+
 foreign import ccall unsafe "wrap_seqquick_int32"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
@@ -365,10 +372,22 @@ cilkSeqSort = do
     return ()
 
 foreign import ccall unsafe "wrap_seqmerge_int32"
-  c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
+  c_seqmerge_int32 ::  SeqMerge CElmT
 
-cilkSeqMerge :: (Ord e1, ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 e1 p e s ()
-cilkSeqMerge = do
+foreign import ccall unsafe "wrap_seqmerge_int64"
+  c_seqmerge_int64 ::  SeqMerge Int64
+
+cilkSeqMerge_int32 :: (ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 Int32 p e s ()
+cilkSeqMerge_int32 = mkCilkSeqMerge c_seqmerge_int32
+
+cilkSeqMerge_int64 :: (ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 Int64 p e s ()
+cilkSeqMerge_int64 = mkCilkSeqMerge c_seqmerge_int64
+
+{-# INLINE mkCilkSeqMerge #-}
+-- | UNSAFE operation -- better use it at the right type.
+mkCilkSeqMerge :: (Ord e1, ParThreadSafe p, PC.ParMonad p)
+               => SeqMerge e1 -> ParVec21T s1 e1 p e s ()
+mkCilkSeqMerge c_seqmerge = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) (VFlp v3) <- reify
   let (fptr1,_) = MV.unsafeToForeignPtr0 v1
       (fptr2,_) = MV.unsafeToForeignPtr0 v2
@@ -392,8 +411,6 @@ c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
 c_cilksort = error "c_cilksort: cilk versions not loaded"
 #endif
 
--- Element type being sorted:
-type CElmT = CInt
 
 
 --------------------------------------------------------------------------------

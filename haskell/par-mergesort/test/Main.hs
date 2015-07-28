@@ -57,8 +57,8 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
 
     , testCase "Public sort interface / Int32" $
         assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int32])
-    , testCase "Public sort interface / CInt" $
-        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::CInt])
+    -- , testCase "Public sort interface / CInt" $
+    --     assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::CInt])
 
     -- , testCase "Public sort interface / Int64" $
     --  assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int64])
