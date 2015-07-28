@@ -23,12 +23,12 @@ module Control.Par.MergeSort
 
 import           Control.Monad.Primitive
 import           Data.Int
-import           Data.Vector.Generic as G
+-- import           Data.Vector.Generic as G
 import           Data.Vector.Generic.Mutable
-import qualified Data.Vector.Mutable as MV
+-- import qualified Data.Vector.Mutable as MV
 -- import qualified Control.Par.ST as PST
 -- import qualified Control.Par.ST.Vec2 as V2
-import qualified Data.Vector.Storable.Mutable as SV
+-- import qualified Data.Vector.Storable.Mutable as SV
 import qualified Data.Vector.Storable as S
 import qualified Control.Par.ST.StorableVec2 as S2
 import           Control.Par.MergeSort.Internal
@@ -71,7 +71,7 @@ sortBy = undefined
 
 
 
-sortPar :: forall p e elt s .
+sortPar :: forall p e s .
            (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
             PC.ParFuture p, HasGet e, HasPut e
             ) -- Ord elt, SV.Storable elt

@@ -63,33 +63,54 @@ data SSort = CSort | VAMSort | VAISort
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
 {-# INLINE mergeSort #-}
+mkMergeSort :: forall p e s s1 .
+               (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+                HasGet e, HasPut e, PC.ParFuture p)
+            => Int -- ^ Sequential sort threshold
+            -> Int -- ^ Sequential merge threshold
+            -> SeqSortM Int32 p e s
+            -> SMerge -- SeqMerge elt
+            -> V.ParVec2T s1 Int32 Int32 p e s ()
+mkMergeSort !st !mt seqSort !ma =
+ --  loop
+ -- where
+ --  loop :: forall s . V.ParVec2T s1 Int32 Int32 p e s ()
+ --  loop =
+   do len <- V.lengthL
+      unless (len <= 1) $
+        if len < st then do
+          seqSort
+        else do
+          let sp = len `quot` 2
+          void $ forkSTSplit (sp,sp)
+            (do _ <- forkSTSplit (sp,sp)
+                       (mkMergeSort st mt seqSort ma)
+                       (mkMergeSort st mt seqSort ma)
+                mergeTo2 sp mt ma)
+            (do _ <- forkSTSplit (sp,sp)
+                       (mkMergeSort st mt seqSort ma)
+                       (mkMergeSort st mt seqSort ma)
+                mergeTo2 sp mt ma)
+          mergeTo1 sp mt ma
+-- where
+--  loop = mkMergeSort st mt seqSort ma
+
+
+{-# INLINE mkMergeSort #-}
 mergeSort :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
-              HasGet e, HasPut e,
-              PC.ParFuture p) =>
-             Int -- ^ Sequential sort threshold
-          -> Int -- ^ Sequential merge threshold
-          -> SSort -> SMerge ->
-       V.ParVec2T s1 Int32 Int32 p e s ()
-mergeSort !st !mt !sa !ma = do
-  len <- V.lengthL
-  unless (len <= 1) $
-    if len < st then do
-      case sa of
-        VAMSort -> seqSortL
-        VAISort -> seqSortL2
-        CSort   -> cilkSeqSort_int32
-    else do
-      let sp = len `quot` 2
-      void $ forkSTSplit (sp,sp)
-        (do void $ forkSTSplit (sp,sp)
-              (mergeSort st mt sa ma)
-              (mergeSort st mt sa ma)
-            mergeTo2 sp mt ma)
-        (do void $ forkSTSplit (sp,sp)
-              (mergeSort st mt sa ma)
-              (mergeSort st mt sa ma)
-            mergeTo2 sp mt ma)
-      mergeTo1 sp mt ma
+                HasGet e, HasPut e, PC.ParFuture p)
+            => Int -- ^ Sequential sort threshold
+            -> Int -- ^ Sequential merge threshold
+            -> SSort
+            -> SMerge
+            -> V.ParVec2T s1 Int32 Int32 p e s ()
+mergeSort !st !mt !sa !ma =
+  mkMergeSort st mt
+     (case sa of
+       VAMSort -> seqSortL
+       VAISort -> seqSortL2
+       CSort   -> cilkSeqSort_int32)
+     ma
 
 -- mergeSortOutPlace ::
 --             (ParThreadSafe p, PC.FutContents p (),
@@ -354,6 +375,10 @@ type CElmT = Int32
 type SeqMerge e = Ptr e -> CLong -> Ptr e -> CLong -> Ptr e -> IO ()
 
 type SeqSort e = Ptr e -> CLong -> IO (Ptr e)
+
+-- | A sequential sort computation that operates on the state.
+type SeqSortM elt p e s =
+  forall s1 . V.ParVec2T s1 elt elt p e s ()
 
 foreign import ccall unsafe "wrap_seqquick_int32"
   c_seqquick_int32 :: SeqSort CElmT
