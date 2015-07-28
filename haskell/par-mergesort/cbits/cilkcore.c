@@ -19,7 +19,9 @@
  */
 
 /*
- * this program uses an algorithm that we call `cilksort'.
+ * This file contains a parallel sort implementation.
+ *
+ * This program uses an algorithm that we call `cilksort'.
  * The algorithm is essentially mergesort:
  *
  *   cilksort(in[1..n]) =
@@ -30,7 +32,7 @@
  *
  *
  * The procedure cilkmerge does the following:
- *       
+ *
  *       cilkmerge(A[1..n], B[1..m], C[1..(n+m)]) =
  *          find the median of A \union B using binary
  *          search.  The binary search gives a pair
@@ -68,8 +70,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
-
-typedef int32_t ELM;
 
 /* MERGESIZE must be >= 2 */
 #define KILO 1024
@@ -239,7 +239,7 @@ void seqmerge(ELM *low1, ELM *high1, ELM *low2, ELM *high2,
       * loading an element out of range.  While this is
       * probably not a problem in practice, yet I don't feel
       * comfortable with an incorrect algorithm.  Therefore,
-      * I use the 'fast' loop on the array (except for the last 
+      * I use the 'fast' loop on the array (except for the last
       * element) and the 'slow' loop for the rest, saving both
       * performance and correctness.
       */
@@ -289,7 +289,7 @@ void seqmerge(ELM *low1, ELM *high1, ELM *low2, ELM *high2,
 
 void wrap_seqmerge(ELM *low1, long len1, ELM* low2, long len2, ELM* dest)
 {
-    seqmerge(low1, low1 + len1 - 1, 
+    seqmerge(low1, low1 + len1 - 1,
              low2, low2 + len2 - 1, dest);
 }
 
@@ -327,24 +327,24 @@ void cilkmerge(ELM *low1, ELM *high1, ELM *low2,
 		    ELM *high2, ELM *lowdest)
 {
      /*
-      * Cilkmerge: Merges range [low1, high1] with range [low2, high2] 
-      * into the range [lowdest, ...]  
+      * Cilkmerge: Merges range [low1, high1] with range [low2, high2]
+      * into the range [lowdest, ...]
       */
 
      ELM *split1, *split2;	/*
-				 * where each of the ranges are broken for 
-				 * recursive merge 
+				 * where each of the ranges are broken for
+				 * recursive merge
 				 */
      long int lowsize;		/*
 				 * total size of lower halves of two
-				 * ranges - 2 
+				 * ranges - 2
 				 */
 
      /*
       * We want to take the middle element (indexed by split1) from the
       * larger of the two arrays.  The following code assumes that split1
       * is taken from range [low1, high1].  So if [low1, high1] is
-      * actually the smaller range, we should swap it with [low2, high2] 
+      * actually the smaller range, we should swap it with [low2, high2]
       */
 
      if (high2 - low2 > high1 - low1) {
@@ -364,14 +364,14 @@ void cilkmerge(ELM *low1, ELM *high1, ELM *low2,
       * Basic approach: Find the middle element of one range (indexed by
       * split1). Find where this element would fit in the other range
       * (indexed by split 2). Then merge the two lower halves and the two
-      * upper halves. 
+      * upper halves.
       */
 
      split1 = ((high1 - low1 + 1) / 2) + low1;
      split2 = binsplit(*split1, low2, high2);
      lowsize = split1 - low1 + split2 - low2;
 
-     /* 
+     /*
       * directly put the splitting element into
       * the appropriate location
       */
@@ -425,6 +425,9 @@ void cilksort(ELM *low, ELM *tmp, long size)
      cilk_sync;
 }
 
+// ================================================================================
+// Testing machinery
+
 void scramble_array(ELM *arr, unsigned long size)
 {
      unsigned long i;
@@ -451,7 +454,7 @@ void fill_array(ELM *arr, unsigned long size)
      scramble_array(arr, size);
 }
 
-/* Just so that we can pass on arrays via FFI and time things */
+/* Just so that we can pass arrays via Haskell FFI and time things */
 unsigned long long wrap_cilksort(ELM *low, ELM *tmp, long size)
 {
     unsigned long long start, end;
@@ -571,7 +574,7 @@ int main(int argc, char **argv)
      }
 
      run_cilksort(size);
-     
+
      return 0;
 }
 #endif

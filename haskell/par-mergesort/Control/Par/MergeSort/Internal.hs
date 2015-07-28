@@ -47,6 +47,8 @@ import           Foreign.C.Types
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 
+--------------------------------------------------------------------------------
+
 -- | Select which sequential merge implementation to use.
 data SMerge = CMerge | HSMerge
   deriving (Show, Read)
@@ -54,6 +56,8 @@ data SMerge = CMerge | HSMerge
 -- | Select which sequential sort implementation to use.
 data SSort = CSort | VAMSort | VAISort
   deriving (Show, Read)
+
+--------------------------------------------------------------------------------
 
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
@@ -360,9 +364,6 @@ cilkSeqSort = do
       return ()
     return ()
 
-foreign import ccall unsafe "wrap_cilksort"
-  c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
-
 foreign import ccall unsafe "wrap_seqmerge"
   c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
 
@@ -382,6 +383,13 @@ cilkSeqMerge = do
         c_seqmerge (castPtr vptr1) (fromIntegral len1)
                    (castPtr vptr2) (fromIntegral len2)
                    (castPtr vptr3)
+
+#if 0
+foreign import ccall unsafe "wrap_cilksort"
+  c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
+#else
+c_cilksort = error "c_cilksort: cilk versions not loaded"
+#endif
 
 -- Element type being sorted:
 type CElmT = CInt

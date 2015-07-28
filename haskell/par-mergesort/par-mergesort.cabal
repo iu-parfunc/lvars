@@ -38,7 +38,7 @@ library
     vector-algorithms,
     primitive               >= 0.6
 
-  c-sources:                cbits/cilksort.c
+  c-sources:                cbits/sort_int32.c
   -- required for REPL, not sure about performance implications
   cc-options:               -fPIC
 
