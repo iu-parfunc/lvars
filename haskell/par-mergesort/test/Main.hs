@@ -21,7 +21,7 @@ import           Test.QuickCheck
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
-import           Foreign.C.Types (CInt, CLong)
+-- import           Foreign.C.Types (CInt, CLong)
 import qualified Control.Par.MergeSort as MS
 import           Control.Par.MergeSort.Internal
                   (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)

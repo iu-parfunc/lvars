@@ -77,7 +77,7 @@ mergeSort !st !mt !sa !ma = do
       case sa of
         VAMSort -> seqSortL
         VAISort -> seqSortL2
-        CSort   -> cilkSeqSort
+        CSort   -> cilkSeqSort_int32
     else do
       let sp = len `quot` 2
       void $ forkSTSplit (sp,sp)
@@ -353,14 +353,38 @@ type CElmT = Int32
 
 type SeqMerge e = Ptr e -> CLong -> Ptr e -> CLong -> Ptr e -> IO ()
 
+type SeqSort e = Ptr e -> CLong -> IO (Ptr e)
+
 foreign import ccall unsafe "wrap_seqquick_int32"
-  c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
+  c_seqquick_int32 :: SeqSort CElmT
+
+foreign import ccall unsafe "wrap_seqquick_int64"
+  c_seqquick_int64 :: SeqSort Int64
+
+foreign import ccall unsafe "wrap_seqmerge_int32"
+  c_seqmerge_int32 ::  SeqMerge CElmT
+
+foreign import ccall unsafe "wrap_seqmerge_int64"
+  c_seqmerge_int64 ::  SeqMerge Int64
+
+--------------------------------------------------------------------------------
+
+cilkSeqSort_int32 :: (ParThreadSafe p, PC.ParMonad p)
+                  =>  V.ParVec2T s1 Int32 Int32 p e s ()
+cilkSeqSort_int32 = mkCilkSeqSort c_seqquick_int32
+
+cilkSeqSort_int64 :: (ParThreadSafe p, PC.ParMonad p)
+                  =>  V.ParVec2T s1 Int64 Int64 p e s ()
+cilkSeqSort_int64 = mkCilkSeqSort c_seqquick_int64
 
 -- | Sequential Cilk sort, on the left vector, inplace.
-cilkSeqSort :: (Ord eL, ParThreadSafe p, PC.ParMonad p) =>
-               V.ParVec2T s1 eL eR p e s ()
+--
+--   UNSAFE version - must be used at the right type.
+mkCilkSeqSort :: (Ord eL, ParThreadSafe p, PC.ParMonad p)
+              => SeqSort eL
+              -> V.ParVec2T s1 eL eL p e s ()
 -- This has the same signature & contract as seqSortL.
-cilkSeqSort = do
+mkCilkSeqSort c_seqquick  = do
   STTup2 (VFlp vecL) (VFlp _) <- reify
   internalLiftIO $ do
     let len = MV.length vecL
@@ -371,11 +395,7 @@ cilkSeqSort = do
       return ()
     return ()
 
-foreign import ccall unsafe "wrap_seqmerge_int32"
-  c_seqmerge_int32 ::  SeqMerge CElmT
-
-foreign import ccall unsafe "wrap_seqmerge_int64"
-  c_seqmerge_int64 ::  SeqMerge Int64
+--------------------------------------------------------------------------------
 
 cilkSeqMerge_int32 :: (ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 Int32 p e s ()
 cilkSeqMerge_int32 = mkCilkSeqMerge c_seqmerge_int32
