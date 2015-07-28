@@ -4,30 +4,30 @@
 
 module Main where
 
-import           Data.Int                     (Int32)
+import           Data.Int (Int32)
 
-import           Control.Monad                (forM_, replicateM)
-import           Control.Monad.ST             (runST)
+import           Control.Monad (forM_, replicateM)
+import           Control.Monad.ST (runST)
 -- import qualified Control.Monad.State.Strict   as SS
-import qualified Data.Vector.Storable         as SV
+import qualified Data.Vector.Storable as SV
 import qualified Data.Vector.Storable.Mutable as SVM
-import           System.Random                (randomIO)
+import           Debug.Trace
+import           System.Random (randomIO)
 
-import           Control.LVish                as LVishSched
-import           Control.Par.Class            (ParThreadSafe ())
-import qualified Control.Par.Class            as PC
+import           Control.LVish as LVishSched
+import           Control.Par.Class (ParThreadSafe ())
+import qualified Control.Par.Class as PC
 import           Control.Par.ST
-import qualified Control.Par.ST.StorableVec2  as V
+import qualified Control.Par.ST.StorableVec2 as V
 
 import           Test.QuickCheck
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
+import qualified Control.Par.MergeSort as MS
 import           Control.Par.MergeSort.Internal
                   (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)
-
-import qualified Control.Par.MergeSort as MS
 
 main :: IO ()
 main = defaultMain $ testGroup "MergeSort tests"
@@ -39,8 +39,8 @@ seqSortMethods  = [CSort, VAMSort, VAISort]
 seqMergeMethods :: [SMerge]
 seqMergeMethods = [CMerge, HSMerge]
 
-unitTests, properties :: TestTree
 
+unitTests :: TestTree
 unitTests = testGroup "Hand-crafted tests and regression tests"
     [ testCase "Sorting an already sorted vector" $
         testAllVariants 10 10 $ SV.fromList [0 .. 99 :: Int32]
@@ -58,6 +58,9 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
     , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
         testAllVariants 0 0 $ SV.fromList [0,-1]
 
+    , testCase "Public sort interface" $
+        assertBool "" $ checkSorted 11 $ MS.sort (SV.fromList $ 99:[1..10::Int])
+
     ]
   where
     testAllVariants t1 t2 v =
@@ -73,6 +76,7 @@ findSplitTest l1 l2 = runST $ do
     v2 <- SV.thaw $ SV.fromList l2
     findSplit' v1 v2 0 (length l1) 0 (length l2)
 
+properties :: TestTree
 properties = testProperty "QuickCheck tests" $ do
     -- TODO(osa): Maybe use an Arbitrary instance, shrink would be useful
     vecSize           <- choose (0, 2 ^ (16 :: Int))
@@ -119,9 +123,18 @@ sortPV' ssThres smThres ssMeth smMeth vec = do
 mkRandomVec :: Int -> IO (SV.Vector Int32)
 mkRandomVec len = SV.generateM len (const randomIO)
 
-checkSorted :: Int -> SV.Vector Int32 -> Bool
-checkSorted len v = len == SV.length v && go 1
+checkSorted :: (Show elt, SVM.Storable elt, Ord elt)
+            => Int -> SV.Vector elt -> Bool
+checkSorted len v =
+    if len == SV.length v
+    then go 1
+    else trace ("bad length: "++show (SV.length v)) $
+         False
   where
     go i
       | i >= SV.length v = True
-      | otherwise        = (v SV.! (i - 1) <= v SV.! i) && go (i + 1)
+      | otherwise        =
+        if (v SV.! (i - 1) <= v SV.! i)
+        then go (i + 1)
+        else trace ("Out of order elements: "++show (v SV.! (i - 1), v SV.! i)) $
+             False

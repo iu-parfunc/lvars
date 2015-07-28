@@ -83,7 +83,9 @@ sortPar vec =
    comp :: S2.ParVec2T s1 elt elt p e s (S.Vector elt)
    comp = do vec' <- S2.liftST (S.thaw vec)
              S2.installL vec'
-             mergeSort 2048 2048 CSort CMerge
+--             mergeSort 2048 2048 CSort CMerge    -- Breaks in ghci.
+--             mergeSort 2048 2048 VAMSort HSMerge -- Works
+--             mergeSort 2048 2048 VAMSort CMerge  -- Works
+             mergeSort 2048 2048 CSort HSMerge    -- Breaks in ghci.
              (left,_) <- S2.reify
-             left' <- S2.liftST $ S.freeze left
-             return left'
+             S2.liftST $ S.freeze left
