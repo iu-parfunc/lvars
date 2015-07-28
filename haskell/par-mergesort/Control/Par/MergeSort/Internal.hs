@@ -346,7 +346,7 @@ seqmerge = do
 
 -- Requires that we selected STORABLE vectors above!
 
-foreign import ccall unsafe "wrap_seqquick"
+foreign import ccall unsafe "wrap_seqquick_int32"
   c_seqquick :: Ptr CElmT -> CLong -> IO (Ptr CElmT)
 
 -- | Sequential Cilk sort, on the left vector, inplace.
@@ -364,7 +364,7 @@ cilkSeqSort = do
       return ()
     return ()
 
-foreign import ccall unsafe "wrap_seqmerge"
+foreign import ccall unsafe "wrap_seqmerge_int32"
   c_seqmerge ::  Ptr CElmT -> CLong -> Ptr CElmT -> CLong -> Ptr CElmT -> IO ()
 
 cilkSeqMerge :: (Ord e1, ParThreadSafe p, PC.ParMonad p) => ParVec21T s1 e1 p e s ()
@@ -388,6 +388,7 @@ cilkSeqMerge = do
 foreign import ccall unsafe "wrap_cilksort"
   c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
 #else
+c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
 c_cilksort = error "c_cilksort: cilk versions not loaded"
 #endif
 

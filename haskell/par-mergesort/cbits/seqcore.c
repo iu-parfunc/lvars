@@ -74,7 +74,7 @@ static inline ELM choose_pivot(ELM *low, ELM *high)
      return med3(*low, *high, low[(high - low) / 2]);
 }
 
-static ELM *seqpart(ELM *low, ELM *high)
+static ELM * ELM_SUFFIX(seqpart)(ELM *low, ELM *high)
 {
      ELM pivot;
      ELM h, l;
@@ -119,7 +119,7 @@ static ELM *seqpart(ELM *low, ELM *high)
   b = tmp;\
 }
 
-static void insertion_sort(ELM *low, ELM *high)
+static void ELM_SUFFIX(insertion_sort)(ELM *low, ELM *high)
 {
      ELM *p, *q;
      ELM a, b;
@@ -135,25 +135,25 @@ static void insertion_sort(ELM *low, ELM *high)
 /*
  * tail-recursive quicksort, almost unrecognizable :-)
  */
-void seqquick(ELM *low, ELM *high)
+void ELM_SUFFIX(seqquick)(ELM *low, ELM *high)
 {
      ELM *p;
 
      while (high - low >= INSERTIONSIZE) {
-	  p = seqpart(low, high);
-	  seqquick(low, p);
+          p = ELM_SUFFIX(seqpart)(low, high);
+	  ELM_SUFFIX(seqquick)(low, p);
 	  low = p + 1;
      }
 
-     insertion_sort(low, high);
+     ELM_SUFFIX(insertion_sort)(low, high);
 }
 
-void wrap_seqquick(ELM *low, long len)
+void ELM_SUFFIX(wrap_seqquick)(ELM *low, long len)
 {
-    seqquick(low, low + len - 1);
+    ELM_SUFFIX(seqquick)(low, low + len - 1);
 }
 
-void seqmerge(ELM *low1, ELM *high1, ELM *low2, ELM *high2,
+void ELM_SUFFIX(seqmerge)(ELM *low1, ELM *high1, ELM *low2, ELM *high2,
 	      ELM *lowdest)
 {
      ELM a1, a2;
@@ -227,9 +227,9 @@ void seqmerge(ELM *low1, ELM *high1, ELM *low2, ELM *high2,
      }
 }
 
-void wrap_seqmerge(ELM *low1, long len1, ELM* low2, long len2, ELM* dest)
+void ELM_SUFFIX(wrap_seqmerge)(ELM *low1, long len1, ELM* low2, long len2, ELM* dest)
 {
-    seqmerge(low1, low1 + len1 - 1,
+    ELM_SUFFIX(seqmerge)(low1, low1 + len1 - 1,
              low2, low2 + len2 - 1, dest);
 }
 
@@ -241,7 +241,7 @@ void wrap_seqmerge(ELM *low1, long len1, ELM* low2, long len2, ELM* dest)
   b = tmp;\
 }
 
-ELM *binsplit(ELM val, ELM *low, ELM *high)
+ELM * ELM_SUFFIX(binsplit)(ELM val, ELM *low, ELM *high)
 {
      /*
       * returns index which contains greatest element <= val.  If val is
