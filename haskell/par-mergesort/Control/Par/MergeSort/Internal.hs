@@ -19,6 +19,9 @@ module Control.Par.MergeSort.Internal
        , SSort(..)
        , mkMergeSort
 
+       -- * Parallel C sort
+       , c_cilksort
+
        -- * For testing only:
        , findSplit'
        )
@@ -199,10 +202,6 @@ mergeTo2 sp threshold ma = do
 type ParVec21T s1 e1 p e s a =
      ParST (STTup2 (STTup2 (MVectorFlp e1) (MVectorFlp e1)) (MVectorFlp e1) s1) p e s a
 
--- | Type alias for a ParST state of (Vec, (Vec, Vec))
-type ParVec12T s1 e1 p e s a =
-     ParST (STTup2 (MVectorFlp e1) (STTup2 (MVectorFlp e1) (MVectorFlp e1)) s1) p e s a
-
 -- | Parallel merge kernel.
 {-# INLINABLE pMergeTo2 #-}
 pMergeTo2 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
@@ -224,38 +223,6 @@ pMergeTo2 threshold seqMerge = do
       (pMergeTo2 threshold seqMerge)
       (pMergeTo2 threshold seqMerge)
 
--- | Sequential merge kernel.
-sMergeTo2 :: (ParThreadSafe p, Ord e1) => ParVec21T s1 e1 p e s ()
-sMergeTo2 = do
-  (lenL, lenR) <- lengthLR1
-  sMergeTo2K 0 lenL 0 lenR 0
-
-sMergeTo2K :: (Ord a, ParThreadSafe p) =>
-              Int -> Int -> Int -> Int -> Int -> ParST
-              (STTup2 (STTup2 (SVectorFlp a) (SVectorFlp a)) (SVectorFlp a) s1) p e s ()
-sMergeTo2K !lBot !lLen !rBot !rLen !index
-  | lBot == lLen && rBot < rLen = do
-    value <- indexR1 rBot
-    write2 index value
-    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
-
-  | rBot >= rLen && lBot < lLen = do
-    value <- indexL1 lBot
-    write2 index value
-    sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
-
-  | index >= (lLen + rLen) = do
-    return ()
-
-  | otherwise = do
-    left <- indexL1 lBot
-    right <- indexR1 rBot
-    if left < right then do
-      write2 index left
-      sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
-     else do
-      write2 index right
-      sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
 
 -- | Merging from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
@@ -327,15 +294,6 @@ morphToVec21 sp (STTup2 (VFlp vec1) vec2) =
   let l1 = MV.slice 0 sp vec1
       r1 = MV.slice sp (MV.length vec1 - sp) vec1 in
   STTup2 (STTup2 (VFlp l1) (VFlp r1)) vec2
-
-morphToVec12 :: Int
-             -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
-             -> STTup2 (SVectorFlp v1) (STTup2 (SVectorFlp v2) (SVectorFlp v2)) s
-{-# INLINE morphToVec12 #-}
-morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
-  let l2 = MV.slice 0 sp vec2
-      r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
-  STTup2 (VFlp vec1) (STTup2 (VFlp l2) (VFlp r2))
 
 -----
 
@@ -497,8 +455,6 @@ c_cilksort ::  Ptr Int32 -> Ptr Int32 -> CLong -> IO CLong
 c_cilksort = error "c_cilksort: cilk versions not loaded"
 #endif
 
-
-
 --------------------------------------------------------------------------------
 -- Helpers for manipulating ParVec12T and ParVec21T
 
@@ -511,6 +467,70 @@ indexR1 :: (ParThreadSafe p) => Int -> ParVec21T s1 e1 p e s e1
 indexR1 index = do
   STTup2 (STTup2 _ (VFlp r1)) _ <- reify
   liftST $ MV.read r1 index
+
+write2 :: (ParThreadSafe p) => Int -> e1 -> ParVec21T s1 e1 p e s ()
+write2 index value = do
+  STTup2 _ (VFlp v2) <- reify
+  liftST $ MV.write v2 index value
+
+
+lengthLR1 :: (ParThreadSafe p) => ParVec21T s1 e1 p e s (Int, Int)
+lengthLR1 = do
+  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) _ <- reify
+  let lenL = MV.length vecL
+      lenR = MV.length vecR
+  return (lenL, lenR)
+
+
+--------------------------------------------------------------------------------
+-- Currently unused:
+--------------------------------------------------------------------------------
+
+-- | Sequential merge kernel.
+_sMergeTo2 :: (ParThreadSafe p, Ord e1) => ParVec21T s1 e1 p e s ()
+_sMergeTo2 = do
+  (lenL, lenR) <- lengthLR1
+  sMergeTo2K 0 lenL 0 lenR 0
+
+sMergeTo2K :: (Ord a, ParThreadSafe p) =>
+               Int -> Int -> Int -> Int -> Int -> ParST
+               (STTup2 (STTup2 (SVectorFlp a) (SVectorFlp a)) (SVectorFlp a) s1) p e s ()
+sMergeTo2K !lBot !lLen !rBot !rLen !index
+  | lBot == lLen && rBot < rLen = do
+    value <- indexR1 rBot
+    write2 index value
+    sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
+
+  | rBot >= rLen && lBot < lLen = do
+    value <- indexL1 lBot
+    write2 index value
+    sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
+
+  | index >= (lLen + rLen) = do
+    return ()
+
+  | otherwise = do
+    left <- indexL1 lBot
+    right <- indexR1 rBot
+    if left < right then do
+      write2 index left
+      sMergeTo2K (lBot + 1) lLen rBot rLen (index + 1)
+     else do
+      write2 index right
+      sMergeTo2K lBot lLen (rBot + 1) rLen (index + 1)
+
+_morphToVec12 :: Int
+              -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
+              -> STTup2 (SVectorFlp v1) (STTup2 (SVectorFlp v2) (SVectorFlp v2)) s
+{-# INLINE _morphToVec12 #-}
+_morphToVec12 sp (STTup2 (VFlp vec1) (VFlp vec2)) =
+  let l2 = MV.slice 0 sp vec2
+      r2 = MV.slice sp (MV.length vec2 - sp) vec2 in
+  STTup2 (VFlp vec1) (STTup2 (VFlp l2) (VFlp r2))
+
+--------------------------------------------------------------------------------
+
+{-
 
 indexL2 :: (ParThreadSafe p) => Int -> ParVec12T s1 e1 p e s e1
 indexL2 index = do
@@ -527,11 +547,6 @@ write1 index value = do
   STTup2 (VFlp v1) _ <- reify
   liftST $ MV.write v1 index value
 
-write2 :: (ParThreadSafe p) => Int -> e1 -> ParVec21T s1 e1 p e s ()
-write2 index value = do
-  STTup2 _ (VFlp v2) <- reify
-  liftST $ MV.write v2 index value
-
 length2 :: (ParThreadSafe p) => ParVec21T s1 e1 p e s Int
 length2 = do
   STTup2 _ (VFlp vec2) <- reify
@@ -542,16 +557,15 @@ length1 = do
   STTup2 (VFlp v1) _ <- reify
   return $ MV.length v1
 
-lengthLR1 :: (ParThreadSafe p) => ParVec21T s1 e1 p e s (Int, Int)
-lengthLR1 = do
-  STTup2 (STTup2 (VFlp vecL) (VFlp vecR)) _ <- reify
-  let lenL = MV.length vecL
-      lenR = MV.length vecR
-  return (lenL, lenR)
-
 lengthLR2 :: (ParThreadSafe p) => ParVec12T s1 s1 p e s (Int, Int)
 lengthLR2 = do
   STTup2 _ (STTup2 (VFlp vecL) (VFlp vecR)) <- reify
   let lenL = MV.length vecL
       lenR = MV.length vecR
   return (lenL, lenR)
+
+-- | Type alias for a ParST state of (Vec, (Vec, Vec))
+type ParVec12T s1 e1 p e s a =
+     ParST (STTup2 (MVectorFlp e1) (STTup2 (MVectorFlp e1) (MVectorFlp e1)) s1) p e s a
+
+-}
