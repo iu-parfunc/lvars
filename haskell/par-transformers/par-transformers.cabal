@@ -13,8 +13,8 @@ Description:         The modules below provide additional
 License:             BSD3
 License-file:        LICENSE
 Author:              Ryan Newton, Aaron Todd
-Maintainer:          Aaron Todd <toddaaro@gmail.com>
-Copyright:           (c) Ryan Newton, Aaron Todd 2013
+Maintainer:          Omer Agacan
+Copyright:           (c) Ryan Newton, Omer Agacan, Aaron Todd 2015
 Stability:           Experimental
 Category:            Control,Parallelism,Monads
 Build-type:          Simple

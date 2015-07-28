@@ -60,9 +60,11 @@ data SSort = CSort | VAMSort | VAISort
 {-# INLINE mergeSort #-}
 mergeSort :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
               HasGet e, HasPut e,
-              PC.ParFuture p, Ord e1, Show e1) =>
-             Int -> Int -> SSort -> SMerge ->
-             V.ParVec2T s1 e1 e1 p e s ()
+              PC.ParFuture p, Ord e1) =>
+             Int -- ^ Sequential sort threshold
+          -> Int -- ^ Sequential merge threshold
+          -> SSort -> SMerge ->
+       V.ParVec2T s1 e1 e1 p e s ()
 mergeSort !st !mt !sa !ma = do
   len <- V.lengthL
   unless (len <= 1) $
@@ -123,7 +125,7 @@ seqSortL2 = do
 -- | Outer wrapper for a function that merges input vectors in the
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
-mergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
+mergeTo2 :: (ParThreadSafe p, Ord e1, PC.FutContents p (),
              PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
             Int -> Int -> SMerge -> V.ParVec2T s1 e1 e1 p e s ()
 mergeTo2 sp threshold ma = do
@@ -142,8 +144,8 @@ type ParVec12T s1 e1 p e s a =
      ParST (STTup2 (MVectorFlp e1) (STTup2 (MVectorFlp e1) (MVectorFlp e1)) s1) p e s a
 
 -- | Parallel merge kernel.
-{-# INLINE pMergeTo2 #-}
-pMergeTo2 :: (ParThreadSafe p, Ord e1, Show e1, PC.FutContents p (),
+{-# INLINABLE pMergeTo2 #-}
+pMergeTo2 :: (ParThreadSafe p, Ord e1, PC.FutContents p (),
               PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
              Int -> SMerge -> ParVec21T s1 e1 p e s ()
 pMergeTo2 threshold ma = do
@@ -165,7 +167,7 @@ pMergeTo2 threshold ma = do
       (pMergeTo2 threshold ma)
 
 -- | Sequential merge kernel.
-sMergeTo2 :: (ParThreadSafe p, Ord e1, Show e1) => ParVec21T s1 e1 p e s ()
+sMergeTo2 :: (ParThreadSafe p, Ord e1) => ParVec21T s1 e1 p e s ()
 sMergeTo2 = do
   (lenL, lenR) <- lengthLR1
   sMergeTo2K 0 lenL 0 lenR 0
@@ -211,7 +213,7 @@ mergeTo1 sp threshold ma = do
 --
 {-# INLINE findSplit #-}
 findSplit :: forall s1 e1 p e s .
-             (ParThreadSafe p, Ord e1, Show e1,
+             (ParThreadSafe p, Ord e1,
               PC.ParMonad p) =>
              ParVec21T s1 e1 p e s (Int, Int)
 findSplit = do

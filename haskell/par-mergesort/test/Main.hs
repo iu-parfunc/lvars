@@ -27,6 +27,8 @@ import           Test.Tasty.QuickCheck
 import           Control.Par.MergeSort.Internal
                   (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)
 
+import qualified Control.Par.MergeSort as MS
+
 main :: IO ()
 main = defaultMain $ testGroup "MergeSort tests"
     [ unitTests, properties ]
@@ -55,6 +57,7 @@ unitTests = testGroup "Hand-crafted tests and regression tests"
           SV.fromList [0,0,0,0]
     , testCase "REGRESSION: Extracted from QuickCheck generated test, returns wrong" $
         testAllVariants 0 0 $ SV.fromList [0,-1]
+
     ]
   where
     testAllVariants t1 t2 v =
@@ -90,6 +93,7 @@ properties = testProperty "QuickCheck tests" $ do
                -- , "Vec: " ++ show lst
                ]
 
+-- | Out of place sort on immutable vectors.
 sortPV :: Int -> Int -> SSort -> SMerge -> SV.Vector Int32 -> SV.Vector Int32
 sortPV ssThres smThres ssMeth smMeth vec =
     -- TODO(osa): Maybe remove copying here by just taking mutable vec and
@@ -101,6 +105,7 @@ sortPV ssThres smThres ssMeth smMeth vec =
         sv <- liftST $ SV.freeze rawL
         return $ sv
 
+-- | Sort the vector in the left component of the state.
 sortPV' :: (PC.ParMonad p, ParThreadSafe p, PC.ParIVar p, PC.FutContents p (),
             PC.ParFuture p, HasPut e, HasGet e) =>
            Int -> Int -> SSort -> SMerge ->
