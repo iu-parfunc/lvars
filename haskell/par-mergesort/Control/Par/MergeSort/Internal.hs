@@ -13,6 +13,15 @@
 --   Don't use this unless you have a good reason.
 
 module Control.Par.MergeSort.Internal
+       ( mergeSort_int32
+       , mergeSort_int64
+       , SMerge(..)
+       , SSort(..)
+       , mkMergeSort
+
+       -- * For testing only:
+       , findSplit'
+       )
   where
 
 import           Control.LVish as LVishSched
@@ -59,22 +68,62 @@ data SSort = CSort | VAMSort | VAISort
   deriving (Show, Read)
 
 --------------------------------------------------------------------------------
+-- Specialized sorts.
+
+{-# INLINE mergeSort_int32 #-}
+mergeSort_int32 :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+                      HasGet e, HasPut e, PC.ParFuture p)
+                  => Int -- ^ Sequential sort threshold
+                  -> Int -- ^ Sequential merge threshold
+                  -> SSort
+                  -> SMerge
+                  -> V.ParVec2T s1 Int32 Int32 p e s ()
+mergeSort_int32 !st !mt !sa !ma =
+  mkMergeSort st mt
+     (case sa of
+       VAMSort -> seqSortL
+       VAISort -> seqSortL2
+       CSort   -> cilkSeqSort_int32)
+     (case ma of
+        CMerge  -> cilkSeqMerge_int32
+        HSMerge -> seqmerge)
+
+
+{-# INLINE mergeSort_int64 #-}
+mergeSort_int64 :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+                      HasGet e, HasPut e, PC.ParFuture p)
+                  => Int -- ^ Sequential sort threshold
+                  -> Int -- ^ Sequential merge threshold
+                  -> SSort
+                  -> SMerge
+                  -> V.ParVec2T s1 Int64 Int64 p e s ()
+mergeSort_int64 !st !mt !sa !ma =
+  mkMergeSort st mt
+     (case sa of
+       VAMSort -> seqSortL
+       VAISort -> seqSortL2
+       CSort   -> cilkSeqSort_int64)
+     (case ma of
+        CMerge  -> cilkSeqMerge_int64
+        HSMerge -> seqmerge)
+
+--------------------------------------------------------------------------------
+-- Generic sort routines
 
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
-{-# INLINE mergeSort #-}
-mkMergeSort :: forall p e s s1 .
+mkMergeSort :: forall p e s s1 elt .
                (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
-                HasGet e, HasPut e, PC.ParFuture p)
+                HasGet e, HasPut e, PC.ParFuture p, Ord elt)
             => Int -- ^ Sequential sort threshold
             -> Int -- ^ Sequential merge threshold
-            -> SeqSortM Int32 p e s
-            -> SeqMergeM Int32 p e s
-            -> V.ParVec2T s1 Int32 Int32 p e s ()
+            -> SeqSortM elt p e s
+            -> SeqMergeM elt p e s
+            -> V.ParVec2T s1 elt elt p e s ()
 mkMergeSort !st !mt seqSort seqMerge =
  --  loop
  -- where
- --  loop :: forall s . V.ParVec2T s1 Int32 Int32 p e s ()
+ --  loop :: forall s . V.ParVec2T s1 elt elt p e s ()
  --  loop =
    do len <- V.lengthL
       unless (len <= 1) $
@@ -96,23 +145,6 @@ mkMergeSort !st !mt seqSort seqMerge =
 --  loop = mkMergeSort st mt seqSort ma
 
 
-{-# INLINE mkMergeSort #-}
-mergeSort :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
-                HasGet e, HasPut e, PC.ParFuture p)
-            => Int -- ^ Sequential sort threshold
-            -> Int -- ^ Sequential merge threshold
-            -> SSort
-            -> SMerge
-            -> V.ParVec2T s1 Int32 Int32 p e s ()
-mergeSort !st !mt !sa !ma =
-  mkMergeSort st mt
-     (case sa of
-       VAMSort -> seqSortL
-       VAISort -> seqSortL2
-       CSort   -> cilkSeqSort_int32)
-     (case ma of
-        CMerge  -> cilkSeqMerge_int32
-        HSMerge -> seqmerge)
 
 -- mergeSortOutPlace ::
 --             (ParThreadSafe p, PC.FutContents p (),
@@ -153,9 +185,9 @@ seqSortL2 = do
 -- | Outer wrapper for a function that merges input vectors in the
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
-mergeTo2 :: (ParThreadSafe p, PC.FutContents p (),
+mergeTo2 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
              PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-            Int -> Int -> SeqMergeM Int32 p e s -> V.ParVec2T s1 Int32 Int32 p e s ()
+            Int -> Int -> SeqMergeM elt p e s -> V.ParVec2T s1 elt elt p e s ()
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
   transmute (morphToVec21 sp) (pMergeTo2 threshold ma)
@@ -173,9 +205,9 @@ type ParVec12T s1 e1 p e s a =
 
 -- | Parallel merge kernel.
 {-# INLINABLE pMergeTo2 #-}
-pMergeTo2 :: (ParThreadSafe p, PC.FutContents p (),
+pMergeTo2 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
               PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-             Int -> SeqMergeM Int32 p e s -> ParVec21T s1 Int32 p e s ()
+             Int -> SeqMergeM elt p e s -> ParVec21T s1 elt p e s ()
 pMergeTo2 threshold seqMerge = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- reify
   let l1 = MV.length v1
@@ -228,9 +260,9 @@ sMergeTo2K !lBot !lLen !rBot !rLen !index
 -- | Merging from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
 {-# INLINE mergeTo1 #-}
-mergeTo1 :: (ParThreadSafe p, PC.FutContents p (),
+mergeTo1 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
              PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
-            Int -> Int -> SeqMergeM Int32 p e s -> V.ParVec2T s1 Int32 Int32 p e s ()
+            Int -> Int -> SeqMergeM elt p e s -> V.ParVec2T s1 elt elt p e s ()
 mergeTo1 sp threshold seqMerge = do
   V.swapState
   mergeTo2 sp threshold seqMerge
@@ -284,7 +316,10 @@ findSplit' vl vr lLow lHigh rLow rHigh = do
 
 -----
 
+-- TODO: Move me into a library of safe (alias free) state transformations.
+
 {-# INLINE morphToVec21 #-}
+-- | Slice the left vector at the given split point, leaving a pair of two vectors.
 morphToVec21 :: Int
              -> STTup2 (SVectorFlp v1) (SVectorFlp v2) s
              -> STTup2 (STTup2 (SVectorFlp v1) (SVectorFlp v1)) (SVectorFlp v2) s
@@ -371,10 +406,6 @@ seqmerge = do
 
 -- Requires that we selected STORABLE vectors above!
 
--- Element type being sorted:
-type CElmT = Int32
--- type CElmT = CInt
-
 -- | Raw foreign sort type.
 type SeqSort e = Ptr e -> CLong -> IO (Ptr e)
 
@@ -391,13 +422,13 @@ type SeqMergeM elt p e s = forall s1 . ParVec21T s1 elt p e s ()
 --------------------------------------------------------------------------------
 
 foreign import ccall unsafe "wrap_seqquick_int32"
-  c_seqquick_int32 :: SeqSort CElmT
+  c_seqquick_int32 :: SeqSort Int32
 
 foreign import ccall unsafe "wrap_seqquick_int64"
   c_seqquick_int64 :: SeqSort Int64
 
 foreign import ccall unsafe "wrap_seqmerge_int32"
-  c_seqmerge_int32 ::  SeqMerge CElmT
+  c_seqmerge_int32 ::  SeqMerge Int32
 
 foreign import ccall unsafe "wrap_seqmerge_int64"
   c_seqmerge_int64 ::  SeqMerge Int64
@@ -460,9 +491,9 @@ mkCilkSeqMerge c_seqmerge = do
 
 #if 0
 foreign import ccall unsafe "wrap_cilksort"
-  c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
+  c_cilksort ::  Ptr Int32 -> Ptr Int32 -> CLong -> IO CLong
 #else
-c_cilksort ::  Ptr CElmT -> Ptr CElmT -> CLong -> IO CLong
+c_cilksort ::  Ptr Int32 -> Ptr Int32 -> CLong -> IO CLong
 c_cilksort = error "c_cilksort: cilk versions not loaded"
 #endif
 

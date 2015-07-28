@@ -89,6 +89,6 @@ sortPar vec =
 --             mergeSort 2048 2048 CSort CMerge    -- Breaks in ghci.
 --             mergeSort 2048 2048 VAMSort HSMerge -- Works
 --             mergeSort 2048 2048 VAMSort CMerge  -- Works
-             mergeSort 2048 2048 CSort HSMerge    -- Breaks in ghci.
+             mergeSort_int32 2048 2048 CSort HSMerge    -- Breaks in ghci.
              (left,_) <- S2.reify
              S2.liftST $ S.freeze left

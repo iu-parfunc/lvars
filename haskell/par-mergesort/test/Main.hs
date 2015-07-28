@@ -24,7 +24,7 @@ import           Test.Tasty.QuickCheck
 -- import           Foreign.C.Types (CInt, CLong)
 import qualified Control.Par.MergeSort as MS
 import           Control.Par.MergeSort.Internal
-                  (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort)
+                  (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort_int32)
 
 main :: IO ()
 main = defaultMain $ testGroup "MergeSort tests"
@@ -124,7 +124,7 @@ sortPV' ssThres smThres ssMeth smMeth vec = do
 --    (_, right) <- V.reify
 --    SS.put (STTup2 (SFlp vec) (SFlp right))
     V.installL vec
-    mergeSort ssThres smThres ssMeth smMeth
+    mergeSort_int32 ssThres smThres ssMeth smMeth
 
 mkRandomVec :: Int -> IO (SV.Vector Int32)
 mkRandomVec len = SV.generateM len (const randomIO)
