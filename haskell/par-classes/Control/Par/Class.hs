@@ -39,7 +39,8 @@ module Control.Par.Class
   -- * Futures: basic parallelism with communication
   , ParFuture(..)
   -- * IVars: futures that anyone can fill
-  , ParIVar(..), IVar
+  , ParIVar(..)
+  , NonIdemParIVar(..)
   -- * Full LVar monads
   -- , ParLVar(..)
 
@@ -71,7 +72,7 @@ where
 
 import           Control.DeepSeq
 import           Control.Par.Class.Unsafe
-import           GHC.Prim                 (Constraint)
+--import           GHC.Prim                 (Constraint)
 
 import           Control.Par.EffectSigs
 
@@ -89,17 +90,11 @@ import           Data.Proxy               (Proxy (..))
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
 --
 class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
--- class (Monad m, Functor m) => ParFuture m where
+  {-# MINIMAL spawn_, read #-}
+
   -- | The type of a future that goes along with the particular `Par`
   -- monad the user chooses.  The future is parameterized by the 's' param as well.
   type Future m :: * -> * -> *
-
-
-  -- -- | Different implementations may place different constraints on
-  -- -- what is allowable inside a Future.  For example, some
-  -- -- implementations require an Eq Constraint.
-  -- type FutContents m a :: Constraint
-  -- type FutContents m a = () -- By default, no constraints.
 
   -- | Create a potentially-parallel computation, and return a /future/
   -- (or /promise/) that can be used to query the result of the forked
@@ -110,44 +105,50 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- >    fork (p >>= put r)
   -- >    return r
   --
-  spawn  :: (NFData a) =>
-            m e s a -> m e s (Future m s a)
+  spawn  :: (NFData a) => m e s a -> m e s (Future m s a)
+  spawn  p = spawn_ (do x <- p; deepseq x (return x))
 
   -- | Like 'spawn', but the result is only head-strict, not fully-strict.
   spawn_ :: m e s a -> m e s (Future m s a)
 
-  -- | Wait for the result of a future, and then return it.
-  get    :: (HasGet e) => Future m s a -> m e s a
+  -- | Wait for the result of a future, and then return it.  This is a
+  --   blocking operation, but only in the bounded sense that it takes
+  --   time to compute the value.  Either the current thread will work
+  --   on the result, or another thread is already working on the
+  --   result.
+  read   :: (HasGet e) => Future m s a -> m e s a
 
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
   -- >  spawnP = spawn . return
   spawnP :: (NFData a) => a -> m e s (Future m s a)
-
-  -- FIXME: We could conceivably elide the HasPut constraints, because spawn does not
-  -- have any possibility of doing a write to memory outside its scope (already allocated).
-
-  -- Default implementations:
-  spawn  p = spawn_ (do x <- p; deepseq x (return x))
   spawnP a = spawn (return a)
+
 
   -- default spawn_ :: (ParIVar m, FutContents m a) => m a -> m (Future m a)
   -- spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
 
 --------------------------------------------------------------------------------
 
--- | A simple type alias.  A hint.
-type IVar m s a = Future m s a
-
 -- | @ParIVar@ builds on futures by adding full /anyone-writes, anyone-reads/ IVars.
 --   These are more expressive but may not be supported by all distributed schedulers.
 --
 -- A minimal implementation consists of `fork`, `put_`, and `new`.
-class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
+--
+class ParMonad m => ParIVar (m :: EffectSig -> * -> * -> *) where
+  {-# MINIMAL new, get, put_ #-}
+
+  type IVar m :: * -> * -> *
 
   -- | creates a new @IVar@
---  new  :: m (IVar m a)
-  new  :: forall a e s . m e s (Future m s a)
+  new  :: forall a e s . m e s (IVar m s a)
+
+  -- | Blocking read on the IVar.  This may block for an unbounded period of time.
+  get  :: (HasGet e) => IVar m s a -> m e s a
+
+  -- | like 'put', but only head-strict rather than fully-strict.
+  put_ :: forall a e s . (HasPut e) =>
+          IVar m s a -> a -> m e s ()
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
   -- are not allowed, and result in a runtime error.
@@ -160,18 +161,11 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   --
   -- Sometimes partial strictness is more appropriate: see 'put_'.
   --
-  put  :: forall a e s . (HasPut e, NFData a) =>
+  -- Note that this version of put is *nonidempotent*.
+  --
+  put  :: forall a e s . (HasPut e, NFData a, Eq a) =>
           IVar m s a -> a -> m e s ()
   put v a = deepseq a (put_ v a)
-
-  -- | like 'put', but only head-strict rather than fully-strict.
-  put_ :: forall a e s . (HasPut e) =>
-          IVar m s a -> a -> m e s ()
-
-  -- | NonIdem version of put.  This version does not have the same constraint
-  -- on the contents of the IVar.
-  putNI_ :: forall a e s . (HasPut e) =>
-            IVar m s a -> a -> m e s ()
 
   -- Extra API routines that have default implementations:
 
@@ -185,6 +179,22 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
                   -- This is usually inefficient!
                   put_ v a
                   return v
+
+  -- TODO: spawnIVar??
+
+-- | IVars with non-idempotent put operations.  These require a
+-- scheduler which never duplicates scheduled tasks.
+class ParIVar m => NonIdemParIVar (m :: EffectSig -> * -> * -> *) where
+
+  -- | NonIdem version of `put_`.  This version does not have the `Eq`
+  -- constraint on the contents of the IVar.
+  --
+  --  That is, with `putNI_`, even multiple puts of *the same* value
+  --  result in an exception.  (Thus it can only be used with
+  --  schedulers that support non-idempotent operations.)
+  putNI_ :: forall a e s . (HasPut e) =>
+            IVar m s a -> a -> m e s ()
+
 
 --------------------------------------------------------------------------------
 
