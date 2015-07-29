@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
