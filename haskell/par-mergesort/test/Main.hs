@@ -131,16 +131,14 @@ mkRandomVec len = SV.generateM len (const randomIO)
 
 checkSorted :: (Show elt, SVM.Storable elt, Ord elt)
             => Int -> SV.Vector elt -> Bool
-checkSorted len v =
-    if len == SV.length v
-    then go 1
-    else trace ("\n ! Bad length: "++show (SV.length v)) $
-         False
+checkSorted len v
+  | len == SV.length v = go 1
+  | otherwise = trace ("\n ! Bad length: "++show (SV.length v)) $
+                False
   where
     go i
       | i >= SV.length v = True
-      | otherwise        =
-        if (v SV.! (i - 1) <= v SV.! i)
-        then go (i + 1)
-        else trace ("\n ! Out of order elements: "++show (v SV.! (i - 1), v SV.! i)) $
-             False
+      | v SV.! (i - 1) <= v SV.! i = go (i + 1)
+      | otherwise =
+        trace ("\n ! Out of order elements: "++show (v SV.! (i - 1), v SV.! i)) $
+              False
