@@ -36,11 +36,15 @@ module Control.Par.Class
   (
   -- * The essence of Par monads: forking control flow
     ParMonad(fork, pbind, preturn, liftReadOnly)
+
   -- * Futures: basic parallelism with communication
   , ParFuture(..)
+  , LazyFutures, EagerFutures
+
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
   , NonIdemParIVar(..)
+
   -- * Full LVar monads
   -- , ParLVar(..)
 
@@ -89,6 +93,19 @@ import           Data.Proxy               (Proxy (..))
 --   However, for monads that are also a member of `ParIVar` it is
 --   typical to simply define `spawn` in terms of `fork`, `new`, and `put`.
 --
+--   All implementations should meet the following two laws.  First,
+--   the spawn-reordering law:
+--
+--   > (do x <- spawn f; y <- spawn g; m) ==
+--   > (do y <- spawn g; x <- spawn f; m)
+--
+--   Second, the spawn/read identity:
+--
+--   > (spawn_ m >>= read)  ==  (m >>= evaluate)
+--
+--   Where `evaluate` would be analogous to
+--   `Control.Exception.evaluate`, and would capture the fact that `spawn_`
+--  evaluates to WHNF.
 class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   {-# MINIMAL spawn_, read #-}
 
@@ -124,9 +141,47 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   spawnP :: (NFData a) => a -> m e s (Future m s a)
   spawnP a = spawn (return a)
 
-
   -- default spawn_ :: (ParIVar m, FutContents m a) => m a -> m (Future m a)
   -- spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
+
+
+-- | This type class provides no methods.  Rather, it documents a
+-- semantic property of a particular monad with futures.  Any monad
+-- with this property must reveal divergence or exceptions within
+-- futures only lazily, when the future is read.  Thus:
+--
+-- > (spawn loop >> m) == m
+-- > (spawn err  >> m) == m
+--
+-- Where:
+--
+-- > loop = return () >> loop
+-- > err  = return () >> undefined
+--
+class ParFuture m => LazyFutures m where
+-- class ParFuture m => ForgettableFutures m where
+
+-- | This type class provides no methods.  Rather, it documents a
+-- semantic property of a particular monad with futures.  Any monad
+-- with this property must wait until all spawned futures are complete
+-- before exitting a parallel session.  Further, it must ensure that
+-- all spawned futures terminate without exception, before the
+-- parallel session may terminate without exception.  This implies a
+-- global barrier at the end of each parallel session.
+--
+-- All implementations should satisfy the law:
+--
+-- > (spawn err  >> m) == err  || otherError
+-- > (spawn loop >> m) == loop || otherError
+--
+-- Here `OtherError` corresponds to the scenario where `m` throws a
+-- different exception.  Here we can see imprecise exceptions in
+-- action; WHICH exception we get on a particular run may be
+-- nondeterministic with Par monad executions in general, which in
+-- turn leverages Haskell's standard notion of imprecise exceptions.
+class ParFuture m => EagerFutures m where
+-- class ParFuture m => UnforgettableFutures m where
+
 
 --------------------------------------------------------------------------------
 
