@@ -66,3 +66,19 @@ test-suite test-mergesort
     tasty-quickcheck
 
   ghc-options:          -Wall -O2 -rtsopts -threaded -eventlog
+
+benchmark bench-mergesort
+  type:                 exitcode-stdio-1.0
+  main-is:              Main.hs
+  hs-source-dirs:       bench/
+
+  build-depends:
+    base,
+    criterion           >= 1.1 && < 1.2,
+    lvish,
+    par-classes,
+    par-mergesort,
+    par-transformers,
+    vector
+
+  ghc-options:          -Wall -O2
