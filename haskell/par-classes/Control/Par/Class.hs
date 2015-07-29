@@ -94,11 +94,12 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- monad the user chooses.  The future is parameterized by the 's' param as well.
   type Future m :: * -> * -> *
 
-  -- | Different implementations may place different constraints on
-  -- what is allowable inside a Future.  For example, some
-  -- implementations require an Eq Constraint.
-  type FutContents m a :: Constraint
-  type FutContents m a = () -- By default, no constraints.
+
+  -- -- | Different implementations may place different constraints on
+  -- -- what is allowable inside a Future.  For example, some
+  -- -- implementations require an Eq Constraint.
+  -- type FutContents m a :: Constraint
+  -- type FutContents m a = () -- By default, no constraints.
 
   -- | Create a potentially-parallel computation, and return a /future/
   -- (or /promise/) that can be used to query the result of the forked
@@ -109,12 +110,11 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- >    fork (p >>= put r)
   -- >    return r
   --
-  spawn  :: (NFData a, HasPut e, FutContents m a) =>
+  spawn  :: (NFData a) =>
             m e s a -> m e s (Future m s a)
 
   -- | Like 'spawn', but the result is only head-strict, not fully-strict.
-  spawn_ :: (HasPut e, FutContents m a) =>
-            m e s a -> m e s (Future m s a)
+  spawn_ :: m e s a -> m e s (Future m s a)
 
   -- | Wait for the result of a future, and then return it.
   get    :: (HasGet e) => Future m s a -> m e s a
@@ -122,7 +122,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   -- | Spawn a pure (rather than monadic) computation.  Fully-strict.
   --
   -- >  spawnP = spawn . return
-  spawnP :: (NFData a, HasPut e, FutContents m a) => a -> m e s (Future m s a)
+  spawnP :: (NFData a) => a -> m e s (Future m s a)
 
   -- FIXME: We could conceivably elide the HasPut constraints, because spawn does not
   -- have any possibility of doing a write to memory outside its scope (already allocated).
@@ -160,12 +160,12 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   --
   -- Sometimes partial strictness is more appropriate: see 'put_'.
   --
-  put  :: forall a e s . (FutContents m a, HasPut e, NFData a) =>
+  put  :: forall a e s . (HasPut e, NFData a) =>
           IVar m s a -> a -> m e s ()
   put v a = deepseq a (put_ v a)
 
   -- | like 'put', but only head-strict rather than fully-strict.
-  put_ :: forall a e s . (FutContents m a, HasPut e) =>
+  put_ :: forall a e s . (HasPut e) =>
           IVar m s a -> a -> m e s ()
 
   -- | NonIdem version of put.  This version does not have the same constraint
@@ -176,11 +176,11 @@ class ParFuture m  => ParIVar (m :: EffectSig -> * -> * -> *) where
   -- Extra API routines that have default implementations:
 
   -- | creates a new @IVar@ that contains a value
-  newFull :: (HasPut e, FutContents m a, NFData a) => a -> m e s (IVar m s a)
+  newFull :: (HasPut e, NFData a) => a -> m e s (IVar m s a)
   newFull a = deepseq a (newFull_ a)
 
   -- | creates a new @IVar@ that contains a value (head-strict only)
-  newFull_ :: (HasPut e, FutContents m a) => a -> m e s (IVar m s a)
+  newFull_ :: (HasPut e) => a -> m e s (IVar m s a)
   newFull_ a = do v <- new
                   -- This is usually inefficient!
                   put_ v a
@@ -377,7 +377,7 @@ instance Generator [a] where
 -- | Collection types which can be consumed in parallel.
 class Generator c => ParFoldable c where
   pmapFold :: forall m e s a .
-              (ParFuture m, HasGet e, HasPut e, FutContents m a)
+              (ParFuture m, HasGet e, HasPut e)
               => (ElemOf c -> m e s a) -- ^ compute one result
               -> (a -> a -> m e s a)   -- ^ combine two results
               -> a                 -- ^ initial accumulator value
