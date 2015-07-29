@@ -1,3 +1,5 @@
+{-# LANGUAGE Trustworthy            #-}
+
 {-# LANGUAGE BangPatterns           #-}
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
@@ -7,7 +9,6 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE Trustworthy            #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE UndecidableInstances   #-}
 
@@ -39,7 +40,6 @@ module Control.Par.Class
 
   -- * Futures: basic parallelism with communication
   , ParFuture(..)
-  , LazyFutures, EagerFutures
 
   -- * IVars: futures that anyone can fill
   , ParIVar(..)
@@ -65,8 +65,10 @@ module Control.Par.Class
   -- * Par-monad Transformers
   , ParMonadTrans(..)
 
-  -- * Simple tracking of WHICH Par monads permit only threadsafe effects
+  -- * Classes which exist only to classify and document properties of monads
   , ParThreadSafe()
+  , IdempotentParMonad
+  , LazyFutures, EagerFutures
 
   -- * Reexports
   , NFData()
@@ -182,6 +184,16 @@ class ParFuture m => LazyFutures m where
 class ParFuture m => EagerFutures m where
 -- class ParFuture m => UnforgettableFutures m where
 
+
+-- | This type class denotes the property that:
+--
+-- > (m >> m) == m
+--
+-- For all actions `m` in the monad.  For example, any concrete Par
+-- monad which implements *only* `ParFuture` and/or `ParIVar`, would
+-- retain this property.  Conversely, any `NonIdemParIVar` monad would
+-- violate the property.
+class ParMonad m => IdempotentParMonad m where
 
 --------------------------------------------------------------------------------
 

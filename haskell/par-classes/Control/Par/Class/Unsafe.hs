@@ -1,3 +1,5 @@
+{-# LANGUAGE Unsafe            #-}
+
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE DataKinds         #-}
@@ -6,9 +8,10 @@
 {-# LANGUAGE KindSignatures    #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE Unsafe            #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Unsafe operations that end users should NOT import.
 --
@@ -28,12 +31,13 @@ import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
 
+
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
--- care which thread they execute on.  Thus it is ok to inject additional parallelism.
+-- care which thread they execute on.  Thus, it is ok to inject additional parallelism.
 --
 -- Specifically, instances of ParThreadSafe must satisfy the law:
 --
--- > do m1; m2 == do fork m1; m2
+-- > (do m1; m2) == (do fork m1; m2)
 --
 class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
 -- TODO: add SecretClass superclass to prevent users from instancing this.
@@ -72,9 +76,10 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a
   liftReadOnly = unsafeCoerce
 
--- If we use this design for ParMonad, we suffer these orphan instances:
--- (We cannot include Monad as a super-class of ParMonad, because it would
---  have to universally quantify over 'e' and 's', which is not allowed.)
+-- | If we use the current design for ParMonad, we suffer these orphan
+-- instances: (We cannot include Monad as a super-class of ParMonad,
+-- because it would have to universally quantify over 'e' and 's',
+-- which is not allowed.)
 instance ParMonad p => Monad (p e s) where
   (>>=) = pbind
   return = preturn
@@ -86,3 +91,4 @@ instance ParMonad p => Applicative (p e s) where
   pure = preturn
   f <*> x = pbind f (\f' -> pbind x (return . f'))
 
+--------------------------------------------------------------------------------
