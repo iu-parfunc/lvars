@@ -22,7 +22,9 @@ module Control.Par.Class.Unsafe
   , ParFuture(..)
   , IdempotentParMonad
   , LazyFutures, EagerFutures
-  , ParThreadSafe(unsafeParIO)
+  , ParThreadSafe
+
+  , SecretSuperClass
   )
 where
 
@@ -84,6 +86,12 @@ instance ParMonad p => Applicative (p e s) where
 --------------------------------------------------------------------------------
 -- Empty classes, ParMonad
 
+-- | This empty class is ONLY present to prevent users from instancing
+-- classes which they should not be allowed to instance within the
+-- SafeHaskell-supporting subset of parallel programming
+-- functionality.
+class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
+
 -- | This type class denotes the property that:
 --
 -- > (m >> m) == m
@@ -92,7 +100,7 @@ instance ParMonad p => Applicative (p e s) where
 -- monad which implements *only* `ParFuture` and/or `ParIVar`, would
 -- retain this property.  Conversely, any `NonIdemParIVar` monad would
 -- violate the property.
-class ParMonad m => IdempotentParMonad m where
+class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 
 
 -- | The class of Par monads in which all monadic actions are threadsafe and do not
@@ -102,14 +110,7 @@ class ParMonad m => IdempotentParMonad m where
 --
 -- > (do m1; m2) == (do fork m1; m2)
 --
-class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
--- TODO: add SecretClass superclass to prevent users from instancing this.
-
-  -- THEN: we can eliminate unsafeParIO:
-
-  -- | Run some IO in parallel on whatever thread we happen to be on.
-  --   The end user does not get access to this.
-  unsafeParIO :: IO a -> p e s a
+class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
 
 
 --------------------------------------------------------------------------------
@@ -189,7 +190,7 @@ class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
 -- > loop = return () >> loop
 -- > err  = return () >> undefined
 --
-class ParFuture m => LazyFutures m where
+class (SecretSuperClass m, ParFuture m) => LazyFutures m where
 -- class ParFuture m => ForgettableFutures m where
 
 -- | This type class provides no methods.  Rather, it documents a
@@ -210,5 +211,5 @@ class ParFuture m => LazyFutures m where
 -- action; WHICH exception we get on a particular run may be
 -- nondeterministic with Par monad executions in general, which in
 -- turn leverages Haskell's standard notion of imprecise exceptions.
-class ParFuture m => EagerFutures m where
+class (SecretSuperClass m, ParFuture m) => EagerFutures m where
 -- class ParFuture m => UnforgettableFutures m where
