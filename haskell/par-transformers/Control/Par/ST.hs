@@ -60,7 +60,7 @@ import qualified Data.Vector.Unboxed.Mutable as MU
 import Prelude hiding (length, read)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe (unsafeParIO))
+import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe)
 import Control.Par.EffectSigs
 
 import GHC.Conc (getNumProcessors)
@@ -296,10 +296,10 @@ runParST recipe (ParST fn) =
        xm = fn initVal
     in xm `pbind` (preturn . fst)
  where
-  doST = unsafeParIO . unsafeSTToIO
+  doST = internalLiftIO . unsafeSTToIO
 
 -- | This version does a deep copy of the initial state.
-runParSTCopy :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+runParSTCopy :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
                  (forall s0 . ST s0 (st s0))
                  -> (forall s1 . ParST (st s1) p e s2 a)
@@ -380,7 +380,7 @@ instance (ParMonad p, ParThreadSafe p) =>
 --   This operation has some overhead.
 {-# INLINE liftST #-}
 liftST :: (ParMonad p, ParThreadSafe p) => ST ss a -> ParST (stt ss) p e s a
-liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
+liftST st = ParST $ \s -> do r <- internalLiftIO io; return (r, s)
   where
     io = unsafeSTToIO st
 
@@ -425,7 +425,7 @@ transmute fn (ParST comp) = ParST $ \orig -> do
 {-# INLINE forkSTSplit #-}
 forkSTSplit
   :: forall p t stt sFull e s.
-     (PC.ParIVar p, STSplittable stt,
+     (PC.ParIVar p, STSplittable stt, PC.NonIdemParIVar p,
       HasPut e, HasGet e)
      => SplitIdx stt                        -- ^ Where to split the data.
      -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
@@ -440,7 +440,8 @@ forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
 
 -- | Spawn which does not assume idempotency of forked computations:
-mySpawn :: (HasPut e, PC.ParIVar p) => p e s a -> p e s (PC.IVar p s a)
+mySpawn :: (HasPut e, PC.ParIVar p, PC.NonIdemParIVar p)
+        => p e s a -> p e s (PC.IVar p s a)
 mySpawn f =
   do l <- PC.new
      PC.fork (do x <- f; PC.putNI_ l x)
@@ -449,10 +450,8 @@ mySpawn f =
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
 instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
-  -- | The `Future` type and `FutContents` constraint are the same as the
-  -- underlying `Par` monad.
-  type Future      (ParST sttt parM)   = PC.Future      parM
-  type FutContents (ParST sttt parM) a = PC.FutContents parM a
+  -- | The `Future` type is the same as the underlying `Par` monad.
+  type Future (ParST sttt parM) = PC.Future parM
 
   {-# INLINE spawn_ #-}
   spawn_ (ParST task) = ParST $ \st -> -- TODO: Why can't I use `return` here?
@@ -461,16 +460,18 @@ instance PC.ParFuture parM => PC.ParFuture (ParST sttt parM) where
          error "spawn_: This child thread does not have permission to touch the array!"
        return res
 
-  {-# INLINE get #-}
-  get iv = ParST $ \st -> (,st) <$> PC.get iv
+  {-# INLINE read #-}
+  read f = ParST $ \st -> (,st) <$> PC.read f
 
 instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
+  type IVar (ParST sttt parM) = PC.IVar parM
+
   {-# INLINE new #-}
   new       = ParST $ \st -> (,st) <$> PC.new
+  {-# INLINE get #-}
+  get iv    = ParST $ \st -> (,st) <$> PC.get iv
   {-# INLINE put_ #-}
   put_ iv v = ParST $ \st -> (,st) <$> PC.put_ iv v
-  {-# INLINE putNI_ #-}
-  putNI_ iv v = ParST $ \st -> (,st) <$> PC.putNI_ iv v
 
 
 --------------------------------------------------------------------------------
@@ -480,7 +481,7 @@ instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
 mkParMapM :: forall elt s1 stt p e s .
              (STSplittable stt, ParThreadSafe p,
               PC.ParFuture p, HasGet e, HasPut e,
-              PC.ParIVar p) =>
+              PC.ParIVar p, PC.NonIdemParIVar p) =>
               (forall s2 . Int ->        ParST (stt s2) p e s elt) -- ^ Reader
            -> (forall s2 . Int -> elt -> ParST (stt s2) p e s ())  -- ^ Writer
            -> (forall s2 .               ParST (stt s2) p e s Int) -- ^ Length
