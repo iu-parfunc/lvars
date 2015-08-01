@@ -263,9 +263,8 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
--- TODO(osa): This is causing a GHC regression -- it reports e and s as unused
--- quantified type variables, even though they're used in stateLV function below.
--- Produce a minimal example and report/fix this.
+-- NOTE: GHC generates warnings about unused type variables `e` and `s`. That is
+-- a bug and reported https://ghc.haskell.org/trac/ghc/ticket/10722.
 instance forall p (e :: EffectSig) s .
          (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
           LVarSched (CancelT p) where
