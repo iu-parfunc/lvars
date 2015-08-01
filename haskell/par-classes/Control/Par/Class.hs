@@ -104,10 +104,10 @@ class ParMonad m => ParIVar (m :: EffectSig -> * -> * -> *) where
   new  :: forall a e s . m e s (IVar m s a)
 
   -- | Blocking read on the IVar.  This may block for an unbounded period of time.
-  get  :: (HasGet e) => IVar m s a -> m e s a
+  get  :: HasGet e => IVar m s a -> m e s a
 
   -- | like 'put', but only head-strict rather than fully-strict.
-  put_ :: forall a e s . (HasPut e) =>
+  put_ :: forall a e s . HasPut e =>
           IVar m s a -> a -> m e s ()
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
