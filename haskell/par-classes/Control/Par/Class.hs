@@ -163,48 +163,48 @@ class ParIVar m => NonIdemParIVar (m :: EffectSig -> * -> * -> *) where
 -- class (LVarSched m, ParWEffects m) => ParLVar m where
 
 -- | Abstract over LVar-capable /schedulers/.  This is not for end-user programming.
-class (ParMonad m) => LVarSched (m :: EffectSig -> * -> * -> *)  where
+class ParMonad p => LVarSched (p :: EffectSig -> * -> * -> *)  where
    -- | The type of raw LVars, shared among all specific data structures (Map, Set, etc).
-   type LVar m :: * -> * -> *
+   type LVar p :: * -> * -> *
 
    -- | Create an LVar, including the extra state that required for scheduling and
    -- synchronization.
-   newLV :: IO a -> m e s (LVar m a d)
+   newLV :: IO a -> p e s (LVar p a d)
 
    -- | Update an LVar.  The change itself happens as an IO action, but any state
    -- changes must be linearizable and must respect the lattice semantics for the LVar.
-   putLV :: LVar m a d           -- ^ the LVar
+   putLV :: LVar p a d           -- ^ the LVar
          -> (a -> IO (Maybe d))  -- ^ how to do the put, and whether the LVar's
                                  --   value changed
-         -> m e s ()
+         -> p e s ()
 
    -- | Do a threshold read on an LVar.  This requires both a "global" and "delta"
    -- handler, and if the underlying Par monad assumes idempotency, both could even
    -- execute for the same value.
-   getLV :: (LVar m a d)                -- ^ the LVar
+   getLV :: LVar p a d                  -- ^ the LVar
          -> (a -> Bool -> IO (Maybe b)) -- ^ already past threshold?
                                         -- The @Bool@ indicates whether the LVar is FROZEN.
          -> (d ->         IO (Maybe b)) -- ^ does @d@ pass the threshold?
-         -> m e s b
+         -> p e s b
 
    -- | Extract a handle on the raw, mutable state within an LVar.
-   stateLV :: (LVar m a d) -> (Proxy (m e s ()), a)
+   stateLV :: LVar p a d -> (Proxy (p e s ()), a)
    -- TODO: Audit to see if we still need this proxy return value.
 
    -- addHandler
 
    -- | Put ourselves at the bottom of the work-pile for the current thread, allowing
    -- others a chance to run.
-   yield :: m e s ()
+   yield :: p e s ()
    yield = return ()
 
    -- | Usually a no-op.  This checks in with the scheduler, so that it might perform
    -- any tasks which need to be performed periodically.
-   schedCheck :: m e s ()
+   schedCheck :: p e s ()
    schedCheck = return ()
 
    -- | Drop the current continuation and return to the scheduler.
-   returnToSched :: m e s a
+   returnToSched :: p e s a
 
    -- -- | Log a line of debugging output, if supported by the scheduler.
    -- -- The debug message is associated with a "chatter level".
