@@ -312,12 +312,12 @@ runParSTCopy mkInit pst =
        pst
 
 -- TODO: We could have a version that looks like this
-runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
-                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
-                  (st s0)
-                  -> (ParST (st s0) p e s2 a)
-                  -> ST s0 (p e s2 a)
-runParSTCopy' initVal pst = undefined
+-- runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+--                  (ParMonad p, ParThreadSafe p, STSplittable st) =>
+--                   (st s0)
+--                   -> (ParST (st s0) p e s2 a)
+--                   -> ST s0 (p e s2 a)
+-- runParSTCopy' initVal pst = undefined
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}
@@ -373,6 +373,9 @@ instance (ParMonad p, ParThreadSafe p) =>
          R.MonadReader stts (ParST stts p e s) where
   {-# INLINE ask #-}
   ask = reify
+
+  {-# INLINE local #-}
+  local f (ParST p) = ParST $ \s -> p (f s)
 
   -- local fn m =
 

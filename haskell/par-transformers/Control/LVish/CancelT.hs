@@ -142,7 +142,7 @@ forkCancelableWithTid
 forkCancelableWithTid tid act = forkInternal tid (internalCastEffects act)
 
 -- | Futures that may be canceled before the result is available.
-data CFut p s a = CFut (Future p s CFutFate) (Future p s a)
+data CFut p s a = CFut (IVar p s CFutFate) (IVar p s a)
 
 -- | (Internal datatype).  In a deterministic scenario, a `CFut` can only be
 -- canceled or read, not both.
@@ -194,7 +194,7 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 
 -- Internal version -- no rules!
 forkInternal
-  :: forall (p :: EffectSig -> * -> * -> *) e s a f .
+  :: forall (p :: EffectSig -> * -> * -> *) e s a .
      (ParIVar p, LVarSched p, HasPut (SetP 'P e)) =>
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
 {-# INLINE forkInternal #-}
@@ -223,7 +223,7 @@ forkInternal (CState childRef) act = CancelT $ do
 
     return $! CFut fate result
   where
-    cast :: CancelT p (SetP P e) s r -> CancelT p e s r
+    cast :: CancelT p (SetP 'P e) s r -> CancelT p e s r
     cast = internalCastEffects
 
     cast' :: p (SetP 'P e) s r -> p e s r
@@ -263,6 +263,9 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
+-- TODO(osa): This is causing a GHC regression -- it reports e and s as unused
+-- quantified type variables, even though they're used in stateLV function below.
+-- Produce a minimal example and report/fix this.
 instance forall p (e :: EffectSig) s .
          (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
           LVarSched (CancelT p) where

@@ -29,17 +29,13 @@ module Control.Par.ST.Vec
 
 import Control.Par.ST hiding (reify)
 
-import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Reader as R
 import qualified Data.Vector.Mutable as MV
-
-import GHC.Conc (getNumProcessors)
-import System.IO.Unsafe (unsafeDupablePerformIO)
 
 import Prelude hiding (drop, length, read, take)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParMonad, ParThreadSafe (unsafeParIO))
+import Control.Par.Class.Unsafe (ParMonad, ParThreadSafe)
 import Control.Par.EffectSigs
 
 --------------------------------------------------------------------------------
@@ -52,7 +48,7 @@ type ParVecT s1 va p (e :: EffectSig) s a = ParST (MVectorFlp va s1) p e s a
 
 -- | Restricted version of `runParST` which initialized the state with a single,
 -- boxed vector of a given size.  All elements start uninitialized.
-runParVecT :: forall p e s s2 a va .
+runParVecT :: forall p e s a va .
               (ParThreadSafe p, ParMonad p)
                -- S.MonadState (MVectorFlp va s2) (ParST (MVectorFlp va s2) p e s))
              => Int
@@ -83,15 +79,10 @@ reify = do
 --
 --   This function reserves the right to sequentialize some iterations.
 parMapM :: forall s1 va p e s .
-           (HasPut e, HasGet e, PC.ParIVar p, ParThreadSafe p) =>
+           (HasPut e, HasGet e,
+            PC.ParFuture p, PC.ParIVar p, ParThreadSafe p, PC.NonIdemParIVar p) =>
            (va -> p e s va) -> ParVecT s1 va p e s ()
 parMapM = mkParMapM read write length id
-
-overPartition :: Int
-overPartition = 8
-
-numProcs :: Int
-numProcs = unsafeDupablePerformIO getNumProcessors
 
 --------------------------------------------------------------------------------
 
