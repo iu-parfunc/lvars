@@ -263,15 +263,13 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
--- NOTE: GHC generates warnings about unused type variables `e` and `s`. That is
--- a bug and reported https://ghc.haskell.org/trac/ghc/ticket/10722.
-instance forall p (e :: EffectSig) s .
-         (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
+instance (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
           LVarSched (CancelT p) where
   type LVar (CancelT p) = LVar p
 
   newLV act = PC.lift $ newLV act
 
+  stateLV :: forall e s a d  . LVar p a d -> (Proxy (p e s ()), a)
   stateLV lvar =
     let (_::Proxy (p e s ()), a) = stateLV lvar
     in (Proxy, a)
