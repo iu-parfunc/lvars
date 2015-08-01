@@ -341,7 +341,7 @@ for_ start end fn = loop start
 {-# INLINE forAcc_ #-}
 forAcc_ :: Monad m => Int -> Int -> acc -> (Int -> acc -> m acc) -> m acc
 forAcc_ start end _ _fn | start > end = error "for_: start is greater than end"
-forAcc_ start end acc fn = loop acc start
+forAcc_ start end acc0 fn = loop acc0 start
   where
    loop !acc !i
      | i > end  = return acc

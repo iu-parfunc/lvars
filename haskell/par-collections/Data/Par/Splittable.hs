@@ -90,7 +90,7 @@ pmapReduceWith_ :: forall c e s m a .
       -> a                 -- ^ initial accumulator value
       -> m e s a
 {-# INLINE pmapReduceWith_ #-}
-pmapReduceWith_ split = mkMapReduce split PC.foldM spawn_
+pmapReduceWith_ splitter = mkMapReduce splitter PC.foldM spawn_
 
 -- | Execute a side-effect for each element generated.  Use the `Split` instance to
 -- determine the degree of parallelism (granularity).
