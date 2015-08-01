@@ -1,6 +1,7 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns    #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies, NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 {-|
 
@@ -11,7 +12,7 @@ A mechanism to describe iteration spaces supporting parallel execution.
 module Data.Par.Range
   (
     -- * Constructing iteration spaces
-    
+
     -- | Beware that ranges include information about whether or not sequential
     -- "bottoming-out" is permitted.  If you are executing parallel loops with
     -- inter-iteration dependencies, be careful to use `fullpar`.
@@ -20,22 +21,22 @@ module Data.Par.Range
     -- * Combined MapReduce operations on ranges
     pmapReduce, pmapReduce_,
 
-    -- * Misc                
+    -- * Misc
     toList
   )
-where 
+where
 
 import Control.DeepSeq
-import Data.Traversable ()
-import Control.Monad as M hiding (mapM, sequence, join)
-import GHC.Conc (getNumProcessors)
+import Control.Monad          as M hiding (join, mapM, sequence)
+import Data.Traversable       ()
+import GHC.Conc               (getNumProcessors)
 
 import Control.Par.Class
 import Control.Par.EffectSigs
-import Data.Splittable.Class as Sp
-import Prelude hiding (init,max,sequence, head,tail)
+import Data.Splittable.Class  as Sp
+import Prelude                hiding (head, init, max, read, sequence, tail)
 
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe       (unsafePerformIO)
 -- import qualified Data.Par.Splittable as P
 
 -- --------------------------------------------------------------------------------
@@ -60,13 +61,13 @@ data Range =
 instance Split Range where
   {-# INLINE split #-}
   split = splitPlease 2
-  {-# INLINE splitPlease #-}  
-  splitPlease pieces rng@(InclusiveRange start end thresh) 
-     | len <= thresh = [rng] 
+  {-# INLINE splitPlease #-}
+  splitPlease pieces rng@(InclusiveRange start end thresh)
+     | len <= thresh = [rng]
      | len < pieces  = [ InclusiveRange i i thresh | i <- [start .. end]]
      | otherwise = chunks
-    where 
-    len = end - start + 1 
+    where
+    len = end - start + 1
     chunks =
       map largepiece [0..remain-1] ++
       map smallpiece [remain..pieces-1]
@@ -105,7 +106,7 @@ toList :: Range -> [Int]
 toList (InclusiveRange st en _) = [st..en]
 
 -- | A simple shorthand for ranges from `n` to `m-1` (inclusive,exclusive).
--- 
+--
 -- Note that this function, as well as `irange` and `zrange`, by default produce
 -- \"auto-sequentializing\" iteration spaces that choose a threshold for bottoming
 -- out to sequential execution based on the size of the range and the number of
@@ -136,7 +137,7 @@ mkInclusiveRange startInd endInd = InclusiveRange {startInd,endInd,seqThresh}
   where
     seqThresh = min max_iterations_seq chunksize
     chunksize = len `quot` (auto_partition_factor * num_procs)
-    len = endInd - startInd + 1 
+    len = endInd - startInd + 1
 {-# INLINE mkInclusiveRange #-}
 
 --------------------------------------------------------------------------------
@@ -151,7 +152,7 @@ auto_partition_factor = 4
 -- Running large numbers of iterations will take time even if the work is trivial.
 -- Thus we put an upper bound on how large we will make a sequential slab of work.
 max_iterations_seq :: Int
-max_iterations_seq = 4000 
+max_iterations_seq = 4000
 
 -- | We used to be able to use `numCapabilities` for this.  But now, with
 -- `numCapabilities` changing at runtime, it will become a source of nondeterminism.
@@ -166,13 +167,13 @@ num_procs = unsafePerformIO getNumProcessors
 -- | For convenience: A variant of `Data.Par.Splittable.pmapReduce`
 -- specialized to operating on `Range` data.
 pmapReduce
-   :: (NFData a, ParFuture p, HasPut e, HasGet e, FutContents p a)
+   :: (NFData a, ParFuture p, HasPut e, HasGet e)
       => Range   -- ^ iteration range over which to calculate
       -> (Int -> p e s a)     -- ^ compute one result
-      -> (a -> a -> p e s a)  -- ^ combine two results 
+      -> (a -> a -> p e s a)  -- ^ combine two results
       -> a                -- ^ initial result
       -> p e s a
--- pmapReduce = P.pmapReduce 
+-- pmapReduce = P.pmapReduce
 pmapReduce = mkMapReduce spawn
 
 -- | A version of `pmapReduce` that is only weak-head-normal-form (WHNF) strict in
@@ -181,48 +182,48 @@ pmapReduce = mkMapReduce spawn
 -- Also, like `pmapReduce`, this is merely a specialized version of
 -- `Data.Par.Splittable.pmapReduce_`.
 pmapReduce_
-   :: (ParFuture p, HasPut e, HasGet e, FutContents p a)
+   :: (ParFuture p, HasPut e, HasGet e)
       => Range   -- ^ iteration range over which to calculate
       -> (Int -> p e s a)     -- ^ compute one result
-      -> (a -> a -> p e s a)  -- ^ combine two results 
+      -> (a -> a -> p e s a)  -- ^ combine two results
       -> a                -- ^ initial result
       -> p e s a
 pmapReduce_ = mkMapReduce spawn_
 
 
 
-              
+
 -- TODO: Replace with generic version:
 {-# INLINE mkMapReduce #-}
-mkMapReduce :: (ParFuture m, HasPut e,  HasGet e, FutContents m t) => 
+mkMapReduce :: (ParFuture m, HasPut e,  HasGet e) =>
                (m e s t -> m e s (Future m s t)) ->
                Range -> (Int -> m e s t) -> (t -> t -> m e s t) -> t -> m e s t
 mkMapReduce spawner irng fn binop init = loop irng
  where
   mapred b ac = do x <- fn b;
                    result <- ac `binop` x
-                   return result                            
+                   return result
   loop rng =
     case split rng of
       -- Sequential case:
-      [InclusiveRange st en _] -> forAcc_ st en init mapred 
+      [InclusiveRange st en _] -> forAcc_ st en init mapred
         -- foldM mapred init [min..max]
-      [a,b] -> do iv <- spawner$ loop a
+      [a,b] -> do iv <- spawner $ loop a
                   res2 <- loop b
-                  res1 <- get iv
+                  res1 <- read iv
                   binop res1 res2
       ls@(_:_:_) -> do ivs <- mapM (spawner . loop) ls
-                       M.foldM (\ acc iv -> get iv >>= binop acc) init ivs
+                       M.foldM (\ acc iv -> read iv >>= binop acc) init ivs
       [] -> return init
 
 
 {-
--- OLD Lvish versions... 
+-- OLD Lvish versions...
 
 -- | Parallel for-loop over an inclusive range.  Semantically similar to:
 --
 -- > parFor (InclusiveRange n m) f = forM_ (randomize_order [n..m]) f
---         
+--
 -- The implementation will split the work into an unspecified number of subtasks in an
 -- attempt to gain parallelism.  The exact number of subtasks is chosen at runtime,
 -- and is probably a small multiple of the available number of processors.
@@ -255,11 +256,11 @@ parFor (InclusiveRange start end) body =
 -- and communicate via blocking reads.  As long as there are no cycles, the runtime
 -- will figure out what order to execute the tasks to satisify their data dependency.
 parForEach :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
-parForEach range fn = for_ range $ \i -> fork (fn i) 
+parForEach range fn = for_ range $ \i -> fork (fn i)
 
 -}
 
--- data LRange = 
+-- data LRange =
 {-
 
 {-# INLINE parForL #-}
@@ -274,7 +275,7 @@ parForL (start,end) body = do
   loop 0 (end - start) 1
  where
    loop offset remain chunk
-     | remain <= 0     = return () 
+     | remain <= 0     = return ()
      | remain <= chunk = parForSimple (offset, offset+remain) body
      | otherwise       = do
          let nxtstrt = offset+chunk
@@ -291,7 +292,7 @@ parForTree (start,end) _
 parForTree (start,end) body = do
   loop 0 (end - start)
  where
-   loop offset remain 
+   loop offset remain
      | remain == 1     = body offset
      | otherwise       = do
          let (half,rem) = remain `quotRem` 2
@@ -301,7 +302,7 @@ parForTree (start,end) body = do
 
 -- | Split the work into a number of tiles, and fork it in a tree topology.
 parForTiled :: Int -> (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
-parForTiled otiles (start,end) body = do 
+parForTiled otiles (start,end) body = do
   loop 0 (end - start) otiles
  where
    loop offset remain tiles
@@ -340,7 +341,7 @@ for_ start end fn = loop start
 {-# INLINE forAcc_ #-}
 forAcc_ :: Monad m => Int -> Int -> acc -> (Int -> acc -> m acc) -> m acc
 forAcc_ start end _ _fn | start > end = error "for_: start is greater than end"
-forAcc_ start end acc fn = loop acc start 
+forAcc_ start end acc fn = loop acc start
   where
    loop !acc !i
      | i > end  = return acc
