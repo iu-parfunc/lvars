@@ -107,7 +107,7 @@ class ParMonad m => ParIVar (m :: EffectSig -> * -> * -> *) where
   get  :: HasGet e => IVar m s a -> m e s a
 
   -- | like 'put', but only head-strict rather than fully-strict.
-  put_ :: forall a e s . HasPut e =>
+  put_ :: forall a e s . (Eq a, HasPut e) =>
           IVar m s a -> a -> m e s ()
 
   -- | put a value into a @IVar@.  Multiple 'put's to the same @IVar@
@@ -130,11 +130,11 @@ class ParMonad m => ParIVar (m :: EffectSig -> * -> * -> *) where
   -- Extra API routines that have default implementations:
 
   -- | creates a new @IVar@ that contains a value
-  newFull :: (HasPut e, NFData a) => a -> m e s (IVar m s a)
+  newFull :: (HasPut e, NFData a, Eq a) => a -> m e s (IVar m s a)
   newFull a = deepseq a (newFull_ a)
 
   -- | creates a new @IVar@ that contains a value (head-strict only)
-  newFull_ :: (HasPut e) => a -> m e s (IVar m s a)
+  newFull_ :: (HasPut e, Eq a) => a -> m e s (IVar m s a)
   newFull_ a = do v <- new
                   -- This is usually inefficient!
                   put_ v a

@@ -62,6 +62,7 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- | (Internal! Not exposed to the end user.) Unsafely cast effect signatures.
   internalCastEffects :: p e1 s a -> p e2 s a
   internalCastEffects = unsafeCoerce
+      -- TODO: Switch to new safe coercion framework (e.g. Eisenberg roles work)
 
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a

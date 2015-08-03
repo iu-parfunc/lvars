@@ -154,6 +154,8 @@ put_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
                                throw (LV.ConflictingPutExn$ "Multiple puts to an IVar! (obj "++
                                       show n2++" was "++show n1++")")
 
+-- | Non-idempotent version of put.  Calling it multiple times with
+-- the same value will raise an exception.
 putNI_ :: (HasPut e) => IVar s a -> a -> Par e s ()
 putNI_ (IVar (WrapLVar iv)) !x = WrapPar $ putLV iv putter
   where putter ref      = atomicModifyIORef' ref update
@@ -221,8 +223,16 @@ spawn p  = do r <- new;  LV.fork (p >>= put r);   return r
 
 {-# INLINE spawn_ #-}
 -- | A version of `spawn` that uses only WHNF, rather than full `NFData`.
-spawn_ :: (HasPut e, Eq a) => Par e s a -> Par e s (IVar s a)
-spawn_ p = do r <- new;  LV.fork (p >>= put_ r);  return r
+--
+--   This version of spawn is currently implemented with IVars, but it
+--   hides the `HasPut` effect, because it is guaranteed to never
+--   throw multiple-put exceptions, and it never writes to memory
+--   outside of locally allocated temporaries.
+spawn_ :: forall e s a . (Eq a) => Par e s a -> Par e s (IVar s a)
+spawn_ p = PC.internalCastEffects comp
+ where
+  comp :: Par (Ef 'P 'G 'F 'B 'I) s (IVar s a)
+  comp = do r <- new;  LV.fork (PC.internalCastEffects p >>= putNI_ r);  return r
 
 {-# INLINE spawnP #-}
 spawnP :: (HasPut e, Eq a, NFData a) => a -> Par e s (IVar s a)
@@ -245,16 +255,25 @@ put v a = deepseq a (put_ v a)
 -- As long as IVar is not defined in same module with either ParFuture or Par
 -- we'll we have orphan instances.
 
-instance PC.ParFuture Par where
-  type Future Par = IVar
-  type FutContents Par a = (Eq a)
-  spawn_ f = spawn_ f
-  get iv = get iv
+
+-- We have some work to do here:
+
+-- instance PC.ParFuture Par where
+--   type Future Par = IVar
+
+-- --  spawn_ f = spawn_ f -- Uh oh, need Eq.
+--   read iv = get iv
 
 -- NOTE(osa): This orphan instance is fixable, but we need to separate ParIVar
 -- from ParFuture.
 
 instance PC.ParIVar Par where
+  type IVar Par = IVar
   put_ = put_
-  putNI_ = putNI_
   new = new
+
+
+-- instance PC.EagerFutures Par where
+
+instance PC.NonIdemParIVar Par where
+  putNI_ = putNI_
