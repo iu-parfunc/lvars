@@ -29,10 +29,6 @@ Source-repository head
 
 Library
   Exposed-modules:
-                 -- A scheduler-transformer that adds cancellation:
-                 Control.LVish.CancelT
-                 -- Control.LVish.DeadlockT
-
                  -- State on top of Par is generally useful, but experimental
                  Control.Par.StateT
 
@@ -47,6 +43,11 @@ Library
                  -- Deterministic RNG needs more testing.
 --                 Control.Par.RNG
 --                 Control.Par.Pedigree
+
+-- Disabling until it's ready for release:
+                 -- A scheduler-transformer that adds cancellation:
+                 -- Control.LVish.CancelT
+                 -- Control.LVish.DeadlockT
 
   Build-depends: base >= 4 && < 5
                -- This provides the interface which monad-par implements:
