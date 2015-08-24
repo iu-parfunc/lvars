@@ -1,6 +1,6 @@
 module Main where
 
-import qualified CancelTests
+-- import qualified CancelTests
 import qualified STTests
 import           Test.Tasty
 
@@ -12,5 +12,5 @@ main = defaultMain alltests
 alltests :: TestTree
 alltests = testGroup "par-transformers tests"
        [ STTests.tests
-       , CancelTests.tests
+--       , CancelTests.tests
        ]

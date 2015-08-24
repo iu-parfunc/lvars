@@ -12,9 +12,9 @@ import qualified Data.Vector.Storable.Mutable as SVM
 import           Debug.Trace
 import           Data.Int
 import           System.Random (randomIO)
-import           Control.LVish as LVishSched
 import           Control.Par.Class (ParThreadSafe ())
 import qualified Control.Par.Class as PC
+import           Control.Par.EffectSigs (HasPut, HasGet)
 import           Control.Par.ST
 import qualified Control.Par.ST.StorableVec2 as V
 import           Test.QuickCheck
@@ -25,6 +25,9 @@ import           Test.Tasty.QuickCheck
 import qualified Control.Par.MergeSort as MS
 import           Control.Par.MergeSort.Internal
                   (SSort, SMerge, SSort(..), SMerge(..), findSplit', mergeSort_int32)
+
+-- import           Control.LVish as Par
+import           Control.Par.Scheds.Sparks as Par
 
 main :: IO ()
 main = defaultMain $ testGroup "MergeSort tests"
@@ -108,7 +111,7 @@ sortPV :: Int -> Int -> SSort -> SMerge -> SV.Vector Int32 -> SV.Vector Int32
 sortPV ssThres smThres ssMeth smMeth vec =
     -- TODO(osa): Maybe remove copying here by just taking mutable vec and
     -- returning mutable one.
-    LVishSched.runPar $ V.runParVec2T (0, SV.length vec) $ do
+    Par.runPar $ V.runParVec2T (0, SV.length vec) $ do
       vec' <- liftST $ SV.thaw vec
       sortPV' ssThres smThres ssMeth smMeth vec' >> do
         (rawL, _) <- V.reify
@@ -116,7 +119,7 @@ sortPV ssThres smThres ssMeth smMeth vec =
         return $ sv
 
 -- | Sort the vector in the left component of the state.
-sortPV' :: (PC.ParMonad p, ParThreadSafe p, PC.ParIVar p, PC.FutContents p (),
+sortPV' :: (PC.ParMonad p, ParThreadSafe p,
             PC.ParFuture p, HasPut e, HasGet e) =>
            Int -> Int -> SSort -> SMerge ->
            SVM.STVector s1 Int32 -> V.ParVec2T s1 Int32 Int32 p e s ()
