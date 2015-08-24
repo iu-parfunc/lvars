@@ -1,4 +1,4 @@
-
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies  #-}
@@ -21,15 +21,14 @@ import TestHelpers as T
 import Control.LVish -- LVarSched instances...
 import Data.LVar.IVar as IV
 import qualified Data.LVar.SLMap as SM
-import qualified Control.Par.Class as PC
 import Data.Par.Range (zrange)
 import Data.Par.Splittable (pforEach)
 
 --------------------------------------------------------------------------------
 
 
-case_toQPar :: Assertion  
-case_toQPar = t1 >>= assertEqual "" "hi" 
+case_toQPar :: Assertion
+case_toQPar = t1 >>= assertEqual "" "hi"
 
 t1 :: IO String
 t1 = runParQuasiDet $ isQD par
@@ -37,7 +36,7 @@ t1 = runParQuasiDet $ isQD par
 --  par :: QuasiDeterministic e => Par e s String
   par = do
     iv <- IV.new
-    -- PC.toQPar $ 
+    -- PC.toQPar $
     IV.put iv "hi"
     IV.get iv
 
@@ -50,12 +49,17 @@ expectedSum :: Word64
 expectedSum = (s * (s + 1)) `quot` 2
   where s = fromIntegral size
 
+
+#warning "GenericTests.hs: Reenable this test when we have ParFuture for LVish"
+
+{-
+
 -- ParFold instance
-case_pfold_imap :: Assertion 
+case_pfold_imap :: Assertion
 case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ do
   mp <- SM.newEmptyMap
   -- pforEach (zrange sz) $ \ ix -> do
-  forM_ [1..size] $ \ ix -> do       
+  forM_ [1..size] $ \ ix -> do
     SM.insert ix (fromIntegral ix::Word64) mp
 
   logDbgLn 1 $ "IMap filled up... freezing"
@@ -66,11 +70,13 @@ case_pfold_imap = assertNoTimeOut 3.0 $ runParNonDet $ do
         return x
       folder x y = do
         logDbgLn 2 $ "Summing in parallel "++show (x,y)
-        return $! x+y 
+        return $! x+y
   summed <- PC.pmapFold mapper folder 0 fmp
   logDbgLn 1 $ "Sum of IMap values: " ++ show summed
   internalLiftIO$ assertEqual "Sum of IMap values" expectedSum summed
   return ()
+
+-}
 
 --------------------------------------------------------------------------------
 

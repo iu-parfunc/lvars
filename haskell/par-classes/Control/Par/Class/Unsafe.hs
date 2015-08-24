@@ -134,9 +134,8 @@ class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> 
 --
 --   > (spawn_ m >>= read)  ==  (m >>= evaluate)
 --
---   Where `evaluate` would be analogous to
---   `Control.Exception.evaluate`, and would capture the fact that `spawn_`
---  evaluates to WHNF.
+--   Where `evaluate` would be `Control.Exception.evaluate`, and would
+--   capture the fact that `spawn_` evaluates to WHNF.
 class ParMonad m => ParFuture (m :: EffectSig -> * -> * -> *) where
   {-# MINIMAL spawn_, read #-}
 

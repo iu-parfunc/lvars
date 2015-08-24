@@ -27,16 +27,13 @@ module Control.Par.MergeSort.Internal
        )
   where
 
-import           Control.LVish as LVishSched
--- TODO(osa): Disabling these until we implement instances:
--- import qualified Control.Monad.Par.Scheds.Direct as DirectSched
--- import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
--- import qualified Control.Monad.Par.Scheds.Trace  as TraceSched
+import qualified Control.Monad.Par.Scheds.Sparks as SparksSched
 
 import           Control.Par.Class (ParThreadSafe ())
 import qualified Control.Par.Class as PC
 import           Control.Par.Class.Unsafe (internalLiftIO)
 import           Control.Par.ST
+import           Control.Par.EffectSigs
 
 import           Control.Monad
 import           Control.Monad.ST (ST)

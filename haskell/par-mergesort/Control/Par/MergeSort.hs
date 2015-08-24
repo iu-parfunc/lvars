@@ -37,8 +37,8 @@ import           Control.Par.Class (ParThreadSafe ())
 import qualified Control.Par.Class as PC
 import           Control.Par.EffectSigs
 
-
-import qualified Control.LVish as LV
+import Control.Par.Scheds.Sparks as LV
+-- import qualified Control.LVish as LV
 
 --------------------------------------------------------------------------------
 
@@ -69,10 +69,6 @@ sortBy = undefined
 --   LV.runPar $ V.runParVec2T (0,size) $
 
 --------------------------------------------------------------------------------
-
--- FINISHME: this isn't ready yet:
-instance (PC.ParFuture LV.Par) where
-
 
 sortPar :: forall p e s .
            (ParThreadSafe p, PC.ParFuture p, HasGet e, HasPut e)

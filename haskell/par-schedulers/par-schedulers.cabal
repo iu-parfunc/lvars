@@ -1,6 +1,7 @@
 name:                par-schedulers
 version:             0.1.0.0
--- synopsis:
+
+synopsis:  A wrapper around monad-par schedulers to use par-classes
 -- description:
 -- license:
 -- license-file:        LICENSE

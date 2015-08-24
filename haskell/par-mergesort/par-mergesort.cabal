@@ -29,7 +29,7 @@ library
 
   build-depends:
     base                    == 4.*,
-    lvish,
+    par-schedulers          >= 0.1,
     monad-par,
     mtl,
     par-classes,
@@ -52,7 +52,7 @@ test-suite test-mergesort
 
   build-depends:
     base,
-    lvish,
+    par-schedulers,
     mtl,
     par-classes,
     par-mergesort,
@@ -75,7 +75,7 @@ benchmark bench-mergesort
   build-depends:
     base,
     criterion           >= 1.1 && < 1.2,
-    lvish,
+    par-schedulers,
     par-classes,
     par-mergesort,
     par-transformers,
