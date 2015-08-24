@@ -74,7 +74,7 @@ data SSort = CSort | VAMSort | VAISort
 -- Specialized sorts.
 
 {-# INLINE mergeSort_int32 #-}
-mergeSort_int32 :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+mergeSort_int32 :: (ParThreadSafe p,
                       HasGet e, HasPut e, PC.ParFuture p)
                   => Int -- ^ Sequential sort threshold
                   -> Int -- ^ Sequential merge threshold
@@ -93,7 +93,7 @@ mergeSort_int32 !st !mt !sa !ma =
 
 
 {-# INLINE mergeSort_int64 #-}
-mergeSort_int64 :: (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+mergeSort_int64 :: (ParThreadSafe p,
                       HasGet e, HasPut e, PC.ParFuture p)
                   => Int -- ^ Sequential sort threshold
                   -> Int -- ^ Sequential merge threshold
@@ -116,7 +116,7 @@ mergeSort_int64 !st !mt !sa !ma =
 -- | Given a vector in left position, and an available buffer of equal
 -- size in the right position, sort the left vector.
 mkMergeSort :: forall p e s s1 elt .
-               (ParThreadSafe p, PC.FutContents p (), PC.ParIVar p,
+               (ParThreadSafe p,
                 HasGet e, HasPut e, PC.ParFuture p, Ord elt)
             => Int -- ^ Sequential sort threshold
             -> Int -- ^ Sequential merge threshold
@@ -150,7 +150,7 @@ mkMergeSort !st !mt seqSort seqMerge =
 
 
 -- mergeSortOutPlace ::
---             (ParThreadSafe p, PC.FutContents p (),
+--             (ParThreadSafe p,
 --               PC.ParFuture p, Ord e1, Show e1) =>
 --              Int -> Int -> SSort -> SMerge ->
 --              V.ParVec2T s1 e1 e1 p e s ()
@@ -188,8 +188,8 @@ seqSortL2 = do
 -- | Outer wrapper for a function that merges input vectors in the
 -- left position into the vector in right position.
 {-# INLINE mergeTo2 #-}
-mergeTo2 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
-             PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
+mergeTo2 :: (ParThreadSafe p, Ord elt,
+             PC.ParFuture p, HasGet e, HasPut e) =>
             Int -> Int -> SeqMergeM elt p e s -> V.ParVec2T s1 elt elt p e s ()
 mergeTo2 sp threshold ma = do
   -- convert the state from (Vec, Vec) to ((Vec, Vec), Vec) then call normal parallel merge
@@ -204,8 +204,8 @@ type ParVec21T s1 e1 p e s a =
 
 -- | Parallel merge kernel.
 {-# INLINABLE pMergeTo2 #-}
-pMergeTo2 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
-              PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
+pMergeTo2 :: (ParThreadSafe p, Ord elt,
+              PC.ParFuture p, HasGet e, HasPut e) =>
              Int -> SeqMergeM elt p e s -> ParVec21T s1 elt p e s ()
 pMergeTo2 threshold seqMerge = do
   STTup2 (STTup2 (VFlp v1) (VFlp v2)) _ <- reify
@@ -227,8 +227,8 @@ pMergeTo2 threshold seqMerge = do
 -- | Merging from right-to-left works by swapping the states before
 -- and after calling the left-to-right merge.
 {-# INLINE mergeTo1 #-}
-mergeTo1 :: (ParThreadSafe p, PC.FutContents p (), Ord elt,
-             PC.ParFuture p, HasGet e, HasPut e, PC.ParIVar p) =>
+mergeTo1 :: (ParThreadSafe p, Ord elt,
+             PC.ParFuture p, HasGet e, HasPut e) =>
             Int -> Int -> SeqMergeM elt p e s -> V.ParVec2T s1 elt elt p e s ()
 mergeTo1 sp threshold seqMerge = do
   V.swapState

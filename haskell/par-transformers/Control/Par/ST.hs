@@ -428,8 +428,7 @@ transmute fn (ParST comp) = ParST $ \orig -> do
 {-# INLINE forkSTSplit #-}
 forkSTSplit
   :: forall p t stt sFull e s.
-     (PC.ParIVar p, STSplittable stt, PC.NonIdemParIVar p,
-      HasPut e, HasGet e)
+     (PC.ParFuture p, STSplittable stt, HasPut e, HasGet e)
      => SplitIdx stt                        -- ^ Where to split the data.
      -> (forall sl. ParST (stt sl) p e s t) -- ^ Left child computation.
      -> (forall sr. ParST (stt sr) p e s t) -- ^ Right child computation.
@@ -437,18 +436,10 @@ forkSTSplit
 forkSTSplit spltidx (ParST lef) (ParST rig) = ParST $ \snap -> do
   let slice1, slice2 :: stt sFull
       (slice1, slice2) = splitST spltidx snap
-  lv <- mySpawn $ lef slice1
+  lv <- PC.spawn_ $ lef slice1
   (rx, _) <- rig slice2
-  (lx, _) <- PC.get lv
+  (lx, _) <- PC.read lv
   return ((lx, rx), snap) -- FIXME: Should we ignore modified states?
-
--- | Spawn which does not assume idempotency of forked computations:
-mySpawn :: (HasPut e, PC.ParIVar p, PC.NonIdemParIVar p)
-        => p e s a -> p e s (PC.IVar p s a)
-mySpawn f =
-  do l <- PC.new
-     PC.fork (do x <- f; PC.putNI_ l x)
-     return l
 
 -- | An instance of `ParFuture` for @ParST@ _does_ let us do arbitrary `fork`s at the
 -- @ParST@ level, HOWEVER the state is inaccessible from within these child computations.
@@ -483,8 +474,7 @@ instance PC.ParIVar parM => PC.ParIVar (ParST sttt parM) where
 --   This function reserves the right to sequentialize some iterations.
 mkParMapM :: forall elt s1 stt p e s .
              (STSplittable stt, ParThreadSafe p,
-              PC.ParFuture p, HasGet e, HasPut e,
-              PC.ParIVar p, PC.NonIdemParIVar p) =>
+              PC.ParFuture p, HasGet e, HasPut e) =>
               (forall s2 . Int ->        ParST (stt s2) p e s elt) -- ^ Reader
            -> (forall s2 . Int -> elt -> ParST (stt s2) p e s ())  -- ^ Writer
            -> (forall s2 .               ParST (stt s2) p e s Int) -- ^ Length
