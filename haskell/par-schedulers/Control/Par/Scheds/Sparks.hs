@@ -26,6 +26,5 @@ instance PC.ParMonad Sparks where
 
 instance ParFuture Sparks where
   type Future Sparks = SparksFuture
-  type FutContents Sparks a = ()
   spawn_ = Sparks . fmap SparksFuture . S.spawn_ . unwrapSparks
-  get = Sparks . S.get . unwrapSparksFuture
+  read   = Sparks . S.get . unwrapSparksFuture

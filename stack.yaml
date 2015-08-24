@@ -8,6 +8,7 @@ packages:
  - haskell/par-collections/
  - haskell/par-collections/tests/
  - haskell/par-mergesort/
+ - haskell/par-schedulers/
  - haskell/par-transformers/
 
 # TODO: Revive:

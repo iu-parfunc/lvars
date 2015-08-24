@@ -25,6 +25,5 @@ instance PC.ParMonad Trace where
 
 instance ParFuture Trace where
   type Future Trace = TraceIVar
-  type FutContents Trace a = ()
   spawn_ = Trace . fmap TraceIVar . T.spawn_ . unwrapTrace
-  get = Trace . T.get . unwrapTraceIVar
+  read = Trace . T.get . unwrapTraceIVar

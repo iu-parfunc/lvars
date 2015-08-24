@@ -3,7 +3,7 @@ version:             0.1.0.0
 -- synopsis:
 -- description:
 -- license:
-license-file:        LICENSE
+-- license-file:        LICENSE
 author:              Ömer Sinan Ağacan
 maintainer:          omeragacan@indiana.edu
 -- copyright:
@@ -19,7 +19,7 @@ library
     Control.Par.Scheds.Trace
 
   build-depends:
-    base        >=4.8 && <4.9,
+    base        >=4.7 && <4.9,
     monad-par   >=0.3 && <0.4,
     par-classes
 

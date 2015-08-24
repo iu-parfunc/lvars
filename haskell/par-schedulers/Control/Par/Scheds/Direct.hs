@@ -25,6 +25,5 @@ instance PC.ParMonad Direct where
 
 instance ParFuture Direct where
   type Future Direct = DirectIVar
-  type FutContents Direct a = ()
   spawn_ = Direct . fmap DirectIVar . D.spawn_ . unwrapDirect
-  get = Direct . D.get . unwrapDirectIVar
+  read   = Direct . D.get . unwrapDirectIVar
