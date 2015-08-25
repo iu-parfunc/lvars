@@ -1,8 +1,16 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE Trustworthy     #-}
 
-module Control.Par.Scheds.Direct ( Par () ) where
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE KindSignatures  #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TypeFamilies    #-}
+
+module Control.Par.Scheds.Direct
+  ( runPar
+  , runParPoly
+  , Par ()
+  ) where
 
 import           System.IO.Unsafe                (unsafePerformIO)
 
@@ -17,6 +25,10 @@ newtype Par (e :: EffectSig) s a =
 
 newtype DirectIVar s a = DirectIVar { unwrapDirectIVar :: D.IVar a }
 
+instance PC.SecretSuperClass Par where
+
+instance PC.ParThreadSafe Par where
+
 instance PC.ParMonad Par where
   pbind (Direct p1) p2 = Direct $ p1 >>= unwrapDirect . p2
   preturn = Direct . return
@@ -27,3 +39,10 @@ instance ParFuture Par where
   type Future Par = DirectIVar
   spawn_ = Direct . fmap DirectIVar . D.spawn_ . unwrapDirect
   read   = Direct . D.get . unwrapDirectIVar
+
+
+runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
+runPar (Direct p) = D.runPar p
+
+runParPoly :: Deterministic e => Par e s a -> a
+runParPoly (Direct p) = D.runPar p
