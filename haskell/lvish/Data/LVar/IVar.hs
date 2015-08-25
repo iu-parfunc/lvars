@@ -271,7 +271,7 @@ instance PC.ParIVar Par where
   type IVar Par = IVar
   put_ = put_
   new = new
-
+  get = get
 
 -- instance PC.EagerFutures Par where
 
