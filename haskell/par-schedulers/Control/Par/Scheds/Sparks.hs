@@ -1,7 +1,8 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RankNTypes     #-}
-{-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE KindSignatures  #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 module Control.Par.Scheds.Sparks
   ( Par
@@ -34,7 +35,6 @@ instance ParFuture Par where
   type FutContents Par a = ()
   spawn_ = Sparks . fmap SparksFuture . S.spawn_ . unwrapSparks
   get = Sparks . S.get . unwrapSparksFuture
-
 
 runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
 runPar (Sparks p) = S.runPar p
