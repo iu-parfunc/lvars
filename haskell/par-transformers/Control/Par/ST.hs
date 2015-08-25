@@ -1,8 +1,18 @@
-{-# LANGUAGE BangPatterns, ConstraintKinds, CPP, DataKinds,
-             FlexibleContexts, FlexibleInstances, GADTs,
-             GeneralizedNewtypeDeriving, MultiParamTypeClasses,
-             Rank2Types, ScopedTypeVariables, TupleSections,
-             TypeFamilies, TypeSynonymInstances, NamedFieldPuns #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 
 -- |
 --  This file provides a basic capability for parallel in-place modification of
@@ -46,25 +56,25 @@ module Control.Par.ST
        where
 
 #if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
+import           Control.Applicative
 #endif
 
-import Control.Monad.ST (ST)
-import Control.Monad.ST.Unsafe (unsafeSTToIO)
+import           Control.Monad.ST             (ST)
+import           Control.Monad.ST.Unsafe      (unsafeSTToIO)
 -- import qualified Control.Monad.State.Strict as S
-import qualified Control.Monad.Reader as R
+import qualified Control.Monad.Reader         as R
 
-import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector.Mutable          as MV
 import qualified Data.Vector.Storable.Mutable as MS
-import qualified Data.Vector.Unboxed.Mutable as MU
-import Prelude hiding (length, read)
+import qualified Data.Vector.Unboxed.Mutable  as MU
+import           Prelude                      hiding (length, read)
 
-import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParMonad (..), ParThreadSafe (unsafeParIO))
-import Control.Par.EffectSigs
+import qualified Control.Par.Class            as PC
+import           Control.Par.Class.Unsafe     (ParMonad (..), ParThreadSafe)
+import           Control.Par.EffectSigs
 
-import GHC.Conc (getNumProcessors)
-import System.IO.Unsafe (unsafeDupablePerformIO)
+import           GHC.Conc                     (getNumProcessors)
+import           System.IO.Unsafe             (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------
 -- | The class of types that can be modified in ST computations, and whose state can
@@ -296,7 +306,7 @@ runParST recipe (ParST fn) =
        xm = fn initVal
     in xm `pbind` (preturn . fst)
  where
-  doST = unsafeParIO . unsafeSTToIO
+  doST = internalLiftIO . unsafeSTToIO
 
 -- | This version does a deep copy of the initial state.
 runParSTCopy :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
@@ -380,7 +390,7 @@ instance (ParMonad p, ParThreadSafe p) =>
 --   This operation has some overhead.
 {-# INLINE liftST #-}
 liftST :: (ParMonad p, ParThreadSafe p) => ST ss a -> ParST (stt ss) p e s a
-liftST st = ParST $ \s -> do r <- unsafeParIO io; return (r, s)
+liftST st = ParST $ \s -> do r <- internalLiftIO io; return (r, s)
   where
     io = unsafeSTToIO st
 

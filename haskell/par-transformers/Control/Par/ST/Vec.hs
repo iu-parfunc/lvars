@@ -39,7 +39,7 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude hiding (drop, length, read, take)
 
 import qualified Control.Par.Class as PC
-import Control.Par.Class.Unsafe (ParMonad, ParThreadSafe (unsafeParIO))
+import Control.Par.Class.Unsafe (ParMonad, ParThreadSafe)
 import Control.Par.EffectSigs
 
 --------------------------------------------------------------------------------

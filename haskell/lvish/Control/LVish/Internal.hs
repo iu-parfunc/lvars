@@ -40,6 +40,9 @@ import qualified Internal.Control.LVish.SchedIdempotent as L
 import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU
 
+-- | This is how we stamp Par as being legit.
+instance PU.SecretSuperClass Par where
+
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
   fork = WrapPar . L.fork . unWrapPar
@@ -77,7 +80,6 @@ instance PC.LVarSched Par where
   returnToSched = WrapPar $ L.mkPar $ \_k -> L.sched
 
 instance PU.ParThreadSafe Par where
-  unsafeParIO = liftIO
 
 -- | The generic representation of LVars used by the scheduler.  The
 -- end-user can't actually do anything with these and should not try

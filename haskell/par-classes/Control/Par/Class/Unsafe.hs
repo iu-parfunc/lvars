@@ -15,8 +15,11 @@
 --   This is here only for other trusted implementation components.
 
 module Control.Par.Class.Unsafe
-  ( ParThreadSafe(unsafeParIO)
-  , ParMonad(..)
+  ( ParMonad(..)
+  , IdempotentParMonad
+  , ParThreadSafe
+
+  , SecretSuperClass
   )
 where
 
@@ -27,20 +30,6 @@ import Control.Applicative
 import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
-
--- | The class of Par monads in which all monadic actions are threadsafe and do not
--- care which thread they execute on.  Thus it is ok to inject additional parallelism.
---
--- Specifically, instances of ParThreadSafe must satisfy the law:
---
--- > do m1; m2 == do fork m1; m2
---
-class (ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
--- TODO: add SecretClass superclass to prevent users from instancing this.
-
-  -- | Run some IO in parallel on whatever thread we happen to be on.
-  --   The end user does not get access to this.
-  unsafeParIO :: IO a -> p e s a
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
@@ -86,3 +75,32 @@ instance ParMonad p => Applicative (p e s) where
   pure = preturn
   f <*> x = pbind f (\f' -> pbind x (return . f'))
 
+
+--------------------------------------------------------------------------------
+-- Empty classes, ParMonad
+
+-- | This empty class is ONLY present to prevent users from instancing
+-- classes which they should not be allowed to instance within the
+-- SafeHaskell-supporting subset of parallel programming
+-- functionality.
+class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
+
+-- | This type class denotes the property that:
+--
+-- > (m >> m) == m
+--
+-- For all actions `m` in the monad.  For example, any concrete Par
+-- monad which implements *only* `ParFuture` and/or `ParIVar`, would
+-- retain this property.  Conversely, any `NonIdemParIVar` monad would
+-- violate the property.
+class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
+
+
+-- | The class of Par monads in which all monadic actions are threadsafe and do not
+-- care which thread they execute on.  Thus, it is ok to inject additional parallelism.
+--
+-- Specifically, instances of ParThreadSafe must satisfy the law:
+--
+-- > (do m1; m2) == (do fork m1; m2)
+--
+class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where

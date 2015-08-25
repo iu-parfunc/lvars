@@ -40,7 +40,7 @@ module Control.Par.ST.UVec2
        where
 
 import Control.Par.ST hiding (reify)
-import Control.Par.Class.Unsafe (ParThreadSafe(unsafeParIO))
+import Control.Par.Class.Unsafe (ParThreadSafe)
 import qualified Control.Monad.Reader as R
 --import qualified Control.Monad.State.Strict as S
 import qualified Data.Vector.Unboxed.Mutable as MU
