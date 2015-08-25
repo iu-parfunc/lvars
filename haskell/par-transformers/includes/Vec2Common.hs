@@ -19,9 +19,6 @@ runParVec2T (size1, size2) comp =
     vec2 <- liftST $ MU.new size2
     unsafeInstall (STTup2 (FLPIT vec1) (FLPIT vec2))
     comp
- where
-  unused = error "runParVec2T -- this initial value should be unused."
-
 
 emptArrRecipe :: ArrayRecipe s a
 emptArrRecipe = ArrayRecipe 0 (\_ -> error "never called")
