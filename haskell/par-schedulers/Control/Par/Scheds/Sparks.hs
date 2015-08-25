@@ -1,12 +1,16 @@
-{-# LANGUAGE Trustworthy            #-}
+{-# LANGUAGE Trustworthy     #-}
 
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies   #-}
-{-# LANGUAGE RankNTypes     #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE KindSignatures  #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TypeFamilies    #-}
 
-module Control.Par.Scheds.Sparks (runPar, Par()) where
+module Control.Par.Scheds.Sparks
+  ( runPar
+  , runParPoly
+  , Par()
+  ) where
 
 import           Control.Monad                   (void)
 import           System.IO.Unsafe                (unsafePerformIO)
