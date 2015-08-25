@@ -1,8 +1,16 @@
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE Trustworthy     #-}
 
-module Control.Par.Scheds.Trace (Par()) where
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE KindSignatures  #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE TypeFamilies    #-}
+
+module Control.Par.Scheds.Trace
+  ( runPar
+  , runParPoly
+  , Par()
+  ) where
 
 import           System.IO.Unsafe               (unsafePerformIO)
 
@@ -27,3 +35,10 @@ instance ParFuture Par where
   type Future Par = TraceIVar
   spawn_ = Trace . fmap TraceIVar . T.spawn_ . unwrapTrace
   read = Trace . T.get . unwrapTraceIVar
+
+
+runPar :: (forall s. Par ('Ef 'P 'G 'NF 'B 'NI) s a) -> a
+runPar (Trace p) = T.runPar p
+
+runParPoly :: Deterministic e => Par e s a -> a
+runParPoly (Trace p) = T.runPar p
