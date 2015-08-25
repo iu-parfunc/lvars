@@ -34,7 +34,7 @@ library
     mtl,
     par-classes,
     par-transformers,
-    vector                  >= 0.10 && < 0.11,
+    vector                  >= 0.10 && < 0.12,
     vector-algorithms,
     primitive               >= 0.6
 
@@ -58,7 +58,7 @@ test-suite test-mergesort
     par-mergesort,
     par-transformers,
     random,
-    vector              >= 0.10 && < 0.11,
+    vector              >= 0.10 && < 0.12,
 
     QuickCheck,
     tasty               >= 0.10 && < 0.11,
