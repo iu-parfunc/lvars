@@ -34,7 +34,6 @@ module Control.Par.ST.UVec
        where
 
 import qualified Control.Monad.Reader as R
-import qualified Control.Monad.State.Strict  as S
 import           Control.Par.Class.Unsafe    (ParThreadSafe)
 import           Control.Par.ST              hiding (reify)
 import qualified Data.Vector.Unboxed.Mutable as MU

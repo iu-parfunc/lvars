@@ -309,7 +309,7 @@ runParST recipe (ParST fn) =
   doST = internalLiftIO . unsafeSTToIO
 
 -- | This version does a deep copy of the initial state.
-runParSTCopy :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+runParSTCopy :: forall (st :: * -> *) s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
                 (ParMonad p, ParThreadSafe p, STSplittable st) =>
                  (forall s0 . ST s0 (st s0))
                  -> (forall s1 . ParST (st s1) p e s2 a)
@@ -327,7 +327,7 @@ runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e 
                   (st s0)
                   -> (ParST (st s0) p e s2 a)
                   -> ST s0 (p e s2 a)
-runParSTCopy' initVal pst = undefined
+runParSTCopy' _initVal _pst = undefined
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}
@@ -383,6 +383,9 @@ instance (ParMonad p, ParThreadSafe p) =>
          R.MonadReader stts (ParST stts p e s) where
   {-# INLINE ask #-}
   ask = reify
+
+  {-# INLINE local #-}
+  local fn (ParST p) = ParST $ \st -> p (fn st)
 
   -- local fn m =
 

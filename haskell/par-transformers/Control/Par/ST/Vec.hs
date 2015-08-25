@@ -29,7 +29,6 @@ module Control.Par.ST.Vec
 
 import Control.Par.ST hiding (reify)
 
-import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Reader as R
 import qualified Data.Vector.Mutable as MV
 
@@ -52,7 +51,7 @@ type ParVecT s1 va p (e :: EffectSig) s a = ParST (MVectorFlp va s1) p e s a
 
 -- | Restricted version of `runParST` which initialized the state with a single,
 -- boxed vector of a given size.  All elements start uninitialized.
-runParVecT :: forall p e s s2 a va .
+runParVecT :: forall p e s a va .
               (ParThreadSafe p, ParMonad p)
                -- S.MonadState (MVectorFlp va s2) (ParST (MVectorFlp va s2) p e s))
              => Int
