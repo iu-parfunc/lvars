@@ -51,7 +51,7 @@ Library
 
                -- These are so we can provide instances for existing collections:
                , primitive    >= 0.6 && < 0.7
-               , vector       >= 0.10 && < 0.11
+               , vector       >= 0.10 && < 0.12
 
   if impl(ghc < 7.7) {
     build-depends: containers >= 0.5
