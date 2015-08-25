@@ -109,21 +109,22 @@ library
                     ------------- End user modules ------------
                     Control.LVish
                     Control.LVish.DeepFrz
-                    Data.LVar.Generic
-                    Data.LVar.IVar
-                    Data.LVar.IStructure
-                    Data.LVar.PureSet
-                    Data.LVar.PureMap
-                    Data.LVar.SatMap
-                    Data.LVar.LayeredSatMap
-                    Data.LVar.FiltSet
-                    Data.LVar.SLSet
-                    Data.LVar.SLMap
                     Data.LVar.Counter
+                    Data.LVar.FiltSet
+                    Data.LVar.Future
+                    Data.LVar.Generic
+                    Data.LVar.IStructure
+                    Data.LVar.IVar
+                    Data.LVar.LayeredSatMap
                     Data.LVar.MaxPosInt
+                    Data.LVar.Memo
                     Data.LVar.NatArray
                     Data.LVar.NatArray.Unsafe
-                    Data.LVar.Memo
+                    Data.LVar.PureMap
+                    Data.LVar.PureSet
+                    Data.LVar.SatMap
+                    Data.LVar.SLMap
+                    Data.LVar.SLSet
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe
