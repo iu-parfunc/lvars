@@ -21,12 +21,12 @@ example:
 
 > {-# LANGUAGE TypeFamilies #-}
 > import Control.LVish.DeepFrz
-> 
+>
 > data MyData = MyData Int deriving Show
-> 
+>
 > instance DeepFrz MyData where
 >   type FrzType MyData = MyData
-> 
+>
 > main = print (runParThenFreeze (return (MyData 3)))
 
 -}
@@ -40,22 +40,27 @@ module Control.LVish.DeepFrz
          -- * The functions you'll want to use
          runParThenFreeze,
          runParThenFreezeIO,
+         runParThenFreezeWithEC,
 
          -- * Some supporting types
          DeepFrz(), FrzType,
          NonFrzn, Frzn, Trvrsbl,
-         
+
        ) where
 
-import Data.Int
-import Data.Word
-import GHC.Prim (unsafeCoerce#)
-
--- import Control.LVish (LVarData1(..))
+import Control.Exception as E
 import Control.LVish.DeepFrz.Internal (DeepFrz(..), NonFrzn, Frzn, Trvrsbl)
 import Control.LVish.Internal (Par(WrapPar))
+import qualified Control.LVish.Logging as L
+import Control.LVish.Types (DbgCfg(..))
 import Control.Par.EffectSigs
-import Internal.Control.LVish.SchedIdempotent (runPar, runParIO)
+import Data.Int
+import Data.Word
+import GHC.Conc (numCapabilities)
+import GHC.Prim (unsafeCoerce#)
+import Internal.Control.LVish.SchedIdempotent (runPar, runParIO, runParDetailed, dbgLvl)
+import System.IO (stderr)
+
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation inside a
@@ -65,7 +70,7 @@ import Internal.Control.LVish.SchedIdempotent (runPar, runParIO)
 -- all data races, and freezing is therefore safe.  Running a `Par`
 -- computation with `runParThenFreeze` accomplishes this, without our
 -- having to call `freeze` explicitly.
--- 
+--
 -- In order to use `runParThenFreeze`, the type returned from the
 -- `Par` computation must be a member of the `DeepFrz` class.  All the
 -- @Data.LVar.*@ libraries should provide instances of `DeepFrz`
@@ -73,7 +78,7 @@ import Internal.Control.LVish.SchedIdempotent (runPar, runParIO)
 -- pure datatypes.  The result of a `runParThenFreeze` depends on the
 -- type-level function `FrzType`, whose only purpose is to toggle the
 -- `s` parameters of all IVars to the `Frzn` state.
--- 
+--
 -- Significantly, the freeze at the end of `runParThenFreeze` has /no/ runtime cost, in
 -- spite of the fact that it enables a /deep/ (recursive) freeze of the value returned
 -- by the `Par` computation.
@@ -82,7 +87,7 @@ runParThenFreeze :: DeepFrz a => Par (Ef P G NF B NI) NonFrzn a -> FrzType a
 runParThenFreeze (WrapPar p) = frz $ runPar p
 
 -- | This version works for nondeterministic computations as well.
--- 
+--
 -- Of course, nondeterministic computations may also call `freeze`
 -- internally, but this function has an advantage to doing your own
 -- `freeze` at the end of a `runParIO`: there is an implicit barrier
@@ -92,6 +97,22 @@ runParThenFreezeIO :: DeepFrz a => Par e NonFrzn a -> IO (FrzType a)
 runParThenFreezeIO (WrapPar p) = do
   x <- runParIO p
   return $ frz x
+
+
+-- | This version passes an escape continuation to the user's computation.
+--   When called, it immediately exits with an answer, killing remaining worker threads.
+runParThenFreezeWithEC :: DeepFrz a => ((a -> IO ()) -> Par e NonFrzn a) -> IO (FrzType a)
+runParThenFreezeWithEC fn =
+  do (_logs,x) <- runParDetailed cfg numCapabilities (unwrap . fn)
+     case x of
+       Left e  -> E.throw e
+       Right y -> return $ frz y
+  where
+   unwrap (WrapPar p) = p
+   cfg = DbgCfg { dbgRange = Just (0,dbgLvl)
+                , dbgDests = [L.OutputTo stderr, L.OutputEvents]
+                , dbgScheduling  = False }
+
 
 {-
 -- This won't work because it conflicts with other instances such as "Either":

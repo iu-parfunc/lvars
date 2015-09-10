@@ -10,7 +10,7 @@
 
 module LVishAndIVar(tests,runTests, runParStress, lotsaRunPar) where
 
-import Test.Framework.Providers.HUnit 
+import Test.Framework.Providers.HUnit
 import Test.Framework (Test, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
@@ -71,7 +71,7 @@ runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 
 -- TEMP: another version that uses the simplest possible method to run lots of runPars.
 -- Nothing else that could POSSIBLY get in the way.
--- 
+--
 -- [2014.01.16] Very odd!  I'm not able to get the crash here, but I am for the
 -- runParsStress test...  Actually, I'm having trouble getting the crash with less
 -- than 20 threads in the runtime for the old test too.  That is, the first of these
@@ -79,31 +79,31 @@ runParStress = stressTest T.stressTestReps 15 (return ()) (\()->True)
 --
 --     STRESSTESTS=15000 ./LVishAndIVar.exe -t runParStress +RTS -N20
 --     STRESSTESTS=15000 ./LVishAndIVar.exe -t runParStress +RTS -N15
--- 
+--
 -- Oddly, it seems to go from happening rarely at -N17 to often at -N18.
--- I think the problem with the simple test that uses "runParNonDet" is that we 
+-- I think the problem with the simple test that uses "runParNonDet" is that we
 -- can't make the runtime use more capabilities than we fork par worker threads.
 -- This could be a GHC runtime bug relating to thread migration?
 case_lotsaRunPar :: Assertion
 case_lotsaRunPar = lotsaRunPar
 lotsaRunPar = loop iters
-  where 
+  where
   iters = 5000
-  threads = 15 -- numCapabilities 
+  threads = 15 -- numCapabilities
   loop 0 = putStrLn ""
   loop i = do
      -- We need to do runParNonDet to make sure the compiler does the runPar each time.
      -- runParNonDet (return ()) -- Can't crash this one.
-     runParDetailed (DbgCfg Nothing [] False) threads (return ())
+     runParDetailed (DbgCfg Nothing [] False) threads (\_ -> return ())
       -- This version can start going RIDICULOUSLY slowly with -N20.  It will use <20% CPU while it does it.
       -- But it won't use much memory either... what is it doing?  With -N4 it goes light years faster, and with -N2
       -- faster yet.  Extra capabilities result in a crazy slowdown here.
       -- With the bad behavior on -N20, it will SOMETIMES complete 5000 iterations in ~3 seconds.  But sometimes
-      -- it will grind to a snails pace after a few hundred iterations.  
+      -- it will grind to a snails pace after a few hundred iterations.
       -- The missing time doesn't show up as system or CPU time...
       -- At -N15, where the # workers matches the # capabilities, it keeps up an ok pace...
       --   -qa doesn't seem to help the problem.
-      --   -qm seems to EXACERBATE the problem, making it happen from the start and consistently. 
+      --   -qm seems to EXACERBATE the problem, making it happen from the start and consistently.
       --    (even then, it is fine with -N15, the mismatch is the problem)
       --   Playing around with -C, -qb -qg -qi doesn't seem to do anything.
      -- traceEventIO ("Finish iteration "++show (iters-i))
@@ -114,7 +114,7 @@ lotsaRunPar = loop iters
 -- Disabling thread-variation due to below bug:
 
 -- EEK!  Just got this [2013.06.27]:
--- 
+--
 -- unit-tests.exe: internal error: wakeup_gc_threads
 --     (GHC version 7.6.3 for x86_64_unknown_linux)
 --     Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
@@ -125,7 +125,7 @@ v0 = do i <- IV.new; fork (return ()); IV.put i 4; IV.get i
 
 case_v0 :: HU.Assertion
 case_v0 = stressTest T.stressTestReps 3 v0 (== 4)
-                            
+
 case_v1a :: Assertion
 case_v1a = stressTest T.stressTestReps 3 v1a (== (4::Int))
 
@@ -136,7 +136,7 @@ case_v1b :: Assertion
 case_v1b = do ls <- v1b
               case length ls of
                 0 -> return () -- Ok, i guess debugging is off.
-                1 -> return () 
+                1 -> return ()
                 _ -> error $ "Wrong number of log messages: \n" ++ concat (intersperse "\n" ls)
 
 -- | In this sequential case there should be no data-race, and thus no duplication of the callback.
@@ -144,7 +144,7 @@ v1b :: IO [String]
 v1b = do let tag = "callback on ivar "
          (logs,_) <- runParLogged $ isDet $ do
                        i <- IV.new
-                       IV.put i (3::Int)                       
+                       IV.put i (3::Int)
                        IV.whenFull Nothing i (\x -> logDbgLn 1$ tag++show x)
                        IV.put i 3
                        IV.put i 3
@@ -157,14 +157,14 @@ escape01 = runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
 
 -- | This is VERY BAD:
 escape01B :: HasPut e => Par e Frzn String
-escape01B = 
+escape01B =
             do IV.put escape01 (4::Int)
                return "uh oh"
 
 -- | [2013.10.06] Fixed this by requiring a SPECIFIC type, NonFrzn.
 -- major_bug :: String
 -- major_bug = runParThenFreeze escape01B
-               
+
 -- | Simple callback test.
 -- case_v3a :: Assertion
 -- case_v3a = v3a >>= assertEqual "simple callback test"
@@ -184,7 +184,7 @@ i3f = runParQuasiDet$ do
             logDbgLn 1 "Unblocked!  Shouldn't see this."
             return ()
   return ()
-#else 
+#else
 i3f = error "test switched off"
 #endif
 
@@ -200,7 +200,7 @@ i3g = runParQuasiDet$ do
 
 --------------------------------------------------------------------------------
 -- Higher level derived ops
---------------------------------------------------------------------------------  
+--------------------------------------------------------------------------------
 
 
 
@@ -212,7 +212,7 @@ case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
 lp01 = runParQuasiDet$ do
   logDbgLn 2 " [lp01] Starting parForSimple loop..."
-  x <- IV.new 
+  x <- IV.new
   parForSimple (0,10) $ \ ix -> do
     logDbgLn 2$ " [lp01]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
@@ -222,7 +222,7 @@ case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
 lp02 = runParQuasiDet$ do
   logDbgLn 2 " [lp02] Starting parForL loop..."
-  x <- IV.new 
+  x <- IV.new
   parForL (0,10) $ \ ix -> do
     logDbgLn 2$ " [lp02]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
@@ -238,7 +238,7 @@ case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
 lp03 = runParQuasiDet$ do
   logDbgLn 2 " [lp03] Starting parForTree loop..."
-  x <- IV.new 
+  x <- IV.new
   parForTree (0,10) $ \ ix -> do
     logDbgLn 2$ " [lp03]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
@@ -249,7 +249,7 @@ case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
 lp04 = runParQuasiDet$ do
   logDbgLn 2 " [lp04] Starting parForTiled loop..."
-  x <- IV.new 
+  x <- IV.new
   parForTiled Nothing 16 (0,10) $ \ ix -> do
     logDbgLn 2$ " [lp04]  iter "++show ix
     when (ix == 9)$ IV.put x "done"
@@ -263,13 +263,13 @@ lp04 = runParQuasiDet$ do
 
 -- -- | Simple test of pairs.
 -- case_v4 :: Assertion
--- case_v4 = v4 >>= assertEqual "simple-pair" (3, "hi") 
+-- case_v4 = v4 >>= assertEqual "simple-pair" (3, "hi")
 
 -- v4 :: IO (Int,String)
 -- v4 = runParNonDet $
 --      do p <- newPair
 --         putFst p 3
---         putSnd p "hi"        
+--         putSnd p "hi"
 --         x <- getFst p
 --         y <- getSnd p
 --         return (x,y)
@@ -283,7 +283,7 @@ lp04 = runParQuasiDet$ do
 --      do p <- newPair
 --         putFst p 3
 --         putSnd p "hi"
---         putSnd p "there"        
+--         putSnd p "there"
 --         getFst p)
 
 -- -- | Another exception due to multiple puts.  This tests whether the scheduler waits
@@ -291,7 +291,7 @@ lp04 = runParQuasiDet$ do
 -- case_i5b :: Assertion
 -- case_i5b = assertException ["Multiple puts to an IVar!"] i5b
 
--- i5b = 
+-- i5b =
 --   runParNonDet $
 --      do p <- newPair
 --         putFst p 3
@@ -314,7 +314,7 @@ lp04 = runParQuasiDet$ do
 --         -- here to bounce the value through the First of the pair.
 --         fork $ putFst p =<< getSnd p
 --         waste_time
-        
+
 --         putSnd p "there"
 --         getFst p
 
@@ -357,7 +357,7 @@ lp04 = runParQuasiDet$ do
 --      do p1 <- newPair
 --         p2 <- newPair
 --         fork $ do x <- getFst p1
---                   putSnd p2 x 
+--                   putSnd p2 x
 --         fork $ do x <- getSnd p2
 --                   putSnd p1 x
 --         putFst p1 33
@@ -397,7 +397,7 @@ dftest3 :: IO (Maybe Int)
 dftest3 = runParNonDet $ do
   iv1 <- IV.new
   IV.put_ iv1 (3::Int)
-  IV.freezeIVar iv1 
+  IV.freezeIVar iv1
 
 
 --FIXME:
@@ -408,14 +408,22 @@ dftest3 = runParNonDet $ do
 -- dftest4_ :: DeepFrz (IV.IVar s1 Int) =>
 --             Par QuasiDet s1 b
 -- dftest4_ = do
---   iv1 <- newBottom 
+--   iv1 <- newBottom
 --   IV.put_ iv1 (3::Int)
---   res <- IV.freezeIVar iv1 
+--   res <- IV.freezeIVar iv1
 --   return res
 
 -- case_dftest4a = assertEqual "freeze polymorphic 1" (Just 3) =<< dftest4a
 -- dftest4a :: IO (Maybe Int)
 -- dftest4a = runParNonDet dftest4_
+
+--------------------------------------------------------------------------------
+-- Escape-continuation tests
+--------------------------------------------------------------------------------
+
+case_escape1 = assertEqual "" () ()
+
+-- runParDetailed
 
 ------------------------------------------------------------------------------------------
 -- Show instances
@@ -425,4 +433,3 @@ case_show01 :: Assertion
 case_show01 = assertEqual "show for IVar" "Just 3" show01
 show01 :: String
 show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
-

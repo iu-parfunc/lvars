@@ -21,7 +21,7 @@ import Test.HUnit as HU
 
 import Internal.Control.LVish.SchedIdempotent (dbgLvl)
 import Control.LVish (runParNonDet, runParDetailed, Par, OutDest(..), DbgCfg(..), defaultMemDbgRange)
-import Control.Par.EffectSigs 
+import Control.Par.EffectSigs
 import Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ import Debug.Trace
 -- (artificially) vary thread interleavings.  When a schedule resulting in an
 -- incorrect answer (or exception) is found, it is printed.
 stressTest :: forall a . Show a =>
-              Word -- ^ Number of repetitions 
+              Word -- ^ Number of repetitions
            -> Int  -- ^ Number of workers to run on.  MUST be greater than the maximum
                    --   number of tasks that can run in parallel; otherwise this will deadlock.
            -> (forall s . Par (Ef P G F B I) s a)   -- ^ Computation to run
@@ -44,9 +44,9 @@ stressTest reps workers comp oracle = do
     putStrLn "WARNING: test running normally because we're compiled without -fdebug mode."
     x <- runParNonDet comp
     checkRes ([],Right x)
-#endif            
- where 
-  rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers comp
+#endif
+ where
+  rawRun = do x <- runParDetailed (DbgCfg (Just(0,0)) [] False) workers (\_ -> comp)
               putStr "!"
               checkRes x
 
@@ -55,13 +55,13 @@ stressTest reps workers comp oracle = do
   echoScreen = if dbgLvl >= 10
                then [OutputTo stdout]
                else []
-                       
+
   reploop 0 = return ()
   reploop i = do
     -- putStrLn$  "Running computation in debug mode, logging messages in range: "++show defaultMemDbgRange
     (logs,ans) <- runParDetailed (DbgCfg (Just defaultMemDbgRange)
                                   ([OutputInMemory, OutputEvents] ++ echoScreen)
-                                  True) workers comp
+                                  True) workers (\_ -> comp)
 -- This will cause problems because some of the messages from lvls 1-3 are sent before the workers are UP:
 --    (logs,ans) <- runParDetailed (DbgCfg (Just(0,10)) [OutputInMemory, OutputEvents] True) workers comp
     putStr $ (show$length logs) ++"."
@@ -71,13 +71,13 @@ stressTest reps workers comp oracle = do
     reploop (i-1)
 
   checkRes :: ([String], Either SomeException a) -> IO ()
-  checkRes (logs,res) = 
+  checkRes (logs,res) =
     case res of
       Left exn                 -> failit logs ("Bad test outcome--exception: "++show exn)
       Right x | not (oracle x) -> failit logs ("Bad test result: "++show x)
               | otherwise      -> return ()
 
-  failit logs s = do 
+  failit logs s = do
       threadDelay (500 * 1000)
       hPutStrLn stderr $ "\nlstressTest: Found FAILING schedule, length "++show (length logs)
       hPutStrLn stderr "-----------------------------------"
