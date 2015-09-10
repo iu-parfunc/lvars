@@ -197,7 +197,7 @@ runParPolyIO (WrapPar p) = L.runParIO p
 
 -- | Variant of `runParPolyIO` that also passes an escape continuation
 -- to the user's computation.
-runParPolyWithEC :: (forall s . (forall b . a -> IO b) -> Par e s a) -> IO a
+runParPolyWithEC :: ((forall b . a -> IO b) -> Par e s a) -> IO a
 runParPolyWithEC fn =
   do (_,x) <- L.runParDetailed L.defaultRunCfg numCapabilities (\x -> unwrap (fn x))
      case x of
