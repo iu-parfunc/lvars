@@ -134,6 +134,7 @@ library
                     Data.LVar.Generic.Internal
                     Data.LVar.PureMap.Unsafe
                     Data.LVar.SLMap.Unsafe
+                    Control.LVish.Basics
                     Control.LVish.Internal
                     Control.LVish.DeepFrz.Internal
 
@@ -160,7 +161,6 @@ library
                     Data.Concurrent.AlignedIORef
                     Control.LVish.SchedIdempotentInternal 
                     Control.LVish.Types
-                    Control.LVish.Basics
                     Control.LVish.Logical
 
 
