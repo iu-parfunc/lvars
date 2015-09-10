@@ -435,7 +435,13 @@ esc2 = runParPolyWithEC $ \esc -> isND$
     fork $ IV.get v
     I.liftIO $ esc 99
 
--- runParDetailed
+case_escape3 = assertEqual "don't use escape continuation" 99 =<< esc3
+esc3 :: IO Int
+esc3 = runParPolyWithEC $ \esc -> isND$
+ if False
+ then I.liftIO $ esc 1
+ else return 99
+
 
 ------------------------------------------------------------------------------------------
 -- Show instances
