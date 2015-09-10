@@ -669,14 +669,14 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 
   -- Exiting early with an escape continuation:
   ---------------------------------------------
-  -- allAsyncs <- newEmptyMVar -- Don't need this if the built-in cancellation works.
   -- Any of the worker threads can call this to shut down the system and exit quickly with an
   -- answer.  It's not immediate because some synchronization remains.
-  let escape :: forall c . a -> IO c
-      escape x = do tryPutMVar answerMV x
-                    -- asyncs <- readMVar allAsyncs
-                    -- forM_ asyncs A.cancel
-                    E.throw ExitEarly
+  let escape :: forall c . (Int,Sched.State ClosedPar LVarID) -> a -> IO c
+      escape (cpu,q) x =
+        do logOffRecord q 3 $ " [dbg-lvish] Worker #"++show cpu++" calling escape continuation, writing answer..."
+           tryPutMVar answerMV x
+           logOffRecord q 3 $ " [dbg-lvish] Worker #"++show cpu++" tried to write answer, now throwing exception..."
+           E.throw ExitEarly
   ---------------------------------------------
 
   let grabLogs = do
@@ -710,27 +710,36 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
                       return ()
 
                 in do logOffRecord q 3 " [dbg-lvish] Main worker thread starting."
-                      exec (close (comp escape) k) q
+                      exec (close (comp (escape (cpu,q))) k) q
 
   -- Here we want a traditional, fork-join parallel loop with proper exception handling.
   -- For the fork part, we use N threads, not N-1, leaving the current thread to wait.
   let loop [] asyncs =
         -- At this point all worker threads are launched and we wait:
         do tid <- myThreadId
-           -- putMVar allAsyncs asyncs
            mlog $ " [dbg-lvish] (main tid "++show tid++") Wait on at least one async to complete.."
-{-
+
+           -- There's an ordering problem about which to block on first:
            (_,x) <- A.waitAnyCatch asyncs
            -- We could do a binary tree of waitBoth here, but this should work for now:
-           case x of
-             Left e -> return $! Left e
-             Right () -> waitloop asyncs -- If one finishes, all are trying to.
--}
-           waitloop asyncs asyncs
+           -- We know that because one thread finished the others are trying to finish
+           -- or have been canceled in the exception case.
+           handleExns x asyncs (waitloop asyncs asyncs)
 
       loop ((cpu,q):tl) asyncs =
         A.withAsyncOn cpu (runWorker (cpu,q))
           (\a -> loop tl (a:asyncs))
+
+      handleExns mexn allAsyncs continue =
+           case mexn of
+             Left e ->
+               do logOffRecord (Prelude.head queues) 3 $ " [dbg-lvish] Caught exception, canceling workers: "++show e
+                  forM_ allAsyncs A.cancel -- *synchronous* cancellation.
+                  logOffRecord (Prelude.head queues) 3 $ " [dbg-lvish] All "++show (length queues)++" workers canceled."
+                  case E.fromException e of
+                    Just ExitEarly -> fmap Right $ dbgTakeMVar [] "retrieve early-exit answer" answerMV
+                    Nothing        -> return $! Left e
+             Right ()  -> continue
 
       -- This is the join part.  There could be a result in the answer MVar, and/or an exception.
       waitloop all [] = do
@@ -740,13 +749,8 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
       waitloop all (hd:tl) =
         do mlog (" [dbg-lvish] Waiting for one async.. "++show(1+length tl)++" remaining")
            me <- A.waitCatch hd
-           case me of
-             Left e ->
-               do forM_ all A.cancel -- *synchronous* cancellation.
-                  case E.fromException e of
-                    Just ExitEarly -> fmap Right $ dbgTakeMVar [] "retrieve early-exit answer" answerMV
-                    Nothing        -> return $! Left e
-             Right ()  -> waitloop all tl
+           handleExns me all (waitloop all tl)
+
   ----------------------------------------
   -- (1) There was a BUG in 'loop' at some point:
   --    "thread blocked indefinitely in an STM transaction"
