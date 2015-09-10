@@ -58,7 +58,7 @@ import Data.Int
 import Data.Word
 import GHC.Conc (numCapabilities)
 import GHC.Prim (unsafeCoerce#)
-import Internal.Control.LVish.SchedIdempotent (runPar, runParIO, runParDetailed, dbgLvl)
+import Internal.Control.LVish.SchedIdempotent (runPar, runParIO, runParDetailed, dbgLvl, defaultRunCfg)
 import System.IO (stderr)
 
 --------------------------------------------------------------------------------
@@ -101,18 +101,16 @@ runParThenFreezeIO (WrapPar p) = do
 
 -- | This version passes an escape continuation to the user's computation.
 --   When called, it immediately exits with an answer, killing remaining worker threads.
-runParThenFreezeWithEC :: DeepFrz a => ((a -> IO ()) -> Par e NonFrzn a) -> IO (FrzType a)
+runParThenFreezeWithEC :: forall a e . DeepFrz a
+                       => ((forall b . a -> IO b)
+                       -> Par e NonFrzn a) -> IO (FrzType a)
 runParThenFreezeWithEC fn =
-  do (_logs,x) <- runParDetailed cfg numCapabilities (unwrap . fn)
+  do (_logs,x) <- runParDetailed defaultRunCfg numCapabilities (\x -> unwrap (fn x))
      case x of
        Left e  -> E.throw e
        Right y -> return $ frz y
   where
    unwrap (WrapPar p) = p
-   cfg = DbgCfg { dbgRange = Just (0,dbgLvl)
-                , dbgDests = [L.OutputTo stderr, L.OutputEvents]
-                , dbgScheduling  = False }
-
 
 {-
 -- This won't work because it conflicts with other instances such as "Either":

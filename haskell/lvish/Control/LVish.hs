@@ -16,14 +16,14 @@
 > {-# LANGUAGE DataKinds #-}
 > import Control.LVish  -- Generic scheduler; works with any lattice.
 > import Data.LVar.IVar -- The particular lattice in question.
-> 
+>
 > p :: Par Det s Int
 > p = do
 >   num <- new
 >   fork $ put num 4
 >   fork $ put num 4
 >   get num
-> 
+>
 > main = do
 >   print $ runPar $ p
 
@@ -44,7 +44,7 @@
 module Control.LVish
   (
     -- * CRITICAL OBLIGATIONS for the user: valid @Eq@ and total @Ord@
-    {-| 
+    {-|
     We would like to tell you that if you're programming with Safe Haskell (@-XSafe@),
     that this library provides a formal guarantee that anything executed with `runPar` is
     guaranteed-deterministic.  Unfortunately, as of this release there is still one back-door
@@ -60,13 +60,13 @@ module Control.LVish
     -}
 
     -- * Par computations and their parameters
-    Par(), 
+    Par(),
     LVishException(..),
 
     -- * Running various Par computations
     runPar, runParQuasiDet, runParNonDet,
     -- * More polymorphic variants of same
-    runParPoly, runParPolyIO, 
+    runParPoly, runParPolyIO, runParPolyWithEC,
 
     -- * Effect signature manipulation and conversion
     module Control.Par.EffectSigs,
@@ -81,10 +81,10 @@ module Control.LVish
     -- | These effects are a conservative approximation, therefore it is always ok,
     --   for example, to turn "no put" (`NP`) into "put" (`P`).
     addP, addG, addF, addB, addI, liftReadOnly,
-    
+
     -- * Basic control flow
-    fork, yield, 
-    --    quiesceAll,    
+    fork, yield,
+    --    quiesceAll,
 
     -- * Lifting IO, sacrifices determinism
     parIO,
@@ -98,10 +98,10 @@ module Control.LVish
      -- asyncAnd, asyncOr, andMap, orMap,
 
      -- * Synchronizing with handler pools
-     L.HandlerPool(),    
-     newPool, 
-     withNewPool, withNewPool_, 
-     quiesce, 
+     L.HandlerPool(),
+     newPool,
+     withNewPool, withNewPool_,
+     quiesce,
 
      forkHP,
 
@@ -123,7 +123,7 @@ import qualified Internal.Control.LVish.SchedIdempotent as L
 import           Control.LVish.SchedIdempotentInternal (State)
 import           Control.Par.EffectSigs
 import           Control.LVish.Logging (LogMsg(..), OutDest(..), defaultMemDbgRange, logOn)
-import           Data.LVar.IVar 
+import           Data.LVar.IVar
 import           Data.Proxy
 import           Data.Coerce (coerce)
 
@@ -132,18 +132,18 @@ import Data.IORef
 
 import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
---------------------------------------------------------------------------------                
-    
-instance (Deterministic e1, e2 ~ SetF F e1) => 
+--------------------------------------------------------------------------------
+
+instance (Deterministic e1, e2 ~ SetF F e1) =>
          PC.ParQuasi (Par e1 s) (Par e2 s) where
   -- WARNING: this will no longer be safe when FULL nondetermiism is possible:
   toQPar act = unsafeConvert act
-  
+
 instance PC.ParSealed (Par e s) where
   type GetSession (Par e s) = s
-  
+
 instance PC.LVarSched (Par e s) where
-  type LVar (Par e s) = L.LVar 
+  type LVar (Par e s) = L.LVar
 
   forkLV = fork
   newLV  = WrapPar . L.newLV
@@ -155,7 +155,7 @@ instance PC.LVarSched (Par e s) where
   returnToSched = WrapPar $ mkPar $ \_k -> L.sched
 
 
-instance (Deterministic e1, e2 ~ SetF F e1) => 
+instance (Deterministic e1, e2 ~ SetF F e1) =>
          PC.LVarSchedQ (Par e1 s) (Par e2 s)  where
 --  freezeLV = WrapPar . L.freezeLV  -- FINISHME
 
@@ -186,7 +186,7 @@ dbgChatterOnly lvl msg = do
   case x of
     Nothing  -> logDbgLn lvl msg
     Just lgr -> liftIO $ logOn lgr (OffTheRecord lvl msg)
-        
+
 
 ------ DUPLICATED: -----
 mkPar :: ((a -> L.ClosedPar) -> SchedState -> IO ()) -> L.Par a
@@ -267,4 +267,3 @@ addB (WrapPar p) = WrapPar p
 
 addI :: Par (Ef p g f b NI) s a -> Par (Ef p g f b i) s a
 addI (WrapPar p) = WrapPar p
-

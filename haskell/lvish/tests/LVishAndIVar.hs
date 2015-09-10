@@ -421,7 +421,19 @@ dftest3 = runParNonDet $ do
 -- Escape-continuation tests
 --------------------------------------------------------------------------------
 
-case_escape1 = assertEqual "" () ()
+case_escape1 = assertEqual "simplest escape" 99 =<< esc1
+esc1 :: IO Int
+esc1 = runParPolyWithEC $ \esc -> isND$
+   do I.liftIO $ putStr "On worker thread, about to escape."
+      I.liftIO (esc 99)
+      error "Should never see this.."
+
+case_escape2 = assertEqual "Block a thread on an IVar and then escape" 99 =<< esc2
+esc2 :: IO Int
+esc2 = runParPolyWithEC $ \esc -> isND$
+ do v <- IV.new
+    fork $ IV.get v
+    I.liftIO $ esc 99
 
 -- runParDetailed
 

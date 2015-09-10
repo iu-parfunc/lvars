@@ -27,7 +27,7 @@ module Internal.Control.LVish.SchedIdempotent
     -- * Safe, deterministic operations
     yield, newPool, fork, forkHP,
     runPar, runParIO,
-    runParDetailed, runParLogged,
+    runParDetailed, defaultRunCfg, runParLogged,
     withNewPool, withNewPool_,
     forkWithExceptions,
 
@@ -648,7 +648,7 @@ instance E.Exception ExitEarly where
 runParDetailed :: forall a .
                   DbgCfg                 -- ^ Debugging config
                -> Int                    -- ^ How many worker threads to use.
-               -> ((a -> IO ()) -> Par a) -- ^ The computation to run, which takes an escape continuation.
+               -> ((forall b . a -> IO b) -> Par a) -- ^ The computation to run, which takes an escape continuation.
                -> IO ([String], Either E.SomeException a)
 runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 -- #ifndef DEBUG_LVAR
@@ -672,7 +672,8 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
   -- allAsyncs <- newEmptyMVar -- Don't need this if the built-in cancellation works.
   -- Any of the worker threads can call this to shut down the system and exit quickly with an
   -- answer.  It's not immediate because some synchronization remains.
-  let escape x = do tryPutMVar answerMV x
+  let escape :: forall c . a -> IO c
+      escape x = do tryPutMVar answerMV x
                     -- asyncs <- readMVar allAsyncs
                     -- forM_ asyncs A.cancel
                     E.throw ExitEarly
@@ -765,11 +766,12 @@ runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
 
 defaultRun :: Par b -> IO b
 defaultRun par = fmap (fromRight . snd) $
-                 runParDetailed cfg numCapabilities (\_ -> par)
-  where
-   cfg = DbgCfg { dbgRange = Just (0,dbgLvl)
-                , dbgDests = [L.OutputTo stderr, L.OutputEvents]
-                , dbgScheduling  = False }
+                 runParDetailed defaultRunCfg numCapabilities (\_ -> par)
+
+defaultRunCfg :: DbgCfg
+defaultRunCfg = DbgCfg { dbgRange = Just (0,dbgLvl)
+                       , dbgDests = [L.OutputTo stderr, L.OutputEvents]
+                       , dbgScheduling  = False }
 
 -- | Run a deterministic parallel computation as pure.
 runPar :: Par a -> a

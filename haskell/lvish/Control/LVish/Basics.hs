@@ -20,8 +20,9 @@
 module Control.LVish.Basics
   ( Par(), LVar(),
 
+
     runPar, runParQuasiDet, runParNonDet,
-    runParPoly, runParPolyIO,
+    runParPoly, runParPolyIO, runParPolyWithEC,
     runParLogged, runParDetailed,
     getLogger,
 
@@ -40,7 +41,7 @@ module Control.LVish.Basics
 
 import Control.Monad (forM_)
 import qualified Data.Foldable    as F
-import           Control.Exception (Exception, SomeException)
+import           Control.Exception (Exception, SomeException, throw)
 import           Control.LVish.Internal as I
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Internal.Control.LVish.SchedIdempotent as L
@@ -49,6 +50,7 @@ import           Control.LVish.Types
 import           Control.Par.EffectSigs
 import           System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 import           Prelude hiding (rem)
+import           GHC.Conc (numCapabilities)
 
 import qualified Control.Par.Class.Unsafe as PU
 import qualified Control.Par.Class     as PC
@@ -132,6 +134,7 @@ withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 runParNonDet :: (forall s . Par (Ef P G F B I) s a) -> IO a
 runParNonDet (WrapPar p) = L.runParIO p
 
+
 -- | Run a computation that allows freezes but not IO.
 --
 -- Thus the input computation is `QuasiDeterministic`, and this may throw a
@@ -163,11 +166,11 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
 --
-runParDetailed :: DbgCfg        -- ^ Debugging configuration
+runParDetailed :: forall a e . DbgCfg        -- ^ Debugging configuration
                -> Int           -- ^ How many worker threads to use.
-               -> (forall s . (a -> IO ()) -> Par e s a) -- ^ The computation to run.
+               -> (forall s . (forall b . a -> IO b) -> Par e s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)
-runParDetailed dc nw fn = L.runParDetailed dc nw (unwrap . fn)
+runParDetailed dc nw fn = L.runParDetailed dc nw (\x -> unwrap (fn x))
   where unwrap (WrapPar p) = p
 
 -- | If a computation is guaranteed-deterministic, then `Par` becomes a dischargeable
@@ -191,6 +194,17 @@ runParPoly (WrapPar p) = L.runPar p
 runParPolyIO :: (forall s . Par e s a) -> IO a
 runParPolyIO (WrapPar p) = L.runParIO p
 
+
+-- | Variant of `runParPolyIO` that also passes an escape continuation
+-- to the user's computation.
+runParPolyWithEC :: (forall s . (forall b . a -> IO b) -> Par e s a) -> IO a
+runParPolyWithEC fn =
+  do (_,x) <- L.runParDetailed L.defaultRunCfg numCapabilities (\x -> unwrap (fn x))
+     case x of
+       Left e  -> throw e
+       Right y -> return y
+  where
+    unwrap (WrapPar p) = p
 
 -- | Log a line of debugging output.  This is only used when *compiled* in debugging
 -- mode.  It atomically adds a string onto an in-memory log.
