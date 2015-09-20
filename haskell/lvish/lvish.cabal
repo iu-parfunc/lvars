@@ -157,6 +157,7 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Data.Concurrent.AlignedIORef
+                    Data.BitList
                     Control.LVish.SchedIdempotentInternal 
                     Control.LVish.Types
                     Control.LVish.Basics
