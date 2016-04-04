@@ -12,3 +12,4 @@ docs_examples
 .cabal-sandbox
 test-results.xml
 tags
+*.stack-work
