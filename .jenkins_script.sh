@@ -28,7 +28,7 @@ ENABLE_EXEC_PROF="--enable-profiling"
 CFG=" --bench "
 
 for flg in $STACK_FLAGS; do
-  CFG+=" --flags=\*:${flg} "
+  CFG+=" --flags=*:${flg} "
 done
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
