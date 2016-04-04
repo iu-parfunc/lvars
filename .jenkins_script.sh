@@ -18,12 +18,6 @@ STACK=stack
 # STACK=stack-1.0.4.2
 which -a $STACK
 
-DISABLE_EXEC_PROF="--disable-profiling"
-ENABLE_EXEC_PROF="--enable-profiling"
-# Old version, GHC-7.8:
-# DISABLE_EXEC_PROF="--disable-executable-profiling"
-# ENABLE_EXEC_PROF="--enable-executable-profiling"
-
 # Always make sure the benchmarks build, even if we don't run them:
 CFG=" --bench "
 
@@ -32,9 +26,9 @@ for flg in $STACK_FLAGS; do
 done
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
-  CFG="$CFG --disable-library-profiling $DISABLE_EXEC_PROF"
+  CFG="$CFG --no-executable-profiling --no-library-profiling $DISABLE_EXEC_PROF"
 else
-  CFG="$CFG --enable-library-profiling $ENABLE_EXEC_PROF"
+  CFG="$CFG --executable-profiling --library-profiling $ENABLE_EXEC_PROF"
 fi
 
 if [ "$NOTEST" == "" ]; then
