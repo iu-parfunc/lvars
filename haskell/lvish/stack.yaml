@@ -11,4 +11,4 @@ extra-deps:
  - chaselev-deque-0.5.0.5
  - thread-local-storage-0.1.0.3
 
-resolver: lts-5.11
+resolver: lts-4.2
