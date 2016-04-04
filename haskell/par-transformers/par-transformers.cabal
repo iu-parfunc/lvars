@@ -89,7 +89,7 @@ Test-suite test-par-transformers
 
   -- (1C) Additional build depends for testing:
   Build-depends:
-    tasty               >= 0.10 && < 0.11,
+    tasty               >= 0.10,
     tasty-hunit
 
   ghc-options: -threaded -Wall -rtsopts -with-rtsopts=-N4 -eventlog

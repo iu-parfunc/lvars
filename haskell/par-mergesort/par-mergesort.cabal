@@ -58,10 +58,10 @@ test-suite test-mergesort
     par-mergesort,
     par-transformers,
     random,
-    vector              >= 0.10 && < 0.12,
+    vector              >= 0.10,
 
     QuickCheck,
-    tasty               >= 0.10 && < 0.11,
+    tasty               >= 0.10,
     tasty-hunit,
     tasty-quickcheck
 
@@ -74,7 +74,7 @@ benchmark bench-mergesort
 
   build-depends:
     base,
-    criterion           >= 1.1 && < 1.2,
+    criterion           >= 1.1,
     lvish,
     par-classes,
     par-mergesort,

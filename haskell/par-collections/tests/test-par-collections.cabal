@@ -29,7 +29,7 @@ Test-suite test-par-collections
 
   -- (4) Additional build depends for testing:
   Build-depends: HUnit
-               , tasty >= 0.10 && < 0.11
+               , tasty >= 0.10
                , tasty-hunit
                , tasty-quickcheck
                , tasty-th
