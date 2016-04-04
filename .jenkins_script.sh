@@ -21,6 +21,10 @@ which -a $STACK
 # Always make sure the benchmarks build, even if we don't run them:
 CFG=" --bench "
 
+if ! [ "$STACK_RESOLVER" == "" ]; then
+  CFG+=" --resolver=$STACK_RESOLVER "
+fi
+
 for flg in $STACK_FLAGS; do
   CFG+=" --flag=*:${flg} "
 done
