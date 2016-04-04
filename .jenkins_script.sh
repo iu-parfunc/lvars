@@ -16,6 +16,7 @@ SHOWDETAILS=streaming
 # Just use which stack is in scope:
 STACK=stack
 # STACK=stack-1.0.4.2
+which -a $STACK
 
 DISABLE_EXEC_PROF="--disable-profiling"
 ENABLE_EXEC_PROF="--enable-profiling"
@@ -24,7 +25,11 @@ ENABLE_EXEC_PROF="--enable-profiling"
 # ENABLE_EXEC_PROF="--enable-executable-profiling"
 
 # Always make sure the benchmarks build, even if we don't run them:
-CFG=" --bench $STACK_FLAGS "
+CFG=" --bench "
+
+for flg in $STACK_FLAGS; do
+  CFG+=" --flags=\*:${flg} "
+done
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then
   CFG="$CFG --disable-library-profiling $DISABLE_EXEC_PROF"
@@ -35,5 +40,7 @@ fi
 if [ "$NOTEST" == "" ]; then
   CFG="$CFG --enable-tests"
 fi
+
+echo "Running stack version "`$STACK --version`" with options: $CFG"
 
 stack --no-system-ghc --install-ghc test $CFG
