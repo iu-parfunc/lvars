@@ -32,9 +32,9 @@ else
 fi
 
 if [ "$NOTEST" == "" ]; then
-  CFG="$CFG --enable-tests"
+  CFG="$CFG --test "
 fi
 
 echo "Running stack version "`$STACK --version`" with options: $CFG"
 
-stack --no-system-ghc --install-ghc test $CFG
+stack --no-system-ghc --install-ghc build $CFG
