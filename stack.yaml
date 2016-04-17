@@ -9,6 +9,7 @@ packages:
  - haskell/par-collections/tests/
  - haskell/par-mergesort/
  - haskell/par-transformers/
+ - haskell/ctrie
 
 # TODO: Revive:
  # - haskell/lvish-apps/

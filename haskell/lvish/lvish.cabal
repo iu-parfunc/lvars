@@ -123,7 +123,8 @@ library
                     Data.LVar.MaxPosInt
                     Data.LVar.NatArray
                     Data.LVar.NatArray.Unsafe
-                    Data.LVar.Memo                    
+                    Data.LVar.Memo
+                    Data.LVar.CtrieMap
                     -------------------------------------------
                     -- Unsafe, only for debugging:
                     Control.LVish.Unsafe                    
@@ -177,7 +178,9 @@ library
                  bits-atomic, missing-foreign,
                  thread-local-storage >= 0.1.0.2,
                  -- Used in SLSet and SLMap
-                 concurrent-skiplist >= 0.1 && < 0.2
+                 concurrent-skiplist >= 0.1 && < 0.2,
+                 -- Used in CtrieMap
+                 ctrie >= 0.1
   build-depends: containers >= 0.5.4.0
 
   build-depends: par-classes     >= 1.1 && < 2.0,
@@ -226,7 +229,8 @@ test-suite test-lvish
                    , random
     build-depends: par-classes     >= 1.1 && < 2.0,
                    par-collections >= 1.1 && < 2.0,
-                   concurrent-skiplist >= 0.1 && < 0.2
+                   concurrent-skiplist >= 0.1 && < 0.2,
+                   ctrie >= 0.1
     build-depends: tasty, tasty-hunit, tasty-th, 
                    tasty-quickcheck > 0.2.4, QuickCheck,
                    HUnit, time, text
