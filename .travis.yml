@@ -7,6 +7,9 @@ cache:
   directories:
   - $HOME/.stack/
 
+notifications:
+  email: false
+
 matrix:
   include:
     - env: STACK_RESOLVER=lts-2.22
