@@ -13,4 +13,4 @@
 	url = git@github.com:rrnewton/concurrent-skiplist.git
 [submodule "haskell/ctrie"]
 	path = haskell/ctrie
-	url = git@github.com:DreamLinuxer/ctrie.git
+	url = git@github.com:iu-parfunc/ctrie.git
