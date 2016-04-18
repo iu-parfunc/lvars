@@ -255,7 +255,8 @@ modify (IMap (WrapLVar lv)) key newBottom fn = do
 {-# INLINE gmodify #-}
 -- | A generic version of `modify` that does not require a `newBottom` argument,
 -- rather, it uses the generic version of that function.
-gmodify :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+gmodify :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f,
+                                   LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           IMap key s (f s a)
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
@@ -267,7 +268,8 @@ gmodify map key fn = modify map key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 --
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f,
+                                     LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
