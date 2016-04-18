@@ -436,11 +436,13 @@ instance PC.Generator (IMap k Frzn a) where
   foldMP fn zer (IMap (WrapLVar lv)) =
     CM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
                     zer (L.state lv)
-{-
+
 instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split:
   pmapFold mfn rfn initAcc (IMap lv) = do
+    error "FINISHME ParFoldable of CTrieMap..."
+    {-
     let slm = state lv
         slc = SLM.toSlice slm
         -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
@@ -459,7 +461,9 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
     internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap... calling mkMapReduce"
     mkMapReduce splitter seqfold PC.spawn_
                 slc mfn rfn initAcc
--}
+   -}
+
+
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
     "{IMap: " ++
