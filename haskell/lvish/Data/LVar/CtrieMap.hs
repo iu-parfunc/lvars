@@ -441,28 +441,11 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split:
   pmapFold mfn rfn initAcc (IMap lv) = do
-    error "FINISHME ParFoldable of CTrieMap..."
-    {-
-    let slm = state lv
-        slc = SLM.toSlice slm
-        -- Is it worth using unsafeDupablePerformIO here?  Or is the granularity large
-        -- enough that we might as well use unsafePerformIO?
-        splitter s =
-          -- Some unfortunate conversion between protocols:
-          case unsafeDupablePerformIO (SLM.splitSlice s) of
-            Nothing      -> [s]
-            Just (s1,s2) -> [s1,s2]
-
-        -- Ideally we could liftIO into the Par monad here.
-        seqfold fn zer (SLM.Slice slm st en) = do
-          internalLiftIO $ putStrLn $ "[DBG] dropping to seqfold.., st/en: "++show (st,en)
-          -- FIXME: Fold over only the range in the slice:
-          SLM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v)) zer slm
-    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap... calling mkMapReduce"
-    mkMapReduce splitter seqfold PC.spawn_
-                slc mfn rfn initAcc
-   -}
-
+    let cm = state lv
+        doElem k v = undefined
+        doSplit = undefined
+    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
+    internalLiftIO $ CM.unsafeTreeTraverse' cm doElem doSplit initAcc
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
