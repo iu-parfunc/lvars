@@ -51,7 +51,7 @@ import Control.LVish.DeepFrz.Internal         (DeepFrz (..), Frzn, NonFrzn,
                                                Trvrsbl)
 import Control.LVish.Internal                 (Par (WrapPar))
 import Control.Par.EffectSigs
-import Internal.Control.LVish.SchedIdempotent (runPar, runParIO)
+import Control.LVish.Internal.SchedIdempotent (runPar, runParIO)
 --------------------------------------------------------------------------------
 
 -- | Under normal conditions, calling a `freeze` operation inside a

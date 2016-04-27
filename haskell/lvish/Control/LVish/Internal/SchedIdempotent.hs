@@ -18,7 +18,7 @@
 -- | This is an internal module that provides the core parallel scheduler.
 --   It is /not/ for end-users.
 
-module Internal.Control.LVish.SchedIdempotent
+module Control.LVish.Internal.SchedIdempotent
   (
     -- * Basic types and accessors
     LVar(..), state, HandlerPool(),
@@ -52,7 +52,7 @@ import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
-import           Control.LVish.Logging as L
+import           Control.LVish.Internal.Logging as L
 import           Debug.Trace(trace)
 import           Data.Concurrent.Internal.MonadToss
 import           Data.IORef
@@ -74,8 +74,8 @@ import           Text.Printf (printf, hPrintf)
 -- import Control.Compose ((:.), unO)
 import           Data.Traversable  hiding (forM)
 
-import Control.LVish.Types
-import qualified Control.LVish.SchedIdempotentInternal as Sched
+import Control.LVish.Internal.Types
+import qualified Control.LVish.Internal.SchedUtils as Sched
 
 ------------------------------------------------------------------------------
 -- LVar and Par monad representation

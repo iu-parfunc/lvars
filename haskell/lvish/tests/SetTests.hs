@@ -26,7 +26,7 @@ import qualified Data.LVar.IVar as IV
 
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
-import qualified Control.LVish.Logging as L
+import qualified Control.LVish.Internal.Logging as L
 import           Control.LVish.Internal (liftIO)
     
 --------------------------------------------------------------------------------

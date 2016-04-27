@@ -3,11 +3,11 @@
 --
 --   This module is imported for instances only (specifically, the `MonadIO` instance).
 
-module Control.LVish.Unsafe() where
+module Control.LVish.Internal.Unsafe() where
 
 import Control.LVish.Internal
 import Control.Monad.IO.Class
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 instance MonadIO (Par e s) where
   liftIO = WrapPar . L.liftIO   

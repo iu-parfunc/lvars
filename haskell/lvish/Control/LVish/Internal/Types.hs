@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 -- | A simple internal module to factor out types that are used in many places.
-module Control.LVish.Types
+module Control.LVish.Internal.Types
        ( LVishException(..)
        , OutDest (..)
        , DbgCfg(..))

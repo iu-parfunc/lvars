@@ -46,8 +46,8 @@ import qualified Data.LVar.IVar as IV
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, Trvrsbl, runParThenFreeze, runParThenFreezeIO)
 import qualified Control.LVish.Internal as I
-import           Internal.Control.LVish.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import           Control.LVish.Internal.SchedIdempotent (liftIO, dbgLvl, forkWithExceptions)
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 import           TestHelpers2 as T
 

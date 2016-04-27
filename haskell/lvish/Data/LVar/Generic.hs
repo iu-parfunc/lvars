@@ -21,9 +21,9 @@ module Data.LVar.Generic
        )
        where
 
-import           Control.LVish.Types
+import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs
-import           Control.LVish.Basics
+import           Control.LVish.Internal.Basics
 import           Control.LVish.Internal (Par)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F

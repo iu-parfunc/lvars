@@ -16,7 +16,7 @@
 
 -- | An internal module simply reexported by Control.LVish.
 
-module Control.LVish.Basics
+module Control.LVish.Internal.Basics
   ( Par(), LVar(),
 
     runPar, runParQuasiDet, runParNonDet,
@@ -39,11 +39,11 @@ module Control.LVish.Basics
 
 import           Control.Exception                      (SomeException)
 import           Control.LVish.Internal                 as I
-import qualified Control.LVish.Logging                  as Lg
-import           Control.LVish.Types
+import qualified Control.LVish.Internal.Logging         as Lg
+import           Control.LVish.Internal.Types
 import           Control.Monad                          (forM_)
 import           Control.Par.EffectSigs
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude                                hiding (rem)
 
 import qualified Control.Par.Class     as PC

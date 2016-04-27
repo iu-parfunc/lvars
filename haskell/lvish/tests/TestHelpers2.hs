@@ -19,7 +19,7 @@ import System.Random (randomRIO)
 import Control.Concurrent (threadDelay)
 import Test.HUnit as HU
 
-import Internal.Control.LVish.SchedIdempotent (dbgLvl)
+import Control.LVish.Internal.SchedIdempotent (dbgLvl)
 import Control.LVish (runParNonDet, runParDetailed, Par, OutDest(..), DbgCfg(..), defaultMemDbgRange)
 import Control.Par.EffectSigs 
 import Debug.Trace

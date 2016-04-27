@@ -126,9 +126,6 @@ library
                     Data.LVar.Memo
                     Data.LVar.CtrieMap
                     -------------------------------------------
-                    -- Unsafe, only for debugging:
-                    Control.LVish.Unsafe
-                    -------------------------------------------
                     -- End users should NOT USE THESE.
                     -- These are only for developing new LVars:
                     Data.LVar.Internal.Pure
@@ -146,9 +143,10 @@ library
                     Data.LVar.PNCounter
                     -------------------------------------------
 
-  -- Package-internal and should not be exposed:
-                    Internal.Control.LVish.SchedIdempotent
-                    Control.LVish.Logging
+                    -- Package-internal and should not be exposed:
+                    Control.LVish.Internal.SchedIdempotent
+                    Control.LVish.Internal.Logging
+
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -158,10 +156,14 @@ library
                     Data.Concurrent.Counter
                     Data.Concurrent.SNZI
                     Data.Concurrent.AlignedIORef
-                    Control.LVish.SchedIdempotentInternal
-                    Control.LVish.Types
-                    Control.LVish.Basics
-                    Control.LVish.Logical
+                    Control.LVish.Internal.SchedUtils
+                    Control.LVish.Internal.Types
+                    Control.LVish.Internal.Basics
+                    Control.LVish.Internal.Logical
+                    -------------------------------------------
+                    -- Unsafe, only for debugging:
+                    Control.LVish.Internal.Unsafe
+
 
 
   -- Other library packages from which modules are imported.

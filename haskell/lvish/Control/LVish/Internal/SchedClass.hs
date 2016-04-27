@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP, NamedFieldPuns #-}
 
 
-module Control.LVish.SchedClass where
+module Control.LVish.Internal.SchedClass where
 
 import Control.Monad
 import Control.LVish.SchedIdempotent

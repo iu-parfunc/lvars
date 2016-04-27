@@ -11,7 +11,7 @@ import Control.Exception                      (throw)
 import Control.LVish
 import Control.LVish.Internal
 import Data.IORef
-import Internal.Control.LVish.SchedIdempotent (getLV, newLV, putLV)
+import Control.LVish.Internal.SchedIdempotent (getLV, newLV, putLV)
 
 ------------------------------------------------------------------------------
 -- IPairs implemented on top of (the idempotent implementation of) LVars:

@@ -35,7 +35,7 @@ module Control.LVish.Internal
 
 import           Control.Par.EffectSigs
 import           Data.Concurrent.Internal.MonadToss
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU

@@ -94,7 +94,7 @@ module Control.LVish
      asyncForEachHP,
 
      -- * Logical control flow operators
-     module Control.LVish.Logical,
+     module Control.LVish.Internal.Logical,
      -- asyncAnd, asyncOr, andMap, orMap,
 
      -- * Synchronizing with handler pools
@@ -115,16 +115,16 @@ module Control.LVish
    ) where
 
 -- NOTE : This is an aggregation module:
-import           Control.LVish.Basics                   as B
+import           Control.LVish.Internal.Basics          as B
 import           Control.LVish.Internal                 as I
-import           Control.LVish.Logging                  (LogMsg (..),
+import           Control.LVish.Internal.Logging          (LogMsg (..),
                                                          defaultMemDbgRange,
                                                          logOn)
-import           Control.LVish.Logical
-import           Control.LVish.Types
+import           Control.LVish.Internal.Logical
+import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs
 import           Data.LVar.IVar
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 --------------------------------------------------------------------------------
 

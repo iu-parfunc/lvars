@@ -70,15 +70,15 @@ import qualified Data.LVar.IVar                         as IV
 import qualified Data.Map.Strict                        as M
 import           Data.UtilInternal                      (traverseWithKey_)
 import           GHC.Prim                               (unsafeCoerce#)
-import           Internal.Control.LVish.SchedIdempotent (freezeLV, getLV, newLV,
+import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV, putLV_)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude
 import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 --import Debug.Trace
 
-import           Control.LVish.Unsafe     ()
+import           Control.LVish.Internal.Unsafe     ()
 import qualified Control.Par.Class        as PC
 import           Control.Par.Class.Unsafe (internalLiftIO)
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)

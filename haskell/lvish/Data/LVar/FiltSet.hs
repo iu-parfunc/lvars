@@ -27,7 +27,7 @@ import Data.LVar.Generic(PartialJoinSemiLattice(..))
 import Data.LVar.LayeredSatMap (LayeredSatMap)
 import Data.LVar.LayeredSatMap (LayeredSatMap(..), LSMContents(..))
 import qualified Data.LVar.LayeredSatMap as LSM
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 import Control.Monad (forM)
 import Data.Atomics (atomicModifyIORefCAS)

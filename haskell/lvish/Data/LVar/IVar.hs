@@ -50,21 +50,21 @@ module Data.LVar.IVar
 
 import           Control.DeepSeq
 import           Control.Exception                      (throw)
-import qualified Control.LVish.Basics                   as LV
+import qualified Control.LVish.Internal.Basics          as LV
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 (LVar (WrapLVar),
                                                          Par (WrapPar))
 import qualified Control.LVish.Internal                 as I
-import qualified Control.LVish.Types                    as LV
+import qualified Control.LVish.Internal.Types           as LV
 import           Control.Par.EffectSigs
 import qualified Data.Foldable                          as F
 import           Data.IORef
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
 import           GHC.Prim                               (unsafeCoerce#)
-import           Internal.Control.LVish.SchedIdempotent (freezeLV, getLV, newLV,
+import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV)
-import qualified Internal.Control.LVish.SchedIdempotent as LI
+import qualified Control.LVish.Internal.SchedIdempotent as LI
 import           System.IO.Unsafe                       (unsafeDupablePerformIO,
                                                          unsafePerformIO)
 import           System.Mem.StableName                  (hashStableName,

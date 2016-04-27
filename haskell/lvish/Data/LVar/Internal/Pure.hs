@@ -35,7 +35,7 @@ import Control.LVish.DeepFrz.Internal
 import Control.LVish.Internal
 import Data.IORef
 import qualified Data.Set as S
-import qualified Internal.Control.LVish.SchedIdempotent as LI
+import qualified Control.LVish.Internal.SchedIdempotent as LI
 import Algebra.Lattice
 import GHC.Prim (unsafeCoerce#)
 import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)

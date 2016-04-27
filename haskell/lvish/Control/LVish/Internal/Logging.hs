@@ -20,7 +20,7 @@ deterministic replay (and quickcheck-style testing of different interleavings).
 
  -}
 
-module Control.LVish.Logging
+module Control.LVish.Internal.Logging
        (
 
          -- * Global variables
@@ -52,7 +52,7 @@ import           System.Random
 import           Text.Printf (printf, hPrintf)
 import           Debug.Trace (trace, traceEventIO)
 
-import Control.LVish.Types
+import Control.LVish.Internal.Types
 -- import qualified Control.LVish.SchedIdempotentInternal as Sched
 
 ----------------------------------------------------------------------------------------------------

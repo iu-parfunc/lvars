@@ -3,7 +3,7 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Control.LVish.SchedIdempotentInternal (
+module Control.LVish.Internal.SchedUtils (
   State(logger, no), 
   new, number, next, pushWork, nullQ, yieldWork, currentCPU, setStatus, await, prng
   ) where
@@ -18,8 +18,8 @@ import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
 
-import qualified Control.LVish.Logging as L
-import Control.LVish.Types (DbgCfg(..))
+import qualified Control.LVish.Internal.Logging as L
+import Control.LVish.Internal.Types (DbgCfg(..))
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"

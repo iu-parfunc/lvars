@@ -54,10 +54,10 @@ import           Data.LVar.Generic                      as G
 import qualified Data.LVar.IVar                         as IV
 import           Data.LVar.PureMap.Unsafe
 import           Data.UtilInternal                      (traverseWithKey_)
-import           Internal.Control.LVish.SchedIdempotent (freezeLV,
+import           Control.LVish.Internal.SchedIdempotent (freezeLV,
                                                          freezeLVAfter, getLV,
                                                          newLV, putLV, putLV_)
-import qualified Internal.Control.LVish.SchedIdempotent as L
+import qualified Control.LVish.Internal.SchedIdempotent as L
 
 import           Control.Exception     (throw)
 import           Data.IORef

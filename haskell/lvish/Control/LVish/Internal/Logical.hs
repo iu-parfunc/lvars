@@ -2,12 +2,12 @@
 {-# LANGUAGE ConstraintKinds, TypeFamilies #-}
 
 -- | Not exported directly.  Reexported by "Control.LVish".
-module Control.LVish.Logical (asyncAnd, asyncOr, andMap, orMap) where
+module Control.LVish.Internal.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
 import Control.Par.EffectSigs
-import Control.LVish.Basics
+import Control.LVish.Internal.Basics
 import Control.LVish.Internal (Par(WrapPar), unsafeDet)
-import Internal.Control.LVish.SchedIdempotent (liftIO, HandlerPool)
+import Control.LVish.Internal.SchedIdempotent (liftIO, HandlerPool)
 import Data.LVar.IVar    as IV
 
 import qualified Data.Atomics.Counter as C
