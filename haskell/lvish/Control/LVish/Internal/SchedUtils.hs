@@ -14,7 +14,7 @@ import Control.Monad
 import Control.Concurrent
 import Data.IORef
 import Data.Atomics (atomicModifyIORefCAS)
-import qualified Data.BitList as BL
+-- import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
 

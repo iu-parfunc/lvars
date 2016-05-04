@@ -59,9 +59,9 @@ import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 as LI
 import           Control.Monad
-import qualified Control.Monad.IO.Class                 as MI
+-- import qualified Control.Monad.IO.Class                 as MI
 import qualified Control.Concurrent.Map                 as CM
-import           Data.Constraint
+-- import           Data.Constraint
 import qualified Data.Foldable                          as F
 --import           Data.IORef                             (readIORef)
 import           Data.List                              (intersperse)
@@ -244,11 +244,11 @@ modify :: forall f a b e s key . (Ord key, Hashable key, Show key, Ord a, HasPut
           -> (Par e s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par e s b
-modify (IMap (WrapLVar lv)) key newBottom fn = do
+modify (IMap (WrapLVar lv)) key newBot fn = do
     act <- WrapPar $ putLV_ lv putter
     act
   where putter cm = do
-          putRes <- unWrapPar $ CM.putIfAbsent cm key newBottom
+          putRes <- unWrapPar $ CM.putIfAbsent cm key newBot
           case putRes of
             CM.Added v -> return (Just (key,v), fn v)
             CM.Found v -> return (Nothing,      fn v)
@@ -262,7 +262,7 @@ gmodify :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f,
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par e s b
-gmodify map key fn = modify map key G.newBottom fn
+gmodify mp key fn = modify mp key G.newBottom fn
 
 
 {-# INLINE getOrInit #-}
