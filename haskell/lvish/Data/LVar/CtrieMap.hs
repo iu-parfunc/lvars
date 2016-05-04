@@ -59,8 +59,9 @@ import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 as LI
 import           Control.Monad
---import           Control.Monad.IO.Class
+import qualified Control.Monad.IO.Class                 as MI
 import qualified Control.Concurrent.Map                 as CM
+import           Data.Constraint
 import qualified Data.Foldable                          as F
 --import           Data.IORef                             (readIORef)
 import           Data.List                              (intersperse)
@@ -80,7 +81,7 @@ import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
 import           Control.LVish.Internal.Unsafe     ()
 import qualified Control.Par.Class        as PC
-import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Control.Par.Class.Unsafe (internalLiftIO, unsafeParMonadIO, parMonadIODict)
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
 --import qualified Data.Splittable.Class    as Sp
 import Data.Hashable (Hashable)
@@ -441,11 +442,19 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
   {-# INLINE pmapFold #-}
   -- Can't split directly but can slice and then split:
   pmapFold mfn rfn initAcc (IMap lv) = do
+--   case parMonadIODict :: Dict (MonadIO (UnsafeParIO p))   
     let cm = state lv
         doElem k v = undefined
+         -- unsafeParMonadIO (mfn (k,v))
+         -- case unsafeParAsIO (mfn (k,v)) of
+         --   (m1, Dict) -> do MI.liftIO (print "hello")
+         --                    m1
+         --                    return ()
+
         doSplit = undefined
-    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
-    internalLiftIO $ CM.unsafeTreeTraverse' cm doElem doSplit initAcc
+--    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
+--    internalLiftIO $ CM.unsafeTreeTraverse' cm doElem doSplit initAcc
+    error "PARFOLDABLE / CTRIE - FINISHME"
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =

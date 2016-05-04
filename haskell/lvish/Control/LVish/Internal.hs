@@ -40,19 +40,31 @@ import qualified Control.LVish.Internal.SchedIdempotent as L
 import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU
 
+import Data.Constraint
+
 -- | This is how we stamp Par as being legit.
 instance PU.SecretSuperClass Par where
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
+  -- Public methods:
   fork = WrapPar . L.fork . unWrapPar
-  internalLiftIO = liftIO
   liftReadOnly (WrapPar p) = WrapPar p
 
   pbind (WrapPar lp) fn = WrapPar (lp >>= fn')
     where
       fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
   preturn x = WrapPar (return x)
+
+  -- Private methods:
+  internalLiftIO = liftIO
+
+  type UnsafeParIO Par = L.Par
+  {-# INLINE unsafeParMonadIO #-}
+  unsafeParMonadIO (WrapPar p) = p
+  parMonadIODict = Dict 
+  
+
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}

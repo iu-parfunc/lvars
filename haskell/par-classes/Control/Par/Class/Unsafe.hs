@@ -30,6 +30,8 @@ import Control.Applicative
 import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
+import Data.Constraint
+import Control.Monad.IO.Class
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
@@ -42,16 +44,14 @@ import Unsafe.Coerce          (unsafeCoerce)
 -- @Safe@ code.
 class ParMonad (p :: EffectSig -> * -> * -> *)
   where
+  -- Public interface:
+  ----------------------------------------
+
   pbind :: p e s a -> (a -> p e s b) -> p e s b
   preturn :: a -> p e s a
 
   -- | Forks a computation to happen in parallel.
   fork :: p e s () -> p e s ()
-
-  -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
-  -- only be used by other infrastructure-level components, e.g. the implementation
-  -- of monad transformers or LVars.
-  internalLiftIO :: IO a -> p e s a
 
   -- | (Internal! Not exposed to the end user.) Unsafely cast effect signatures.
   internalCastEffects :: p e1 s a -> p e2 s a
@@ -60,6 +60,21 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a
   liftReadOnly = unsafeCoerce
+
+  -- Private methods:
+  ----------------------------------------
+
+  -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
+  -- only be used by other infrastructure-level components, e.g. the implementation
+  -- of monad transformers or LVars.
+  internalLiftIO :: IO a -> p e s a
+
+  -- | An associated type to allow (trusted) LVar implementations to use
+  -- the monad as an IO Monad.
+  type UnsafeParIO p :: * -> *
+
+  unsafeParMonadIO :: p e s a -> UnsafeParIO p a
+  parMonadIODict :: Dict (MonadIO (UnsafeParIO p))
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
 -- (We cannot include Monad as a super-class of ParMonad, because it would

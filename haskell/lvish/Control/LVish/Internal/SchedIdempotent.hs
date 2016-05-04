@@ -45,6 +45,7 @@ module Control.LVish.Internal.SchedIdempotent
     mkPar, Status(..), sched, Listener(..), lvarDbgName
   ) where
 
+import qualified Control.Monad.IO.Class as IOClass
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
 import qualified Control.Concurrent as Conc
@@ -586,6 +587,9 @@ liftIO :: IO a -> Par a
 liftIO io = mkPar $ \k q -> do
   r <- io
   exec (k r) q
+
+instance IOClass.MonadIO Par where
+  liftIO = liftIO
 
 -- | IF compiled with debugging support, this will return the Logger used by the
 -- current Par session, otherwise it will return Nothing.
