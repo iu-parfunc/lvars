@@ -46,11 +46,11 @@ import           Data.List (sortBy)
 import           GHC.Conc hiding (yield)
 import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.IO (stderr, stdout, hFlush, hPutStrLn, Handle)
+import           System.IO (stderr, stdout, hFlush, hPutStrLn)
 import           System.Environment(getEnvironment)
 import           System.Random
-import           Text.Printf (printf, hPrintf)
-import           Debug.Trace (trace, traceEventIO)
+import           Text.Printf (hPrintf)
+import           Debug.Trace (traceEventIO)
 
 import Control.LVish.Internal.Types
 -- import qualified Control.LVish.SchedIdempotentInternal as Sched

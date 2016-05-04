@@ -189,7 +189,7 @@ library
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0
 
-  ghc-options: -rtsopts -Wall
+  ghc-options: -rtsopts -Wall -fno-warn-orphans
   if flag(useopt)
     ghc-options: -O2
 
@@ -238,7 +238,7 @@ test-suite test-lvish
                    tasty-quickcheck > 0.2.4, QuickCheck,
                    HUnit, time, text
 
-    ghc-options: -Wall
+    ghc-options: -Wall -fno-warn-orphans
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)
@@ -278,7 +278,7 @@ benchmark bench-lvish
                    par-collections >= 1.1 && < 2.0
     build-depends: criterion >= 1.0
 
-    ghc-options: -Wall
+    ghc-options: -Wall -fno-warn-orphans
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)
