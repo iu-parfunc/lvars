@@ -61,6 +61,8 @@ import           Control.LVish.Internal                 as LI
 import           Control.Monad
 --import           Control.Monad.IO.Class
 import qualified Control.Concurrent.Map                 as CM
+import qualified Control.Concurrent.Map.Internal        as CMI
+import qualified Control.Concurrent.Map.Array           as CMA
 import qualified Data.Foldable                          as F
 --import           Data.IORef                             (readIORef)
 import           Data.List                              (intersperse)
@@ -84,6 +86,9 @@ import           Control.Par.Class.Unsafe (internalLiftIO)
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
 --import qualified Data.Splittable.Class    as Sp
 import Data.Hashable (Hashable)
+import Data.IORef
+import Data.Bits
+import Control.Monad as M
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis Ctrie
@@ -442,10 +447,34 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
   -- Can't split directly but can slice and then split:
   pmapFold mfn rfn initAcc (IMap lv) = do
     let cm = state lv
-        doElem k v = undefined
-        doSplit = undefined
     internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
-    internalLiftIO $ CM.unsafeTreeTraverse' cm doElem doSplit initAcc
+    ctrieTraverse cm initAcc
+    where
+      doElem k v acc = do
+        r <- mfn (k , v)
+        rfn r acc
+        
+      ctrieTraverse (CMI.Map root) initacc = go root initacc
+        where
+          go inode acc = do
+            main <- internalLiftIO $ readIORef inode
+            case main of
+              CMI.CNode bmp arr    -> do
+                ivs <- CMA.foldM (\ ls a -> do
+                                     iv <- PC.spawn_ $ go2 a initacc
+                                     return $ iv : ls)
+                                 [] (popCount bmp) arr
+                M.foldM (\ acc' iv -> PC.get iv >>= rfn acc') acc ivs
+              CMI.Tomb (CMI.S k v) -> doElem k v acc
+              CMI.Collision xs     -> go4 xs acc
+
+          go2 (CMI.INode inode) acc       = go inode acc
+          go2 (CMI.SNode (CMI.S k v)) acc = doElem k v acc
+
+          go4 [] acc = return acc
+          go4 ((CMI.S k v):rst) acc = do
+            acc'  <- doElem k v acc
+            go4 rst acc'
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =
