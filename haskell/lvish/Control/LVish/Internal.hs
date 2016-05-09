@@ -40,8 +40,6 @@ import qualified Control.LVish.Internal.SchedIdempotent as L
 import qualified Control.Par.Class        as PC
 import qualified Control.Par.Class.Unsafe as PU
 
-import Data.Constraint
-
 -- | This is how we stamp Par as being legit.
 instance PU.SecretSuperClass Par where
 
@@ -62,10 +60,8 @@ instance PU.ParMonad Par where
   type UnsafeParIO Par = L.Par
   dropToUnsafe (WrapPar p) = p
   liftUnsafe = WrapPar
-  parMonadIODict _ = Dict   
   {-# INLINE dropToUnsafe #-}
   {-# INLINE liftUnsafe #-}
-  {-# INLINE parMonadIODict #-}
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}

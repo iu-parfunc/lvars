@@ -6,7 +6,7 @@
 
 -- | Tests for the Data.LVar.PureMap and Data.LVar.SLMap modules.
 
-module CtrieMapTests (tests, runTests) where
+module CtrieMapTests where
 
 -- import qualified Data.LVar.SLSet as IS
 import qualified Data.LVar.CtrieMap as IM

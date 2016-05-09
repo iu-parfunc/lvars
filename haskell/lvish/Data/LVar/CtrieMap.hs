@@ -61,11 +61,9 @@ import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
 import           Control.Monad
 -- import           Control.Monad.IO.Class
-import           Data.Constraint
-import           Data.Proxy
+
 -- import qualified Control.Monad.IO.Class                 as MI
 import qualified Control.Concurrent.Map as CM
--- import           Data.Constraint
 import qualified Data.Foldable as F
 --import           Data.IORef                             (readIORef)
 import           Data.List (intersperse)
@@ -274,8 +272,8 @@ gmodify mp key fn = modify mp key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 --
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f,
-                                     LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f,
+                                   LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
@@ -294,7 +292,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     deltaThresh (_,v) | v == val  = return$ Just ()
                       | otherwise = return Nothing
-    globalThresh ref _frzn = do
+    globalThresh _ref _frzn = do
       let cm = L.state lv
       let fn Nothing _k v | v == val  = return $! Just ()
                           | otherwise = return $ Nothing
@@ -455,8 +453,6 @@ instance Show k => PC.ParFoldable (IMap k Frzn t) where
               -> (IMap k Frzn t)
               -> m e s a
   pmapFold mfn rfn initAcc (IMap lv) = 
-    case PU.parMonadIODict (Proxy::Proxy m) of
-      Dict -> 
        let cm = state lv
            doElem :: k -> t -> PU.UnsafeParIO m a
            doElem k v = do r  <- PU.dropToUnsafe (mfn (k,v))

@@ -183,8 +183,7 @@ library
                  concurrent-skiplist >= 0.1 && < 0.2,
                  -- Used in CtrieMap
                  ctrie >= 0.1,
-                 hashable,
-                 constraints
+                 hashable
 
   build-depends: containers >= 0.5.4.0
 

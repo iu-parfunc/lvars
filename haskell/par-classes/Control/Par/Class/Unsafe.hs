@@ -33,8 +33,7 @@ import Control.Applicative
 import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
-import Data.Constraint
-import Data.Proxy
+
 import Control.Monad.IO.Class
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
@@ -46,8 +45,7 @@ import Control.Monad.IO.Class
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
 -- should not be able to access the 'internalLiftIO' operation of this class from
 -- @Safe@ code.
-class
-      -- (MonadIO (UnsafeParIO p)) =>
+class (MonadIO (UnsafeParIO p)) =>
       ParMonad (p :: EffectSig -> * -> * -> *)
   where
   -- Public interface:
@@ -86,12 +84,6 @@ class
 
   -- | The inverse of 'dropToUnsafe'.
   liftUnsafe   :: UnsafeParIO p a -> p e s a 
-
-  -- | To interoperate with code expecting 'MonadIO', we need to
-  -- provide access to this instance for the unsafe monad.  But we
-  -- can't do so globally, because only *trusted* clients should be
-  -- privy to this instance.
-  parMonadIODict :: Proxy p -> Dict (MonadIO (UnsafeParIO p))
 
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
