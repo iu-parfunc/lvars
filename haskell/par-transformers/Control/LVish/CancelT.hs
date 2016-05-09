@@ -276,16 +276,16 @@ internal_cancel (CState ref) = do
 
 -- PROBLEM WITH WARNINGS: "Unused quantified type variable ‘e’"
 -- However, the variable 'e' IS IN FACT USED BELOW.  It seems the check is too local.
-instance forall p (e :: EffectSig) s .
+instance forall p .
          (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
           LVarSched (CancelT p) where
   type LVar (CancelT p) = LVar p
 
   newLV act = PC.lift $ newLV act
 
-  stateLV lvar =
-    let (_::Proxy (p e s ()), a) = stateLV lvar
-    in (Proxy, a)
+  stateLV lvar = 
+    case stateLV lvar of
+     (_::Proxy (p e s ()), a) -> (Proxy, a)
 
   putLV lv putter = do
     pollForCancel
