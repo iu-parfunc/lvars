@@ -2,6 +2,8 @@
 -- This is NOT a full Haskell module.
 -- This is a slice of source code that is #included into multiple files.
 
+-- ASSUMES: module "IM" refers to the Map implementation.
+
 -- This code is for testing write-only operations:
 
 import Test.Tasty.HUnit 
@@ -23,6 +25,9 @@ import System.Random
 import Test.QuickCheck
 import Test.Tasty.QuickCheck (testProperty)
 
+-- Some maps need Hashable instead of Ord:
+import Data.Hashable
+
 import           Control.LVish
 import           Control.LVish.DeepFrz (DeepFrz(..), Frzn, NonFrzn, Trvrsbl,
                                         runParThenFreeze, runParThenFreezeIO)
@@ -38,7 +43,7 @@ import GHC.Conc (numCapabilities)
 -- Build simple properties that amount to the identity function, but perform
 -- conversions in the middle.
 mkSimpleIdentityProp ::
-  (Ord v, Ord k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
+  (Ord v, Ord k, Hashable k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
   (TheMap k NonFrzn v -> Par (Ef P G NF B NI) NonFrzn a) -> [(k, v)] -> Bool
 mkSimpleIdentityProp trans prs =
   (L.sort$ L.nub$ map snd prs) == 

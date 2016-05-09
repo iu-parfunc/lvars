@@ -17,6 +17,8 @@ import qualified SkipListTests
 --import qualified SNZITests
 import qualified PureMapTests
 import qualified SLMapTests
+import qualified CtrieMapTests
+
 import qualified SatMapTests
 -- import qualified LayeredSatMapTests
 import qualified SetTests
@@ -40,6 +42,8 @@ alltests = testGroup "allTests"
 --       , LayeredSatMap.tests 
        , SatMapTests.tests
 --       , LayeredSatMapTests.tests
+
+       , CtrieMapTests.tests
 
 #ifdef FAILING_TESTS
        -- This was failing, but marking bringing it back online to test again [2014.10.22]:       

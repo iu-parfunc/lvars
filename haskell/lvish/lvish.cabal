@@ -182,7 +182,9 @@ library
                  -- Used in SLSet and SLMap
                  concurrent-skiplist >= 0.1 && < 0.2,
                  -- Used in CtrieMap
-                 ctrie >= 0.1, hashable, constraints
+                 ctrie >= 0.1,
+                 hashable,
+                 constraints
 
   build-depends: containers >= 0.5.4.0
 
@@ -220,6 +222,7 @@ test-suite test-lvish
                     SatMapTests,
                     LayeredSatMapTests,
                     SLMapTests,
+                    CtrieMapTests,
                     SetTests,
                     MaxPosIntTests,
                     AddRemoveSetTests,
@@ -236,7 +239,7 @@ test-suite test-lvish
                    ctrie >= 0.1
     build-depends: tasty, tasty-hunit, tasty-th,
                    tasty-quickcheck > 0.2.4, QuickCheck,
-                   HUnit, time, text
+                   HUnit, time, text, hashable
 
     ghc-options: -Wall -fno-warn-orphans
 

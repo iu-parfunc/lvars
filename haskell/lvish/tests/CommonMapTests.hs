@@ -1,4 +1,8 @@
 
+-- FRAGMENT: not a complete file.
+
+-- ASSUMES: module "IM" refers to the Map implementation.
+
 #include "CommonMapWriteTests.hs"
 
 --------------------------------------------------------------------------------
@@ -233,5 +237,6 @@ insertionTest chunks = do
 
 --------------------------------------------------------------------------------
 
+-- | Aggregate the included tests with the ones in this file:
 tests_common :: TestTree
 tests_common = testGroup "Common" [ $(testGroupGenerator) , tests_writeOnly ]
