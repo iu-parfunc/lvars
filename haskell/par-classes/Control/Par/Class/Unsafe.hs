@@ -9,6 +9,8 @@
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE Unsafe            #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
 -- | Unsafe operations that end users should NOT import.
@@ -84,9 +86,6 @@ class
 
   -- | The inverse of 'dropToUnsafe'.
   liftUnsafe   :: UnsafeParIO p a -> p e s a 
-
-  -- | A counterpart of 'fork' in the unsafe fragment.
-  forkUnsafe :: UnsafeParIO p () -> UnsafeParIO p ()
 
   -- | To interoperate with code expecting 'MonadIO', we need to
   -- provide access to this instance for the unsafe monad.  But we

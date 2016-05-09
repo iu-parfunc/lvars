@@ -63,11 +63,9 @@ instance PU.ParMonad Par where
   dropToUnsafe (WrapPar p) = p
   liftUnsafe = WrapPar
   parMonadIODict _ = Dict   
-  forkUnsafe = L.fork
   {-# INLINE dropToUnsafe #-}
   {-# INLINE liftUnsafe #-}
   {-# INLINE parMonadIODict #-}
-  {-# INLINE forkUnsafe #-}
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}

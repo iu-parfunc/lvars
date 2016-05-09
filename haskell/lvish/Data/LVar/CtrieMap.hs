@@ -88,7 +88,7 @@ import qualified Control.Par.Class as PC
 import qualified Control.Par.Class.Unsafe as PU
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
 --import qualified Data.Splittable.Class    as Sp
--- import qualified Data.Par.Range as R
+import qualified Data.Par.Range as R
 import           Data.Hashable (Hashable)
 
 ------------------------------------------------------------------------------
@@ -463,19 +463,20 @@ instance Show k => PC.ParFoldable (IMap k Frzn t) where
                            return r
 
            doSplit :: Int -> (Int -> PU.UnsafeParIO m a) -> PU.UnsafeParIO m a
-           doSplit n continue =
-             -- TODO: Can use some parallel for-loop from par-collections for better
-             -- spawn topoloogy:
-             -- let act :: m e s a 
-             --     act = R.pmapReduce_ (R.range 0 n) continue rfn initAcc
-             -- in PU.unsafeParMonadIO act
+           -- Optimization, try to minimize heap-alloc for this common case:
+           doSplit 2 continue =
+             PU.dropToUnsafe $ 
+             do f <- PC.spawn_ (PU.liftUnsafe (continue 0))
+                y <- PU.liftUnsafe $ continue 1 
+                x <- PC.get f
+                rfn x y 
 
-             -- FIXME: Need a way to run parallel computation in UnsafeParIO.
-             -- I.e. need a ParFuture instance for it also!!
-             foldM (\acc i ->
-                       do v <- continue i
-                          PU.dropToUnsafe $ rfn acc v)
-                   initAcc [0..n-1]
+           -- This should probably be an invariant breakage on the part of unsafeTreeTraverse:
+           doSplit 1 continue = continue 0
+                
+           doSplit n continue =
+             PU.dropToUnsafe $
+                R.pmapReduce_ (R.range 0 n) (PU.liftUnsafe . continue) rfn initAcc
 
            unsf :: (PU.UnsafeParIO m) a
            unsf = CM.unsafeTreeTraverse' cm doElem doSplit initAcc             
