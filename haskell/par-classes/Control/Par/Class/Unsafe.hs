@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE DataKinds         #-}
@@ -31,6 +32,7 @@ import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
 import Data.Constraint
+import Data.Proxy
 import Control.Monad.IO.Class
 
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
@@ -38,11 +40,13 @@ import Control.Monad.IO.Class
 --
 -- Note, this class also serves a secondary purpose similar: providing an
 -- implementation-internal way to lift IO into tho Par monad.  However, this is a
--- different use case than either `MonadIO` or `ParThreadSafe`.  Unlike the latter,
+-- different use case than either 'MonadIO' or 'ParThreadSafe'.  Unlike the latter,
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
--- should not be able to access the `internalLiftIO` operation of this class from
+-- should not be able to access the 'internalLiftIO' operation of this class from
 -- @Safe@ code.
-class ParMonad (p :: EffectSig -> * -> * -> *)
+class
+      -- (MonadIO (UnsafeParIO p)) =>
+      ParMonad (p :: EffectSig -> * -> * -> *)
   where
   -- Public interface:
   ----------------------------------------
@@ -73,8 +77,23 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- the monad as an IO Monad.
   type UnsafeParIO p :: * -> *
 
-  unsafeParMonadIO :: p e s a -> UnsafeParIO p a
-  parMonadIODict :: Dict (MonadIO (UnsafeParIO p))
+  -- | Convert a computation to the UNSAFE, INTERNAL monad, where anything goes,
+  --  and, in particular, IO is allowed.
+  dropToUnsafe :: p e s a -> UnsafeParIO p a
+
+  -- | The inverse of 'dropToUnsafe'.
+  liftUnsafe   :: UnsafeParIO p a -> p e s a 
+
+  -- TODO:
+  --  A counterpart of 'fork' in the unsafe fragment.
+  -- forkUnsafe :: UnsafeParIO p a -> UnsafeParIO p a 
+
+  -- | To interoperate with code expecting 'MonadIO', we need to
+  -- provide access to this instance for the unsafe monad.  But we
+  -- can't do so globally, because only *trusted* clients should be
+  -- privy to this instance.
+  parMonadIODict :: Proxy p -> Dict (MonadIO (UnsafeParIO p))
+
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
 -- (We cannot include Monad as a super-class of ParMonad, because it would
@@ -104,9 +123,9 @@ class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
 --
 -- > (m >> m) == m
 --
--- For all actions `m` in the monad.  For example, any concrete Par
--- monad which implements *only* `ParFuture` and/or `ParIVar`, would
--- retain this property.  Conversely, any `NonIdemParIVar` monad would
+-- For all actions 'm' in the monad.  For example, any concrete Par
+-- monad which implements *only* 'ParFuture' and/or 'ParIVar', would
+-- retain this property.  Conversely, any 'NonIdemParIVar' monad would
 -- violate the property.
 class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 
@@ -119,3 +138,4 @@ class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 -- > (do m1; m2) == (do fork m1; m2)
 --
 class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
+

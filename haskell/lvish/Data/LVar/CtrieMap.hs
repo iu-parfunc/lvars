@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
@@ -47,44 +48,48 @@ module Data.LVar.CtrieMap
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy, traverseMap, traverseMap_,
+        copy, traverseMap, traverseMap_,
 
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP
        ) where
 
 import           Control.Applicative
-import           Control.Exception                      (throw)
+import           Control.Exception (throw)
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal as LI
 import           Control.Monad
+-- import           Control.Monad.IO.Class
+import           Data.Constraint
+import           Data.Proxy
 -- import qualified Control.Monad.IO.Class                 as MI
-import qualified Control.Concurrent.Map                 as CM
+import qualified Control.Concurrent.Map as CM
 -- import           Data.Constraint
-import qualified Data.Foldable                          as F
+import qualified Data.Foldable as F
 --import           Data.IORef                             (readIORef)
-import           Data.List                              (intersperse)
-import           Data.LVar.Generic                      as G
-import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
-import qualified Data.LVar.IVar                         as IV
-import qualified Data.Map.Strict                        as M
-import           Data.UtilInternal                      (traverseWithKey_)
-import           GHC.Prim                               (unsafeCoerce#)
+import           Data.List (intersperse)
+import           Data.LVar.Generic as G
+import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import qualified Data.LVar.IVar as IV
+import qualified Data.Map.Strict as M
+import           Data.UtilInternal (traverseWithKey_)
+import           GHC.Prim (unsafeCoerce#)
 import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV, putLV_)
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude
-import           System.IO.Unsafe                       (unsafeDupablePerformIO)
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 --import Debug.Trace
 
-import           Control.LVish.Internal.Unsafe     ()
-import qualified Control.Par.Class        as PC
-import           Control.Par.Class.Unsafe (internalLiftIO, unsafeParMonadIO, parMonadIODict)
+import           Control.LVish.Internal.Unsafe ()
+import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PU
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
 --import qualified Data.Splittable.Class    as Sp
-import Data.Hashable (Hashable)
+-- import qualified Data.Par.Range as R
+import           Data.Hashable (Hashable)
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis Ctrie
@@ -435,26 +440,47 @@ instance PC.Generator (IMap k Frzn a) where
   {-# INLINE foldMP #-}
   -- | More efficient, not requiring unsafePerformIO or risk of duplication.
   foldMP fn zer (IMap (WrapLVar lv)) =
-    CM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
+    CM.foldlWithKey PU.internalLiftIO (\ a k v -> fn a (k,v))
                     zer (L.state lv)
 
-instance Show k => PC.ParFoldable (IMap k Frzn a) where
+instance Show k => PC.ParFoldable (IMap k Frzn t) where
   {-# INLINE pmapFold #-}
-  -- Can't split directly but can slice and then split:
-  pmapFold mfn rfn initAcc (IMap lv) = do
---   case parMonadIODict :: Dict (MonadIO (UnsafeParIO p))   
-    let cm = state lv
-        doElem k v = undefined
-         -- unsafeParMonadIO (mfn (k,v))
-         -- case unsafeParAsIO (mfn (k,v)) of
-         --   (m1, Dict) -> do MI.liftIO (print "hello")
-         --                    m1
-         --                    return ()
 
-        doSplit = undefined
---    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
---    internalLiftIO $ CM.unsafeTreeTraverse' cm doElem doSplit initAcc
-    error "PARFOLDABLE / CTRIE - FINISHME"
+  -- Can't split directly but can slice and then split:
+  pmapFold :: forall m e s a .
+              (PC.ParFuture m, HasGet e, HasPut e, PC.FutContents m a)
+              => ((k,t) -> m e s a)
+              -> (a -> a -> m e s a)   
+              -> a                 
+              -> (IMap k Frzn t)
+              -> m e s a
+  pmapFold mfn rfn initAcc (IMap lv) = 
+    case PU.parMonadIODict (Proxy::Proxy m) of
+      Dict -> 
+       let cm = state lv
+           doElem :: k -> t -> PU.UnsafeParIO m a
+           doElem k v = do r  <- PU.dropToUnsafe (mfn (k,v))
+                           return r
+
+           doSplit :: Int -> (Int -> PU.UnsafeParIO m a) -> PU.UnsafeParIO m a
+           doSplit n continue =
+             -- TODO: Can use some parallel for-loop from par-collections for better
+             -- spawn topoloogy:
+             -- let act :: m e s a 
+             --     act = R.pmapReduce_ (R.range 0 n) continue rfn initAcc
+             -- in PU.unsafeParMonadIO act
+
+             -- FIXME: Need a way to run parallel computation in UnsafeParIO.
+             -- I.e. need a ParFuture instance for it also!!
+             foldM (\acc i ->
+                       do v <- continue i
+                          PU.dropToUnsafe $ rfn acc v)
+                   initAcc [0..n-1]
+
+           unsf :: (PU.UnsafeParIO m) a
+           unsf = CM.unsafeTreeTraverse' cm doElem doSplit initAcc             
+       in
+         PU.liftUnsafe unsf
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =

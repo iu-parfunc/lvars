@@ -56,14 +56,16 @@ instance PU.ParMonad Par where
       fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
   preturn x = WrapPar (return x)
 
-  -- Private methods:
+  --------------- Private methods ------------------
   internalLiftIO = liftIO
 
   type UnsafeParIO Par = L.Par
-  {-# INLINE unsafeParMonadIO #-}
-  unsafeParMonadIO (WrapPar p) = p
-  parMonadIODict = Dict 
-  
+  {-# INLINE dropToUnsafe #-}
+  dropToUnsafe (WrapPar p) = p
+  {-# INLINE liftUnsafe #-}
+  liftUnsafe = WrapPar
+  {-# INLINE parMonadIODict #-}
+  parMonadIODict _ = Dict   
 
 
 {-# INLINE state  #-}

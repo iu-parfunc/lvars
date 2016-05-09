@@ -51,4 +51,4 @@ Library
                , constraints
                , transformers
 
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-orphans
