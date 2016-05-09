@@ -74,7 +74,8 @@ class
   internalLiftIO :: IO a -> p e s a
 
   -- | An associated type to allow (trusted) LVar implementations to use
-  -- the monad as an IO Monad.
+  -- the monad as a 'MonadIO' Monad.  This is useful to pass callbacks
+  -- to other library functions that expect 'MonadIO'.
   type UnsafeParIO p :: * -> *
 
   -- | Convert a computation to the UNSAFE, INTERNAL monad, where anything goes,
@@ -84,9 +85,8 @@ class
   -- | The inverse of 'dropToUnsafe'.
   liftUnsafe   :: UnsafeParIO p a -> p e s a 
 
-  -- TODO:
-  --  A counterpart of 'fork' in the unsafe fragment.
-  -- forkUnsafe :: UnsafeParIO p a -> UnsafeParIO p a 
+  -- | A counterpart of 'fork' in the unsafe fragment.
+  forkUnsafe :: UnsafeParIO p () -> UnsafeParIO p ()
 
   -- | To interoperate with code expecting 'MonadIO', we need to
   -- provide access to this instance for the unsafe monad.  But we

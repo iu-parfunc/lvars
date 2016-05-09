@@ -60,13 +60,14 @@ instance PU.ParMonad Par where
   internalLiftIO = liftIO
 
   type UnsafeParIO Par = L.Par
-  {-# INLINE dropToUnsafe #-}
   dropToUnsafe (WrapPar p) = p
-  {-# INLINE liftUnsafe #-}
   liftUnsafe = WrapPar
-  {-# INLINE parMonadIODict #-}
   parMonadIODict _ = Dict   
-
+  forkUnsafe = L.fork
+  {-# INLINE dropToUnsafe #-}
+  {-# INLINE liftUnsafe #-}
+  {-# INLINE parMonadIODict #-}
+  {-# INLINE forkUnsafe #-}
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}
