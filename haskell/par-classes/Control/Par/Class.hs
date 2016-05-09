@@ -71,7 +71,7 @@ where
 
 import           Control.DeepSeq
 import           Control.Par.Class.Unsafe
-import           GHC.Prim                 (Constraint)
+import           GHC.Exts                 (Constraint)
 
 import           Control.Par.EffectSigs
 

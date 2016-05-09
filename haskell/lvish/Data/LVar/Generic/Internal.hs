@@ -32,7 +32,7 @@ import           Data.List (sort, intersperse)
 import           GHC.Prim (unsafeCoerce#)
 -- import           System.IO.Unsafe (unsafeDupablePerformIO)
 
-import GHC.Prim (Constraint)
+import GHC.Base (Constraint)
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling

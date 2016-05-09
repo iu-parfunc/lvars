@@ -25,7 +25,7 @@ import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 import           Data.UtilInternal (traverseWithKey_)
 
-import           Control.Applicative ((<$>))
+-- import           Control.Applicative ((<$>))
 import           Data.IORef
 import qualified Data.Foldable as F
 import qualified Data.Map.Strict as M
@@ -127,11 +127,11 @@ unsafePeekKey key (IMap (WrapLVar lv)) = do
 -- otherwise filling in a new "bottom" value and returning it.
 --
 -- The boolean return value is @True@ iff a new, fresh entry was created.
-unsafeGetOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
+_unsafeGetOrInit :: forall f a e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a) =>
           key -- ^ The key to lookup or populate.
           -> IMap key s (f s a)
           -> Par e s (Bool, f s a)
-unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
+_unsafeGetOrInit key (IMap (WrapLVar lv)) = go1
  where
   -- go1 is OPTIONAL optimization.  Could skip right to go2.
   -- The tension here is that we can't do IO during an atomicModifyIORef.
@@ -183,6 +183,6 @@ instance PC.Generator (IMap k Frzn a) where
   {-# INLINE fold #-}
   fold fn zer mp = PC.fold fn zer (fromIMap mp)
 
-  {-# INLINE foldMP #-}
+  -- {-# INLINE foldMP #-}
   -- | More efficient, not requiring unsafePerformIO or risk of duplication.
   -- foldMP fn zer mp = foldMP fn zer (fromIMap mp)
