@@ -189,7 +189,7 @@ library
 
   build-depends: par-classes     >= 1.1 && < 2.0,
                  par-collections >= 1.1 && < 2.0,
-                 tslogger >= 0.1
+                 tslogger >= 0.1.0.0
                  
   ghc-options: -rtsopts -Wall -fno-warn-orphans
 
@@ -241,10 +241,9 @@ test-suite test-lvish
     build-depends: tasty, tasty-hunit, tasty-th,
                    tasty-quickcheck > 0.2.4, QuickCheck,
                    HUnit, time, text, hashable
-
+    build-depends: tslogger >= 0.1.0.0
+                   
     ghc-options: -Wall -fno-warn-orphans
-
-    build-depends: tslogger >= 0.1
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)
