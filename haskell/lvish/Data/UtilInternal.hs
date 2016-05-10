@@ -10,7 +10,7 @@ module Data.UtilInternal
 
 import           Control.Applicative
 import           Control.Monad (void)
-import           Data.Monoid (Monoid(..))
+-- import           Data.Monoid (Monoid(..))
 import qualified Data.Map as M
 
 --------------------------------------------------------------------------------

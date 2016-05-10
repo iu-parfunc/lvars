@@ -54,7 +54,7 @@ newtype CancelT (p :: EffectSig -> * -> * -> *) e s a =
 instance ParMonad m => ParMonad (CancelT m) where
   pbind (CancelT st) f = CancelT $ do
     s0 <- S.get
-    (res, s) <- S.lift $ S.runStateT st s0
+    (res, _s) <- S.lift $ S.runStateT st s0 -- AUDITME: is it ok that it drops the state here? [2016.05.09]
     unCancelT $ f res
 
   preturn = CancelT . return
@@ -69,6 +69,10 @@ instance ParMonad m => ParMonad (CancelT m) where
       return res
 
   internalLiftIO m = CancelT (S.lift (internalLiftIO m))
+
+  type UnsafeParIO (CancelT m) = StateT CState (UnsafeParIO m)
+  dropToUnsafe = undefined
+  liftUnsafe = undefined
 
 instance ParMonadTrans CancelT where
   lift = CancelT . S.lift
@@ -199,7 +203,7 @@ forkCancelableNDWithTid tid act = forkInternal tid act
 
 -- Internal version -- no rules!
 forkInternal
-  :: forall (p :: EffectSig -> * -> * -> *) e s a f .
+  :: forall (p :: EffectSig -> * -> * -> *) e s a .
      (ParIVar p, LVarSched p, FutContents p CFutFate, FutContents p a,
       HasPut (SetP 'P e)) =>
      ThreadId -> CancelT p e s a -> CancelT p e s (CFut p s a)
@@ -229,7 +233,7 @@ forkInternal (CState childRef) act = CancelT $ do
 
     return $! CFut fate result
   where
-    cast :: CancelT p (SetP P e) s r -> CancelT p e s r
+    cast :: CancelT p (SetP 'P e) s r -> CancelT p e s r
     cast = internalCastEffects
 
     cast' :: p (SetP 'P e) s r -> p e s r
@@ -270,16 +274,18 @@ internal_cancel (CState ref) = do
   -- We could do this traversal in parallel if we liked...
   S.forM_ chldrn internal_cancel
 
-instance forall p (e :: EffectSig) s .
+-- PROBLEM WITH WARNINGS: "Unused quantified type variable ‘e’"
+-- However, the variable 'e' IS IN FACT USED BELOW.  It seems the check is too local.
+instance forall p .
          (ParMonad (CancelT p), ParIVar p, LVarSched p, ParMonadTrans CancelT) =>
           LVarSched (CancelT p) where
   type LVar (CancelT p) = LVar p
 
   newLV act = PC.lift $ newLV act
 
-  stateLV lvar =
-    let (_::Proxy (p e s ()), a) = stateLV lvar
-    in (Proxy, a)
+  stateLV lvar = 
+    case stateLV lvar of
+     (_::Proxy (p e s ()), a) -> (Proxy, a)
 
   putLV lv putter = do
     pollForCancel
@@ -309,6 +315,7 @@ instance ParFuture m => ParFuture (CancelT m) where
 instance ParIVar m => ParIVar (CancelT m) where
   new       = CancelT $ S.lift PC.new
   put_ iv v = CancelT $ S.lift $ PC.put_ iv v
+  putNI_ iv v = CancelT $ S.lift $ PC.putNI_ iv v
 
 -- | A continuation-passing-sytle version of `asyncAnd`.  This version is
 -- non-blocking, simply registering a call-back that receives the result of the AND
@@ -357,10 +364,11 @@ asyncAndCPS leftM rightM kont = do
                 internalCastEffects $ kont False
               101 -> internalCastEffects $ kont False
               200 -> return ()
+              _   -> error "asyncAndCPS: internal error.  Should be imposssible."
   tid1 <- createTid
   tid2 <- createTid
-  launch tid1 tid2 leftM
-  launch tid2 tid1 rightM
+  _ <- launch tid1 tid2 leftM
+  _ <- launch tid2 tid1 rightM
   return ()
 
 -- | A parallel AND operation that not only signals its output early when it receives

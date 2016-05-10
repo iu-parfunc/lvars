@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE DataKinds         #-}
@@ -7,6 +8,8 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE Unsafe            #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
@@ -31,27 +34,28 @@ import Control.Par.EffectSigs
 
 import Unsafe.Coerce          (unsafeCoerce)
 
+import Control.Monad.IO.Class
+
 -- | The essence of a Par monad is that its control flow is a binary tree of forked
 -- threads.
 --
 -- Note, this class also serves a secondary purpose similar: providing an
 -- implementation-internal way to lift IO into tho Par monad.  However, this is a
--- different use case than either `MonadIO` or `ParThreadSafe`.  Unlike the latter,
+-- different use case than either 'MonadIO' or 'ParThreadSafe'.  Unlike the latter,
 -- ALL Par monads should be a member of this class.  Unlike the former, the user
--- should not be able to access the `internalLiftIO` operation of this class from
+-- should not be able to access the 'internalLiftIO' operation of this class from
 -- @Safe@ code.
-class ParMonad (p :: EffectSig -> * -> * -> *)
+class (MonadIO (UnsafeParIO p)) =>
+      ParMonad (p :: EffectSig -> * -> * -> *)
   where
+  -- Public interface:
+  ----------------------------------------
+
   pbind :: p e s a -> (a -> p e s b) -> p e s b
   preturn :: a -> p e s a
 
   -- | Forks a computation to happen in parallel.
   fork :: p e s () -> p e s ()
-
-  -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
-  -- only be used by other infrastructure-level components, e.g. the implementation
-  -- of monad transformers or LVars.
-  internalLiftIO :: IO a -> p e s a
 
   -- | (Internal! Not exposed to the end user.) Unsafely cast effect signatures.
   internalCastEffects :: p e1 s a -> p e2 s a
@@ -60,6 +64,27 @@ class ParMonad (p :: EffectSig -> * -> * -> *)
   -- | Effect subtyping.  Lift an RO computation to be a potentially RW one.
   liftReadOnly :: p (SetReadOnly e) s a -> p e s a
   liftReadOnly = unsafeCoerce
+
+  -- Private methods:
+  ----------------------------------------
+
+  -- | (Internal!  Not exposed to the end user.)  Lift an IO operation.  This should
+  -- only be used by other infrastructure-level components, e.g. the implementation
+  -- of monad transformers or LVars.
+  internalLiftIO :: IO a -> p e s a
+
+  -- | An associated type to allow (trusted) LVar implementations to use
+  -- the monad as a 'MonadIO' Monad.  This is useful to pass callbacks
+  -- to other library functions that expect 'MonadIO'.
+  type UnsafeParIO p :: * -> *
+
+  -- | Convert a computation to the UNSAFE, INTERNAL monad, where anything goes,
+  --  and, in particular, IO is allowed.
+  dropToUnsafe :: p e s a -> UnsafeParIO p a
+
+  -- | The inverse of 'dropToUnsafe'.
+  liftUnsafe   :: UnsafeParIO p a -> p e s a 
+
 
 -- If we use this design for ParMonad, we suffer these orphan instances:
 -- (We cannot include Monad as a super-class of ParMonad, because it would
@@ -89,9 +114,9 @@ class SecretSuperClass (p :: EffectSig -> * -> * -> *) where
 --
 -- > (m >> m) == m
 --
--- For all actions `m` in the monad.  For example, any concrete Par
--- monad which implements *only* `ParFuture` and/or `ParIVar`, would
--- retain this property.  Conversely, any `NonIdemParIVar` monad would
+-- For all actions 'm' in the monad.  For example, any concrete Par
+-- monad which implements *only* 'ParFuture' and/or 'ParIVar', would
+-- retain this property.  Conversely, any 'NonIdemParIVar' monad would
 -- violate the property.
 class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 
@@ -104,3 +129,4 @@ class (SecretSuperClass p, ParMonad p) => IdempotentParMonad p where
 -- > (do m1; m2) == (do fork m1; m2)
 --
 class (SecretSuperClass p, ParMonad p) => ParThreadSafe (p :: EffectSig -> * -> * -> *) where
+

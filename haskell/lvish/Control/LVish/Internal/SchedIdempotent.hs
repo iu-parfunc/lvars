@@ -45,26 +45,27 @@ module Control.LVish.Internal.SchedIdempotent
     mkPar, Status(..), sched, Listener(..), lvarDbgName
   ) where
 
+import qualified Control.Monad.IO.Class as IOClass
 import           Control.Monad hiding (sequence, join)
 import           Control.Concurrent hiding (yield)
-import qualified Control.Concurrent as Conc
+-- import qualified Control.Concurrent as Conc
 import qualified Control.Exception as E
 import qualified Control.Concurrent.Async as A
 import           Control.DeepSeq
 import           Control.Applicative
 import           Control.LVish.Internal.Logging as L
-import           Debug.Trace(trace)
+-- import           Debug.Trace(trace)
 import           Data.Concurrent.Internal.MonadToss
 import           Data.IORef
 import           Data.Atomics
-import           Data.Typeable
+-- import           Data.Typeable
 import qualified Data.Atomics.Counter as C
 import qualified Data.Concurrent.Bag as B
 import           GHC.Conc hiding (yield)
-import qualified GHC.Conc 
+-- import qualified GHC.Conc 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
-import           System.Environment(getEnvironment)
+-- import           System.Environment(getEnvironment)
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
@@ -72,7 +73,7 @@ import           System.Random (random)
 import           Text.Printf (printf, hPrintf)
 
 -- import Control.Compose ((:.), unO)
-import           Data.Traversable  hiding (forM)
+-- import           Data.Traversable  hiding (forM)
 
 import Control.LVish.Internal.Types
 import qualified Control.LVish.Internal.SchedUtils as Sched
@@ -586,6 +587,9 @@ liftIO :: IO a -> Par a
 liftIO io = mkPar $ \k q -> do
   r <- io
   exec (k r) q
+
+instance IOClass.MonadIO Par where
+  liftIO = liftIO
 
 -- | IF compiled with debugging support, this will return the Logger used by the
 -- current Par session, otherwise it will return Nothing.

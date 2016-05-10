@@ -55,13 +55,13 @@ import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 (LVar (WrapLVar),
                                                          Par (WrapPar))
 import qualified Control.LVish.Internal                 as I
-import qualified Control.LVish.Internal.Types           as LV
+-- -- import qualified Control.LVish.Internal.Types           as LV
 import           Control.Par.EffectSigs
 import qualified Data.Foldable                          as F
 import           Data.IORef
 import           Data.LVar.Generic
 import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
-import           GHC.Prim                               (unsafeCoerce#)
+-- -- import           GHC.Prim                               (unsafeCoerce#)
 import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV)
 import qualified Control.LVish.Internal.SchedIdempotent as LI
@@ -71,7 +71,7 @@ import           System.Mem.StableName                  (hashStableName,
                                                          makeStableName)
 
 import qualified Control.Par.Class        as PC
-import qualified Control.Par.Class.Unsafe as PC
+-- -- import qualified Control.Par.Class.Unsafe as PC
 
 ------------------------------------------------------------------------------
 -- IVars implemented on top of (the idempotent implementation of) LVars

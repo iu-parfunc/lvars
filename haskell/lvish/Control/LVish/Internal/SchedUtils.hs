@@ -14,7 +14,7 @@ import Control.Monad
 import Control.Concurrent
 import Data.IORef
 import Data.Atomics (atomicModifyIORefCAS)
-import qualified Data.BitList as BL
+-- import qualified Data.BitList as BL
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
 
@@ -42,40 +42,50 @@ nullQ = CL.nullQ
 
 type Deque a = IORef [a]
 
--- | Create a new local work deque
-newDeque :: IO (Deque a)
 newDeque = newIORef []
 
--- | Add work to a thread's own work deque
-pushMine :: Deque a -> a -> IO ()
 pushMine deque t = 
   atomicMod deque $ \ts -> (t:ts, ())
                                    
--- | Take work from a thread's own work deque
-popMine :: Deque a -> IO (Maybe a)
 popMine deque = do
   atomicMod deque $ \ts ->
     case ts of
       []      -> ([], Nothing)
       (t:ts') -> (ts', Just t)
 
-nullQ :: Deque a -> IO Bool
 nullQ deque = do
   ls <- readIORef deque
   return $! null ls
 
-
--- | Add low-priority work to a thread's own work deque
-pushYield :: Deque a -> a -> IO ()
 pushYield deque t = 
   atomicMod deque $ \ts -> (ts++[t], ()) 
 
--- | Take work from a different thread's work deque
-popOther :: Deque a -> IO (Maybe a)
 popOther = popMine
 
 #endif
 -- END: ifdef CHASE_LEV
+
+------------ Signatures, shared by the above: --------------
+
+-- | Create a new local work deque
+newDeque :: IO (Deque a)
+
+-- | Add work to a thread's own work deque
+pushMine :: Deque a -> a -> IO ()
+
+-- | Take work from a thread's own work deque
+popMine :: Deque a -> IO (Maybe a)
+
+nullQ :: Deque a -> IO Bool
+
+-- | Take work from a different thread's work deque
+popOther :: Deque a -> IO (Maybe a)
+
+-- | Add low-priority work to a thread's own work deque
+pushYield :: Deque a -> a -> IO ()
+
+------------------------------------------------------------
+
 
 -- The version of atomic modify used in several places in this file:
 atomicMod :: IORef a -> (a -> (a, b)) -> IO b

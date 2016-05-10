@@ -3,6 +3,8 @@
 --
 --   This module is imported for instances only (specifically, the `MonadIO` instance).
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Control.LVish.Internal.Unsafe() where
 
 import Control.LVish.Internal

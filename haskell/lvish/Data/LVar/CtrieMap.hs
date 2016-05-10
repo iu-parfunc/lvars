@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
@@ -47,48 +48,53 @@ module Data.LVar.CtrieMap
          withCallbacksThenFreeze,
 
          -- * Higher-level derived operations
-         copy, traverseMap, traverseMap_,
+        copy, traverseMap, traverseMap_,
 
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseMapHP, traverseMapHP_, unionHP
        ) where
 
 import           Control.Applicative
-import           Control.Exception                      (throw)
+import           Control.Exception (throw)
 import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
-import           Control.LVish.Internal                 as LI
+import           Control.LVish.Internal as LI
 import           Control.Monad
---import           Control.Monad.IO.Class
 import qualified Control.Concurrent.Map                 as CM
 import qualified Control.Concurrent.Map.Internal        as CMI
 import qualified Control.Concurrent.Map.Array           as CMA
 import qualified Data.Foldable                          as F
+
 --import           Data.IORef                             (readIORef)
-import           Data.List                              (intersperse)
-import           Data.LVar.Generic                      as G
-import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
-import qualified Data.LVar.IVar                         as IV
-import qualified Data.Map.Strict                        as M
-import           Data.UtilInternal                      (traverseWithKey_)
-import           GHC.Prim                               (unsafeCoerce#)
+import           Data.List (intersperse)
+import           Data.LVar.Generic as G
+import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
+import qualified Data.LVar.IVar as IV
+import qualified Data.Map.Strict as M
+import           Data.UtilInternal (traverseWithKey_)
+import           GHC.Prim (unsafeCoerce#)
 import           Control.LVish.Internal.SchedIdempotent (freezeLV, getLV, newLV,
                                                          putLV, putLV_)
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude
-import           System.IO.Unsafe                       (unsafeDupablePerformIO)
+import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 --import Debug.Trace
 
-import           Control.LVish.Internal.Unsafe     ()
-import qualified Control.Par.Class        as PC
-import           Control.Par.Class.Unsafe (internalLiftIO)
+import           Control.LVish.Internal.Unsafe ()
+import qualified Control.Par.Class as PC
+import qualified Control.Par.Class.Unsafe as PU
 --import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
 --import qualified Data.Splittable.Class    as Sp
+
 import Data.Hashable (Hashable)
 import Data.IORef
 import Data.Bits
 import Control.Monad as M
+
+import qualified Data.Par.Range as R
+import           Data.Hashable (Hashable)
+
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis Ctrie
@@ -248,11 +254,11 @@ modify :: forall f a b e s key . (Ord key, Hashable key, Show key, Ord a, HasPut
           -> (Par e s (f s a))    -- ^ Create a new \"bottom\" element whenever an entry is not present.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par e s b
-modify (IMap (WrapLVar lv)) key newBottom fn = do
+modify (IMap (WrapLVar lv)) key newBot fn = do
     act <- WrapPar $ putLV_ lv putter
     act
   where putter cm = do
-          putRes <- unWrapPar $ CM.putIfAbsent cm key newBottom
+          putRes <- unWrapPar $ CM.putIfAbsent cm key newBot
           case putRes of
             CM.Added v -> return (Just (key,v), fn v)
             CM.Found v -> return (Nothing,      fn v)
@@ -266,15 +272,15 @@ gmodify :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f,
           -> key                  -- ^ The key to lookup.
           -> (f s a -> Par e s b) -- ^ The computation to apply on the right-hand side of the keyed entry.
           -> Par e s b
-gmodify map key fn = modify map key G.newBottom fn
+gmodify mp key fn = modify mp key G.newBottom fn
 
 
 {-# INLINE getOrInit #-}
 -- | Return the preexisting value for a key if it exists, and otherwise return
 --
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f,
-                                     LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a e s key . (Ord key, Hashable key, LVarData1 f, LVarWBottom f,
+                                   LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
@@ -293,7 +299,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     deltaThresh (_,v) | v == val  = return$ Just ()
                       | otherwise = return Nothing
-    globalThresh ref _frzn = do
+    globalThresh _ref _frzn = do
       let cm = L.state lv
       let fn Nothing _k v | v == val  = return $! Just ()
                           | otherwise = return $ Nothing
@@ -439,12 +445,13 @@ instance PC.Generator (IMap k Frzn a) where
   {-# INLINE foldMP #-}
   -- | More efficient, not requiring unsafePerformIO or risk of duplication.
   foldMP fn zer (IMap (WrapLVar lv)) =
-    CM.foldlWithKey internalLiftIO (\ a k v -> fn a (k,v))
+    CM.foldlWithKey PU.internalLiftIO (\ a k v -> fn a (k,v))
                     zer (L.state lv)
 
-instance Show k => PC.ParFoldable (IMap k Frzn a) where
+instance Show k => PC.ParFoldable (IMap k Frzn t) where
   {-# INLINE pmapFold #-}
-  -- Can't split directly but can slice and then split:
+#if 1
+  -- NON-MODULAR version, tree-walk inlined
   pmapFold mfn rfn initAcc (IMap lv) = do
     let cm = state lv
     internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
@@ -475,6 +482,41 @@ instance Show k => PC.ParFoldable (IMap k Frzn a) where
           go4 ((CMI.S k v):rst) acc = do
             acc'  <- doElem k v acc
             go4 rst acc'
+#else
+  pmapFold :: forall m e s a .
+              (PC.ParFuture m, HasGet e, HasPut e, PC.FutContents m a)
+              => ((k,t) -> m e s a)
+              -> (a -> a -> m e s a)   
+              -> a                 
+              -> (IMap k Frzn t)
+              -> m e s a
+  pmapFold mfn rfn initAcc (IMap lv) = 
+       let cm = state lv
+           doElem :: k -> t -> PU.UnsafeParIO m a
+           doElem k v = do r  <- PU.dropToUnsafe (mfn (k,v))
+                           return r
+
+           doSplit :: Int -> (Int -> PU.UnsafeParIO m a) -> PU.UnsafeParIO m a
+           -- Optimization, try to minimize heap-alloc for this common case:
+           doSplit 2 continue =
+             PU.dropToUnsafe $ 
+             do f <- PC.spawn_ (PU.liftUnsafe (continue 0))
+                y <- PU.liftUnsafe $ continue 1 
+                x <- PC.get f
+                rfn x y 
+
+           -- This should probably be an invariant breakage on the part of unsafeTreeTraverse:
+           doSplit 1 continue = continue 0
+                
+           doSplit n continue =
+             PU.dropToUnsafe $
+                R.pmapReduce_ (R.range 0 n) (PU.liftUnsafe . continue) rfn initAcc
+
+           unsf :: (PU.UnsafeParIO m) a
+           unsf = CM.unsafeTreeTraverse' cm doElem doSplit initAcc             
+       in
+         PU.liftUnsafe unsf
+#endif
 
 instance (Show k, Show a) => Show (IMap k Frzn a) where
   show (IMap (WrapLVar lv)) =

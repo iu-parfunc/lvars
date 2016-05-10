@@ -10,7 +10,7 @@ packages:
  - haskell/par-mergesort/
  - haskell/par-transformers/
  - haskell/ctrie
-
+ 
 # TODO: Revive:
  # - haskell/lvish-apps/
  # - haskell/lvish-apps/cfa/
@@ -21,9 +21,12 @@ packages:
  # - haskell/fhpc13-lvars/benchmarks/bf-traverse-monad-par/
  # - haskell/fhpc13-lvars/benchmarks/bf-traverse-Strategies/
 
+# TODO: Add:
+# haskell/par-schedulers
+ 
 
 extra-deps:
- - atomic-primops-0.8
+ - atomic-primops-0.8.0.3
  - chaselev-deque-0.5.0.5
  - bits-atomic-0.1.3
  - thread-local-storage-0.1.0.3

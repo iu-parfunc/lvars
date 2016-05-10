@@ -21,18 +21,18 @@ module Data.LVar.Generic.Internal
         unsafeCoerceLVar, unsafeTraversable)
        where
 
-import           Control.LVish.Internal.Types
+-- import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs
 import           Control.LVish.Internal.Basics
-import           Control.LVish.Internal (Par)
-import           Control.LVish.Internal.SchedIdempotent (HandlerPool)
+-- import           Control.LVish.Internal (Par)
+-- import           Control.LVish.Internal.SchedIdempotent (HandlerPool)
 import           Control.LVish.DeepFrz.Internal (Frzn, Trvrsbl)
 import qualified Data.Foldable    as F
 import           Data.List (sort, intersperse)
 import           GHC.Prim (unsafeCoerce#)
-import           System.IO.Unsafe (unsafeDupablePerformIO)
+-- import           System.IO.Unsafe (unsafeDupablePerformIO)
 
-import GHC.Prim (Constraint)
+import GHC.Base (Constraint)
 
 ------------------------------------------------------------------------------
 -- Interface for generic LVar handling

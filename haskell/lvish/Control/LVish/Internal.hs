@@ -45,14 +45,23 @@ instance PU.SecretSuperClass Par where
 
 -- | This provides a Monad instance also.
 instance PU.ParMonad Par where
+  -- Public methods:
   fork = WrapPar . L.fork . unWrapPar
-  internalLiftIO = liftIO
   liftReadOnly (WrapPar p) = WrapPar p
 
   pbind (WrapPar lp) fn = WrapPar (lp >>= fn')
     where
       fn' x = case fn x of WrapPar p -> p -- FIXME: could be a safe coerce?
   preturn x = WrapPar (return x)
+
+  --------------- Private methods ------------------
+  internalLiftIO = liftIO
+
+  type UnsafeParIO Par = L.Par
+  dropToUnsafe (WrapPar p) = p
+  liftUnsafe = WrapPar
+  {-# INLINE dropToUnsafe #-}
+  {-# INLINE liftUnsafe #-}
 
 {-# INLINE state  #-}
 {-# INLINE unsafeConvert #-}

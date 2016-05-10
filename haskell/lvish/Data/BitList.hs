@@ -176,7 +176,7 @@ instance Eq BitList where
 
 -- Mask off the high order (unused) bits.
 mask :: (Show a, Bits a, Num a) => Word8 -> a -> a
-mask 0 x = 0
+mask 0 _ = 0
 mask i x = (x << n) >> n
 -- mask i x =
 -- trace ("SHIFT left "++show n++" yielding "++show (x `unsafeShiftL` n)++
@@ -226,11 +226,11 @@ instance Ord BitList where
 ---------------------------------------------------------------------------
 
 -- | Reverse the low byte of a Word64
-rev8 :: Word64 -> Word64
-rev8 b = (((b * 0x80200802) .&. 0x0884422110) * 0x0101010101) >> 32;
+_rev8 :: Word64 -> Word64
+_rev8 b = (((b * 0x80200802) .&. 0x0884422110) * 0x0101010101) >> 32;
 
-rev32 :: Word32 -> Word32
-rev32 x0 =  (x4 >> 16) .|. (x4 << 16)
+_rev32 :: Word32 -> Word32
+_rev32 x0 =  (x4 >> 16) .|. (x4 << 16)
   where
    x1 = (((x0 .&. 0xaaaaaaaa) >> 1) .|. ((x0 .&. 0x55555555) << 1))
    x2 = (((x1 .&. 0xcccccccc) >> 2) .|. ((x1 .&. 0x33333333) << 2))
@@ -256,11 +256,11 @@ rev64 x0 = (x5 >> 32) .|. (x5 << 32)
 --------------------------------------------------------------------------------
 -- Testing:
 
-t1 :: BitList
-t1 = pack (L.concat$ L.replicate 10 [True,False,True])
+_t1 :: BitList
+_t1 = pack (L.concat$ L.replicate 10 [True,False,True])
 
-t2 :: Int
-t2 = L.length $ unpack $ pack $ replicate 1000 True
+_t2 :: Int
+_t2 = L.length $ unpack $ pack $ replicate 1000 True
 
 t3 :: BitList
 t3 = pack $ replicate 1000 True
@@ -268,36 +268,36 @@ t3 = pack $ replicate 1000 True
 t4 :: BitList
 t4 = drop 500 t3
 
-p3 :: Bool
-p3 = L.and (unpack t3)
+_p3 :: Bool
+_p3 = L.and (unpack t3)
 
-p4 :: Bool
-p4 = L.and (unpack t4)
+_p4 :: Bool
+_p4 = L.and (unpack t4)
 
 t5 :: BitList
 t5 = iterate tail t4 !! 250
 
-t5a :: Int
-t5a = length t5
+_t5a :: Int
+_t5a = length t5
 
-t5b :: Int
-t5b = L.length (unpack t5)
+_t5b :: Int
+_t5b = L.length (unpack t5)
 
-t6 :: BitList
-t6 = drop 5 (More 1 0 (One 64 0))
+_t6 :: BitList
+_t6 = drop 5 (More 1 0 (One 64 0))
 -- More (-4) 0 (One 64 0)
 
-t7 :: Bool
-t7 = prop_droptail (pack [True])
+_t7 :: Bool
+_t7 = prop_droptail (pack [True])
 
-t8a :: Bool
-t8a = tail oo == drop 1 oo
+_t8a :: Bool
+_t8a = tail oo == drop 1 oo
 
-t8b :: Bool
-t8b = null (tail oo)
+_t8b :: Bool
+_t8b = null (tail oo)
 
-t8c :: Bool
-t8c = null (drop 1 oo)
+_t8c :: Bool
+_t8c = null (drop 1 oo)
 
 oo :: BitList
 oo = One 1 1
@@ -307,8 +307,8 @@ prop_droptail xs =
   (length xs == 0) ||
   (drop 1 xs == tail xs)
 
-prop_ord :: BitList -> BitList -> Bool
-prop_ord xs ys =
+_prop_ord :: BitList -> BitList -> Bool
+_prop_ord xs ys =
   (compare xs ys ==
    compare (unpack xs) (unpack ys))
 

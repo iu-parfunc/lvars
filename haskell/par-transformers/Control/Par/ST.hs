@@ -61,7 +61,7 @@ import           Control.Applicative
 
 import           Control.Monad.ST             (ST)
 import           Control.Monad.ST.Unsafe      (unsafeSTToIO)
--- import qualified Control.Monad.State.Strict as S
+import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Reader         as R
 
 import qualified Data.Vector.Mutable          as MV
@@ -286,6 +286,8 @@ instance STSplittable (SVectorFlp a) where
 newtype ParST stState (p :: EffectSig -> * -> * -> *) e s a =
         ParST { unwrapParST :: stState -> p e s (a,stState) }
 
+
+
 -- | @runParST@ discharges the extra state effect leaving the the underlying `Par`
 -- computation only -- just like `runStateT`.  Here, using the standard trick
 -- runParST has a rank-2 type, with a phantom type @s1@.
@@ -322,12 +324,12 @@ runParSTCopy mkInit pst =
        pst
 
 -- TODO: We could have a version that looks like this
-runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
+_runParSTCopy' :: forall (st :: * -> *) s0 s2 (p :: EffectSig -> * -> * -> *) (e :: EffectSig) a .
                  (ParMonad p, ParThreadSafe p, STSplittable st) =>
                   (st s0)
                   -> (ParST (st s0) p e s2 a)
                   -> ST s0 (p e s2 a)
-runParSTCopy' _initVal _pst = undefined
+_runParSTCopy' _initVal _pst = undefined
 
 -- | The unsafe variant allows the user to initialize with an arbitrary state.
 {-# INLINE unsafeRunParST #-}
@@ -372,6 +374,11 @@ instance ParMonad p => ParMonad (ParST st p) where
       (res,_) <- task
                  (error "fork: This child thread does not have permission to touch the array!")
       return res
+
+  type UnsafeParIO (ParST st p) = S.StateT st (UnsafeParIO p)
+  dropToUnsafe (ParST fn)  = S.StateT (dropToUnsafe . fn)
+  liftUnsafe (S.StateT fn) = ParST (liftUnsafe . fn)
+
 
 -- | Lift an ordinary `Par` computation into `ParST`.
 {-# INLINE liftPar #-}
@@ -419,9 +426,14 @@ for_ (start, end) fn = loop start
 -- unsafe because the user can destroy alias-freedom.
 {-# INLINE transmute #-}
 {-# DEPRECATED transmute "transmute allows violation of alias-freedom" #-}
--- transmute :: forall p e s ans a b .
---              ParMonad p =>
---              (b s -> a s) -> (ParST (a s) p) e s ans -> (ParST (b s) p) e s ans
+transmute :: forall t
+                    stState
+                    (p :: EffectSig -> * -> * -> *)
+                    (e :: EffectSig)
+                    s
+                    a.
+             ParMonad p =>
+             (stState -> t) -> ParST t p e s a -> ParST stState p e s a
 transmute fn (ParST comp) = ParST $ \orig -> do
   (res, _) <- comp (fn orig)
   return $! (res, orig)

@@ -48,5 +48,6 @@ Library
   Build-depends: base >= 4.7 && < 5
                , deepseq >= 1.1
                , ghc-prim >= 0.3
+               , transformers
 
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-orphans

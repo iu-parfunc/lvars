@@ -1,7 +1,7 @@
 module Data.Concurrent.Bag(Bag, Token, new, put, remove, foreach) where
 
-import           Control.Monad
-import           Control.Concurrent
+-- import           Control.Monad
+-- import           Control.Concurrent
 import           System.IO.Unsafe (unsafePerformIO)
 import           Data.IORef
 import qualified Data.IntMap as M
