@@ -123,8 +123,9 @@ import           Control.LVish.Internal.Logging          (LogMsg (..),
 import           Control.LVish.Internal.Logical
 import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs
-import           Data.LVar.IVar
 import qualified Control.LVish.Internal.SchedIdempotent as L
+import           Data.LVar.IVar 
+import           System.Log.TSLogger (LogMsg(..), OutDest(..), DbgCfg(..), defaultMemDbgRange, logOn)
 
 --------------------------------------------------------------------------------
 

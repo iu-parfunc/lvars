@@ -146,7 +146,7 @@ library
                     -- Package-internal and should not be exposed:
                     Control.LVish.Internal.SchedIdempotent
                     Control.LVish.Internal.Logging
-
+--                    Internal.Data.Concurrent.LinkedMap
 
   -- Internal modules included in this library but not exported:
   other-modules:
@@ -188,9 +188,11 @@ library
   build-depends: containers >= 0.5.4.0
 
   build-depends: par-classes     >= 1.1 && < 2.0,
-                 par-collections >= 1.1 && < 2.0
-
+                 par-collections >= 1.1 && < 2.0,
+                 tslogger >= 0.1
+                 
   ghc-options: -rtsopts -Wall -fno-warn-orphans
+
   if flag(useopt)
     ghc-options: -O2
 
@@ -241,6 +243,8 @@ test-suite test-lvish
                    HUnit, time, text, hashable
 
     ghc-options: -Wall -fno-warn-orphans
+
+    build-depends: tslogger >= 0.1
 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)

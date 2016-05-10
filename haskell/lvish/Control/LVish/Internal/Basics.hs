@@ -45,6 +45,7 @@ import           Control.Monad                          (forM_)
 import           Control.Par.EffectSigs
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude                                hiding (rem)
+import qualified System.Log.TSLogger as Lg
 
 import qualified Control.Par.Class     as PC
 import qualified Data.Splittable.Class as SC
@@ -153,9 +154,9 @@ runParLogged (WrapPar p) = L.runParLogged p
 --   This version of runPar catches ALL exceptions that occur within the runPar, and
 --   returns them via an Either.  The reason for this is that even if an error
 --   occurs, it is still useful to observe the log messages that lead to the failure.
---
-runParDetailed :: DbgCfg        -- ^ Debugging configuration
-               -> Int           -- ^ How many worker threads to use.
+--   
+runParDetailed :: Lg.DbgCfg        -- ^ Debugging configuration
+               -> Int           -- ^ How many worker threads to use. 
                -> (forall s . Par e s a) -- ^ The computation to run.
                -> IO ([String], Either SomeException a)
 runParDetailed dc nw (WrapPar p) = L.runParDetailed dc nw p
@@ -208,7 +209,7 @@ getLogger = WrapPar $ L.getLogger
 {-# INLINE parForL #-}
 -- | Left-biased parallel for loop.  As worker threads beyond the first are added,
 -- this hews closer to the sequential iteration order than an unbiased parallel loop.
---
+--y
 -- Takes a range as inclusive-start, exclusive-end.
 parForL :: (Int,Int) -> (Int -> Par e s ()) -> Par e s ()
 parForL (start,end) _ | start > end = error$"parForL: start is greater than end: "++show (start,end)

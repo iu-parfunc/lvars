@@ -18,8 +18,8 @@ import Data.Atomics (atomicModifyIORefCAS)
 import System.Random (StdGen, mkStdGen)
 import Text.Printf
 
-import qualified Control.LVish.Internal.Logging as L
-import Control.LVish.Internal.Types (DbgCfg(..))
+import System.Log.TSLogger (DbgCfg(..))
+import qualified System.Log.TSLogger as L
 
 #ifdef CHASE_LEV
 #warning "Compiling with Chase-Lev work-stealing deque"

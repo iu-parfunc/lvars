@@ -13,3 +13,4 @@ docs_examples
 test-results.xml
 tags
 *.stack-work
+untracked_junk
