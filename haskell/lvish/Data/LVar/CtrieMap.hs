@@ -454,7 +454,7 @@ instance Show k => PC.ParFoldable (IMap k Frzn t) where
   -- NON-MODULAR version, tree-walk inlined
   pmapFold mfn rfn initAcc (IMap lv) = do
     let cm = state lv
-    internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
+    PU.internalLiftIO $ putStrLn$  "[DBG] pmapFold on frzn IMap..."
     ctrieTraverse cm initAcc
     where
       doElem k v acc = do
@@ -464,7 +464,7 @@ instance Show k => PC.ParFoldable (IMap k Frzn t) where
       ctrieTraverse (CMI.Map root) initacc = go root initacc
         where
           go inode acc = do
-            main <- internalLiftIO $ readIORef inode
+            main <- PU.internalLiftIO $ readIORef inode
             case main of
               CMI.CNode bmp arr    -> do
                 ivs <- CMA.foldM (\ ls a -> do
