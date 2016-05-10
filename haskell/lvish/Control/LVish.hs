@@ -117,9 +117,6 @@ module Control.LVish
 -- NOTE : This is an aggregation module:
 import           Control.LVish.Internal.Basics          as B
 import           Control.LVish.Internal                 as I
-import           Control.LVish.Internal.Logging          (LogMsg (..),
-                                                         defaultMemDbgRange,
-                                                         logOn)
 import           Control.LVish.Internal.Logical
 import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs

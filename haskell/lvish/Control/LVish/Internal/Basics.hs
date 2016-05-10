@@ -39,7 +39,6 @@ module Control.LVish.Internal.Basics
 
 import           Control.Exception                      (SomeException)
 import           Control.LVish.Internal                 as I
-import qualified Control.LVish.Internal.Logging         as Lg
 import           Control.LVish.Internal.Types
 import           Control.Monad                          (forM_)
 import           Control.Par.EffectSigs

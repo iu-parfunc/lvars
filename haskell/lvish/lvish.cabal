@@ -145,7 +145,6 @@ library
 
                     -- Package-internal and should not be exposed:
                     Control.LVish.Internal.SchedIdempotent
-                    Control.LVish.Internal.Logging
 --                    Internal.Data.Concurrent.LinkedMap
 
   -- Internal modules included in this library but not exported:
