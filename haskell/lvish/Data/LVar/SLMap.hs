@@ -235,7 +235,8 @@ insert !key !elm (IMap (WrapLVar lv)) = WrapPar$ putLV lv putter
   where putter slm = do
           putRes <- SLM.putIfAbsent slm key $ return elm
           case putRes of
-            Added _ -> return $ Just (key, elm)
+            Added _            -> return $ Just (key, elm)
+            Found v | elm == v -> return $ Just (key, elm)
             Found _ -> throw$ ConflictingPutExn$ "Multiple puts to one entry in an IMap!"
 
 -- | `IMap`s containing other LVars have some additional capabilities compared to
