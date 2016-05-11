@@ -93,7 +93,7 @@ import Data.Bits
 import Control.Monad as M
 
 import qualified Data.Par.Range as R
-import           Data.Hashable (Hashable)
+-- import           Data.Hashable (Hashable)
 
 
 ------------------------------------------------------------------------------
@@ -211,13 +211,18 @@ withCallbacksThenFreeze (IMap lv) callback action = do
 
 -- | Add an (asynchronous) callback that listens for all new key/value pairs
 -- added to the map, optionally tied to a handler pool.
-forEachHP :: Maybe HandlerPool           -- ^ optional pool to enroll in
+--
+-- WARNING: this function currently allows a low-probability of
+-- duplicate invocations of the handler.  If `HasIO e`, you had better
+-- be OK with your IO actions happening more than once if you use this
+-- function.
+forEachHP :: (NoBump e)
+          => Maybe HandlerPool           -- ^ optional pool to enroll in
           -> IMap k s v                  -- ^ Map to listen to
           -> (k -> v -> Par e s ())      -- ^ callback
           -> Par e s ()
 forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
     L.addHandler mh lv globalCB
-       -- FIXME: this is bad, it schedules REPEAT callbacks on the same key:
        (\(k,v) -> return$ Just$ unWrapPar$ callb k v)
   where
     gcallb k v = do
@@ -230,7 +235,7 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
 
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.
-forEach :: IMap k s v -> (k -> v -> Par e s ()) -> Par e s ()
+forEach :: (NoBump e) => IMap k s v -> (k -> v -> Par e s ()) -> Par e s ()
 forEach = forEachHP Nothing
 
 -- | Put a single entry into the map.  (WHNF) Strict in the key and value.
@@ -368,13 +373,13 @@ traverseFrzn_ fn (IMap (WrapLVar lv)) =
 
 -- | Establish a monotonic map between the input and output map  Produce a new result
 -- based on each element, while leaving the keys the same.
-traverseMap :: (Ord k, Hashable k, Eq b, HasPut e) =>
+traverseMap :: (Ord k, Hashable k, Eq b, HasPut e, NoBump e) =>
                (k -> a -> Par e s b) -> IMap k s a -> Par e s (IMap k s b)
 traverseMap f s = traverseMapHP Nothing f s
 
 -- | An imperative-style, in-place version of 'traverseMap' that takes the output map
 -- as an argument.
-traverseMap_ :: (Ord k, Hashable k, Eq b, HasPut e) =>
+traverseMap_ :: (Ord k, Hashable k, Eq b, HasPut e, NoBump e) =>
                 (k -> a -> Par e s b) -> IMap k s a -> IMap k s b -> Par e s ()
 traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
@@ -384,11 +389,12 @@ traverseMap_ f s o = traverseMapHP_ Nothing f s o
 
 -- | Return a fresh map which will contain strictly more elements than the input.
 -- That is, things put in the former go in the latter, but not vice versa.
-copy :: (Ord k, Hashable k, Eq v, HasPut e) => IMap k s v -> Par e s (IMap k s v)
+copy :: (Ord k, Hashable k, Eq v, HasPut e, NoBump e)
+     => IMap k s v -> Par e s (IMap k s v)
 copy = traverseMap (\ _ x -> return x)
 
 -- | Variant of `traverseMap` that optionally ties the handlers to a pool.
-traverseMapHP :: (Ord k, Hashable k, Eq b, HasPut e) =>
+traverseMapHP :: (Ord k, Hashable k, Eq b, HasPut e, NoBump e) =>
                  Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a ->
                  Par e s (IMap k s b)
 traverseMapHP mh fn set = do
@@ -397,7 +403,7 @@ traverseMapHP mh fn set = do
   return os
 
 -- | Variant of `traverseMap_` that optionally ties the handlers to a pool.
-traverseMapHP_ :: (Ord k, Hashable k, Eq b, HasPut e) =>
+traverseMapHP_ :: (Ord k, Hashable k, Eq b, HasPut e, NoBump e) =>
                   Maybe HandlerPool -> (k -> a -> Par e s b) -> IMap k s a -> IMap k s b ->
                   Par e s ()
 traverseMapHP_ mh fn set os = do
@@ -408,7 +414,8 @@ traverseMapHP_ mh fn set os = do
 -- | Return a new map which will (ultimately) contain everything in either input
 --   map.  Conflicting entries will result in a multiple put exception.
 --   Optionally ties the handlers to a pool.
-unionHP :: (Ord k, Hashable k, Eq a, HasPut e) => Maybe HandlerPool ->
+unionHP :: (Ord k, Hashable k, Eq a, HasPut e, NoBump e)
+        => Maybe HandlerPool ->
            IMap k s a -> IMap k s a -> Par e s (IMap k s a)
 unionHP mh m1 m2 = do
   os <- newEmptyMap
