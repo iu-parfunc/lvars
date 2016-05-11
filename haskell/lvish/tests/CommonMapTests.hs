@@ -70,6 +70,16 @@ v7a = fmap (L.sort . F.toList) $
      return mp
 
 
+case_doubleInsert :: Assertion
+case_doubleInsert = assertEqual "double insert on a map"
+   True
+   (runPar $ isDet $ do
+     mp <- IM.newEmptyMap
+     IM.insert (3::Int) True mp
+     IM.insert 3 True mp
+     IM.getKey 3 mp)
+
+
 --------------------------------------------------------------------------------
 -- Tests that use `forEachHP`
 --------------------------------------------------------------------------------

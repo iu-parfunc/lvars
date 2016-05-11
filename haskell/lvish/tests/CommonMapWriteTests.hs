@@ -78,3 +78,4 @@ case_fillFreeze1K = assertEqual "fill and then freeze"
     (sum [0..sz-1])
     (case sortFrzn (fillNFreeze sz) of AFoldable x -> F.foldl' (+) 0 x)
  where sz = 1000
+
