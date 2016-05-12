@@ -10,6 +10,9 @@ cache:
 notifications:
   email: false
 
+git:
+    submodules: false
+  
 matrix:
   include:
     - env: STACK_RESOLVER=lts-2.22
@@ -36,15 +39,19 @@ matrix:
 
 # This is stack-specific.  Oh well.
 before_install:
+ - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
+ - git submodule update --init --recursive
+  
  - mkdir -p ~/.local/bin
  - export PATH=~/.local/bin:$PATH
  - cat /proc/cpuinfo | grep name
+ - export STACK_YAML=stack-${STACK_RESOLVER}.yaml
+ 
  - wget https://github.com/commercialhaskell/stack/releases/download/v1.0.4/stack-1.0.4.2-linux-x86_64.tar.gz
  - tar xvf stack-1.0.4.2-linux-x86_64.tar.gz
  - mv -f stack-1.0.4.2-linux-x86_64/stack ~/.local/bin/
  - chmod a+x ~/.local/bin/stack
- - export STACK_YAML=stack-${STACK_RESOLVER}.yaml
-
+ 
 install:
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
  - ./.travis_install.sh
