@@ -118,7 +118,7 @@ module Control.LVish
 import           Control.LVish.Internal.Basics          as B
 import           Control.LVish.Internal                 as I
 import           Control.LVish.Internal.Logical
-import           Control.LVish.Internal.Types
+-- import           Control.LVish.Internal.Types
 import           Control.Par.EffectSigs
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Data.LVar.IVar 
@@ -175,22 +175,27 @@ noGet :: NoGet e => Par e s a -> Par e s a
 noGet x = x
 
 
-
+-- | Deterministic: Everything is switched on but freeze and IO.
 isDet :: (e ~ ('Ef 'P 'G 'NF 'B 'NI)) => Par e s a -> Par e s a
 isDet x = x
 
+-- | Quasideterministic: Everything is on but IO.
 isQD :: (e ~ ('Ef 'P 'G 'F 'B 'NI)) => Par e s a -> Par e s a
 isQD x = x
 
+-- | Turn all effect-level switches on, including IO.
 isND :: (e ~ ('Ef 'P 'G 'F 'B 'I)) => Par e s a -> Par e s a
 isND x = x
 
+-- | Like 'isDet', but with idempotent operations only ('NoBump').
 isIdemD :: (e ~ ('Ef 'P 'G 'NF 'NB 'NI)) => Par e s a -> Par e s a
 isIdemD x = x
 
+-- | Like 'isQD', but with idempotent operations only ('NoBump').
 isIdemQD :: (e ~ ('Ef 'P 'G 'F 'NB 'NI)) => Par e s a -> Par e s a
 isIdemQD x = x
 
+-- | Allow "gets" but nothing else.
 isReadOnly :: (e ~ ('Ef 'NP 'G 'NF 'NB 'NI)) => Par e s a -> Par e s a
 isReadOnly x = x
 

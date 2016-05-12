@@ -119,8 +119,9 @@ withNewPool_ f = WrapPar $ L.withNewPool_ $ unWrapPar . f
 
 
 -- | Run a `Par` computation where /everything/ is permitted,
---   i.e. all effect-signature switches are switched to "on".
-runParNonDet :: (forall s . Par ('Ef 'P 'G 'F 'B 'I) s a) -> IO a
+--   i.e. all effect-signature switches can be switched to "on".
+runParNonDet :: (forall s . Par e s a) -> IO a
+-- runParNonDet :: (forall s . Par ('Ef 'P 'G 'F 'B 'I) s a) -> IO a
 runParNonDet (WrapPar p) = L.runParIO p
 
 -- | Run a computation that allows freezes but not IO.
@@ -137,7 +138,7 @@ runParNonDet (WrapPar p) = L.runParIO p
 -- Finally, note that in the future `runQuasiDet` may behave differently than
 -- `runNonDet`; in particular, it may attempt recovery or retry strategies when an
 -- LVishException is thrown.
-runParQuasiDet :: (forall s . Par ('Ef 'P 'G 'F 'B 'NI) s a) -> IO a
+runParQuasiDet :: (forall s . Par ('Ef p g f b 'NI) s a) -> IO a
 runParQuasiDet (WrapPar p) = L.runParIO p
 
 -- | A version of `runParPolyIO` that exposes more debugging information.  That is,

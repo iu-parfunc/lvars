@@ -182,7 +182,7 @@ instance DeepFrz a => DeepFrz (LayeredSatMap k s a) where
  frz = unsafeCoerce# -- Can't use unsafeCoerceLVar due to LVarData1 constraint
 
 test0 :: [Maybe (M.Map String Int)]
-test0 = map fromIMap $ runParThenFreeze $ do
+test0 = map fromIMap $ runParThenFreeze $ isDet $ do
   m <- newEmptyMap
   insert "foo" (0 :: Int) m
   newLayer1 <- pushLayer m

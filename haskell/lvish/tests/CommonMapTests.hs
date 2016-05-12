@@ -53,7 +53,7 @@ case_v7a = assertEqual "basic imap test"
 
 v7a :: IO [Float]
 v7a = fmap (L.sort . F.toList) $
-  runParNonDet $ IM.freezeMap =<<
+  runParNonDet $ isND $ IM.freezeMap =<<
   do mp <- IM.newEmptyMap
      fork $ do IM.waitSize 3 mp
                IM.insert (100::Int) (100.1::Float) mp
@@ -90,7 +90,7 @@ case_v8c = assertEqual "forEachHP on maps" [101,102] =<< v8c
 -- | Similar test with Maps instead of Sets.
 v8c :: IO [Int]
 v8c = fmap (L.sort . F.toList) $
-      runParNonDet $ do
+      runParNonDet $ isND $ do
   hp <- newPool
   m1 <- IM.newFromList ([(1,1),(2,2)]::[(Int,Int)])
   m2 <- IM.newEmptyMap
@@ -111,7 +111,7 @@ case_v8d = assertEqual "union on maps" [40,50,101,102] =<< runParQuasiDet v8d
 -- fmap (L.sort . F.toList) $
 -- v8d :: Par QuasiDet s (TheMap Int Frzn Int)
 -- v8d :: QuasiDeterministic e => Par e s [Int]
-v8d :: (HasFreeze e, HasPut e) => Par e s [Int]
+v8d :: (HasFreeze e, HasPut e, NoBump e) => Par e s [Int]
 v8d = do
   hp <- newPool
   logDbgLn 1 " [v8d] Got a new pool..."
@@ -138,7 +138,7 @@ v8d = do
 case_v9a :: Assertion
 case_v9a = assertEqual "make sure there's sufficient parallelism" () =<<
   (assertNoTimeOut 1.0 $
-   runParNonDet $ do
+   runParNonDet $ ioButNoBump $ do
      mp <- IM.newEmptyMap
      IM.forEach mp $ \ c v -> do
        case c of
@@ -159,9 +159,13 @@ case_v9a = assertEqual "make sure there's sufficient parallelism" () =<<
 -- Issue related:
 --------------------------------------------------------------------------------
 
+ioButNoBump :: Par ('Ef 'P 'G 'F 'NB 'NI) s a ->
+               Par ('Ef 'P 'G 'F 'NB 'NI) s a
+ioButNoBump x = x
+
 -- Issue #27, spurious duplication.
 case_handlrDup :: Assertion
-case_handlrDup = runParNonDet $ do
+case_handlrDup = runParNonDet $ ioButNoBump $ do 
   logDbgLn 1 "[case_handlrDup] Step 1"
   ctr <- I.liftIO$ newIORef 0
   mp  <- IM.newEmptyMap

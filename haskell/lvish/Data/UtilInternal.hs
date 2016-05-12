@@ -8,10 +8,11 @@ module Data.UtilInternal
        )
        where
 
-import           Control.Applicative
+import           Control.Applicative (Const(..), Applicative, pure, (*>))
 import           Control.Monad (void)
--- import           Data.Monoid (Monoid(..))
+import           Data.Monoid (Monoid(..))
 import qualified Data.Map as M
+import           Prelude ((.))
 
 --------------------------------------------------------------------------------
 -- Helper code.

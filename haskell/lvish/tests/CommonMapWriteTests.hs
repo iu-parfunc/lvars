@@ -44,11 +44,12 @@ import GHC.Conc (numCapabilities)
 -- conversions in the middle.
 mkSimpleIdentityProp ::
   (Ord v, Ord k, Hashable k, F.Foldable t, DeepFrz a, FrzType a ~ t v) =>
-  (TheMap k NonFrzn v -> Par (Ef P G NF B NI) NonFrzn a) -> [(k, v)] -> Bool
+  (TheMap k NonFrzn v -> Par ('Ef 'P 'G 'NF 'NB 'NI) NonFrzn a) ->
+  [(k, v)] -> Bool
 mkSimpleIdentityProp trans prs =
   (L.sort$ L.nub$ map snd prs) == 
   (L.sort$ L.nub $ F.toList $
-   runParThenFreeze $ isDet $ do
+   runParThenFreeze $ isIdemD $ do
      mp0 <- IM.newFromList prs
      trans mp0)
 

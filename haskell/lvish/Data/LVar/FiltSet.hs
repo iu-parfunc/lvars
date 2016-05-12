@@ -129,7 +129,7 @@ instance DeepFrz a => DeepFrz (FiltSet s f a) where
   frz = unsafeCoerce#
 
 test1 :: FiltSet Frzn (LayeredSatMap String) Int
-test1 = runParThenFreeze $ do
+test1 = runParThenFreeze $ isDet $ do
   m <- LSM.newMap $ M.fromList [("x", 0 :: Int)]
   m' <- LSM.pushLayer m
   m'' <- LSM.pushLayer m

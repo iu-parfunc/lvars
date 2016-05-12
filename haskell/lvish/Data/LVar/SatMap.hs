@@ -490,7 +490,7 @@ instance PC.Generator (SatMap k Frzn a) where
 ----------------------------------------
 
 t0 :: SatMap String Frzn Int
-t0 = runParThenFreeze $ do 
+t0 = runParThenFreeze $ isDet $ do 
   m <- newEmptyMap
   insert "hi" (32::Int) m
   insert "hi" (34::Int) m
@@ -498,7 +498,7 @@ t0 = runParThenFreeze $ do
   return m
 
 t1 :: SatMap String Frzn Int
-t1 = runParThenFreeze $ do 
+t1 = runParThenFreeze $ isDet $ do 
   m <- newEmptyMap
   insert "hi" (32::Int) m
   insert "hi" (33::Int) m
