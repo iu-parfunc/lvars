@@ -9,9 +9,9 @@ module Main where
 import Test.Tasty (TestTree, testGroup, defaultMain)
 --import TestHelpers (defaultMainSeqTests)
 
-import qualified MemoTests
+--import qualified MemoTests
 import qualified LVishAndIVar
-import qualified ArrayTests
+--import qualified ArrayTests
 import qualified LogicalTests
 import qualified SkipListTests
 --import qualified SNZITests
@@ -19,11 +19,11 @@ import qualified PureMapTests
 import qualified SLMapTests
 import qualified CtrieMapTests
 
-import qualified SatMapTests
+-- import qualified SatMapTests
 -- import qualified LayeredSatMapTests
 import qualified SetTests
-import qualified MaxPosIntTests
-import qualified AddRemoveSetTests
+--import qualified MaxPosIntTests
+--import qualified AddRemoveSetTests
 import qualified GenericTests
 
 main :: IO ()
@@ -33,14 +33,14 @@ main = defaultMain alltests
 alltests :: TestTree
 alltests = testGroup "allTests" 
        [ LVishAndIVar.tests
-       , ArrayTests.tests
-       , MemoTests.tests
+--       , ArrayTests.tests
+--       , MemoTests.tests
        , LogicalTests.tests
-       , MaxPosIntTests.tests
+--       , MaxPosIntTests.tests
        , SetTests.tests
        , PureMapTests.tests 
 --       , LayeredSatMap.tests 
-       , SatMapTests.tests
+--       , SatMapTests.tests
 --       , LayeredSatMapTests.tests
 
        , CtrieMapTests.tests
@@ -53,5 +53,5 @@ alltests = testGroup "allTests"
 
        , GenericTests.tests -- Divergence... debugging [2013.12.07]
 #endif
-       , AddRemoveSetTests.tests
+--       , AddRemoveSetTests.tests
        ]

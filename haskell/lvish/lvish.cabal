@@ -114,16 +114,16 @@ library
                     Data.LVar.IStructure
                     Data.LVar.PureSet
                     Data.LVar.PureMap
-                    Data.LVar.SatMap
-                    Data.LVar.LayeredSatMap
-                    Data.LVar.FiltSet
+                    --Data.LVar.SatMap
+                    --Data.LVar.LayeredSatMap
+                    --Data.LVar.FiltSet
                     Data.LVar.SLSet
                     Data.LVar.SLMap
                     Data.LVar.Counter
-                    Data.LVar.MaxPosInt
-                    Data.LVar.NatArray
-                    Data.LVar.NatArray.Unsafe
-                    Data.LVar.Memo
+                    --Data.LVar.MaxPosInt
+                    --Data.LVar.NatArray
+                    --Data.LVar.NatArray.Unsafe
+                    --Data.LVar.Memo
                     Data.LVar.CtrieMap
                     -------------------------------------------
                     -- End users should NOT USE THESE.
@@ -135,12 +135,12 @@ library
                     Control.LVish.DeepFrz.Internal
 
                     -- New / Experimental:
-                    Data.LVar.CycGraph
+                    --Data.LVar.CycGraph
 
   -- These are in "beta" and shouldn't be released yet:
                     -- Not quite ready for prime-time yet:
-                    Data.LVar.AddRemoveSet
-                    Data.LVar.PNCounter
+                    --Data.LVar.AddRemoveSet
+                    --Data.LVar.PNCounter
                     -------------------------------------------
 
                     -- Package-internal and should not be exposed:
@@ -175,8 +175,7 @@ library
                  transformers,
                  ghc-prim,
                  async,
-                 -- Used in NatArray:
-                 bits-atomic, missing-foreign,
+                 missing-foreign,
                  thread-local-storage >= 0.1.0.2,
                  -- Used in SLSet and SLMap
                  concurrent-skiplist >= 0.1 && < 0.2,
@@ -215,18 +214,20 @@ test-suite test-lvish
     hs-source-dirs: tests/
     other-modules:  TestHelpers,
                     LVishAndIVar,
-                    ArrayTests,
-                    MemoTests,
+--                    ArrayTests,
+--                    MemoTests,
                     LogicalTests,
                     PureMapTests,
-                    SatMapTests,
+--                    SatMapTests,
 --                    LayeredSatMapTests,
                     SLMapTests,
                     CtrieMapTests,
                     SetTests,
-                    MaxPosIntTests,
-                    AddRemoveSetTests,
-                    GenericTests
+--                    MaxPosIntTests,
+--                    AddRemoveSetTests,
+                    GenericTests,
+                    SkipListTests,
+                    TestHelpers2
 
     build-depends: lvish
     build-depends: base >= 4.6 && < 4.9

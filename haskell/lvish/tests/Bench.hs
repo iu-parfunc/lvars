@@ -20,10 +20,10 @@ import qualified Data.Map          as M
 import qualified Data.LVar.PureMap as PM
 import qualified Data.LVar.SLMap   as SM
 
-import qualified Data.LVar.SatMap  as Sat
-import qualified Data.LVar.LayeredSatMap as LSM
+--import qualified Data.LVar.SatMap  as Sat
+--import qualified Data.LVar.LayeredSatMap as LSM
     
-import qualified Data.LVar.FiltSet as FS
+--import qualified Data.LVar.FiltSet as FS
 
 import Data.Atomics.Counter
 import Criterion.Main
@@ -46,7 +46,7 @@ main = defaultMain $
   bgroup "basics"
     [
       bench "runPar" $ whnf' runIntPar (IntPar $ return 3)
-    , bench "runParThenFreeze" $ whnf runParThenFreeze (return (3::Int))
+    , bench "runParThenFreeze" $ whnf runParThenFreeze $ isDet (return (3::Int))
     , bench "NOOP" $ benchPar (return ())
     , bench "fork" $ benchPar (fork (return ()))
     , bench "new"  $ benchPar  (do _ <- new; return ())
@@ -64,12 +64,12 @@ main = defaultMain $
   bgroup "pureset" (copyContainerBench PS.newEmptySet PS.insert PS.newFromList (PS.copy)),
   bgroup "slset"   (copyContainerBench SS.newEmptySet SS.insert SS.newFromList (SS.copy)),
   bgroup "puremap" (copyContainerBench PM.newEmptyMap (\n -> PM.insert n n) (PM.newFromList . pairit) (PM.copy)),
-  bgroup "slmap"   (copyContainerBench SM.newEmptyMap (\n -> SM.insert n n) (SM.newFromList . pairit) (SM.copy)),
+  bgroup "slmap"   (copyContainerBench SM.newEmptyMap (\n -> SM.insert n n) (SM.newFromList . pairit) (SM.copy))
 
-  bgroup "satmap"   (basicContainerBench Sat.newEmptyMap (\n -> Sat.insert n n) (Sat.newFromList . pairit)),
-  bgroup "layermap" (copyContainerBench LSM.newEmptyMap (\n -> LSM.insert n n) (LSM.newFromList . pairit) LSM.pushLayer),
-  bgroup "filtset" filtSetBench,
-  bgroup "satBenches" [pureSetSatBench, filtSetSatBench]
+--  bgroup "satmap"   (basicContainerBench Sat.newEmptyMap (\n -> Sat.insert n n) (Sat.newFromList . pairit)),
+--  bgroup "layermap" (copyContainerBench LSM.newEmptyMap (\n -> LSM.insert n n) (LSM.newFromList . pairit) LSM.pushLayer),
+--  bgroup "filtset" filtSetBench,
+--  bgroup "satBenches" [pureSetSatBench, filtSetSatBench]
   ]
  where
    pairit = map (\n->(n,n))
@@ -126,7 +126,7 @@ copyContainerBench mknew insert frmList copy =
                                           s <- mknew;
                                           copyLoop 10 s) ]
 {-# INLINE copyContainerBench #-}
-  
+{-  
 filtSetBench :: [Benchmark]
 filtSetBench = [
   bench "new" $ benchPar (FS.newEmptySet >> return ())
@@ -152,7 +152,7 @@ filtSetBench = [
      s <- FS.newEmptySet
      for_ 1 (fromIntegral num) $ \n -> do
        m <- LSM.newMap $ M.fromList [(n, n)]
-       FS.insert m s
+       FS.insert m s 
   ]
 
 newtype SatTuple k s v = SatTuple (Int, Sat.SatMap k s v)
@@ -193,7 +193,7 @@ filtSetSatBench = bench "filtSetSatBench" $ Benchmarkable $ \num -> runParNonDet
     FS.insert tup set
     FS.saturate tup
   return ()
-
+-}
 ----------------------------------------------------------------------------------------------------
   
 -- | Helper for benchmarking par-monad actions:
