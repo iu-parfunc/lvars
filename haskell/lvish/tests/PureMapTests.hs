@@ -46,7 +46,7 @@ case_i7b = do
 -- | A quasi-deterministic example.
 i7b :: IO (M.Map Int (S.Set Float))
 -- A manual nested freeze instead of DeepFrz:
-i7b = runParQuasiDet $ do
+i7b = runParQuasiDet $ isQD $ do
   mp <- IM.newEmptyMap
   s1 <- IS.newEmptySet
   s2 <- IS.newEmptySet
@@ -96,7 +96,7 @@ case_v7c = assertEqual "imap test - racing modifies"
 case_show03 :: Assertion
 case_show03 = assertEqual "show for PureMap" "{IMap: (\"key1\",33), (\"key2\",44)}" show03
 show03 :: String
-show03 = show$ runParThenFreeze $ do
+show03 = show$ runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  

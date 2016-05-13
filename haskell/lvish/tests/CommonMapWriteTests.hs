@@ -64,7 +64,7 @@ tests_writeOnly = testGroup "Common" [ $(testGroupGenerator) ]
 
 fillNFreezeChunks :: [(Int, Int)] -> TheMap Int Frzn Int
 -- fmap IM.freezeMap $ 
-fillNFreezeChunks chunks = runParThenFreeze $ do
+fillNFreezeChunks chunks = runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap 
   forM chunks $ \ (start,end) -> do
     fork $ do

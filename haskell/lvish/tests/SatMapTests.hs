@@ -39,7 +39,7 @@ runTests = defaultMain tests
 case_show03 :: Assertion
 case_show03 = assertEqual "show for SatMap" "{SatMap: (\"key1\",33), (\"key2\",44)}" show03
 show03 :: String
-show03 = show$ runParThenFreeze $ do
+show03 = show$ runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap
   IM.insert "key1" (33::Int) mp
   IM.insert "key2" (44::Int) mp  

@@ -37,7 +37,7 @@ runTests = defaultMain tests
 case_show02 :: Assertion
 case_show02 = assertEqual "show for SLMap" "{IMap: (\"key2\",44), (\"key1\",33)}" show02
 show02 :: String
-show02 = show$ runParThenFreeze $ do
+show02 = show$ runParThenFreeze $ isDet $ do
   mp <- IM.newEmptyMap
   SM.insert "key1" (33::Int) mp
   SM.insert "key2" (44::Int) mp  

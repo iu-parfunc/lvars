@@ -153,7 +153,8 @@ v1b = do let tag = "callback on ivar "
          return (filter (isInfixOf tag) logs)
 
 escape01 :: IV.IVar Frzn Int
-escape01 = runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
+escape01 = runParThenFreeze $ isDet $
+           do v <- IV.new; IV.put v (3::Int); return v
 
 -- | This is VERY BAD:
 escape01B :: HasPut e => Par e Frzn String
@@ -178,7 +179,7 @@ case_i3f = exceptionOrTimeOut 0.3 ["test switched off"] i3f
 i3f :: IO ()
 #ifdef NO_DANGLING_THREADS
 -- | A test to make sure that we get an error when we block on an unavailable ivar.
-i3f = runParQuasiDet$ do
+i3f = runParQuasiDet$ isQD $ do
   iv <- IV.new
   fork $ do IV.get iv
             logDbgLn 1 "Unblocked!  Shouldn't see this."
@@ -192,7 +193,7 @@ case_i3g :: Assertion
 case_i3g = exceptionOrTimeOut 0.3 [] i3g
 -- | A still-running worker thread should NOT be allowed, because it may do a put that causes an exception.
 i3g :: IO Word8
-i3g = runParQuasiDet$ do
+i3g = runParQuasiDet$ isQD $ do
   iv <- IV.new
   fork $ do let loop !ls = loop [1 .. length ls]
             loop [1..10]
@@ -210,7 +211,7 @@ i3g = runParQuasiDet$ do
 
 case_lp01 :: Assertion
 case_lp01 = assertEqual "parForSimple test" "done" =<< lp01
-lp01 = runParQuasiDet$ do
+lp01 = runParQuasiDet$ isQD $ do
   logDbgLn 2 " [lp01] Starting parForSimple loop..."
   x <- IV.new 
   parForSimple (0,10) $ \ ix -> do
@@ -220,7 +221,7 @@ lp01 = runParQuasiDet$ do
 
 case_lp02 :: Assertion
 case_lp02 = assertEqual "parForL test" "done" =<< lp02
-lp02 = runParQuasiDet$ do
+lp02 = runParQuasiDet$ isQD$ do
   logDbgLn 2 " [lp02] Starting parForL loop..."
   x <- IV.new 
   parForL (0,10) $ \ ix -> do
@@ -236,7 +237,7 @@ lp02 = runParQuasiDet$ do
 -- just 'v' tests and even just 'v9' tests.
 case_lp03 :: Assertion
 case_lp03 = assertEqual "parForTree test" "done" =<< lp03
-lp03 = runParQuasiDet$ do
+lp03 = runParQuasiDet$ isQD $ do
   logDbgLn 2 " [lp03] Starting parForTree loop..."
   x <- IV.new 
   parForTree (0,10) $ \ ix -> do
@@ -247,7 +248,7 @@ lp03 = runParQuasiDet$ do
 
 case_lp04 :: Assertion
 case_lp04 = assertEqual "parForTree test" "done" =<< lp04
-lp04 = runParQuasiDet$ do
+lp04 = runParQuasiDet$ isQD $ do
   logDbgLn 2 " [lp04] Starting parForTiled loop..."
   x <- IV.new 
   parForTiled Nothing 16 (0,10) $ \ ix -> do
@@ -371,7 +372,7 @@ lp04 = runParQuasiDet$ do
 case_dftest0 = assertEqual "manual freeze, outer layer" "hello" =<< dftest0
 
 dftest0 :: IO String
-dftest0 = runParNonDet $ do
+dftest0 = runParNonDet $ isND $ do
   iv1 <- IV.new
   iv2 <- IV.new
   IV.put_ iv1 iv2
@@ -384,7 +385,7 @@ case_dftest1 = assertEqual "deefreeze double ivar" (Just "hello") =<< dftest1
 
 -- | Should return (Just (Just "hello"))
 dftest1 :: IO (Maybe String)
-dftest1 = runParNonDet $ do
+dftest1 = runParNonDet $ isND $ do
   iv1 <- IV.new
   iv2 <- IV.new
   IV.put_ iv1 iv2
@@ -394,7 +395,7 @@ dftest1 = runParNonDet $ do
 
 case_dftest3 = assertEqual "freeze simple ivar" (Just 3) =<< dftest3
 dftest3 :: IO (Maybe Int)
-dftest3 = runParNonDet $ do
+dftest3 = runParNonDet $ isND $ do
   iv1 <- IV.new
   IV.put_ iv1 (3::Int)
   IV.freezeIVar iv1 
@@ -424,5 +425,5 @@ dftest3 = runParNonDet $ do
 case_show01 :: Assertion
 case_show01 = assertEqual "show for IVar" "Just 3" show01
 show01 :: String
-show01 = show$ runParThenFreeze $ do v <- IV.new; IV.put v (3::Int); return v
+show01 = show$ runParThenFreeze $ isDet $ do v <- IV.new; IV.put v (3::Int); return v
 

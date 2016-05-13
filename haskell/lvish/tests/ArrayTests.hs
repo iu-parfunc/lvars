@@ -53,7 +53,7 @@ tests = $(testGroupGenerator)
 case_v9a :: Assertion
 case_v9a = assertEqual "basic NatArray" 4 =<< v9a
 v9a :: IO Word8
-v9a = runParNonDet$ do
+v9a = runParNonDet$ isND $ do
   arr <- NA.newNatArray 10
   NA.put arr 5 (4::Word8)
   NA.get arr 5
@@ -75,7 +75,7 @@ v9a = runParNonDet$ do
 case_i9c :: Assertion
 case_i9c = exceptionOrTimeOut 0.3 ["thread blocked indefinitely"] i9c
 i9c :: IO Word8
-i9c = runParNonDet$ do
+i9c = runParNonDet$ isND$  do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logDbgLn 1 "Unblocked!  Shouldn't see this."
@@ -85,7 +85,7 @@ i9c = runParNonDet$ do
 case_v9d :: Assertion
 case_v9d = assertEqual "NatArray blocking/unblocking" 99 =<< v9d
 v9d :: IO Word8
-v9d = runParNonDet$ do
+v9d = runParNonDet$ isND$ do
   arr:: NA.NatArray s Word8 <- NA.newNatArray 10 
   fork $ do NA.get arr 5
             logDbgLn 1 "Unblocked! Good."
@@ -106,7 +106,7 @@ out9e = fromIntegral$ in9e * (in9e + 1) `quot` 2 -- 5000050000
 
 -- | Fill in all elements of a NatArray, and then sum them.
 v9e :: IO Word64
-v9e = runParNonDet$ do
+v9e = runParNonDet$ isND$ do
   let size = in9e
   arr <- NA.newNatArray size
   fork $
@@ -144,7 +144,7 @@ timeOutWarning secs io = do
 case_i9h :: Assertion
 case_i9h = exceptionOrTimeOut 0.3 ["Attempt to put zero"] i9i
 i9i :: IO Word
-i9i = runParNonDet$ do
+i9i = runParNonDet$ isND$  do
   arr <- NA.newNatArray 1
   NA.put arr 0 0
   NA.get arr 0
@@ -166,7 +166,7 @@ case_v9f1_fillIvarArr =
    timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
    assertEqual "Array of ivars, compare effficiency:" out9e =<< v9f
 v9f :: IO Word64
-v9f = runParNonDet$ do
+v9f = runParNonDet$ isND $ do
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
@@ -190,7 +190,7 @@ case_v9f2_seq_fillIvarArray :: Assertion
 --
 case_v9f2_seq_fillIvarArray = 
  timeOutWarning 3.0 $ -- FIXME: KNOWN PROBLEM. Livelocks here!
- assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (do 
+ assertEqual "Array of ivars, compare effficiency:" out9e =<< runParNonDet (isND$ do 
   let size = in9e
       news = V.replicate size IV.new
   arr <- V.sequence news
@@ -224,7 +224,7 @@ case_v9g_istruct =
   assertEqual "IStructure, compare effficiency:" out9e =<< v9g
 
 v9g :: IO Word64
-v9g = runParNonDet$ do
+v9g = runParNonDet$ isND $ do
   let size = in9e
   arr <- ISt.newIStructure size      
   fork $
@@ -240,7 +240,7 @@ v9g = runParNonDet$ do
 case_show04 :: Assertion
 case_show04 = assertEqual "show for IStructure" "{IStructure: Just 33, Just 44}" show04
 show04 :: String
-show04 = show$ runParThenFreeze $ do
+show04 = show$ runParThenFreeze $ isDet $ do
   ist <- ISt.newIStructure 2
   ISt.put ist 0 (33::Int)
   ISt.put ist 1 (44::Int)

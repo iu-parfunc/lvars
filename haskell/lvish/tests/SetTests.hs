@@ -302,7 +302,7 @@ v8b = runParNonDet $ isND $ do
 case_show05 :: Assertion
 case_show05 = assertEqual "show for PureSet" "{ISet: 33, 44}" (show show05)
 show05 :: ISet Frzn Int
-show05 = runParThenFreeze $ do
+show05 = runParThenFreeze $ isDet $ do
   is <- IS.newEmptySet
   IS.insert (33::Int) is
   IS.insert (44::Int) is
@@ -312,7 +312,7 @@ show05 = runParThenFreeze $ do
 case_show06 :: Assertion
 case_show06 = assertEqual "show for SLSet" "{ISet: 44, 33}" (show show06)
 show06 :: SS.ISet Frzn Int
-show06 = runParThenFreeze $ do
+show06 = runParThenFreeze $ isDet $ do
   is <- SS.newEmptySet
   SS.insert (33::Int) is
   SS.insert (44::Int) is

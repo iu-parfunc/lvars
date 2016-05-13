@@ -90,7 +90,7 @@ case_v8c = assertEqual "forEachHP on maps" [101,102] =<< v8c
 -- | Similar test with Maps instead of Sets.
 v8c :: IO [Int]
 v8c = fmap (L.sort . F.toList) $
-      runParNonDet $ isND $ do
+      runParNonDet $ ioButNoBump $ do
   hp <- newPool
   m1 <- IM.newFromList ([(1,1),(2,2)]::[(Int,Int)])
   m2 <- IM.newEmptyMap
