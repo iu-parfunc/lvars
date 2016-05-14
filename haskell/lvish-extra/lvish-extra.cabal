@@ -15,10 +15,144 @@ build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
 
+flag debug
+  description: Activate additional debug assertions, and printed output.
+--               if DEBUGLVL env var is set to 1 or higher.
+  default: False
+  manual: True
+
+flag chaselev
+  description: Use the Chase-Lev work-stealing deque
+  default: True
+  manual: True
+
+flag getonce
+  description: Ensure that continuations of get run at most once
+               (by using extra synchronization)
+  default: True
+  manual: True
+
+flag useopt
+  description: Use optimization (O2).  This is always good for LVish.
+  default: True
+  manual: True
+
+flag threaded
+  description: Should the tests be threaded?  Typically yes.
+  default: True
+  manual: True
+
+                     
 library
-  exposed-modules:     Data.LVar.LayeredSatMap, Data.LVar.NatArray, Data.LVar.NatArray.Unsafe, Experimental.BitArray, Experimental.Monotonic, Experimental.Scrap
+  exposed-modules:     Data.LVar.AddRemoveset
+                       Data.LVar.Cycgraph
+                       Data.LVar.Filtset
+                       Data.LVar.LayeredSatMap
+                       Data.LVar.NatArray
+                       Data.LVar.NatArray.Unsafe
+                       Data.LVar.Maxposint
+                       Data.LVar.Memo
+                       Data.LVar.PNCounter
+                       Data.LVar.SatMap
+                       --Experimental.BitArray
+                       --Experimental.Monotonic
+                       --Experimental.Scrap
   -- other-modules:       
-  other-extensions:    ScopedTypeVariables, TypeFamilies, BangPatterns, FlexibleInstances, MagicHash, GADTs, Trustworthy, NamedFieldPuns, RankNTypes, CPP, FlexibleContexts, MultiParamTypeClasses, DataKinds, InstanceSigs, GeneralizedNewtypeDeriving
-  build-depends:       base >=4.8 && <4.9, containers >=0.5 && <0.6, ghc-prim >=0.4 && <0.5, deepseq >=1.4 && <1.5
+  other-extensions:    ScopedTypeVariables,TypeFamilies, BangPatterns, FlexibleInstances, MagicHash, GADTs, Trustworthy, NamedFieldPuns, RankNTypes, CPP, FlexibleContexts, MultiParamTypeClasses, DataKinds, InstanceSigs, GeneralizedNewtypeDeriving
+  build-depends:       base >=4.8,
+                       containers >=0.5,
+                       ghc-prim >=0.4,
+                       deepseq >=1.4,
+                       par-classes     >= 1.1 && < 2.0,
+                       par-collections >= 1.1 && < 2.0,
+                       tslogger >= 0.1.0.0
+
+  ghc-options: -rtsopts -Wall -fno-warn-orphans
+
+  if flag(useopt)
+    ghc-options: -O2
+
+  if flag(debug)
+     -- TEMP: depending on these for visualzing MemoCyc DAGs:
+--     build-depends: fgl, graphviz, text
+     cpp-options: -DDEBUG_LVAR
+--     cpp-options: -DDEBUG_MEMO
+  if flag(chaselev)
+     build-depends: chaselev-deque
+     cpp-options: -DCHASE_LEV
+  if flag(getonce)
+     cpp-options: -DGET_ONCE
+
   -- hs-source-dirs:      
-  default-language:    Haskell2010
+
+test-suite test-lvish
+    type:	    exitcode-stdio-1.0
+    main-is:        Main.hs
+    hs-source-dirs: tests/
+    other-modules:  TestHelpers,
+                    ArrayTests,
+                    MemoTests,
+                    SatMapTests,
+                    LayeredSatMapTests,
+                    MaxPosIntTests,
+                    AddRemoveSetTests,
+                    PNCounterTests,
+                    TestHelpers2
+
+    build-depends: lvish
+    build-depends: base >= 4.6 && < 4.9
+                   , containers >= 0.5
+                   , vector >=0.10
+                   , random
+
+    -- For we duplicate these flag-dependent options:
+    if flag(useopt)
+      ghc-options: -O2
+    if flag(threaded)
+      ghc-options: -threaded -rtsopts -with-rtsopts=-N4
+
+    if flag(debug)
+       -- TEMP: depending on these for visualzing MemoCyc DAGs:
+       -- build-depends: fgl, graphviz, text
+--       cpp-options: -DDEBUG_MEMO
+       cpp-options: -DDEBUG_LVAR
+    if flag(chaselev)
+       build-depends: chaselev-deque
+       cpp-options: -DCHASE_LEV
+    if flag(getonce)
+       cpp-options: -DGET_ONCE
+
+    -- Atomic-primops fails when used by template-haskell/ghci on linux:
+    if impl(ghc < 7.7) && os(linux) {
+      buildable: False
+    }
+
+benchmark bench-lvish
+    type:	    exitcode-stdio-1.0
+    main-is:        Bench.hs
+    hs-source-dirs: tests/
+
+    build-depends: lvish
+    build-depends: base >= 4.6 && < 4.9
+                   , containers >= 0.5
+                   , vector >=0.10
+                   , random
+                   , atomic-primops >= 0.7 && < 0.9
+    build-depends: par-classes     >= 1.1 && < 2.0,
+                   par-collections >= 1.1 && < 2.0
+    build-depends: criterion >= 1.0
+
+    ghc-options: -Wall -fno-warn-orphans
+
+    -- For we duplicate these flag-dependent options:
+    if flag(useopt)
+      ghc-options: -O2
+    if flag(threaded)
+      ghc-options: -threaded -rtsopts -with-rtsopts=-N4
+    if flag(debug)
+      cpp-options: -DDEBUG_LVAR
+    if flag(chaselev)
+      build-depends: chaselev-deque
+      cpp-options: -DCHASE_LEV
+    if flag(getonce)
+      cpp-options: -DGET_ONCE
