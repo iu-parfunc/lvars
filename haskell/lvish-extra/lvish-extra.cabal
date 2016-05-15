@@ -6,6 +6,7 @@ version:             0.1.0.0
 -- synopsis:            
 -- description:         
 -- license:             
+license:             BSD3
 license-file:        LICENSE
 author:              Chao-Hong Chen
 maintainer:          dreamlinuxer@gmail.com
@@ -13,7 +14,7 @@ maintainer:          dreamlinuxer@gmail.com
 category:            Concurrency
 build-type:          Simple
 -- extra-source-files:  
-cabal-version:       >=1.10
+cabal-version:       >=1.8
 
 flag debug
   description: Activate additional debug assertions, and printed output.
@@ -44,13 +45,13 @@ flag threaded
 
                      
 library
-  exposed-modules:     Data.LVar.AddRemoveset
-                       Data.LVar.Cycgraph
-                       Data.LVar.Filtset
+  exposed-modules:     Data.LVar.AddRemoveSet
+                       Data.LVar.CycGraph
+                       Data.LVar.FiltSet
                        Data.LVar.LayeredSatMap
                        Data.LVar.NatArray
                        Data.LVar.NatArray.Unsafe
-                       Data.LVar.Maxposint
+                       Data.LVar.MaxPosInt
                        Data.LVar.Memo
                        Data.LVar.PNCounter
                        Data.LVar.SatMap
@@ -65,7 +66,15 @@ library
                        deepseq >=1.4,
                        par-classes     >= 1.1 && < 2.0,
                        par-collections >= 1.1 && < 2.0,
-                       tslogger >= 0.1.0.0
+                       tslogger >= 0.1.0.0,
+                       atomic-primops >= 0.8.0,
+                       deepseq >= 1.3,
+                       lattices   >= 1.2,
+                       vector >=0.10,
+                       lvish,
+                       missing-foreign,
+                       thread-local-storage >= 0.1.0.2,
+                       bits-atomic
 
   ghc-options: -rtsopts -Wall -fno-warn-orphans
 
@@ -85,7 +94,7 @@ library
 
   -- hs-source-dirs:      
 
-test-suite test-lvish
+test-suite test-lvish-extra
     type:	    exitcode-stdio-1.0
     main-is:        Main.hs
     hs-source-dirs: tests/
@@ -93,18 +102,24 @@ test-suite test-lvish
                     ArrayTests,
                     MemoTests,
                     SatMapTests,
-                    LayeredSatMapTests,
+--                    LayeredSatMapTests,
                     MaxPosIntTests,
                     AddRemoveSetTests,
                     PNCounterTests,
                     TestHelpers2
 
-    build-depends: lvish
+    build-depends: lvish, lvish-extra
     build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10
                    , random
-
+    build-depends: par-classes     >= 1.1 && < 2.0,
+                   par-collections >= 1.1 && < 2.0
+    build-depends: tasty, tasty-hunit, tasty-th,
+                   tasty-quickcheck > 0.2.4, QuickCheck,
+                   HUnit, time, text, hashable
+    build-depends: tslogger >= 0.1.0.0
+                 
     -- For we duplicate these flag-dependent options:
     if flag(useopt)
       ghc-options: -O2
@@ -127,12 +142,12 @@ test-suite test-lvish
       buildable: False
     }
 
-benchmark bench-lvish
+benchmark bench-lvish-extra
     type:	    exitcode-stdio-1.0
     main-is:        Bench.hs
     hs-source-dirs: tests/
 
-    build-depends: lvish
+    build-depends: lvish, lvish-extra
     build-depends: base >= 4.6 && < 4.9
                    , containers >= 0.5
                    , vector >=0.10

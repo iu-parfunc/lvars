@@ -146,10 +146,10 @@ library
                     -- Package-internal and should not be exposed:
                     Control.LVish.Internal.SchedIdempotent
 --                    Internal.Data.Concurrent.LinkedMap
+                    Data.UtilInternal
 
   -- Internal modules included in this library but not exported:
   other-modules:
-                    Data.UtilInternal
                     Data.LVar.Pair
                     Data.Concurrent.Bag
                     Data.Concurrent.Counter
