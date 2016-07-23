@@ -171,7 +171,7 @@ library
                  lattices   >= 1.2,
                  vector >=0.10,
                  atomic-primops >= 0.7 && < 0.9,
-                 random,
+                 pcg-random >= 0.1.3.4,
                  transformers,
                  ghc-prim,
                  async,

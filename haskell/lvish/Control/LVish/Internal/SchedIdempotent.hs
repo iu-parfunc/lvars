@@ -69,7 +69,8 @@ import           System.IO.Unsafe (unsafePerformIO)
 import           System.Mem.StableName (makeStableName, hashStableName)
 import           Prelude  hiding (mapM, sequence, head, tail)
 import qualified Prelude
-import           System.Random (random)
+--import           System.Random (random)
+import           System.Random.PCG.Fast.Pure (uniformBool)
 import           System.Log.TSLogger as L
 import           Text.Printf (printf, hPrintf)
 
@@ -606,9 +607,10 @@ getWorkerNum = mkPar $ \k q -> exec (k (Sched.no q)) q
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
 instance MonadToss Par where  
   toss = mkPar $ \k q -> do  
-    g <- readIORef $ Sched.prng q
-    let (b, g' ) = random g
-    writeIORef (Sched.prng q) g'
+--    g <- readIORef $ Sched.prng q
+    b <- uniformBool $ Sched.prng q
+--    let (b, g' ) = random g
+--    writeIORef (Sched.prng q) g'
     exec (k b) q
 
 -- | Cooperatively schedule other threads.

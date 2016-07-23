@@ -15,7 +15,8 @@ import Control.Concurrent
 import Data.IORef
 import Data.Atomics (atomicModifyIORefCAS)
 -- import qualified Data.BitList as BL
-import System.Random (StdGen, mkStdGen)
+-- import System.Random (StdGen, mkStdGen)
+import System.Random.PCG.Fast.Pure (GenIO, createSystemRandom, initialize)
 import Text.Printf
 
 import System.Log.TSLogger (DbgCfg(..))
@@ -102,7 +103,7 @@ atomicMod = atomicModifyIORefCAS
 data State a s = State
     { no       :: {-# UNPACK #-} !Int, -- ^ The number of this worker
       numWorkers :: !Int,               -- ^ Total number of workers in this runPar
-      prng     :: !(IORef StdGen),        -- ^ core-local random number generation
+      prng     :: !GenIO,        -- ^ core-local random number generation
       status   :: !(IORef s),             -- ^ A thread-local flag
       workpool :: !(Deque a),             -- ^ The thread-local work deque
       idle     :: !(IORef [MVar Bool]),   -- ^ global list of idle workers
@@ -205,7 +206,7 @@ new DbgCfg{dbgDests,dbgRange,dbgScheduling} numWorkers s = do
   let mkState states i = do 
         workpool <- newDeque
         status   <- newIORef s
-        prng     <- newIORef $ mkStdGen i
+        prng     <- initialize $ fromIntegral i
         return State { no = i, workpool, idle, status, states, prng, logger, numWorkers }
   rec states <- forM [0..(numWorkers-1)] $ mkState states
   return (logger,states)
