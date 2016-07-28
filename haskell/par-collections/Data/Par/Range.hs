@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies, NamedFieldPuns #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 {-|
 
