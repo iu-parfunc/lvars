@@ -10,6 +10,7 @@
 -- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ConstraintKinds     #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 {-|
 
@@ -62,16 +63,11 @@ import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Control.Exception     (throw)
 import           Data.IORef
 import qualified Data.Map.Strict       as M
-import           System.IO.Unsafe      (unsafeDupablePerformIO, unsafePerformIO)
+import           System.IO.Unsafe      (unsafePerformIO)
 import           System.Mem.StableName (hashStableName, makeStableName)
 
 -- From here we get a Generator and, in the future, ParFoldable instance for Map:
 import Data.Par.Map ()
-
-import qualified Control.Par.Class        as PC
-import           Control.Par.Class.Unsafe (internalLiftIO)
--- import qualified Data.Splittable.Class as Sp
--- import Data.Par.Splittable (pmapReduceWith_, mkMapReduce)
 
 --------------------------------------------------------------------------------
 
@@ -186,7 +182,7 @@ gmodify map key fn = modify map key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 --
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a e s key . (Ord key, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 

@@ -2,8 +2,6 @@
 
 module Data.Concurrent.Counter(Counter, new, inc, dec, poll) where
 
-import Control.Monad
-import Control.Concurrent
 import Data.IORef
 
 type Counter = IORef Int

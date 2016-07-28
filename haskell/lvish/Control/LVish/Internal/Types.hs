@@ -7,7 +7,6 @@ module Control.LVish.Internal.Types
 
 import Data.Typeable (Typeable)
 import Control.Exception
-import System.IO (Handle)
 
 -- | All @LVar@s share a common notion of exceptions.
 --   The two common forms of exception currently are conflicting-put and put-after-freeze.

@@ -15,13 +15,12 @@ module Data.LVar.Counter
          -- TODO: support other reductions than (+).
        ) where
 
-import Control.LVish hiding (freeze, put)
+import Control.LVish hiding (put)
 import Control.LVish.Internal (Par(WrapPar), LVar(WrapLVar), state, liftIO)
 import Control.LVish.DeepFrz.Internal
 import qualified Control.LVish.Internal.SchedIdempotent as LI 
 -- import qualified Data.Atomics.Counter.Reference as AC
 import qualified Data.Atomics.Counter as AC
-import           Data.Word
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 
 --------------------------------------------------------------------------------

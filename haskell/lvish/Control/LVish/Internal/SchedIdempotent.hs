@@ -21,7 +21,7 @@
 module Control.LVish.Internal.SchedIdempotent
   (
     -- * Basic types and accessors
-    LVar(..), state, HandlerPool(),
+    LVar(..), HandlerPool(),
     Par(..), ClosedPar(..),
     
     -- * Safe, deterministic operations
@@ -55,7 +55,7 @@ import           Control.DeepSeq
 import           Control.Applicative
 -- import           Control.LVish.Internal.Logging as L
 import           Data.Concurrent.Internal.MonadToss
-import           Debug.Trace(trace)
+-- import           Debug.Trace(trace)
 import           Data.IORef
 import           Data.Atomics
 -- import           Data.Typeable
@@ -72,8 +72,9 @@ import qualified Prelude
 --import           System.Random (random)
 import           System.Random.PCG.Fast.Pure (uniformBool)
 import           System.Log.TSLogger as L
-import           Text.Printf (printf, hPrintf)
-
+#ifdef DEBUG_LVAR
+import           Text.Printf (hPrintf)
+#endif
 -- import Control.Compose ((:.), unO)
 -- import           Data.Traversable  hiding (forM)
 
@@ -108,6 +109,7 @@ data LVar a d = LVar {
 }
 
 type LVarID = IORef ()
+newLVID :: IO (IORef ())
 newLVID = newIORef ()
 
 -- | a global ID that is *not* the name of any LVar.  Makes it possible to
@@ -208,12 +210,14 @@ logStrLn lvl str = do
 logStrLn _ _  = return ()
 #endif
 
+#ifdef DEBUG_LVAR
 logHelper :: Maybe Logger -> Int -> LogMsg -> IO ()
 logHelper lgr num msg = do
   let msg' = L.mapMsg (("wrkr"++show num++" ")++) msg
   case lgr of 
     Just lgr -> L.logOn lgr msg' -- logOn will do the lvl check
     Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
+#endif
 
 logWith      :: Sched.State a s -> Int -> String -> IO ()
 logOffRecord :: Sched.State a s -> Int -> String -> IO ()
@@ -233,7 +237,7 @@ logOffRecord  _ _ _  = return ()
 -- | Debugging only -- create some kind of printable identifier for
 -- the LVar (uses StableName).
 lvarDbgName :: LVar a d -> String
-lvarDbgName (LVar {state, status}) = (show$ unsafeName state)
+lvarDbgName (LVar {state}) = (show$ unsafeName state)
     
 -- | Create an LVar.
 newLV :: IO a -> Par (LVar a d)
@@ -360,9 +364,9 @@ winnerCheck _ _ tr _ = tr
 
 -- | A version of the winner check that either lets the current thread
 -- through, or kills it and returns to the scheduler.
-winnerCheckPar :: DedupCell -> Par ()
-winnerCheckPar execFlag = mkPar $ \k q ->
-  undefined
+-- winnerCheckPar :: DedupCell -> Par ()
+-- winnerCheckPar execFlag = mkPar $ \k q ->
+--   undefined
 
 
 
@@ -600,9 +604,11 @@ getLogger = mkPar $ \k q ->
   let mlgr = Sched.logger q in
   exec (k mlgr) q
 
+#ifdef DEBUG_LVAR
 -- | Return the worker that we happen to be running on.  (NONDETERMINISTIC.)
 getWorkerNum :: Par Int
 getWorkerNum = mkPar $ \k q -> exec (k (Sched.no q)) q
+#endif
 
 -- | Generate a random boolean in a core-local way.  Fully nondeterministic!
 instance MonadToss Par where  
@@ -652,7 +658,7 @@ runParDetailed :: DbgCfg  -- ^ Debugging config
                -> Int           -- ^ How many worker threads to use. 
                -> Par a         -- ^ The computation to run.
                -> IO ([String], Either E.SomeException a)
-runParDetailed cfg@DbgCfg{dbgRange, dbgDests, dbgScheduling } numWrkrs comp = do
+runParDetailed cfg numWrkrs comp = do
 -- ifndef DEBUG_LVAR
 --   when (dbgScheduling /= True) $ -- || dbgRange /= Nothing  
 --     error "runParDetailed: asked to control scheduling, but compiled without debugging support."
@@ -779,9 +785,9 @@ fromRight :: Either E.SomeException a -> a
 fromRight (Right x) = x
 fromRight (Left e) = E.throw e
 
-{-# INLINE atomicModifyIORef_ #-}
-atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
-atomicModifyIORef_ ref fn = atomicModifyIORef' ref (\ x -> (fn x,()))
+-- {-# INLINE atomicModifyIORef_ #-}
+-- atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
+-- atomicModifyIORef_ ref fn = atomicModifyIORef' ref (\ x -> (fn x,()))
 
 {-# NOINLINE unsafeName #-}
 unsafeName :: a -> Int
@@ -791,18 +797,20 @@ unsafeName x = unsafePerformIO $ do
 
 {-# INLINE hpMsg #-}
 hpMsg :: Sched.State a s -> String -> HandlerPool -> IO ()
-hpMsg q msg hp = do
 #ifdef DEBUG_LVAR
+hpMsg q msg hp = do
     s <- hpId_ hp
     logWith q 3 $ msg++", pool identity= " ++s
 #else
+hpMsg _ _ _ = do
      return ()
 #endif
 
-{-# NOINLINE hpId #-}   
-hpId :: HandlerPool -> String
-hpId hp = unsafePerformIO (hpId_ hp)
+-- {-# NOINLINE hpId #-}   
+-- hpId :: HandlerPool -> String
+-- hpId hp = unsafePerformIO (hpId_ hp)
 
+#ifdef DEBUG_LVAR
 -- | Debugging tool for printing which HandlerPool
 hpId_ :: HandlerPool -> IO String
 hpId_ (HandlerPool cnt bag) = do
@@ -811,7 +819,9 @@ hpId_ (HandlerPool cnt bag) = do
   c   <- C.readCounter cnt
   return $ show (hashStableName sn1) ++"/"++ show (hashStableName sn2) ++
            " transient cnt "++show c
+#endif
 
+#ifdef DEBUG_LVAR
 -- | For debugging purposes.  This can help us figure out (by an ugly
 --   process of elimination) which MVar reads are leading to a "Thread
 --   blocked indefinitely" exception.
@@ -839,7 +849,9 @@ busyTakeMVar tids msg mv =
    case x of
      Just y  -> return y
      Nothing -> try =<< L.backoff bkoff 
+#endif
 
+dbgTakeMVar :: forall a. [ThreadId] -> String -> MVar a -> IO a
 #ifdef DEBUG_LVAR
 dbgTakeMVar = busyTakeMVar
 #else

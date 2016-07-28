@@ -32,10 +32,7 @@ module Data.LVar.IStructure
 import Data.Vector as V
 
 import           Control.DeepSeq (NFData)
-import           Control.Applicative
-import           Data.Maybe (fromJust, isJust)
 import qualified Data.LVar.IVar as IV
-import           Data.LVar.IVar (IVar(IVar))
 import qualified Data.Foldable as F
 import           Data.List (intersperse)
 -- import qualified Data.Traversable as T
@@ -43,9 +40,7 @@ import           Data.List (intersperse)
 import           Control.LVish as LV hiding (put,put_,get)
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal as LI
-import           Control.Par.EffectSigs
-import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV,
-                                                         freezeLVAfter, liftIO)
+import           Control.LVish.Internal.SchedIdempotent (freezeLV)
 import           Data.LVar.Generic as G
 import           Data.LVar.Generic.Internal (unsafeCoerceLVar)
 

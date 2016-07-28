@@ -6,7 +6,6 @@ module Data.Concurrent.AlignedIORef (AlignedIORef(), newAlignedIORef, ref)
 where
   
 import Data.IORef  
-import Control.Monad
 
 data AlignedIORef a = AlignedIORef {
   -- pad out to 64 bytes to avoid false sharing (assuming 4 byte words and 64

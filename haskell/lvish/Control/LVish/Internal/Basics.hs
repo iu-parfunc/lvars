@@ -89,8 +89,8 @@ quiesce = WrapPar . L.quiesce
 
 -- | A global barrier.  Wait for all unblocked, active threads of work in the system
 -- to complete, and then proceed after that point.
-quiesceAll :: Par e s ()
-quiesceAll = WrapPar L.quiesceAll
+-- quiesceAll :: Par e s ()
+-- quiesceAll = WrapPar L.quiesceAll
 
 -- | Execute a computation in parallel.
 fork :: Par e s () -> Par e s ()

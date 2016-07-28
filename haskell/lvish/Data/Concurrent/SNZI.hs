@@ -47,7 +47,6 @@ import Data.Concurrent.AlignedIORef
 import Data.Concurrent.Internal.Reagent  
 import Data.IORef
 import GHC.Conc
-import System.IO.Unsafe
   
 -- | An entry point for a shared SNZI value
 data SNZI = 

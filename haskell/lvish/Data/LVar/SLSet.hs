@@ -47,7 +47,6 @@ module Data.LVar.SLSet
          cartesianProdHP, cartesianProdsHP
        ) where 
 
-import Control.Applicative
 import qualified Data.Foldable as F
 import           Data.Concurrent.SkipListMap as SLM
 import           Data.List (intersperse)
@@ -62,7 +61,6 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
-import Prelude hiding (insert)
 
 ------------------------------------------------------------------------------
 -- ISets implemented via SkipListMap
@@ -354,7 +352,7 @@ intersectionHP mh s1 s2 = do
   forEachHP mh s2 (fn os s1)
   return os
  where  
-  fn outSet other@(ISet lv) elm = do
+  fn outSet (ISet lv) elm = do
     -- At this point 'elm' has ALREADY been added to "us", we check "them":    
     peek <- LI.liftIO $ SLM.find (state lv) elm
     case peek of
@@ -372,14 +370,14 @@ cartesianProdHP mh s1 s2 = do
   return os
  where
   -- This is expensive, but we've got to do it from both sides to counteract races:
-  fn outSet other@(ISet lv) cmbn elm1 = 
+  fn outSet (ISet lv) cmbn elm1 = 
     SLM.foldlWithKey LI.liftIO
        (\() elm2 () -> insert (cmbn elm1 elm2) outSet) () (state lv)
 
 -- | Variant of 'cartesianProds' that optionally ties the handlers to a pool.
 cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
                     Par e s (ISet s [a])
-cartesianProdsHP mh [] = newEmptySet
+cartesianProdsHP _  [] = newEmptySet
 cartesianProdsHP mh ls = do
 #if 1
   -- Case 1: recursive definition in terms of pairwise products:
@@ -389,6 +387,7 @@ cartesianProdsHP mh ls = do
         partial <- loop rst
         p1 <- cartesianProdHP mh nxt partial
         traverseSetHP mh (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
+      loop [] = undefined -- impossible
   loop ls
 #else
   os <- newEmptySet

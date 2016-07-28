@@ -6,8 +6,8 @@ module Control.LVish.Internal.Logical (asyncAnd, asyncOr, andMap, orMap) where
 
 import Control.Par.EffectSigs
 import Control.LVish.Internal.Basics
-import Control.LVish.Internal (Par(WrapPar), unsafeDet)
-import Control.LVish.Internal.SchedIdempotent (liftIO, HandlerPool)
+import Control.LVish.Internal (Par(WrapPar))
+import Control.LVish.Internal.SchedIdempotent (liftIO)
 import Data.LVar.IVar    as IV
 
 import qualified Data.Atomics.Counter as C

@@ -45,7 +45,6 @@ module Data.LVar.PureSet
        ) where
 
 import           Control.Monad (void)
-import           Control.Applicative ((<$>))
 import           Data.IORef
 import           Data.Atomics (atomicModifyIORefCAS)
 import           Data.List (intersperse)
@@ -60,7 +59,7 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV, freezeLVAfter)
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
-import Prelude hiding (insert)
+import           Prelude
 
 -- LK: Why is it ok to just write WrapPar and LVar instead of LI.WrapPar
 -- and LI.LVar?  Where are they being imported from?
@@ -388,6 +387,7 @@ cartesianProdsHP mh ls = do
         partial <- loop rst
         p1      <- cartesianProdHP mh nxt partial
         traverseSetHP mh (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
+      loop []        = undefined -- impossible
   loop ls
 #else
   os <- newEmptySet

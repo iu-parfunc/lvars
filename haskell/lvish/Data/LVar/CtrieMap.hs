@@ -92,9 +92,6 @@ import Data.IORef
 import Data.Bits
 import Control.Monad as M
 
-import qualified Data.Par.Range as R
--- import           Data.Hashable (Hashable)
-
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis Ctrie

@@ -16,14 +16,14 @@ import Data.IORef
 import Data.Atomics (atomicModifyIORefCAS)
 -- import qualified Data.BitList as BL
 -- import System.Random (StdGen, mkStdGen)
-import System.Random.PCG.Fast.Pure (GenIO, createSystemRandom, initialize)
+import System.Random.PCG.Fast.Pure (GenIO, initialize)
 import Text.Printf
 
 import System.Log.TSLogger (DbgCfg(..))
 import qualified System.Log.TSLogger as L
 
 #ifdef CHASE_LEV
-#warning "Compiling with Chase-Lev work-stealing deque"
+-- #warning "Compiling with Chase-Lev work-stealing deque"
 
 import qualified Data.Concurrent.Deque.ChaseLev as CL
 

@@ -12,6 +12,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE Trustworthy           #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 {-|
 
@@ -62,10 +63,8 @@ import           Control.LVish
 import           Control.LVish.DeepFrz.Internal
 import           Control.LVish.Internal                 as LI
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Concurrent.SkipListMap            as SLM
 import qualified Data.Foldable                          as F
-import           Data.IORef                             (readIORef)
 import           Data.List                              (intersperse)
 import           Data.LVar.Generic                      as G
 import           Data.LVar.Generic.Internal             (unsafeCoerceLVar)
@@ -79,13 +78,10 @@ import qualified Control.LVish.Internal.SchedIdempotent as L
 import           Prelude
 import           System.IO.Unsafe                       (unsafeDupablePerformIO)
 
-import Debug.Trace
-
 import           Control.LVish.Internal.Unsafe     ()
 import qualified Control.Par.Class        as PC
 import           Control.Par.Class.Unsafe (internalLiftIO)
-import           Data.Par.Splittable      (mkMapReduce, pmapReduceWith_)
-import qualified Data.Splittable.Class    as Sp
+import           Data.Par.Splittable      (mkMapReduce)
 
 ------------------------------------------------------------------------------
 -- IMaps implemented vis SkipListMap
@@ -274,7 +270,7 @@ gmodify map key fn = modify map key G.newBottom fn
 -- | Return the preexisting value for a key if it exists, and otherwise return
 --
 --   This is a convenience routine that can easily be defined in terms of `gmodify`
-getOrInit :: forall f a b e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
+getOrInit :: forall f a e s key . (Ord key, LVarData1 f, LVarWBottom f, LVContents f a, Show key, Ord a, HasPut e) =>
           key -> IMap key s (f s a) -> Par e s (f s a)
 getOrInit key mp = gmodify mp key return
 
@@ -293,7 +289,7 @@ waitValue !val (IMap (WrapLVar lv)) = WrapPar$ getLV lv globalThresh deltaThresh
   where
     deltaThresh (_,v) | v == val  = return$ Just ()
                       | otherwise = return Nothing
-    globalThresh ref _frzn = do
+    globalThresh _ _frzn = do
       let slm = L.state lv
       let fn Nothing _k v | v == val  = return $! Just ()
                           | otherwise = return $ Nothing
