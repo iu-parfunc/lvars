@@ -25,14 +25,14 @@ matrix:
       addons: {apt: {packages: [libgmp-dev]}}
 
     # Test with GHC 8.0:
-    - env: STACK_RESOLVER=nightly-2016-08-02
-      addons: {apt: {packages: [libgmp-dev]}}
+    # - env: STACK_RESOLVER=nightly-2016-08-02
+    #   addons: {apt: {packages: [libgmp-dev]}}
 
     # Try to use the latest packages so that we catch failures before they get to LTS:
     # --------------------------------------------------------------------------------
-    - env: STACK_RESOLVER=ghc-7.8
+    - env: STACK_RESOLVER=5.11
       addons: {apt: {packages: [ghc-7.8.4,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
-    - env: STACK_RESOLVER=ghc-7.10
+    - env: STACK_RESOLVER=6.10
       addons: {apt: {packages: [ghc-7.10.1,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
 
     # Finish me!:
