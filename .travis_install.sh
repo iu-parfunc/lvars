@@ -19,5 +19,6 @@ fi
 cat stack-${STACK_RESOLVER}.yaml
 # Sweet and simple.  Install upstream dependencies, including GHC:
 stack setup --no-terminal
+stack solver --update-config
 stack build
 stack test --only-snapshot --no-terminal
