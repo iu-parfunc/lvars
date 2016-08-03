@@ -9,7 +9,7 @@ echo "resolver: ${STACK_RESOLVER}" >> stack-${STACK_RESOLVER}.yaml
 rm -f stack.yaml # Just to make sure.
 
 # In this mode we just grab the latest from hackage:
-if [ ${STACK_RESOLVER%-*} = "ghc" ]; then
+if [ ${STACK_RESOLVER%-*} = "default" ]; then
     which -a ghc
     ghc --version
     stack --resolver=${STACK_RESOLVER} solver --modify-stack-yaml
