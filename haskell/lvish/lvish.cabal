@@ -168,7 +168,7 @@ library
   -- Other library packages from which modules are imported.
   build-depends: base    >= 4.6 && < 4.9,
                  deepseq >= 1.3,
-                 lattices   >= 1.2,
+                 lattices   >= 1.4,
                  vector >=0.10,
                  atomic-primops >= 0.7 && < 0.9,
                  pcg-random >= 0.1.3.4,
