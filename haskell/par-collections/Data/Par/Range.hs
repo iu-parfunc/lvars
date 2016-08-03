@@ -1,7 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies, NamedFieldPuns #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 {-|
 
@@ -343,7 +342,7 @@ forAcc_ :: Monad m => Int -> Int -> acc -> (Int -> acc -> m acc) -> m acc
 forAcc_ start end _ _fn | start > end = error "for_: start is greater than end"
 forAcc_ start end acc fn = loop acc start 
   where
-   loop !acc !i
-     | i > end  = return acc
-     | otherwise = do acc' <- fn i acc
+   loop !ac !i
+     | i > end  = return ac
+     | otherwise = do acc' <- fn i ac
                       loop acc' (i+1)
