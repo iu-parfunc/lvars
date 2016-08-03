@@ -15,19 +15,30 @@ git:
   
 matrix:
   include:
-    - env: STACK_RESOLVER=lts-2.22
-      addons: {apt: {packages: [ghc-7.8.4,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
-    - env: STACK_RESOLVER=lts-3.2
-      addons: {apt: {packages: [libgmp-dev]}}
-    # - env: STACK_RESOLVER=nightly-2015-08-21
+    # - env: STACK_RESOLVER=lts-2.22
+    #   addons: {apt: {packages: [ghc-7.8.4,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
+    # - env: STACK_RESOLVER=lts-3.2
     #   addons: {apt: {packages: [libgmp-dev]}}
 
-  # Try to use the latest packages so that we catch failures before they get to LTS:
+    # This is whatever's in the stack.yaml file (currently 6.8) [2016.08.03]:
+    - env: STACK_RESOLVER=default
+      addons: {apt: {packages: [libgmp-dev]}}
+
+    # Test with GHC 8.0:
+    - env: STACK_RESOLVER=nightly-2016-08-02
+      addons: {apt: {packages: [libgmp-dev]}}
+
+    # Try to use the latest packages so that we catch failures before they get to LTS:
+    # --------------------------------------------------------------------------------
     - env: STACK_RESOLVER=ghc-7.8
       addons: {apt: {packages: [ghc-7.8.4,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
     - env: STACK_RESOLVER=ghc-7.10
       addons: {apt: {packages: [ghc-7.10.1,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
 
+    # Finish me!:
+    # - env: STACK_RESOLVER=ghc-8.0
+    #   addons: {apt: {packages: [ghc-8.0,happy-1.19.4,alex-3.1.3],sources: [hvr-ghc]}}
+      
   # Try it out with GHC head:
     # - env: CABALVER=head GHCVER=head
     #   addons: {apt: {packages: [cabal-install-head,ghc-head],  sources: [hvr-ghc]}}
