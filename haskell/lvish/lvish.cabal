@@ -227,8 +227,7 @@ test-suite test-lvish
 --                    MaxPosIntTests,
 --                    AddRemoveSetTests,
                     GenericTests,
-                    SkipListTests,
-                    TestHelpers2
+                    SkipListTests
 
     build-depends: lvish
     build-depends: base >= 4.6 && < 4.9
