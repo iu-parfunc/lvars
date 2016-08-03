@@ -21,7 +21,7 @@ which -a $STACK
 # Always make sure the benchmarks build, even if we don't run them:
 CFG=" --bench --no-run-benchmarks "
 
-if ! [ "$STACK_RESOLVER" == "" ]; then
+if [ "$STACK_RESOLVER" != "" ] && [ "$STACK_RESOLVER" != "default" ]; then
   CFG+=" --resolver=$STACK_RESOLVER "
 fi
 
