@@ -313,7 +313,7 @@ class (ParQuasi m qm, ParIMap m) => ParIMapFrz m qm | m -> qm where
 --   a data source that can generate only a particular kind of element (but cannot be
 --   constructed or traversed).
 --
---   It is trivial to provide an instance for any type that is already a `Functor`:
+--   It is trivial to provide an instance for any type that is already `Foldable`:
 --
 -- > import Data.Foldable as F
 -- > instance Foldable f => Generator (f a) where

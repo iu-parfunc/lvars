@@ -29,8 +29,22 @@ instance (Eq k, Eq v) => Split (M.Map k v) where
   split = M.splitRoot
 
 -- TODO: Opt in to the trivial instance of ParFoldable, using Split-based mapreduce:
--- instance PC.ParFoldable (M.Map k v) where
---  pmapFold = Sp.pmapReduce
+instance PC.ParFoldable (M.Map k v) where
+  pmapFold f1 f2 zer col = go col
+   where
+     go gen =
+       case M.size gen of
+         0 -> return zer
+         -- GHC probably won't be able to optimize this recursive function:
+         -- splitRoot should be rewritten at a different type.
+         1 -> f1 $! M.findMin gen
+         _ -> do let [l,m,r] = M.splitRoot gen
+                 l' <- PC.spawn_ (go l)
+                 r' <- go r
+                 m' <- go m
+                 x  <- f2 m' r'
+                 l'' <- PC.get l'
+                 f2 l'' x
 #else
 -- instance PC.ParFoldable (M.Map k v) where
 #endif
