@@ -1,6 +1,6 @@
 [submodule "haskell/concurrent-skiplist"]
-	path = haskell/concurrent-skiplist
+	path = deps/concurrent-skiplist
 	url = git@github.com:rrnewton/concurrent-skiplist.git
 [submodule "haskell/ctrie"]
-	path = haskell/ctrie
+	path = deps/ctrie
 	url = git@github.com:iu-parfunc/ctrie.git

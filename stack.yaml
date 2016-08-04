@@ -2,14 +2,14 @@
 # flags: {}
 
 packages:
- - haskell/concurrent-skiplist/
- - haskell/lvish/
- - haskell/par-classes/
- - haskell/par-collections/
- - haskell/par-collections/tests/
- - haskell/par-mergesort/
- - haskell/par-transformers/
- - haskell/ctrie
+ - src/lvish/
+ - src/par-classes/
+ - src/par-collections/
+ - src/par-collections/tests/
+ - src/par-mergesort/
+ - src/par-transformers/
+ - deps/concurrent-skiplist/
+ - deps/ctrie
 
  - location:
     git:  https://github.com/iu-parfunc/tslogger.git

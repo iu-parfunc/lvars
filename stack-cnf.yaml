@@ -2,14 +2,14 @@
 # flags: {}
 
 packages:
- - haskell/concurrent-skiplist/
- - haskell/lvish/
- - haskell/par-classes/
- - haskell/par-collections/
- - haskell/par-collections/tests/
- - haskell/par-mergesort/
- - haskell/par-transformers/
- - haskell/ctrie
+ - src/lvish/
+ - src/par-classes/
+ - src/par-collections/
+ - src/par-collections/tests/
+ - src/par-mergesort/
+ - src/par-transformers/
+ - deps/ctrie
+ - deps/concurrent-skiplist/
 
  # Temp: This is on hackage, but the index isn't update yet:
  - location:
@@ -20,17 +20,17 @@ packages:
    extra-dep: true
  
 # TODO: Revive:
- # - haskell/lvish-apps/
- # - haskell/lvish-apps/cfa/
- # - haskell/lvish-apps/pbbs/
-# - haskell/lvish-graph-algorithms/
- # - haskell/fhpc13-lvars/
- # - haskell/fhpc13-lvars/benchmarks/bf-traverse-LVar/
- # - haskell/fhpc13-lvars/benchmarks/bf-traverse-monad-par/
- # - haskell/fhpc13-lvars/benchmarks/bf-traverse-Strategies/
+ # - src/lvish-apps/
+ # - src/lvish-apps/cfa/
+ # - src/lvish-apps/pbbs/
+# - src/lvish-graph-algorithms/
+ # - archive_old/fhpc13-lvars/
+ # - archive_old/fhpc13-lvars/benchmarks/bf-traverse-LVar/
+ # - archive_old/fhpc13-lvars/benchmarks/bf-traverse-monad-par/
+ # - archive_old/fhpc13-lvars/benchmarks/bf-traverse-Strategies/
 
 # TODO: Add:
-# haskell/par-schedulers
+# src/par-schedulers
  
 
 extra-deps:
