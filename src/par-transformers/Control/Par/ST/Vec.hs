@@ -32,12 +32,12 @@ import Control.Par.ST hiding (reify)
 import qualified Control.Monad.Reader as R
 import qualified Data.Vector.Mutable as MV
 
-import GHC.Conc (getNumProcessors)
-import System.IO.Unsafe (unsafeDupablePerformIO)
+--import GHC.Conc (getNumProcessors)
+--import System.IO.Unsafe (unsafeDupablePerformIO)
 
 import Prelude hiding (drop, length, read, take)
 
-import qualified Control.Par.Class as PC
+--import qualified Control.Par.Class as PC
 import Control.Par.Class.Unsafe (ParMonad, ParThreadSafe)
 import Control.Par.EffectSigs
 
@@ -81,6 +81,7 @@ reify = do
 -- | Do an in-place parallel map on the vector state.
 --
 --   This function reserves the right to sequentialize some iterations.
+{-
 parMapM :: forall s1 va p e s .
            (HasPut e, HasGet e, PC.ParIVar p, ParThreadSafe p) =>
            (va -> p e s va) -> ParVecT s1 va p e s ()
@@ -91,7 +92,7 @@ overPartition = 8
 
 numProcs :: Int
 numProcs = unsafeDupablePerformIO getNumProcessors
-
+-}
 --------------------------------------------------------------------------------
 
 -- | Write to the (implicit) vector state.
