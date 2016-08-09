@@ -13,7 +13,7 @@ packages:
 
  - location:
     git:  https://github.com/iu-parfunc/tslogger.git
-    commit: f4036354ca9c56c127bcbdeb5498db5b4893c10b
+    commit: 339d18daf0c744455c222ab24fc34eb389dec63e
     
 # TODO: Revive:
  # - haskell/lvish-apps/
