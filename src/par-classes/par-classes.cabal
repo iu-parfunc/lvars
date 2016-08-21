@@ -1,22 +1,23 @@
 Name:                par-classes
-Version:             1.1
+Version:             1.2
 Synopsis:            Type classes providing a general interface to various @Par@ monads.
 
 -- Version history:
 --  1.0      : Replacing old 'abstract-par' package with this new, extended version.
 --  1.0.1    : Add Data.Splittable
 --  1.1      : Add EffectSigs
-
-Description:
-  A @Par@ monad offers a parallel programming API based on dataflow
-  programming.  To use the traditional `Par` monad, install the @monad-par@
-  package, which includes this package as a dependency.
+--  1.2      : Add Control.Par.Sparks
+    
+Description: A @Par@ monad offers a parallel programming API based on
+  dataflow programming.  This package offers classes abstracting over
+  Par monads.  These classes separate different levels of @Par@
+  functionality.  See the "Control.Par.Class" module for more details.
   .
-  This package is an abstract interface only. It provides a number of
-  type clasess, but not an implementation.  The type classes separate
-  different levels of @Par@ functionality.  See the
-  "Control.Par.Class" module for more details.
+  For instances of these parallelism classes, see the @lVish@ and
+  @monad-par@ packages, as well as the limited reference
+  implementation, found in `Control.Par.Sparks`.
 
+  
 Homepage:            https://github.com/iu-parfunc/lvars
 License:             BSD3
 License-file:        LICENSE
@@ -41,13 +42,15 @@ Library
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
+           Control.Par.Sparks                  
            Control.Par.EffectSigs
            Data.Splittable.Class
-
+           
   -- This needs to stay low-dependencies!!  Interfaces only.
   Build-depends: base >= 4.7 && < 5
                , deepseq >= 1.1
                , ghc-prim >= 0.3
                , transformers
+               , parallel 
 
   ghc-options: -Wall -fno-warn-orphans
