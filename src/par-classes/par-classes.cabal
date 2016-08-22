@@ -42,7 +42,7 @@ Library
            -- Classes generalizing different levels of monad-par functionality:
            Control.Par.Class
            Control.Par.Class.Unsafe
-           Control.Par.Sparks                  
+           -- Control.Par.Sparks                  
            Control.Par.EffectSigs
            Data.Splittable.Class
            
