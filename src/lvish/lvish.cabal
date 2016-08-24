@@ -90,6 +90,10 @@ flag threaded
   default: True
   manual: True
 
+flag nonidem
+  description: nonidempotent scheduler
+  default: True
+  manual:  True
 
 -- flag beta
 --   description: These features are in beta and not fully supported yet.
@@ -204,6 +208,9 @@ library
      cpp-options: -DCHASE_LEV
   if flag(getonce)
      cpp-options: -DGET_ONCE
+  if flag(nonidem)
+     cpp-options: -DNONIDEM
+
 
 
 --------------------------------------------------------------------------------
@@ -261,7 +268,9 @@ test-suite test-lvish
        cpp-options: -DCHASE_LEV
     if flag(getonce)
        cpp-options: -DGET_ONCE
-
+    if flag(nonidem)
+       cpp-options: -DNONIDEM
+       
     -- Atomic-primops fails when used by template-haskell/ghci on linux:
     if impl(ghc < 7.7) && os(linux) {
       buildable: False
@@ -297,3 +306,5 @@ benchmark bench-lvish
       cpp-options: -DCHASE_LEV
     if flag(getonce)
       cpp-options: -DGET_ONCE
+    if flag(nonidem)
+       cpp-options: -DNONIDEM

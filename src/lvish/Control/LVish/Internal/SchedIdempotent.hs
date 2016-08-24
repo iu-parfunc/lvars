@@ -103,10 +103,20 @@ import qualified Control.LVish.Internal.SchedUtils as Sched
 --     entire LVar state, but for, e.g., collection data structures, delta will
 --     generally represent a single insertion.
 data LVar a d = LVar {
-  state  :: !a,                -- the current, "global" state of the LVar
-  status :: {-# UNPACK #-} !(IORef (Status d)), -- is the LVar active or frozen?  
-  name   :: {-# UNPACK #-} !LVarID            -- a unique identifier for this LVar
+  state  :: !a,                                          -- the current, "global" state of the LVar
+  status :: {-# UNPACK #-} !(IORef (Status d)),          -- is the LVar active or frozen?  
+  name   :: {-# UNPACK #-} !LVarID                       -- a unique identifier for this LVar
+#ifdef NONIDEM
+  , handlerStatus :: {-# UNPACK #-} !(IORef HandlerStatus) -- are handlers being installed?
+#endif
 }
+
+#ifdef NONIDEM
+data HandlerStatus
+ = Dormant                    -- no handlers currently being installed
+ | Installing Int [ClosedPar] -- some number of handlers being installed, with
+                              -- a list of blocked puts waiting on completion
+#endif
 
 type LVarID = IORef ()
 newLVID :: IO (IORef ())
@@ -247,7 +257,12 @@ newLV init = mkPar $ \k q -> do
   listeners <- B.new
   status    <- newIORef $ Active listeners
   name      <- newLVID
+#ifdef NONIDEM
+  handlerStatus <- newIORef Dormant
+  exec (k $ LVar {state, status, name, handlerStatus}) q
+#else
   exec (k $ LVar {state, status, name}) q
+#endif
 
 -- | Do a threshold read on an LVar
 getLV :: (LVar a d)                  -- ^ the LVar 
