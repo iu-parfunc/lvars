@@ -390,6 +390,43 @@ putLV_ :: LVar a d                 -- ^ the LVar
        -> (a -> Par (Maybe d, b))  -- ^ how to do the put, and whether the LVar's
                                    -- value changed
        -> Par b
+#ifdef NONIDEM
+putLV_ lv@(LVar {state, status, name, handlerStatus}) doPut = mkPar body  where
+  body k q = 
+    let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
+        putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
+
+        cont (delta, ret) = ClosedPar $ \q -> do
+            logWith q 8 $ " [dbg-lvish] putLV: status read"++uniqsuf
+            curStatus <- readIORef status
+            Sched.setStatus q noName       -- retract our modification intent
+            case curStatus of
+              Freezing -> putAfterFrzExn
+              Frozen   -> putAfterFrzExn
+              Active listeners -> do
+                whenJust delta $ \d -> do
+                  -- FIXME: need finer granularity here:
+                  logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
+                  B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
+                exec (k ret) q
+
+        putNonidemp = do
+          logWith q 8 $ " [dbg-lvish] putLV/nonidem: setPutFlag"++uniqsuf
+          Sched.setStatus q name -- publish our intent to modify the LVar
+          logWith q 8 $ " [dbg-lvish] putLV/nonidem: initial handlerStatus read"++uniqsuf
+          ticket    <- readForCAS handlerStatus
+          case peekTicket ticket of
+            Dormant -> do
+              logWith q 8 $ " [dbg-lvish] putLV/nonidem: about to exec the real mutation"++uniqsuf
+              exec (close (doPut state) cont) q -- possibly modify the LVar
+            Installing n ps -> do
+              logWith q 8 $ " [dbg-lvish] putLV/nonidem: casIORef handlerStatus"++uniqsuf
+              (success, _) <- casIORef handlerStatus ticket $! Installing n $! (ClosedPar $ body k):ps
+              logWith q 8 $ " [dbg-lvish] putLV/nonidem: clearPutFlag"++uniqsuf
+              Sched.setStatus q noName
+              if success then sched q else putNonidemp
+    in putNonidemp
+#else
 putLV_ lv@(LVar {state, status, name}) doPut = mkPar $ \k q -> do
   let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
       putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
@@ -416,7 +453,7 @@ putLV_ lv@(LVar {state, status, name}) doPut = mkPar $ \k q -> do
             exec (k ret) q
       logWith q 5 $ " [dbg-lvish] putLV: about to mutate lvar"++uniqsuf
       exec (close (doPut state) cont) q
-
+#endif
 
 -- | Update an LVar without generating a result.  
 putLV :: LVar a d             -- ^ the LVar
@@ -518,6 +555,62 @@ addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> (a -> Par ())               -- ^ initial snapshot callback on handler registration
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
+#ifdef NONIDEM
+addHandler hp LVar {state, status, name, handlerStatus} globalCB updateThresh =
+  let acqLock q = do
+        ticket <- readForCAS handlerStatus
+        let (newStatus, wait) = case peekTicket ticket of
+              Dormant         -> (Installing 1 [],     True)
+              Installing n ps -> (Installing (n+1) ps, False)
+        (success, _) <- casIORef handlerStatus ticket newStatus
+        if success
+          then when wait $ Sched.await q (name /=) -- first handler installation; wait
+                                                   -- for existing puts to complete
+          else acqLock q  -- retry lock acquisition
+
+      relLock q = do
+        ticket <- readForCAS handlerStatus
+        let (newStatus, ps) = case peekTicket ticket of
+              Dormant         -> error "BUG: acq/rel mismatch on handler lock"
+              Installing 1 ps -> (Dormant, ps)
+              Installing n ps -> (Installing (n-1) ps, [])
+        (success, _) <- casIORef handlerStatus ticket newStatus
+        if success
+          then forM_ ps $ Sched.pushWork q 
+          else relLock q -- retry lock release
+          
+      spawnWhen thresh q = do
+        tripped <- thresh
+        whenJust tripped $ \cb -> do
+          logWith q 5 " [dbg-lvish] addHandler: Delta threshold triggered, pushing work.."
+          closed <- closeInPool hp cb
+          Sched.pushWork q closed
+          
+      onUpdate d _ q = spawnWhen (updateThresh d) q
+      onFreeze   _ _ = return ()
+  in mkPar $ \k q -> do
+    acqLock q
+    curStatus <- readIORef status 
+    case curStatus of
+      Active listeners ->             -- enroll the handler as a listener
+        do B.put listeners $ Listener onUpdate onFreeze; return ()
+      Frozen   -> return ()           -- frozen, so no need to enroll
+      Freezing -> return ()           -- frozen, so no need to enroll
+      
+    logWith q 4 " [dbg-lvish] addHandler: calling globalCB.."
+    -- At registration time, traverse (globally) over the previously inserted items
+    -- to launch any required callbacks.
+    let k2 :: () -> ClosedPar
+        k2 () = case k () of 
+                  ClosedPar go -> ClosedPar $ \ q2 -> do 
+                    -- Warning! What happens if the globalCB blocks and then wakes on a different thread?
+                    relLock q -- Release lock on original worker.
+                    go q2 -- Continue after the addHandler.
+    -- Ported over bugfix here from master branch.
+    -- There's a quirk here where we need to stick in the lock release
+    -- to happen afetr the globalCB is done (in the continuation).
+    exec (close (globalCB state) k2) q
+#else
 addHandler hp LVar {state, status} globalCB updateThresh = 
   let spawnWhen thresh q = do
         tripped <- thresh
@@ -540,6 +633,7 @@ addHandler hp LVar {state, status} globalCB updateThresh =
     -- At registration time, traverse (globally) over the previously inserted items
     -- to launch any required callbacks.
     exec (close (globalCB state) k) q
+#endif
 
 -- | Block until a handler pool is quiescent.
 quiesce :: HandlerPool -> Par ()
