@@ -397,18 +397,18 @@ putLV_ lv@(LVar {state, status, name, handlerStatus}) doPut = mkPar body  where
         putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
 
         cont (delta, ret) = ClosedPar $ \q -> do
-            logWith q 8 $ " [dbg-lvish] putLV: status read"++uniqsuf
-            curStatus <- readIORef status
-            Sched.setStatus q noName       -- retract our modification intent
-            whenJust delta $ \d -> do
-              case curStatus of
-                Freezing -> putAfterFrzExn
-                Frozen   -> putAfterFrzExn
-                Active listeners -> do
-                  -- FIXME: need finer granularity here:
-                  logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
-                  B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
-            exec (k ret) q
+          logWith q 8 $ " [dbg-lvish] putLV: status read"++uniqsuf
+          curStatus <- readIORef status
+          Sched.setStatus q noName       -- retract our modification intent
+          whenJust delta $ \d -> do
+            case curStatus of
+              Freezing -> putAfterFrzExn
+              Frozen   -> putAfterFrzExn
+              Active listeners -> do
+                -- FIXME: need finer granularity here:
+                logWith q 9 $ " [dbg-lvish] putLV: calling each listener's onUpdate"++uniqsuf
+                B.foreach listeners $ \(Listener onUpdate _) tok -> onUpdate d tok q
+          exec (k ret) q
 
         putNonidemp = do
           logWith q 8 $ " [dbg-lvish] putLV/nonidem: setPutFlag"++uniqsuf
