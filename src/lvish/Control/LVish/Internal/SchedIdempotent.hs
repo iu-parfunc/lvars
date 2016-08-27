@@ -396,10 +396,13 @@ putLV_ lv@(LVar {state, status, name, handlerStatus}) doPut = mkPar body  where
     let uniqsuf = ", lv "++(lvarDbgName lv)++" on worker "++(show$ Sched.no q)
         putAfterFrzExn = E.throw$ PutAfterFreezeExn "Attempt to change a frozen LVar"
 
+        setPutFlag   = Sched.setStatus q name
+        clearPutFlag = Sched.setStatus q noName
+
         cont (delta, ret) = ClosedPar $ \q -> do
           logWith q 8 $ " [dbg-lvish] putLV: status read"++uniqsuf
           curStatus <- readIORef status
-          Sched.setStatus q noName       -- retract our modification intent
+          clearPutFlag          -- retract our modification intent
           whenJust delta $ \d -> do
             case curStatus of
               Freezing -> putAfterFrzExn
@@ -412,18 +415,18 @@ putLV_ lv@(LVar {state, status, name, handlerStatus}) doPut = mkPar body  where
 
         putNonidemp = do
           logWith q 8 $ " [dbg-lvish] putLV/nonidem: setPutFlag"++uniqsuf
-          Sched.setStatus q name -- publish our intent to modify the LVar
+          setPutFlag    -- publish our intent to modify the LVar
           logWith q 8 $ " [dbg-lvish] putLV/nonidem: initial handlerStatus read"++uniqsuf
           ticket    <- readForCAS handlerStatus
           case peekTicket ticket of
             Dormant -> do
               logWith q 8 $ " [dbg-lvish] putLV/nonidem: about to exec the real mutation"++uniqsuf
-              exec (close (doPut state) cont) q -- possibly modify the LVar
+              exec (close (doPut state) cont) q  -- possibly modify the LVar
             Installing n ps -> do
               logWith q 8 $ " [dbg-lvish] putLV/nonidem: casIORef handlerStatus"++uniqsuf
               (success, _) <- casIORef handlerStatus ticket $! Installing n $! (ClosedPar $ body k):ps
               logWith q 8 $ " [dbg-lvish] putLV/nonidem: clearPutFlag"++uniqsuf
-              Sched.setStatus q noName
+              clearPutFlag
               if success then sched q else putNonidemp
     in putNonidemp
 #else
