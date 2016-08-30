@@ -61,7 +61,7 @@ import           Data.Atomics
 -- import           Data.Typeable
 import qualified Data.Atomics.Counter as C
 import qualified Data.Concurrent.Bag as B
-import           GHC.Conc hiding (yield)
+import           GHC.Conc hiding (yield, withMVar)
 -- import qualified GHC.Conc 
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
@@ -221,12 +221,22 @@ logStrLn _ _  = return ()
 #endif
 
 #ifdef DEBUG_LVAR
+-- | This is inefficient, but we should only use it in exceptional
+-- circumstances.
+lockedPrint :: String -> IO () 
+lockedPrint m =
+  withMVar printLock (\() -> hPutStrLn stderr m)
+
+{-# NOINLINE printLock #-}
+printLock :: MVar ()
+printLock = unsafePerformIO (newMVar ())
+ 
 logHelper :: Maybe Logger -> Int -> LogMsg -> IO ()
 logHelper lgr num msg = do
   let msg' = L.mapMsg (("wrkr"++show num++" ")++) msg
   case lgr of 
     Just lgr -> L.logOn lgr msg' -- logOn will do the lvl check
-    Nothing  -> hPutStrLn stderr ("WARNING/nologger:"++show msg')
+    Nothing  -> lockedPrint ("WARNING/nologger:"++show msg')
 #endif
 
 logWith      :: Sched.State a s -> Int -> String -> IO ()
