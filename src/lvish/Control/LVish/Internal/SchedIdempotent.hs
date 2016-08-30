@@ -210,12 +210,15 @@ logStrLn  :: Int -> String -> Par ()
 #ifdef DEBUG_LVAR
 -- logStrLn = liftIO . logStrLn_
 logStrLn lvl str = do
-  Just lgr <- getLogger
-  when (lvl >= L.minLvl lgr && lvl <= L.maxLvl lgr) $ do
-    num <- getWorkerNum
-    if lvl < 0
-     then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
-     else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)
+  l <- getLogger
+  case l of
+    Nothing  -> liftIO$ lockedPrint ("WARNING, compiled in debug mode but no logger: "++show(lvl,str))
+    Just lgr -> 
+     when (lvl >= L.minLvl lgr && lvl <= L.maxLvl lgr) $ do
+       num <- getWorkerNum
+       if lvl < 0
+        then liftIO$ logHelper (Just lgr) num (L.OffTheRecord (-lvl) str)
+        else liftIO$ logHelper (Just lgr) num (L.StrMsg lvl str)    
 #else
 logStrLn _ _  = return ()
 #endif
