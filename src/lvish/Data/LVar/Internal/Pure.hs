@@ -229,8 +229,9 @@ unsafeMonotonicHandlerHP mh (PureLVar (WrapLVar lv)) callb = WrapPar $ do
   where
 --    deltaCB = undefined
     deltaCB v = return$ Just$ unWrapPar $ callb v    
-    globalCB ref = LI.liftIO $ do
+    globalCB ref unlockLVar = LI.liftIO $ do
        x <- readIORef ref -- Snapshot
+       unlockLVar -- Gets to run early because it's pure.
        _ <- deltaCB x
        return ()
 

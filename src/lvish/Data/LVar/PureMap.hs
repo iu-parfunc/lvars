@@ -100,13 +100,14 @@ withCallbacksThenFreeze (IMap (WrapLVar lv)) callback action =
        IV.get res
   where
     deltaCB (k,v) = return$ Just$ unWrapPar $ callback k v
-    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> L.Par ()
-    initCB hp resIV ref = do
+    initCB :: HandlerPool -> IV.IVar s b -> (IORef (M.Map k v)) -> IO () -> L.Par ()
+    initCB hp resIV ref unlockMap = do
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       mp <- L.liftIO $ readIORef ref -- Snapshot
       unWrapPar $ do
         traverseWithKey_ (\ k v -> forkHP (Just hp)$ callback k v) mp
+        LI.liftIO unlockMap -- Must happen before action
         res <- action -- Any additional puts here trigger the callback.
         IV.put_ resIV res
 

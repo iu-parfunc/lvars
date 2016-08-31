@@ -201,12 +201,13 @@ withCallbacksThenFreeze (ISet lv) callback action = do
   hp  <- newPool 
   res <- IV.new -- TODO, specialize to skip this when the init action returns ()
   let deltCB x = return$ Just$ unWrapPar$ callback x
-      initCB slm = 
+      initCB slm unlockSet = 
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
         unWrapPar $ do
           SLM.foldlWithKey LI.liftIO
             (\() v () -> forkHP (Just hp) $ callback v) () slm
+          LI.liftIO unlockSet
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
   WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
@@ -234,10 +235,11 @@ forEachHP :: Maybe HandlerPool            -- ^ optional pool to enroll in
 forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ 
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
   where
-    globalCB slm = 
-      unWrapPar $
+    globalCB slm unlockSet = 
+      unWrapPar $ do 
         SLM.foldlWithKey LI.liftIO
            (\() v () -> forkHP hp $ callb v) () slm
+        LI.liftIO unlockSet
 
 -- | Add an (asynchronous) callback that listens for all new elements added to
 -- the set.

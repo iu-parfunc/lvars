@@ -228,8 +228,9 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
     return ()
   where
-    globalCB ref = do
+    globalCB ref unlockSet = do
       set <- L.liftIO$ readIORef ref -- Snapshot
+      L.liftIO unlockSet
       unWrapPar $ 
         F.foldlM (\() v -> forkHP hp $ callb v) () set -- Non-allocating traversal.
 
