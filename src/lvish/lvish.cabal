@@ -170,7 +170,7 @@ library
 
 
   -- Other library packages from which modules are imported.
-  build-depends: base    >= 4.6 && < 4.9,
+  build-depends: base    >= 4.6,
                  deepseq >= 1.3,
                  lattices   >= 1.4,
                  vector >=0.10,
@@ -237,7 +237,7 @@ test-suite test-lvish
                     SkipListTests
 
     build-depends: lvish
-    build-depends: base >= 4.6 && < 4.9
+    build-depends: base >= 4.6
                    , containers >= 0.5
                    , vector >=0.10
                    , random
@@ -283,7 +283,7 @@ benchmark bench-lvish
     hs-source-dirs: tests/
 
     build-depends: lvish
-    build-depends: base >= 4.6 && < 4.9
+    build-depends: base >= 4.6
                    , containers >= 0.5
                    , vector >=0.10
                    , random
