@@ -14,3 +14,4 @@ test-results.xml
 tags
 *.stack-work
 untracked_junk
+.liquid/
