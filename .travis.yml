@@ -14,14 +14,20 @@ git:
     submodules: false
 
 env:
-   - FLAGS=lvish:nonidem
-   - FLAGS=lvish:-nonidem
-
-env:
-  - STACK_RESOLVER=default  
+  - STACK_RESOLVER=default
+    FLAGS=lvish:nonidem      
   - STACK_RESOLVER=lts-5.11
+    FLAGS=lvish:nonidem  
   - STACK_RESOLVER=lts-6.10  
+    FLAGS=lvish:nonidem  
 
+  - STACK_RESOLVER=default  
+    FLAGS=lvish:-nonidem
+  - STACK_RESOLVER=lts-5.11
+    FLAGS=lvish:-nonidem
+  - STACK_RESOLVER=lts-6.10  
+    FLAGS=lvish:-nonidem
+  
 addons: {apt: {packages: [libgmp-dev]}}
        
   # allow_failures:
