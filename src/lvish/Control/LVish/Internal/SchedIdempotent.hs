@@ -565,10 +565,15 @@ closeInPool (Just hp) c = do
                                     -- handler pool
 
 -- | Add a handler to an existing pool.
+--
+--   The initial snapshot action must be carefully designed.  It needs to:
+--   (1) Read the data structure contents and fork tasks (NONBLOCKING)
+--   (2) Release the lock on the data structure (i.e. call the unlock action passed to it)
+--   (3) Do whatever else it feels like. (possibly blocking)
 {-# INLINE addHandler #-}
 addHandler :: Maybe HandlerPool           -- ^ pool to enroll in, if any
            -> LVar a d                    -- ^ LVar to listen to
-           -> (a -> Par ())               -- ^ initial snapshot callback on handler registration
+           -> (a -> IO () -> Par ())     -- ^ initial snapshot callback on handler registration
            -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
            -> Par ()
 #ifdef NONIDEM
@@ -579,6 +584,7 @@ addHandler hp LVar {state, status, name, handlerStatus} globalCB updateThresh =
               Dormant         -> (Installing 1 [],     True)
               Installing n ps -> (Installing (n+1) ps, False)
         (success, _) <- casIORef handlerStatus ticket newStatus
+        logWith q 4 $ " [dbg-lvish] addHandler/attempt to acqLock, CAS: "++show success
         if success
           then when wait $ Sched.await q (name /=) -- first handler installation; wait
                                                    -- for existing puts to complete
@@ -591,6 +597,7 @@ addHandler hp LVar {state, status, name, handlerStatus} globalCB updateThresh =
               Installing 1 ps -> (Dormant, ps)
               Installing n ps -> (Installing (n-1) ps, [])
         (success, _) <- casIORef handlerStatus ticket newStatus
+        logWith q 4 $ " [dbg-lvish] addHandler/attempt to relLock, CAS: "++show success
         if success
           then forM_ ps $ Sched.pushWork q 
           else relLock q -- retry lock release
@@ -619,13 +626,14 @@ addHandler hp LVar {state, status, name, handlerStatus} globalCB updateThresh =
     let k2 :: () -> ClosedPar
         k2 () = case k () of 
                   ClosedPar go -> ClosedPar $ \ q2 -> do 
-                    -- Warning! What happens if the globalCB blocks and then wakes on a different thread?
-                    relLock q -- Release lock on original worker.
+                    logWith q 5 " [dbg-lvish] addHandler: inside k2"
                     go q2 -- Continue after the addHandler.
     -- Ported over bugfix here from master branch.
     -- There's a quirk here where we need to stick in the lock release
     -- to happen afetr the globalCB is done (in the continuation).
-    exec (close (globalCB state) k2) q
+    exec (close (globalCB state (relLock q)) k2) q
+    -- Warning! What happens if the globalCB blocks and then wakes on
+    -- a different thread? => Should be ok.
 #else
 addHandler hp LVar {state, status} globalCB updateThresh = 
   let spawnWhen thresh q = do
@@ -683,17 +691,18 @@ quiesceAll = mkPar $ \k q -> do
   exec (k ()) q
 
 -- | Freeze an LVar after a given handler quiesces.
-
+-- 
 -- This is quasi-deterministic.
+--
+-- The initial snapshot action must fulfill the same contract as in addHandler.
 freezeLVAfter :: LVar a d                    -- ^ the LVar of interest
-              -> (a -> Par ())               -- ^ initial snapshot callback on handler registration
+              -> (a -> IO () -> Par ())      -- ^ initial snapshot callback on handler registration
               -> (d -> IO (Maybe (Par ())))  -- ^ subsequent callbacks: updates
               -> Par ()
 freezeLVAfter lv globalCB updateCB = do
-  let globalCB' = globalCB
-      updateCB' = updateCB
   hp <- newPool
-  addHandler (Just hp) lv globalCB' updateCB'
+  addHandler (Just hp) lv globalCB updateCB
+  logStrLn 4 " [dbg-lvish] freezeLVAfter: addHandler complete, calling quiesce"
   quiesce hp  
   freezeLV lv
 

@@ -129,10 +129,11 @@ instance LVarData1 (IMap k) where
   addHandler mh (IMap (WrapLVar lv)) callb = WrapPar $
     L.addHandler mh lv globalCB (\(_k,v) -> return$ Just$ unWrapPar$ callb v)
     where
-      globalCB cm =
-        unWrapPar $
+      globalCB cm unlockMap =
+        unWrapPar $ do
           CM.foldlWithKey LI.liftIO
              (\() _k v -> forkHP mh $ callb v) () cm
+          LI.liftIO unlockMap -- After we're done reading.
 
 -- | The `IMap`s in this module also have the special property that they support an
 -- /O(1)/ freeze operation which immediately yields a `Foldable` container
@@ -191,12 +192,13 @@ withCallbacksThenFreeze (IMap lv) callback action = do
   hp  <- newPool
   res <- IV.new
   let deltCB (k,v) = return$ Just$ unWrapPar$ callback k v
-      initCB cm = do
+      initCB cm unlockMap = do
         -- The implementation guarantees that all elements will be caught either here,
         -- or by the delta-callback:
         unWrapPar $ do
           CM.foldlWithKey LI.liftIO
             (\() k v -> forkHP (Just hp) $ callback k v) () cm
+          LI.liftIO unlockMap -- Must be called before action.
           x <- action -- Any additional puts here trigger the callback.
           IV.put_ res x
   WrapPar $ L.addHandler (Just hp) (unWrapLVar lv) initCB deltCB
@@ -225,10 +227,11 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $
     gcallb k v = do
       logDbgLn 5 " [CtrieMap] callback from global traversal "
       callb k v
-    globalCB cm = do
+    globalCB cm unlockMap = do
       unWrapPar $ do
         logDbgLn 5 " [CtrieMap] Beginning fold to check for global-work"
         CM.foldlWithKey LI.liftIO (\() k v -> forkHP mh $ gcallb k v) () cm
+        LI.liftIO unlockMap
 
 -- | Add an (asynchronous) callback that listens for all new new key/value pairs added to
 -- the map.

@@ -109,8 +109,9 @@ forEachHP mh (IMap (WrapLVar lv)) callb = WrapPar $ do
     -- FIXME: require idempotence or make sure this does NOT launch
     -- repeated callbacks for the same key:
     deltaCB (k,v) = return$ Just$ unWrapPar $ callb k v
-    globalCB ref = do
+    globalCB ref unlockMap = do
       mp <- L.liftIO $ readIORef ref -- Snapshot
+      L.liftIO unlockMap -- Pure can unlock early.
       unWrapPar $
         traverseWithKey_ (\ k v -> forkHP mh$ callb k v) mp
 

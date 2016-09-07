@@ -196,8 +196,9 @@ whenFull mh (IVar (WrapLVar lv)) fn =
     -- The threshold is ALWAYS met when a put occurs:
     -- FIXME: That doesn't mean we should always return Just however...
     fn' x = return (Just (I.unWrapPar (fn x)))
-    globalCB ref = do
+    globalCB ref unlockIt = do
       mx <- LI.liftIO $ readIORef ref -- Snapshot
+      LI.liftIO unlockIt
       case mx of
         Nothing -> return ()
         Just v  -> I.unWrapPar$ fn v

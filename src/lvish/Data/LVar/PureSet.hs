@@ -172,13 +172,18 @@ withCallbacksThenFreeze (ISet (WrapLVar lv)) callback action =
        IV.get res
   where
     deltCB x = return$ Just$ unWrapPar$ callback x
-    initCB hp resIV ref = (do
+    initCB hp resIV ref unlockSet = (do
+      unWrapPar $ dbgChatterOnly 2 "PureSet.withCallbacksThenFreeze: inside global initCB..."
+              
       -- The implementation guarantees that all elements will be caught either here,
       -- or by the delta-callback:
       set <- L.liftIO $ readIORef ref -- Snapshot
       unWrapPar $ do
         F.foldlM (\() v -> forkHP (Just hp)$ callback v) () set -- Non-allocating traversal.
+        LI.liftIO unlockSet
+        dbgChatterOnly 5 "PureSet.withCallbacksThenFreeze: initCB, callbacks forked. Start body."
         res <- action -- Any additional puts here trigger the callback.
+        dbgChatterOnly 5 "PureSet.withCallbacksThenFreeze: initCB, body finished, put result."
         IV.put_ resIV res) :: L.Par ()
 
 -- | Get the exact contents of the set.  As with any
@@ -223,8 +228,9 @@ forEachHP hp (ISet (WrapLVar lv)) callb = WrapPar $ do
     L.addHandler hp lv globalCB (\x -> return$ Just$ unWrapPar$ callb x)
     return ()
   where
-    globalCB ref = do
+    globalCB ref unlockSet = do
       set <- L.liftIO$ readIORef ref -- Snapshot
+      L.liftIO unlockSet
       unWrapPar $ 
         F.foldlM (\() v -> forkHP hp $ callb v) () set -- Non-allocating traversal.
 
