@@ -92,7 +92,7 @@ flag threaded
 
 flag nonidem
   description: nonidempotent scheduler
-  default: False
+  default: True
   manual:  True
 
 -- flag beta

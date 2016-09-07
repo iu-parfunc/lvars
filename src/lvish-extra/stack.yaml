@@ -3,14 +3,15 @@
 
 packages:
  - .
- - ../concurrent-skiplist
  - ../lvish/
  - ../par-classes/
  - ../par-collections/
 #  - ../par-collections/tests/
 # - haskell/par-mergesort/
 # - haskell/par-transformers/
- - ../ctrie/
+ - ../../deps/concurrent-skiplist
+ - ../../deps/ctrie/
+ - ../../deps/concurrent-skiplist
 
  - location:
     git:  https://github.com/iu-parfunc/tslogger.git
@@ -36,5 +37,6 @@ extra-deps:
  - chaselev-deque-0.5.0.5
  - bits-atomic-0.1.3
  - thread-local-storage-0.1.0.3
- 
+ - pcg-random-0.1.3.4
+
 resolver: lts-5.11
