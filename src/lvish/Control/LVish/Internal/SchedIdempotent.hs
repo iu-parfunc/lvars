@@ -656,7 +656,7 @@ addHandler hp LVar {state, status} globalCB updateThresh =
     logWith q 4 " [dbg-lvish] addHandler: calling globalCB.."
     -- At registration time, traverse (globally) over the previously inserted items
     -- to launch any required callbacks.
-    exec (close (globalCB state) k) q
+    exec (close (globalCB state (return ())) k) q
 #endif
 
 -- | Block until a handler pool is quiescent.
