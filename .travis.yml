@@ -58,6 +58,6 @@ install:
 
 # Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
 script:
- - stack test $FLAGS --no-terminal
+ - stack test --flag $FLAGS --no-terminal
 # TODO: bring back at least compiling here:
 # - stack build --no-terminal ./src/lvish-extras/
