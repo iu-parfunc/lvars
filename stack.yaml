@@ -14,6 +14,11 @@ packages:
  - location:
     git:  https://github.com/iu-parfunc/tslogger.git
     commit: bfa8d2b52f0d41439863b15863baa0ca2ef613d9
+
+ - location:
+    git:  https://github.com/iu-parfunc/verified-instances.git
+    commit: 24b5293ab29d6e91eea3a02042ae4b78199ff801
+
     
 # TODO: Revive:
  # - haskell/lvish-apps/
