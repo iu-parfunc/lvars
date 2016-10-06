@@ -51,6 +51,8 @@ Library
                , deepseq >= 1.1
                , ghc-prim >= 0.3
                , transformers
-               , parallel 
+               , parallel
+               , verified-instances
+               , semigroups
 
   ghc-options: -Wall -fno-warn-orphans
