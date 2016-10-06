@@ -48,6 +48,7 @@ module Control.Par.Class
 
    -- * Data structures that can be consumed in parallel
   , ParFoldable(..)
+  , VerifiedParFoldable(..)
   , Generator(..)
 
    -- * (Internal) Abstracting LVar Schedulers.
@@ -77,6 +78,9 @@ import           Control.Par.EffectSigs
 
 import qualified Data.Foldable            as F
 import           Data.Proxy               (Proxy (..))
+import           Data.Semigroup
+import           Data.VerifiedSemigroup
+import           Data.VerifiableConstraint
 
 --------------------------------------------------------------------------------
 
@@ -383,6 +387,17 @@ class Generator c => ParFoldable c where
               -> a                 -- ^ initial accumulator value
               -> c                 -- ^ element generator to consume
               -> m e s a
+
+class ParFoldable c => VerifiedParFoldable c where
+  vpmapFold :: forall m e s a .
+               (ParFuture m, HasGet e, HasPut e, FutContents m a)
+            => (ElemOf c -> m e s a) -- ^ compute one result
+            -> VerifiedSemigroup a   -- semigroup
+            -> a                 -- ^ initial accumulator value
+            -> c                 -- ^ element generator to consume
+            -> m e s a
+  vpmapFold mfn vsgrp initAcc c = (using (VSemigrp vsgrp)) $
+                                  pmapFold mfn (\ a₁ a₂ -> return $ a₁ <> a₂) initAcc c
 
 --------------------------------------------------------------------------------
 
