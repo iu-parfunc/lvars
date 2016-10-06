@@ -17,7 +17,7 @@ packages:
 
  - location:
     git:  https://github.com/iu-parfunc/verified-instances.git
-    commit: 24b5293ab29d6e91eea3a02042ae4b78199ff801
+    commit: f1c7a791566c92cca16d48a54b3009495a9a8feb
 
     
 # TODO: Revive:
