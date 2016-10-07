@@ -73,17 +73,15 @@ vMonoidProd = VerifiedMonoid zero vSemigroupProd oneLident oneRident
 
 main :: IO ()
 main = defaultMain [
-  bgroup "pmapFoldtest"
-  [ bench "100"    $ nfIO $ pmapFoldtest 100
-  , bench "1000"   $ nfIO $ pmapFoldtest 1000
-  , bench "10000"  $ nfIO $ pmapFoldtest 10000
-  , bench "100000" $ nfIO $ pmapFoldtest 100000
-  ],
   bgroup "vpmapFoldtest"
-  [ bench "100"    $ nfIO $ vpmapFoldtest 100
-  , bench "1000"   $ nfIO $ vpmapFoldtest 1000
-  , bench "10000"  $ nfIO $ vpmapFoldtest 10000
-  , bench "100000" $ nfIO $ vpmapFoldtest 100000
+  [ bench "10000"    $ nfIO $ vpmapFoldtest 10000
+  , bench "100000"   $ nfIO $ vpmapFoldtest 100000
+  , bench "1000000"  $ nfIO $ vpmapFoldtest 1000000
+  ],
+  bgroup "pmapFoldtest"
+  [ bench "10000"    $ nfIO $ pmapFoldtest 10000
+  , bench "100000"   $ nfIO $ pmapFoldtest 100000
+  , bench "1000000"  $ nfIO $ pmapFoldtest 1000000
   ]
   ]
 
