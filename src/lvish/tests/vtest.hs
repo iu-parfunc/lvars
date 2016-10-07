@@ -4,17 +4,14 @@
 {-# LANGUAGE BangPatterns #-}
 module Main where
 
-import Data.Semigroup
 import Data.VerifiedSemigroup
 import Data.VerifiedMonoid
 import Language.Haskell.Liquid.ProofCombinators
 import Control.LVish
 import Data.LVar.PureMap
-import Data.Time.Clock
-import System.IO.Unsafe
 import Data.Par.Map ()
 import Control.Par.Class
-import Control.Par.Class.Unsafe (internalLiftIO)
+import Criterion.Main
 
 {-@ newtype Prod = Prod { unProd :: Int } @-}
 newtype Prod = Prod { unProd :: Int }
@@ -74,18 +71,31 @@ oneRident x =   add x zero
 vMonoidProd :: VerifiedMonoid Prod
 vMonoidProd = VerifiedMonoid zero vSemigroupProd oneLident oneRident
 
-size :: Int
-size = 10000000
-
 main :: IO ()
-main = do
-  !start <- getCurrentTime
-  ans <- runParNonDet $ isND $ do
-    mp <- newFromList $ zip [1..size] [1..size]
-    fmp <- freezeMap mp
-    vpmapFold (\(_ , v) -> return $ Prod v)
-              vMonoidProd fmp
-  !end <- getCurrentTime
-  putStrLn $ show ans
-  putStrLn $ (show ((realToFrac $ diffUTCTime end start) * 1000.0 ::Double)) ++ " ms"
-  return ()
+main = defaultMain [
+  bgroup "pmapFoldtest"
+  [ bench "10000"    $ nfIO $ pmapFoldtest 10000
+  , bench "100000"   $ nfIO $ pmapFoldtest 100000
+  , bench "1000000"  $ nfIO $ pmapFoldtest 1000000
+  , bench "10000000" $ nfIO $ pmapFoldtest 10000000
+  ],
+  bgroup "vpmapFoldtest"
+  [ bench "10000"    $ nfIO $ vpmapFoldtest 10000
+  , bench "100000"   $ nfIO $ vpmapFoldtest 100000
+  , bench "1000000"  $ nfIO $ vpmapFoldtest 1000000
+  , bench "10000000" $ nfIO $ vpmapFoldtest 10000000
+  ]
+  ]
+
+pmapFoldtest :: Int -> IO (Int)
+pmapFoldtest size = runParNonDet $ isND $ do
+  mp <- newFromList $ zip [1..size] [1..size]
+  fmp <- freezeMap mp
+  pmapFold (\(_ , v) -> return v) (\v1 v2 -> return $ v1 + v2) 0 fmp
+
+vpmapFoldtest :: Int -> IO (Int)
+vpmapFoldtest size = runParNonDet $ isND $ do
+  mp <- newFromList $ zip [1..size] [1..size]
+  fmp <- freezeMap mp
+  ans <- vpmapFold (\(_ , v) -> return $ Prod v) vMonoidProd fmp
+  return $ unProd ans
