@@ -185,7 +185,11 @@ library
                  concurrent-skiplist >= 0.1 && < 0.2,
                  -- Used in CtrieMap
                  ctrie >= 0.1,
-                 hashable
+                 hashable,
+                 time,
+                 verified-instances,
+                 semigroups
+
 
   build-depends: containers >= 0.5.4.0
 
@@ -308,3 +312,69 @@ benchmark bench-lvish
       cpp-options: -DGET_ONCE
     if flag(nonidem)
        cpp-options: -DNONIDEM
+
+Executable vtest
+  build-depends: async,
+                 atomic-primops >= 0.7 && < 0.9,
+                 base    >= 4.6,
+                 deepseq >= 1.3,
+                 ghc-prim,
+                 lattices   >= 1.4,
+                 missing-foreign,
+                 pcg-random >= 0.1.3.4,
+                 thread-local-storage >= 0.1.0.2,
+                 time >= 1.5.0.1,
+                 transformers,
+                 vector >=0.10,
+                 -- Used in SLSet and SLMap
+                 concurrent-skiplist >= 0.1 && < 0.2,
+                 -- Used in CtrieMap
+                 ctrie >= 0.1,
+                 hashable
+
+  build-depends: containers >= 0.5.4.0
+
+  build-depends: par-classes     >= 1.1 && < 2.0,
+                 par-collections >= 1.1 && < 2.0,
+                 tslogger >= 0.1.0.0,
+                 verified-instances,
+                 semigroups,
+                 time,
+                 lvish
+
+  Main-Is:        vtest.hs
+  Hs-Source-Dirs: tests/
+  ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
+
+Executable test
+  build-depends: async,
+                 atomic-primops >= 0.7 && < 0.9,
+                 base    >= 4.6,
+                 deepseq >= 1.3,
+                 ghc-prim,
+                 lattices   >= 1.4,
+                 missing-foreign,
+                 pcg-random >= 0.1.3.4,
+                 thread-local-storage >= 0.1.0.2,
+                 time >= 1.5.0.1,
+                 transformers,
+                 vector >=0.10,
+                 -- Used in SLSet and SLMap
+                 concurrent-skiplist >= 0.1 && < 0.2,
+                 -- Used in CtrieMap
+                 ctrie >= 0.1,
+                 hashable
+
+  build-depends: containers >= 0.5.4.0
+
+  build-depends: par-classes     >= 1.1 && < 2.0,
+                 par-collections >= 1.1 && < 2.0,
+                 tslogger >= 0.1.0.0,
+                 verified-instances,
+                 semigroups,
+                 time,
+                 lvish
+
+  Main-Is:        test.hs
+  Hs-Source-Dirs: tests/
+  ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4

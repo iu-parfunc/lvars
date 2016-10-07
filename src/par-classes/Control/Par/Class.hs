@@ -78,9 +78,7 @@ import           Control.Par.EffectSigs
 
 import qualified Data.Foldable            as F
 import           Data.Proxy               (Proxy (..))
-import           Data.Semigroup
-import           Data.VerifiedSemigroup
-import           Data.VerifiableConstraint
+import           Data.VerifiedMonoid
 
 --------------------------------------------------------------------------------
 
@@ -392,12 +390,9 @@ class ParFoldable c => VerifiedParFoldable c where
   vpmapFold :: forall m e s a .
                (ParFuture m, HasGet e, HasPut e, FutContents m a)
             => (ElemOf c -> m e s a) -- ^ compute one result
-            -> VerifiedSemigroup a   -- semigroup
-            -> a                 -- ^ initial accumulator value
+            -> VerifiedMonoid a   -- semigroup
             -> c                 -- ^ element generator to consume
             -> m e s a
-  vpmapFold mfn vsgrp initAcc c = (using (VSemigrp vsgrp)) $
-                                  pmapFold mfn (\ a₁ a₂ -> return $ a₁ <> a₂) initAcc c
 
 --------------------------------------------------------------------------------
 

@@ -11,6 +11,9 @@ module Data.Par.Map
 import qualified Control.Par.Class     as PC
 import qualified Data.Map              as M
 import           Data.Splittable.Class (Split (..))
+import           Data.Monoid
+import           Data.VerifiedMonoid
+import           Data.VerifiableConstraint
 
 -- import Control.Applicative
 -- import           Data.Monoid
@@ -46,6 +49,10 @@ instance PC.ParFoldable (M.Map k v) where
                  x  <- f2 m' r'
                  l'' <- PC.get l'
                  f2 l'' x
+
+instance PC.VerifiedParFoldable (M.Map k v) where
+    vpmapFold mfn vm  c = (using (VMonoid vm)) $
+                          PC.pmapFold mfn (\ a₁ a₂ -> return $ mappend a₁ a₂) mempty c
 #else
 -- instance PC.ParFoldable (M.Map k v) where
 #endif
