@@ -8,7 +8,8 @@ import Data.VerifiedSemigroup
 import Data.VerifiedMonoid
 import Language.Haskell.Liquid.ProofCombinators
 import Control.LVish
-import Data.LVar.PureMap
+import Data.LVar.PureMap as PM
+import Data.Map
 import Data.Par.Map ()
 import Control.Par.Class
 import Criterion.Main
@@ -71,29 +72,39 @@ oneRident x =   add x zero
 vMonoidProd :: VerifiedMonoid Prod
 vMonoidProd = VerifiedMonoid zero vSemigroupProd oneLident oneRident
 
-main :: IO ()
-main = defaultMain [
-  bgroup "vpmapFoldtest"
-  [ bench "10000"    $ nfIO $ vpmapFoldtest 10000
-  , bench "100000"   $ nfIO $ vpmapFoldtest 100000
-  , bench "1000000"  $ nfIO $ vpmapFoldtest 1000000
-  ],
-  bgroup "pmapFoldtest"
-  [ bench "10000"    $ nfIO $ pmapFoldtest 10000
-  , bench "100000"   $ nfIO $ pmapFoldtest 100000
-  , bench "1000000"  $ nfIO $ pmapFoldtest 1000000
-  ]
-  ]
+create_map :: Int -> IO (Map Int Int)
+create_map sz = return $ fromList $ zip [1..sz] [1..sz]
 
-pmapFoldtest :: Int -> IO (Int)
-pmapFoldtest size = runParNonDet $ isND $ do
-  mp <- newFromList $ zip [1..size] [1..size]
-  fmp <- freezeMap mp
+main :: IO ()
+main = do
+  !mp1 <- create_map 10000
+  !mp2 <- create_map 100000
+  !mp3 <- create_map 1000000
+  !_ <- vpmapFoldtest mp1
+  !_ <- vpmapFoldtest mp2
+  !_ <- vpmapFoldtest mp3
+  defaultMain [
+    bgroup "vpmapFoldtest"
+    [ bench "10000"    $ nfIO $ vpmapFoldtest mp1
+    , bench "100000"   $ nfIO $ vpmapFoldtest mp2
+    , bench "1000000"  $ nfIO $ vpmapFoldtest mp3
+    ],
+    bgroup "pmapFoldtest"
+    [ bench "10000"    $ nfIO $ pmapFoldtest mp1
+    , bench "100000"   $ nfIO $ pmapFoldtest mp2
+    , bench "1000000"  $ nfIO $ pmapFoldtest mp3
+    ]
+    ]
+
+pmapFoldtest :: Map Int Int -> IO (Int)
+pmapFoldtest mp = runParNonDet $ isND $ do
+  !pmp <- PM.newMap mp
+  !fmp <- PM.freezeMap pmp
   pmapFold (\(_ , v) -> return v) (\v1 v2 -> return $ v1 + v2) 0 fmp
 
-vpmapFoldtest :: Int -> IO (Int)
-vpmapFoldtest size = runParNonDet $ isND $ do
-  mp <- newFromList $ zip [1..size] [1..size]
-  fmp <- freezeMap mp
-  ans <- vpmapFold (\(_ , v) -> return $ Prod v) vMonoidProd fmp
+vpmapFoldtest :: Map Int Int -> IO (Int)
+vpmapFoldtest mp = runParNonDet $ isND $ do
+  !pmp <- PM.newMap mp
+  !fmp <- PM.freezeMap pmp
+  !ans <- vpmapFold (\(_ , v) -> return $ Prod v) vMonoidProd fmp
   return $ unProd ans
