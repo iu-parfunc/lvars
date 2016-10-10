@@ -1,4 +1,3 @@
-
 # flags: {}
 
 packages:
@@ -17,9 +16,9 @@ packages:
 
  - location:
     git:  https://github.com/iu-parfunc/verified-instances.git
-    commit: f1c7a791566c92cca16d48a54b3009495a9a8feb
+    commit: 679eea62407df77dfcf6a9e51050a6a432b7b576
 
-    
+
 # TODO: Revive:
  # - haskell/lvish-apps/
  # - haskell/lvish-apps/cfa/
@@ -32,14 +31,14 @@ packages:
 
 # TODO: Add:
 # haskell/par-schedulers
- 
+
 extra-deps:
-# Soon:  
+# Soon:
 # - tslogger-0.1.0.1
  - atomic-primops-0.8.0.4
  - chaselev-deque-0.5.0.5
  - bits-atomic-0.1.3
  - thread-local-storage-0.1.0.3
  - pcg-random-0.1.3.4
- 
+
 resolver: lts-6.13
