@@ -41,7 +41,13 @@ module Data.LVar.PureSet
 
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseSetHP, traverseSetHP_, unionHP, intersectionHP,
-         cartesianProdHP, cartesianProdsHP
+         cartesianProdHP, cartesianProdsHP,
+
+         -- * Verified operations
+         vnewFromList, vfromISet,
+         vinsert, vwaitElem, vcopy,
+         vtraverseSet, vtraverseSet_,
+         vtraverseSetHP, vtraverseSetHP_
        ) where
 
 import           Control.Monad (void)
@@ -60,6 +66,8 @@ import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, fr
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
 import           Prelude
+import           Data.VerifiedOrd
+import           Data.VerifiableConstraint
 
 -- LK: Why is it ok to just write WrapPar and LVar instead of LI.WrapPar
 -- and LI.LVar?  Where are they being imported from?
@@ -136,6 +144,11 @@ newSet s = WrapPar$ fmap (ISet . WrapLVar) $ newLV$ newIORef s
 -- | Create a new set drawing initial elements from an existing list.
 newFromList :: Ord a => [a] -> Par e s (ISet s a)
 newFromList ls = newSet (S.fromList ls)
+
+-- | Create a new set drawing initial elements from an existing list.
+vnewFromList :: VerifiedOrd a -> [a] -> Par e s (ISet s a)
+vnewFromList vord = using (VOrd vord) newFromList
+{-# INLINE vnewFromList #-}
 
 -- (Todo: in production you might want even more ... like going from a Vector)
 
@@ -215,6 +228,9 @@ fromISet :: Ord a => ISet Frzn a -> S.Set a
 -- Alternate names? -- toPure? toSet? fromFrzn??
 fromISet (ISet lv) = unsafeDupablePerformIO (readIORef (state lv))
 
+vfromISet :: VerifiedOrd a -> ISet Frzn a -> S.Set a
+vfromISet vord = using (VOrd vord) fromISet
+{-# INLINE vfromISet #-}
 
 --------------------------------------------------------------------------------
 
@@ -253,6 +269,9 @@ insert !elm (ISet (WrapLVar lv)) = WrapPar$ putLV lv putter
           then (set',Just elm)
           else (set, Nothing)
 
+vinsert :: HasPut e => VerifiedOrd a -> a -> ISet s a -> Par e s ()
+vinsert vord = using (VOrd vord) insert
+{-# INLINE vinsert #-}
 
 -- | Wait for the set to contain a specified element.
 waitElem :: HasGet e => Ord a => a -> ISet s a -> Par e s ()
@@ -267,6 +286,9 @@ waitElem !elm (ISet (WrapLVar lv)) = WrapPar $
     deltaThresh e2 | e2 == elm = return $ Just ()
                    | otherwise  = return Nothing 
 
+vwaitElem :: HasGet e => VerifiedOrd a -> a -> ISet s a -> Par e s ()
+vwaitElem vord = using (VOrd vord) waitElem
+{-# inline vwaitElem #-}
 
 -- | Wait on the /size/ of the set, not its contents.
 waitSize :: HasGet e => Int -> ISet s a -> Par e s ()
@@ -292,14 +314,26 @@ waitSize !sz (ISet lv) = do
 copy :: (HasPut e, Ord a) => ISet s a -> Par e s (ISet s a)
 copy = traverseSet return
 
+vcopy :: HasPut e => VerifiedOrd a -> ISet s a -> Par e s (ISet s a)
+vcopy vord = using (VOrd vord) copy
+{-# INLINE vcopy #-}
+
 -- | Establish a monotonic map between the input and output sets.
 traverseSet :: (HasPut e, Ord b) => (a -> Par e s b) -> ISet s a -> Par e s (ISet s b)
 traverseSet f s = traverseSetHP Nothing f s
+
+vtraverseSet :: HasPut e => VerifiedOrd b -> (a -> Par e s b) -> ISet s a -> Par e s (ISet s b)
+vtraverseSet vord = using (VOrd vord) traverseSet
+{-# INLINE vtraverseSet #-}
 
 -- | An imperative-style, in-place version of 'traverseSet' that takes the output set
 -- as an argument.
 traverseSet_ :: (HasPut e, Ord b) => (a -> Par e s b) -> ISet s a -> ISet s b -> Par e s ()
 traverseSet_ f s o = void $ traverseSetHP_ Nothing f s o
+
+vtraverseSet_ :: HasPut e => VerifiedOrd b -> (a -> Par e s b) -> ISet s a -> ISet s b -> Par e s ()
+vtraverseSet_ vord = using (VOrd vord) traverseSet_
+{-# INLINE vtraverseSet_ #-}
 
 -- | Return a new set which will (ultimately) contain everything in either input set.
 union :: (HasPut e, Ord a) => ISet s a -> ISet s a -> Par e s (ISet s a)
@@ -329,6 +363,11 @@ traverseSetHP mh fn set = do
   traverseSetHP_ mh fn set os  
   return os
 
+vtraverseSetHP :: HasPut e => VerifiedOrd b -> Maybe HandlerPool -> (a -> Par e s b) -> ISet s a ->
+                  Par e s (ISet s b)
+vtraverseSetHP vord = using (VOrd vord) traverseSetHP
+{-# INLINE vtraverseSetHP #-}
+
 -- | Variant of `traverseSet_` that optionally ties the handlers to a pool.
 traverseSetHP_ :: (HasPut e, Ord b) => Maybe HandlerPool -> (a -> Par e s b) -> ISet s a -> ISet s b ->
                   Par e s ()
@@ -336,6 +375,11 @@ traverseSetHP_ mh fn set os = do
   forEachHP mh set $ \ x -> do 
     x' <- fn x
     insert x' os
+
+vtraverseSetHP_ :: HasPut e => VerifiedOrd b -> Maybe HandlerPool -> (a -> Par e s b) -> ISet s a -> ISet s b ->
+                   Par e s ()
+vtraverseSetHP_ vord = using (VOrd vord) traverseSetHP_
+{-# INLINE vtraverseSetHP_ #-}
 
 -- | Variant of `union` that optionally ties the handlers in the resulting set to the same
 -- handler pool as those in the two input sets.
