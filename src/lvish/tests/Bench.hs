@@ -30,6 +30,8 @@ import Criterion.Main
 import Criterion.Types
 import GHC.Conc(numCapabilities)
 
+import Data.VerifiedOrd.Instances
+
 -- data IntPar = forall s . IntPar (Par Det s Int)
 data IntPar = IntPar (forall s . Par Det s Int)
 
@@ -62,6 +64,7 @@ main = defaultMain $
      ],
 
   bgroup "pureset" (copyContainerBench PS.newEmptySet PS.insert PS.newFromList (PS.copy)),
+  bgroup "vpureset" (copyContainerBench PS.newEmptySet (PS.vinsert vordInt) (PS.vnewFromList vordInt) (PS.vcopy vordInt)),
   bgroup "slset"   (copyContainerBench SS.newEmptySet SS.insert SS.newFromList (SS.copy)),
   bgroup "puremap" (copyContainerBench PM.newEmptyMap (\n -> PM.insert n n) (PM.newFromList . pairit) (PM.copy)),
   bgroup "slmap"   (copyContainerBench SM.newEmptyMap (\n -> SM.insert n n) (SM.newFromList . pairit) (SM.copy))
