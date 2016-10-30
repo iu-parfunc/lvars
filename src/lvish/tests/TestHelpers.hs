@@ -180,7 +180,7 @@ stdTestHarness genTests = do
 -- DEBUGGING
 ----------------------------------------------------------------------------------------------------
 
--- | Debugging flag shared by all accelerate-backend-kit modules.
+-- | Debugging flag shared by all modules.
 --   This is activated by setting the environment variable DEBUG=1..5
 dbg :: Int
 dbg = case lookup "DEBUG" theEnv of
