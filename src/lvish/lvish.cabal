@@ -345,3 +345,24 @@ Executable vtest
   Main-Is:        vtest.hs
   Hs-Source-Dirs: tests/
   ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
+
+
+benchmark bench-verified-pureset
+    type:           exitcode-stdio-1.0
+    main-is:        PureSet.hs
+    hs-source-dirs: tests/verified/
+
+    build-depends: lvish
+    build-depends: base >= 4.6
+                 , clock >= 0.7.2
+                 , deepseq >= 1.3
+                 , directory >= 1.2.2.0
+                 , gnuplot >= 0.5.4.1
+                 , mtl >= 2.2
+                 , par-classes >= 1.1
+                 , pcg-random >= 0.1.3.4
+                 , rdtsc >= 1.3.0.1
+                 , verified-instances
+
+    ghc-options: -Wall -fno-warn-orphans
+    other-modules: Utils
