@@ -118,18 +118,18 @@ applyGCStats _ _ m = m
 
 -- | measure `iters` times
 {-# INLINE measure #-}
-measure :: (MonadIO m, NFData a) => Int64 -> IO a -> m Measured
-measure !iters !f = liftIO $ do
-  performGC
-  startStats <- getGCStats
-  startTime <- getTime
-  startCpuTime <- getCPUTime
-  startCycles <- getCycles
-  _ <- for_ 1 iters $ const f
-  endTime <- getTime
-  endCpuTime <- getCPUTime
-  endCycles <- getCycles
-  endStats <- getGCStats
+measure :: (MonadIO m, NFData a) => Int64 -> m a -> m Measured
+measure !iters !f = do
+  liftIO performGC
+  startStats <- liftIO getGCStats
+  startTime <- liftIO getTime
+  startCpuTime <- liftIO getCPUTime
+  startCycles <- liftIO getCycles
+  _ <- for_ 1 iters (\_ -> f)
+  endTime <- liftIO getTime
+  endCpuTime <- liftIO getCPUTime
+  endCycles <- liftIO getCycles
+  endStats <- liftIO getGCStats
   let !m = applyGCStats endStats startStats $ measured
         { measTime = max 0 (endTime - startTime)
         , measCpuTime = max 0 (endCpuTime - startCpuTime)
@@ -140,7 +140,7 @@ measure !iters !f = liftIO $ do
 
 -- | measure once
 {-# INLINE measureOnce #-}
-measureOnce :: (MonadIO m, NFData a) => IO a -> m Measured
+measureOnce :: (MonadIO m, NFData a) => m a -> m Measured
 measureOnce = measure 1
 
 {-# INLINE rescale #-}
