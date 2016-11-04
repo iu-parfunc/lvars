@@ -200,7 +200,7 @@ for start end fn = loop start
       | otherwise = do
           !x <- fn i
           !xs <- loop (i + 1)
-          return $! x : xs
+          return (x : xs)
 
 {-# INLINABLE fori #-}
 fori :: (Num n, Ord n, MonadIO m, NFData n, NFData a) => n -> n -> (n -> m a) -> m [(n, a)]
@@ -213,7 +213,7 @@ fori start end fn = loop start
       | otherwise = do
           !x <- fn i
           !xs <- loop (i + 1)
-          return $! (i, x) : xs
+          return ((i, x) : xs)
 
 {-# INLINABLE fori' #-}
 fori' :: (Num n, Ord n, MonadIO m, NFData n, NFData a) => n -> n -> n -> (n -> m a) -> m [(n, a)]
@@ -226,4 +226,17 @@ fori' start end step fn = loop start
       | otherwise = do
           !x <- fn i
           !xs <- loop (i + step)
-          return $! (i, x) : xs
+          return ((i, x) : xs)
+
+{-# INLINABLE fold #-}
+fold :: (Num n, Ord n, Monad m, NFData b) => n -> n -> b -> (b -> a -> b) -> (n -> m a) -> m b
+fold start end _ _ _
+  | start > end = error "start greater than end"
+fold start end !z fld fn = loop start
+  where
+    loop !i
+      | i > end = return z
+      | otherwise = do
+          !x <- fn i
+          !xs <- loop (i + 1)
+          return (fld xs x)
