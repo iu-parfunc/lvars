@@ -347,9 +347,9 @@ Executable vtest
   ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N4
 
 
-benchmark bench-verified-pureset
+benchmark bench-verified-set
     type:           exitcode-stdio-1.0
-    main-is:        PureSet.hs
+    main-is:        Set.hs
     hs-source-dirs: tests/verified/
                   , .
 

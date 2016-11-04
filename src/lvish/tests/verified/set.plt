@@ -1,5 +1,5 @@
 set terminal postscript eps enhanced color font 'Helvetica,20'
-set output "pureset.eps"
+set output "set.eps"
 set format y "%g"
 set grid xtics
 set grid ytics
