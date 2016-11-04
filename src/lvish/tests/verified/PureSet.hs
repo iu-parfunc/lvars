@@ -16,10 +16,11 @@ import           System.Environment
 import           System.IO.Unsafe
 import qualified System.Random.PCG.Fast.Pure as PCG
 
-import           Control.LVish
+import           Control.LVish                 hiding (parForTree)
 import           Control.LVish.Internal.Unsafe ()
 import           Data.LVar.PureSet             (ISet)
 import qualified Data.LVar.PureSet             as PS
+import           Data.Set                      as S
 
 import Data.VerifiedOrd.Instances
 
@@ -54,6 +55,21 @@ iters = unsafePerformIO $ read <$> getEnv "ITERS"
 threads :: Int
 threads = unsafePerformIO $ read <$> getEnv "THREADS"
 
+-- | This is the same parForTree from lvish, but using Integral
+parForTree :: (Integral n, Show n) => (n, n) -> (n -> Par e s ()) -> Par e s ()
+parForTree (start, end) _
+  | start > end = error $ "parForTree: start is greater than end: " ++ show (start, end)
+parForTree (start, end) body = do
+  loop 0 (end - start)
+
+  where
+    loop offset remain
+      | remain == 1 = body offset
+      | otherwise = do
+          let (half, rem) = remain `quotRem` 2
+          fork $ loop offset half
+          loop (offset + half) (half + rem)
+
 {-# INLINE measure #-}
 measure :: (MonadIO m, NFData a) => m a -> m Measured
 measure f = do
@@ -66,13 +82,10 @@ pureSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
+      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       runParPolyIO $ do
-        ps <- PS.newEmptySet :: Par Det s (ISet s Int64)
-        U.for_ 0 fromSize $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            PS.insert k ps
-        measure $ U.for fromSize toSize $
+        ps <- PS.newSet fs :: Par Det s (ISet s Int64)
+        measure $ parForTree (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
             PS.insert k ps
@@ -83,13 +96,10 @@ vPureSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
+      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       runParPolyIO $ do
-        ps <- PS.newEmptySet :: Par Det s (ISet s Int64)
-        U.for_ 0 fromSize $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            PS.vinsert vordInt64 k ps
-        measure $ U.for fromSize toSize $
+        ps <- PS.newSet fs :: Par Det s (ISet s Int64)
+        measure $ parForTree (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
             PS.vinsert vordInt64 k ps
