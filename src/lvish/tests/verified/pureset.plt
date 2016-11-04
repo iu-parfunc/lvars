@@ -13,4 +13,10 @@ plot "reports/pureset.csv" using 1:2 \
      title "PureSet", \
      "reports/vpureset.csv" using 1:2 \
      with errorlines linewidth 1.5 pointtype 7 pointsize 1.0 \
-     title "Verified PureSet"
+     title "Verified PureSet", \
+     "reports/slset.csv" using 1:2 \
+     with errorlines linewidth 1.5 pointtype 8 pointsize 1.0 \
+     title "SLSet", \
+     "reports/vslset.csv" using 1:2 \
+     with errorlines linewidth 1.5 pointtype 5 pointsize 1.0 \
+     title "Verified SLSet"

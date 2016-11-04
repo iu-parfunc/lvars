@@ -18,8 +18,8 @@ import qualified System.Random.PCG.Fast.Pure as PCG
 
 import           Control.LVish                 hiding (parForTree)
 import           Control.LVish.Internal.Unsafe ()
-import           Data.LVar.PureSet             (ISet)
 import qualified Data.LVar.PureSet             as PS
+import           Data.LVar.SLSet               as SL
 import           Data.Set                      as S
 
 import Data.VerifiedOrd.Instances
@@ -84,7 +84,7 @@ pureSetBench = do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       runParPolyIO $ do
-        ps <- PS.newSet fs :: Par Det s (ISet s Int64)
+        ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
         measure $ parForTree (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
@@ -98,18 +98,52 @@ vPureSetBench = do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       runParPolyIO $ do
-        ps <- PS.newSet fs :: Par Det s (ISet s Int64)
+        ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
         measure $ parForTree (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
             PS.vinsert vordInt64 k ps
 
+slSetBench :: Bench
+slSetBench = do
+  g <- PCG.restore (PCG.initFrozen seed)
+  U.fori 1 threads $
+    \t -> do
+      setNumCapabilities t
+      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
+      runParPolyIO $ do
+        ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
+        measure $ parForTree (fromSize, toSize) $
+          \_ -> do
+            k <- liftIO (U.rand g range)
+            SL.insert k ps
+
+vslSetBench :: Bench
+vslSetBench = do
+  g <- PCG.restore (PCG.initFrozen seed)
+  U.fori 1 threads $
+    \t -> do
+      setNumCapabilities t
+      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
+      runParPolyIO $ do
+        ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
+        measure $ parForTree (fromSize, toSize) $
+          \_ -> do
+            k <- liftIO (U.rand g range)
+            SL.vinsert vordInt64 k ps
+
 main :: IO ()
 main = do
   !pureSetMeasures <- pureSetBench
   !vpureSetMeasures <- vPureSetBench
+  !slSetMeasures <- slSetBench
+  !vslSetMeasures <- vslSetBench
   createDirectoryIfMissing True "tests/verified/reports"
   LBS.writeFile "tests/verified/reports/pureset.csv" . encode $
     (\(t, m) -> (t, measTime m)) `fmap` pureSetMeasures
   LBS.writeFile "tests/verified/reports/vpureset.csv" . encode $
     (\(t, m) -> (t, measTime m)) `fmap` vpureSetMeasures
+  LBS.writeFile "tests/verified/reports/slset.csv" . encode $
+    (\(t, m) -> (t, measTime m)) `fmap` slSetMeasures
+  LBS.writeFile "tests/verified/reports/vslset.csv" . encode $
+    (\(t, m) -> (t, measTime m)) `fmap` vslSetMeasures
