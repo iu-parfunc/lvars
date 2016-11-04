@@ -44,7 +44,10 @@ module Data.LVar.SLSet
 
          -- * Alternate versions of derived ops that expose @HandlerPool@s they create
          traverseSetHP, traverseSetHP_,
-         cartesianProdHP, cartesianProdsHP
+         cartesianProdHP, cartesianProdsHP,
+
+         -- * Verified operations
+         vinsert,
        ) where 
 
 import qualified Data.Foldable as F
@@ -61,6 +64,9 @@ import           Control.LVish.Internal as LI
 import           Control.LVish.Internal.SchedIdempotent (newLV, putLV, getLV, freezeLV)
 import qualified Control.LVish.Internal.SchedIdempotent as L
 import           System.IO.Unsafe (unsafeDupablePerformIO)
+
+import Data.VerifiedOrd
+import Data.VerifiableConstraint
 
 ------------------------------------------------------------------------------
 -- ISets implemented via SkipListMap
@@ -255,6 +261,9 @@ insert !elm (ISet lv) = WrapPar$ putLV (unWrapLVar lv) putter
           case putRes of
             Added _ -> return $ Just elm
             Found _ -> return Nothing 
+
+vinsert :: VerifiedOrd a -> a -> ISet s a -> Par e s ()
+vinsert vord = using (VOrd vord) insert
 
 -- | Wait for the set to contain a specified element.
 waitElem :: Ord a => a -> ISet s a -> Par e s ()
