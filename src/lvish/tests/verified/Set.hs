@@ -9,6 +9,7 @@ import           Control.Monad.Trans
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Csv
 import           Data.Int
+import qualified Data.Vector.Unboxed         as VU
 import           Data.Word
 import           GHC.Conc
 import           System.Directory
@@ -47,6 +48,10 @@ seed = unsafePerformIO $ read <$> getEnv "SEED"
 range :: Int64
 range = unsafePerformIO $ read <$> getEnv "RANGE"
 
+{-# NOINLINE bound #-}
+bound :: Int
+bound = unsafePerformIO $ read <$> getEnv "BOUND"
+
 {-# NOINLINE iters #-}
 iters :: Int64
 iters = unsafePerformIO $ read <$> getEnv "ITERS"
@@ -54,6 +59,12 @@ iters = unsafePerformIO $ read <$> getEnv "ITERS"
 {-# NOINLINE threads #-}
 threads :: Int
 threads = unsafePerformIO $ read <$> getEnv "THREADS"
+
+{-# NOINLINE randomInts #-}
+randomInts :: VU.Vector Int64
+randomInts = unsafePerformIO
+               (PCG.restore (PCG.initFrozen seed) >>= \g ->
+                  VU.replicateM bound (PCG.uniformR (0, range) g))
 
 -- | This is the same parForSimple from lvish, but using Integral
 parForSimple :: Integral n => (n , n) -> (n -> Par e s ()) -> Par e s ()
@@ -90,9 +101,9 @@ pureSetBench = do
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       measure $ runParPolyIO $ do
         ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-          \_ -> do
-            k <- liftIO (U.rand g range)
         parForSimple (fromSize, toSize) $
+          \i -> do
+            let k = (VU.!) randomInts (fromIntegral i `mod` bound)
             PS.insert k ps
 
 vPureSetBench :: Bench
@@ -104,9 +115,9 @@ vPureSetBench = do
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       measure $ runParPolyIO $ do
         ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-          \_ -> do
-            k <- liftIO (U.rand g range)
         parForSimple (fromSize, toSize) $
+          \i -> do
+            let k = (VU.!) randomInts (fromIntegral i `mod` bound)
             PS.vinsert vordInt64 k ps
 
 slSetBench :: Bench
@@ -118,9 +129,9 @@ slSetBench = do
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       measure $ runParPolyIO $ do
         ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-          \_ -> do
-            k <- liftIO (U.rand g range)
         parForSimple (fromSize, toSize) $
+          \i -> do
+            let k = (VU.!) randomInts (fromIntegral i `mod` bound)
             SL.insert k ps
 
 vslSetBench :: Bench
@@ -132,9 +143,9 @@ vslSetBench = do
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
       measure $ runParPolyIO $ do
         ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-          \_ -> do
-            k <- liftIO (U.rand g range)
         parForSimple (fromSize, toSize) $
+          \i -> do
+            let k = (VU.!) randomInts (fromIntegral i `mod` bound)
             SL.vinsert vordInt64 k ps
 
 main :: IO ()
