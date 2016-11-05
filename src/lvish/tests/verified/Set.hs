@@ -88,11 +88,11 @@ pureSetBench = do
     \t -> do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
+      measure $ runParPolyIO $ do
         ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
+        parForSimple (fromSize, toSize) $
             PS.insert k ps
 
 vPureSetBench :: Bench
@@ -102,11 +102,11 @@ vPureSetBench = do
     \t -> do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
+      measure $ runParPolyIO $ do
         ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
+        parForSimple (fromSize, toSize) $
             PS.vinsert vordInt64 k ps
 
 slSetBench :: Bench
@@ -116,11 +116,11 @@ slSetBench = do
     \t -> do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
+      measure $ runParPolyIO $ do
         ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
+        parForSimple (fromSize, toSize) $
             SL.insert k ps
 
 vslSetBench :: Bench
@@ -130,11 +130,11 @@ vslSetBench = do
     \t -> do
       setNumCapabilities t
       fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
+      measure $ runParPolyIO $ do
         ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
           \_ -> do
             k <- liftIO (U.rand g range)
+        parForSimple (fromSize, toSize) $
             SL.vinsert vordInt64 k ps
 
 main :: IO ()
