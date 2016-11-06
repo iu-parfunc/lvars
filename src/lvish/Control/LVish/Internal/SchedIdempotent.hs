@@ -878,8 +878,9 @@ runParDetailed cfg numWrkrs comp = do
 
 
 defaultRun :: Par b -> IO b
-defaultRun = fmap (fromRight . snd) .
-             runParDetailed cfg numCapabilities
+defaultRun comp = do
+  numCap <- getNumCapabilities
+  fmap (fromRight . snd) . runParDetailed cfg numCap $ comp
   where
    cfg = DbgCfg { dbgRange = Just (0,dbgLvl)
                 , dbgDests = [L.OutputTo stderr, L.OutputEvents]
@@ -907,11 +908,12 @@ runParLogged comp = do
 -- ifndef DEBUG_LVAR
 --   error "runParLogged: this function is disabled when LVish is compiled without debugging support."
 -- endif
+  numCap <- getNumCapabilities
   (logs,ans) <- runParDetailed 
                    DbgCfg { dbgRange = (Just (0,dbgLvl))
                           , dbgDests = [L.OutputEvents, L.OutputInMemory]
                           , dbgScheduling = False }  
-                   numCapabilities comp
+                   numCap comp
   return $! (logs,fromRight ans)
 
 -- | Convert from a Maybe back to an exception.

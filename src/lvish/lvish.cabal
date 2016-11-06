@@ -370,7 +370,6 @@ benchmark bench-verified-set
                  , rdtsc >= 1.3.0.1
                  , transformers >= 0.4.2
                  , tslogger >= 0.1.0.1
-                 , vector >= 0.11
                  , verified-instances
 
     ghc-options: -Wall -fno-warn-orphans
