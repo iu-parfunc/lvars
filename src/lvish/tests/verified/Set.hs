@@ -13,39 +13,31 @@ import           Data.Word
 import           GHC.Conc
 import           System.Directory
 import           System.Environment
+import           System.IO
 import           System.IO.Unsafe
 import qualified System.Random.PCG.Fast.Pure as PCG
 
-import           Control.LVish                 hiding (parForSimple, parForTree)
+import qualified Control.LVish               as LV
 import           Control.LVish.Internal.Unsafe ()
 import qualified Data.LVar.PureSet             as PS
 import           Data.LVar.SLSet               as SL
 import           Data.Set                      as S
+import qualified Control.Par.Class     as PC
 
 import Data.VerifiedOrd.Instances
 
 import           Utils (Measured (..))
 import qualified Utils as U
 
-type Det = 'Ef 'P 'G 'NF 'B 'NI
-
 type Bench = IO [(Int, Measured)]
 
-{-# NOINLINE fromSize #-}
-fromSize :: Int64
-fromSize = unsafePerformIO $ read <$> getEnv "FROMSIZE"
-
-{-# NOINLINE toSize #-}
-toSize :: Int64
-toSize = unsafePerformIO $ read <$> getEnv "TOSIZE"
+{-# NOINLINE sIzE #-}
+sIzE :: Int64
+sIzE = unsafePerformIO $ read <$> getEnv "SIZE"
 
 {-# NOINLINE seed #-}
 seed :: Word64
 seed = unsafePerformIO $ read <$> getEnv "SEED"
-
-{-# NOINLINE range #-}
-range :: Int64
-range = unsafePerformIO $ read <$> getEnv "RANGE"
 
 {-# NOINLINE iters #-}
 iters :: Int64
@@ -54,26 +46,6 @@ iters = unsafePerformIO $ read <$> getEnv "ITERS"
 {-# NOINLINE threads #-}
 threads :: Int
 threads = unsafePerformIO $ read <$> getEnv "THREADS"
-
--- | This is the same parForSimple from lvish, but using Integral
-parForSimple :: Integral n => (n , n) -> (n -> Par e s ()) -> Par e s ()
-parForSimple (start, end) fn = do
-  U.for_ start end (\i -> fork (fn i))
-
--- | This is the same parForTree from lvish, but using Integral
-parForTree :: (Integral n, Show n) => (n, n) -> (n -> Par e s ()) -> Par e s ()
-parForTree (start, end) _
-  | start > end = error $ "parForTree: start is greater than end: " ++ show (start, end)
-parForTree (start, end) body = do
-  loop 0 (end - start)
-
-  where
-    loop offset remain
-      | remain == 1 = body offset
-      | otherwise = do
-          let (half, rem) = remain `quotRem` 2
-          fork $ loop offset half
-          loop (offset + half) (half + rem)
 
 {-# INLINE measure #-}
 measure :: (MonadIO m, NFData a) => m a -> m Measured
@@ -87,13 +59,11 @@ pureSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
-        ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            PS.insert k ps
+      measure $ LV.runParPolyIO $ LV.isDet $ do
+        ps <- PS.newEmptySet
+        U.for_ 1 sIzE (\_ -> LV.fork $ do
+                          k <- liftIO $ U.rand g
+                          PS.insert k ps)
 
 vPureSetBench :: Bench
 vPureSetBench = do
@@ -101,13 +71,11 @@ vPureSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
-        ps <- PS.newSet fs :: Par Det s (PS.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            PS.vinsert vordInt64 k ps
+      measure $ LV.runParPolyIO $ LV.isDet $ do
+        ps <- PS.newEmptySet
+        U.for_ 1 sIzE (\_ -> LV.fork $ do
+                          k <- liftIO $ U.rand g
+                          PS.vinsert vordInt64 k ps)
 
 slSetBench :: Bench
 slSetBench = do
@@ -115,13 +83,11 @@ slSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
-        ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            SL.insert k ps
+      measure $ LV.runParPolyIO $ do
+        ps <- SL.newEmptySet
+        U.for_ 1 sIzE (\_ -> LV.fork $ do
+                          k <- liftIO $ U.rand g
+                          SL.insert k ps)
 
 vslSetBench :: Bench
 vslSetBench = do
@@ -129,13 +95,11 @@ vslSetBench = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      fs <- U.fold 0 fromSize S.empty (\s i -> S.insert i s) (\_ -> U.rand g range)
-      runParPolyIO $ do
-        ps <- SL.newSet fs :: Par Det s (SL.ISet s Int64)
-        measure $ parForSimple (fromSize, toSize) $
-          \_ -> do
-            k <- liftIO (U.rand g range)
-            SL.vinsert vordInt64 k ps
+      measure $ LV.runParPolyIO $ do
+        ps <- SL.newEmptySet
+        U.for_ 1 sIzE (\_ -> LV.fork $ do
+                          k <- liftIO $ U.rand g
+                          SL.vinsert vordInt64 k ps)
 
 main :: IO ()
 main = do

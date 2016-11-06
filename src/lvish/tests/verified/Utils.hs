@@ -30,8 +30,8 @@ import           System.Mem
 import qualified System.Random.PCG.Fast.Pure as PCG
 
 {-# INLINE rand #-}
-rand :: PCG.GenIO -> Int64 -> IO Int64
-rand !g !n = PCG.uniformR (0, n) g
+rand :: PCG.GenIO -> IO Int64
+rand !g = PCG.uniform g
 
 -- | Run a function several times and take the median time.
 {-# INLINE run #-}
