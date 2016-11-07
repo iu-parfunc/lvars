@@ -84,7 +84,7 @@ mkSetBench (SetImpl setNew setIns) = do
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      measure $ runParPolyIO $ isDet $ do
+      measure $ runParPolyIO $ do
         !ps <- setNew
         U.for_ 1 size $
           \_ -> fork $ do

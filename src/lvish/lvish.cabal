@@ -392,3 +392,52 @@ benchmark bench-verified-set
                  , Data.LVar.IVar
                  , Data.LVar.PureSet
                  , Data.LVar.SLSet
+
+benchmark bench-verified-fold
+    type:           exitcode-stdio-1.0
+    main-is:        Fold.hs
+    hs-source-dirs: tests/verified/
+                  , .
+
+    build-depends: async >= 2.1
+                 , atomic-primops >= 0.8.0.4
+                 , base >= 4.6
+                 , bytestring >= 0.10.6.0
+                 , cassava >= 0.4.5.0
+                 , clock >= 0.7.2
+                 , concurrent-skiplist >= 0.1.0.1
+                 , containers >= 0.5.6.2
+                 , deepseq >= 1.3
+                 , directory >= 1.2.2.0
+                 , ghc-prim >= 0.4.0.0
+                 , mtl >= 2.2
+                 , par-classes >= 1.1
+                 , par-collections >= 1.1
+                 , pcg-random >= 0.1.3.4
+                 , rdtsc >= 1.3.0.1
+                 , transformers >= 0.4.2
+                 , tslogger >= 0.1.0.1
+                 , verified-instances
+
+    ghc-options: -Wall -fno-warn-orphans
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N
+
+    other-modules: Sum
+                 , Utils
+                 , Control.LVish.Internal.Unsafe
+                 , Control.LVish
+                 , Control.LVish.DeepFrz
+                 , Control.LVish.DeepFrz.Internal
+                 , Control.LVish.Internal
+                 , Control.LVish.Internal.Basics
+                 , Control.LVish.Internal.Logical
+                 , Control.LVish.Internal.SchedIdempotent
+                 , Control.LVish.Internal.SchedUtils
+                 , Control.LVish.Internal.Types
+                 , Data.Concurrent.Bag
+                 , Data.LVar.Generic
+                 , Data.LVar.Generic.Internal
+                 , Data.LVar.IVar
+                 , Data.LVar.PureMap
+                 , Data.LVar.PureMap.Unsafe
+                 , Data.UtilInternal
