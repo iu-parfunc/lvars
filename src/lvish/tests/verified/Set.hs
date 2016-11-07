@@ -16,34 +16,42 @@ import           System.Environment
 import           System.IO.Unsafe
 import qualified System.Random.PCG.Fast.Pure   as PCG
 
-import qualified Control.LVish                 as LV
+import           Control.LVish                 as LV
 import           Control.LVish.Internal.Unsafe ()
 import qualified Data.LVar.PureSet             as PS
 import           Data.LVar.SLSet               as SL
-import qualified Data.Set                      as S
 
 import           Data.VerifiedOrd.Instances
 
 import           Utils                         (Measured (..))
 import qualified Utils                         as U
 
+type Det = 'Ef 'P 'G 'NF 'B 'NI
+
 type Bench = IO [(Int, Measured)]
+
+{-# INLINE readFromEnv #-}
+readFromEnv :: (Show a, Read a) => String -> IO a
+readFromEnv key = do
+  !val <- read <$> getEnv key
+  putStrLn (key ++ ": " ++ show val)
+  return val
 
 {-# NOINLINE size #-}
 size :: Int64
-size = unsafePerformIO $ read <$> getEnv "SIZE"
+size = unsafePerformIO $ readFromEnv "SIZE"
 
 {-# NOINLINE seed #-}
 seed :: Word64
-seed = unsafePerformIO $ read <$> getEnv "SEED"
+seed = unsafePerformIO $ readFromEnv "SEED"
 
 {-# NOINLINE iters #-}
 iters :: Int64
-iters = unsafePerformIO $ read <$> getEnv "ITERS"
+iters = unsafePerformIO $ readFromEnv "ITERS"
 
 {-# NOINLINE threads #-}
 threads :: Int
-threads = unsafePerformIO $ read <$> getEnv "THREADS"
+threads = unsafePerformIO $ readFromEnv "THREADS"
 
 {-# INLINE measure #-}
 measure :: (MonadIO m, NFData a) => m a -> m Measured
@@ -51,57 +59,49 @@ measure f = do
   m <- U.measure iters f
   return (U.rescale m)
 
-pureSetBench :: Bench
-pureSetBench = do
-  g <- PCG.restore (PCG.initFrozen seed)
+data SetImpl m =
+       SetImpl
+         { newEmptySet :: forall s. Par Det s (m s Int64)
+         , insert      :: forall s. Int64 -> m s Int64 -> Par Det s ()
+         }
+
+pureSetImpl :: SetImpl PS.ISet
+pureSetImpl = SetImpl PS.newEmptySet PS.insert
+
+vpureSetImpl :: SetImpl PS.ISet
+vpureSetImpl = SetImpl PS.newEmptySet (PS.vinsert vordInt64)
+
+slSetImpl :: SetImpl SL.ISet
+slSetImpl = SetImpl SL.newEmptySet SL.insert
+
+vslSetImpl :: SetImpl SL.ISet
+vslSetImpl = SetImpl SL.newEmptySet (SL.vinsert vordInt64)
+
+{-# INLINE mkSetBench #-}
+mkSetBench :: SetImpl m -> Bench
+mkSetBench (SetImpl setNew setIns) = do
+  !g <- PCG.restore (PCG.initFrozen seed)
   U.fori 1 threads $
     \t -> do
       setNumCapabilities t
-      measure $ LV.runParPolyIO $ LV.isDet $ do
-        ps <- PS.newEmptySet
-        U.for_ 1 size
-          (\_ -> LV.fork $ do
-             k <- liftIO $ U.rand g
-             PS.insert k ps)
+      measure $ runParPolyIO $ isDet $ do
+        !ps <- setNew
+        U.for_ 1 size $
+          \_ -> fork $ do
+            !k <- liftIO (U.rand g)
+            setIns k ps
+
+pureSetBench :: Bench
+pureSetBench = mkSetBench pureSetImpl
 
 vPureSetBench :: Bench
-vPureSetBench = do
-  g <- PCG.restore (PCG.initFrozen seed)
-  U.fori 1 threads $
-    \t -> do
-      setNumCapabilities t
-      measure $ LV.runParPolyIO $ LV.isDet $ do
-        ps <- PS.newEmptySet
-        U.for_ 1 size
-          (\_ -> LV.fork $ do
-             k <- liftIO $ U.rand g
-             PS.vinsert vordInt64 k ps)
+vPureSetBench = mkSetBench vpureSetImpl
 
 slSetBench :: Bench
-slSetBench = do
-  g <- PCG.restore (PCG.initFrozen seed)
-  U.fori 1 threads $
-    \t -> do
-      setNumCapabilities t
-      measure $ LV.runParPolyIO $ do
-        ps <- SL.newEmptySet
-        U.for_ 1 size
-          (\_ -> LV.fork $ do
-             k <- liftIO $ U.rand g
-             SL.insert k ps)
+slSetBench = mkSetBench slSetImpl
 
 vslSetBench :: Bench
-vslSetBench = do
-  g <- PCG.restore (PCG.initFrozen seed)
-  U.fori 1 threads $
-    \t -> do
-      setNumCapabilities t
-      measure $ LV.runParPolyIO $ do
-        ps <- SL.newEmptySet
-        U.for_ 1 size
-          (\_ -> LV.fork $ do
-             k <- liftIO $ U.rand g
-             SL.vinsert vordInt64 k ps)
+vslSetBench = mkSetBench vslSetImpl
 
 main :: IO ()
 main = do

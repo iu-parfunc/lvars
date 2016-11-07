@@ -391,3 +391,4 @@ benchmark bench-verified-set
                  , Data.LVar.Generic.Internal
                  , Data.LVar.IVar
                  , Data.LVar.PureSet
+                 , Data.LVar.SLSet
