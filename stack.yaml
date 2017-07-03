@@ -11,9 +11,11 @@ packages:
 - location:
     git: https://github.com/iu-parfunc/tslogger.git
     commit: bfa8d2b52f0d41439863b15863baa0ca2ef613d9
+  extra-dep: true
 - location:
     git: https://github.com/iu-parfunc/verified-instances.git
     commit: 6043c1335699d22c514274b9d18d8e9dd6501bc9
+  extra-dep: true
 extra-deps:
 - chaselev-deque-0.5.0.5
 - constraints-0.8
