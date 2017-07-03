@@ -30,14 +30,14 @@ fromRep (Right ()) = I
 
 {-@ toFrom :: x:BitRep -> { toRep (fromRep x) == x } @-}
 toFrom :: BitRep -> Proof
-toFrom x@(Left ())  = toRep (fromRep x) ==. toRep O ==. x *** QED
-toFrom x@(Right ()) = toRep (fromRep x) ==. toRep I ==. x *** QED
+toFrom x@(Left ())  = toRep (fromRep x) *** QED
+toFrom x@(Right ()) = toRep (fromRep x) *** QED
 
 -- FIXME: should work, but doesn't, assume for now
 {-@ assume fromTo :: x:Bit -> { fromRep (toRep x) == x } @-}
 fromTo :: Bit -> Proof
-fromTo x@O = fromRep (toRep x) ==. fromRep (Left ()) ==. x *** QED
-fromTo x@I = fromRep (toRep x) ==. fromRep (Right ()) ==. x *** QED
+fromTo x@O = fromRep (toRep x) *** QED
+fromTo x@I = fromRep (toRep x) *** QED
 
 isoBit :: Iso BitRep Bit
 isoBit = Iso fromRep toRep fromTo toFrom
