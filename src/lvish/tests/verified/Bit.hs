@@ -1,6 +1,7 @@
 {-@ LIQUID "--higherorder"    @-}
 {-@ LIQUID "--totality"       @-}
 {-@ LIQUID "--exactdc"        @-}
+{-@ LIQUID "--automatic-instances=liquidinstances" @-}
 
 module Bit where
 
@@ -30,14 +31,14 @@ fromRep (Right ()) = I
 
 {-@ toFrom :: x:BitRep -> { toRep (fromRep x) == x } @-}
 toFrom :: BitRep -> Proof
-toFrom x@(Left ())  = toRep (fromRep x) *** QED
-toFrom x@(Right ()) = toRep (fromRep x) *** QED
+toFrom x@(Left ())  = simpleProof
+toFrom x@(Right ()) = simpleProof
 
 -- FIXME: should work, but doesn't, assume for now
 {-@ assume fromTo :: x:Bit -> { fromRep (toRep x) == x } @-}
 fromTo :: Bit -> Proof
-fromTo x@O = fromRep (toRep x) *** QED
-fromTo x@I = fromRep (toRep x) *** QED
+fromTo x@O = simpleProof
+fromTo x@I = simpleProof
 
 isoBit :: Iso BitRep Bit
 isoBit = Iso fromRep toRep fromTo toFrom
