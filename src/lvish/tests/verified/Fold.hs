@@ -24,6 +24,8 @@ import           Sum
 import           Utils                         (Measured (..))
 import qualified Utils                         as U
 
+import           Language.Haskell.Liquid.ProofCombinators
+
 type Det = 'Ef 'P 'G 'NF 'B 'NI
 
 type Bench = IO [(Int, Measured)]
