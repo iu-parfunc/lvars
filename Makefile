@@ -24,7 +24,7 @@ endif
 all: $(ALL)
 
 docker:
-	docker build -t liquidhaskell .
+	docker build -t parfunc/verified-instances:popl18 .
 
 build:
 	$(STACK) build
