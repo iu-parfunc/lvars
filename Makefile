@@ -9,10 +9,10 @@ TIMEIT ?=
 
 ifeq ($(DOCKER),true)
 	STACK ?= stack --docker
-	ALL = docker build check
+	ALL = docker build test check
 else
 	STACK ?= stack
-	ALL = build check
+	ALL = build test check
 endif
 
 LIQUID ?= $(STACK) exec liquid --
@@ -28,6 +28,8 @@ docker:
 
 build:
 	$(STACK) build
+
+test:   build
 	$(STACK) test --no-run-tests
 	$(STACK) bench --no-run-benchmarks
 
@@ -40,4 +42,4 @@ clean:
 	find . -type d -name '.liquid' -exec rm -rf {} \+
 	$(STACK) clean
 
-.PHONY: docker build check clean
+.PHONY: docker build test check clean
