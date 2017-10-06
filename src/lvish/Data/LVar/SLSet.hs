@@ -390,7 +390,6 @@ cartesianProdsHP :: Ord a => Maybe HandlerPool -> [ISet s a] ->
                     Par e s (ISet s [a])
 cartesianProdsHP _  [] = newEmptySet
 cartesianProdsHP mh ls = do
-#if 1
   -- Case 1: recursive definition in terms of pairwise products:
   -- It would be best to create a balanced tree of these, I believe:
   let loop [lst]     = traverseSetHP mh (\x -> return [x]) lst -- Inefficient!
@@ -400,22 +399,4 @@ cartesianProdsHP mh ls = do
         traverseSetHP mh (\ (x,tl) -> return (x:tl)) p1 -- Inefficient!!
       loop [] = undefined -- impossible
   loop ls
-#else
-  os <- newEmptySet
-  let loop done [] acc = acc
-      loop done (nxt:rest) acc =
-        addHandler hp nxt (fn os done rest)
-        
---  forM_ ls $ \ inSet -> do 
---    addHandler hp s1 (fn os s2 (\ x y -> (x,y)))
-
-  return os
- where
-  fn outSet left right newElm = do
-    peeksL <- liftIO$ mapM (readIORef . state . unISet) left
-    peeksR <- liftIO$ mapM (readIORef . state . unISet) right
-
---    F.foldlM (\() elm2 -> insert (cmbn elm1 elm2) outSet) () peek
-    return (error "FINISHME: set cartesianProdHP")
-#endif
 
