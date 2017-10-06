@@ -1,7 +1,6 @@
 {-@ LIQUID "--totality"        @-}
 {-@ LIQUID "--higherorder"     @-}
 {-@ LIQUID "--prune-unsorted"  @-}
-{-@ LIQUID "--automatic-instances=liquidinstances" @-}
 {-# LANGUAGE BangPatterns #-}
 module Main where
 
@@ -25,6 +24,10 @@ import Language.Haskell.Liquid.ProofCombinators
 newtype Prod = Prod { unProd :: Int }
   deriving (Show, Eq, Ord)
 
+{-@ assume unProdBeta :: x:Int -> { unProd (Prod x) == x } @-}
+unProdBeta :: Int -> Proof
+unProdBeta _ = simpleProof
+
 {-@ assume prodEta :: x:Prod -> { Prod (unProd x) == x } @-}
 prodEta :: Prod -> Proof
 prodEta _ = simpleProof
@@ -36,7 +39,13 @@ add x y = Prod (unProd x + unProd y)
 {-@ addAssoc :: x:Prod -> y:Prod -> z:Prod
              -> {add x (add y z) == add (add x y) z} @-}
 addAssoc :: Prod -> Prod -> Prod -> Proof
-addAssoc x y z = simpleProof
+addAssoc x y z =   add x (add y z)
+               ==. Prod (unProd x + unProd (Prod (unProd y + unProd z)))
+               ==. Prod (unProd x + (unProd y + unProd z)) ? unProdBeta (unProd y + unProd z)
+               ==. Prod ((unProd x + unProd y) + unProd z)
+               ==. Prod (unProd (Prod (unProd x + unProd y)) + unProd z) ? unProdBeta (unProd x + unProd y)
+               ==. add (add x y) z
+               *** QED
 
 vSemigroupProd :: VerifiedSemigroup Prod
 vSemigroupProd = VerifiedSemigroup add addAssoc
@@ -48,11 +57,21 @@ zero = Prod 0
 
 {-@ oneLident :: x:Prod -> {add zero x == x} @-}
 oneLident :: Prod -> Proof
-oneLident = prodEta
+oneLident x =   add zero x
+            ==. Prod (unProd (Prod 0) + unProd x)
+            ==. Prod (0 + unProd x) ? unProdBeta 0
+            ==. Prod (unProd x)
+            ==. x ? prodEta x
+            *** QED
 
 {-@ oneRident :: x:Prod -> {add x zero == x} @-}
 oneRident :: Prod -> Proof
-oneRident = prodEta
+oneRident x =   add x zero
+            ==. Prod (unProd x + unProd (Prod 0))
+            ==. Prod (unProd x + 0) ? unProdBeta 0
+            ==. Prod (unProd x)
+            ==. x ? prodEta x
+            *** QED
 
 vMonoidProd :: VerifiedMonoid Prod
 vMonoidProd = VerifiedMonoid zero vSemigroupProd oneLident oneRident

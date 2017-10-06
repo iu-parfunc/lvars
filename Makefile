@@ -1,5 +1,22 @@
-HS = src/lvish/tests/verified/Bit.hs src/lvish/tests/verified/Sum.hs \
-     src/lvish/Data/LVar/PureSet.hs src/lvish/Data/LVar/SLSet.hs
+HS = src/lvish/Data/LVar/PureSet.hs \
+     src/lvish/Data/LVar/SLSet.hs
+
+ifeq ($(PLE),true)
+	HS += src/lvish/tests/verified/Bit.hs \
+	      src/lvish/tests/verified/Sum.hs \
+	      src/lvish/tests/vtest.hs
+else ifeq ($(PLE),false)
+	HS += src/lvish/tests/verified/BitNoPLE.hs \
+	      src/lvish/tests/verified/SumNoPLE.hs \
+	      src/lvish/tests/vtestNoPLE.hs
+else
+	HS += src/lvish/tests/verified/Bit.hs \
+	      src/lvish/tests/verified/BitNoPLE.hs \
+	      src/lvish/tests/verified/Sum.hs \
+	      src/lvish/tests/verified/SumNoPLE.hs \
+	      src/lvish/tests/vtest.hs \
+	      src/lvish/tests/vtestNoPLE.hs
+endif
 
 # Dummy target
 CHS = $(subst hs,chs,$(HS))
