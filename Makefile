@@ -55,6 +55,9 @@ check: build $(CHS)
 %.chs: %.hs
 	$(LIQUID) -i src/lvish -i src/lvish/tests/verified $<
 
+count:
+	for file in $(HS); do echo $$file ; ./lh-count.sh $$file ; done
+
 clean:
 	find . -type d -name '.liquid' -exec rm -rf {} \+
 	$(STACK) clean
