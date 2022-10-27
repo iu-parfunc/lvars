@@ -11,10 +11,6 @@ packages:
  - deps/concurrent-skiplist/
  - deps/ctrie
 
- - location:
-    git:  https://github.com/iu-parfunc/tslogger.git
-    commit: bfa8d2b52f0d41439863b15863baa0ca2ef613d9
-    
 # TODO: Revive:
  # - haskell/lvish-apps/
  # - haskell/lvish-apps/cfa/
@@ -36,5 +32,7 @@ extra-deps:
  - bits-atomic-0.1.3
  - thread-local-storage-0.1.0.3
  - pcg-random-0.1.3.4
+ - git:  https://github.com/iu-parfunc/tslogger.git
+   commit: bfa8d2b52f0d41439863b15863baa0ca2ef613d9
  
 resolver: lts-6.13
